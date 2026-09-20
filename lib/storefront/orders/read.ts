@@ -1,0 +1,374 @@
+/*
+ * lib/storefront/orders/read.ts
+ *
+ * Reading placed orders back.
+ *
+ * WHO MAY SEE AN ORDER is decided here, once, and it is the only question
+ * that matters in this file:
+ *
+ *   an account holder   their own orders, by customer id.
+ *   a guest             one order, and only by knowing BOTH its reference
+ *                       and the email it was placed with. A reference alone
+ *                       is a number someone could guess at; a reference plus
+ *                       the address it was sent to is not.
+ *
+ * Every query is also scoped to the store, so a reference from one merchant
+ * is meaningless at another — the same rule the rest of the storefront
+ * follows.
+ *
+ * Money crosses back here: the database holds major units, the storefront
+ * works in minor ones.
+ */
+import type { TransferAccount } from '../checkout/types';
+import { Prisma } from '@/lib/generated/prisma/client';
+import { prisma } from '@/lib/prisma';
+import { normalizeEmail } from '../account/shopper';
+import type { Money } from '../types';
+import type {
+  OrderPaymentStatus,
+  OrderReturnStatus,
+  OrderStatus,
+  StorefrontOrder,
+  StorefrontOrderLine,
+} from './types';
+import { RETURN_REASONS, customerCanCancel, countsAgainstReturnable, isReturnReason, returnDeadline, returnEligibility } from './policy';
+
+/** ₦5,000.00 (Decimal) → 500000 kobo. */
+function toMinor(value: Prisma.Decimal | number): Money {
+  return Math.round(Number(value) * 100);
+}
+
+const ORDER_SELECT = {
+  reference: true,
+  status: true,
+  paymentStatus: true,
+  paymentMethod: true,
+  transferDetails: true,
+  placedAt: true,
+  confirmedAt: true,
+  packingAt: true,
+  shippedAt: true,
+  deliveredAt: true,
+  cancelledAt: true,
+  cancelReason: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+  shipFullName: true,
+  shipPhone: true,
+  shipLine1: true,
+  shipLine2: true,
+  shipCity: true,
+  shipState: true,
+  shipCountry: true,
+  shipPostalCode: true,
+  deliveryMethodId: true,
+  deliveryMethodLabel: true,
+  deliveryFee: true,
+  deliveryEtaMinDays: true,
+  deliveryEtaMaxDays: true,
+  currency: true,
+  subtotal: true,
+  discount: true,
+  discountCode: true,
+  taxAmount: true,
+  totalAmount: true,
+  note: true,
+  organization: { select: { returnWindowDays: true } },
+  refunds: { select: { amount: true, returnId: true, createdAt: true }, orderBy: { createdAt: 'asc' } },
+  returns: {
+    orderBy: { requestedAt: 'desc' },
+    select: {
+      id: true,
+      status: true,
+      reason: true,
+      details: true,
+      merchantNote: true,
+      requestedAt: true,
+      approvedAt: true,
+      rejectedAt: true,
+      refundedAt: true,
+      withdrawnAt: true,
+      lines: { select: { orderLineItemId: true, quantity: true } },
+    },
+  },
+  lineItems: {
+    select: {
+      id: true,
+      productId: true,
+      variantId: true,
+      name: true,
+      variantName: true,
+      sku: true,
+      imageUrl: true,
+      slug: true,
+      quantity: true,
+      unitPrice: true,
+      totalPrice: true,
+    },
+  },
+} as const;
+
+type OrderRow = Prisma.OrderGetPayload<{ select: typeof ORDER_SELECT }>;
+
+/**
+ * The delivery window, in working days from when the order was placed.
+ *
+ * Weekends are skipped so a Friday "2 working days" order doesn't promise
+ * Sunday — the same rule the checkout quoted, kept in one place now that the
+ * order itself stores the days.
+ */
+function estimateWindow(placedAt: Date, min: number, max: number) {
+  const addWorkingDays = (days: number) => {
+    const date = new Date(placedAt);
+    let remaining = days;
+    while (remaining > 0) {
+      date.setDate(date.getDate() + 1);
+      const day = date.getDay();
+      if (day !== 0 && day !== 6) remaining -= 1;
+    }
+    return date.toISOString();
+  };
+
+  return { from: addWorkingDays(min), to: addWorkingDays(max) };
+}
+
+/** The JSON snapshot, defensively: only well-formed accounts come out. */
+export function readTransferDetails(value: unknown): TransferAccount[] | null {
+  if (!Array.isArray(value)) return null;
+  const accounts = value.filter(
+    (a): a is TransferAccount =>
+      !!a &&
+      typeof a === 'object' &&
+      typeof (a as TransferAccount).bankName === 'string' &&
+      typeof (a as TransferAccount).accountName === 'string' &&
+      typeof (a as TransferAccount).accountNumber === 'string',
+  );
+  return accounts.length ? accounts : null;
+}
+
+const CANCELLED_BY: Record<string, 'customer' | 'merchant' | 'payment-timeout'> = {
+  customer: 'customer',
+  merchant: 'merchant',
+  'payment-timeout': 'payment-timeout',
+};
+
+function toStorefrontOrder(row: OrderRow, now = new Date()): StorefrontOrder {
+  const lines: StorefrontOrderLine[] = row.lineItems.map((line) => ({
+    id: line.id,
+    productId: line.productId,
+    variantId: line.variantId,
+    name: line.name,
+    variantName: line.variantName,
+    sku: line.sku,
+    imageUrl: line.imageUrl,
+    slug: line.slug,
+    quantity: line.quantity,
+    unitPrice: toMinor(line.unitPrice),
+    totalPrice: toMinor(line.totalPrice),
+  }));
+
+  /* Refunds, and what a cancelled paid order still owes. */
+  const refundedMinor = row.refunds.reduce((sum, r) => sum + toMinor(r.amount), 0);
+  const refundedByReturn = new Map<string, Money>();
+  for (const refund of row.refunds) {
+    if (refund.returnId) refundedByReturn.set(refund.returnId, (refundedByReturn.get(refund.returnId) ?? 0) + toMinor(refund.amount));
+  }
+  const paidAndCancelled =
+    row.status === 'CANCELLED' && (row.paymentStatus === 'PAID' || row.paymentStatus === 'PARTIALLY_REFUNDED');
+  const owed = paidAndCancelled ? Math.max(0, toMinor(row.totalAmount) - refundedMinor) : 0;
+
+  /* Returns, and what's left of each line to send back. */
+  const lineById = new Map(lines.map((line) => [line.id, line]));
+  const returned = new Map<string, number>();
+  for (const r of row.returns) {
+    if (!countsAgainstReturnable(r.status)) continue;
+    for (const line of r.lines) returned.set(line.orderLineItemId, (returned.get(line.orderLineItemId) ?? 0) + line.quantity);
+  }
+  const windowDays = row.organization.returnWindowDays;
+  const eligibility = returnEligibility({
+    status: row.status,
+    deliveredAt: row.deliveredAt,
+    windowDays,
+    lines: lines.map((line) => ({ id: line.id, quantity: line.quantity, returned: returned.get(line.id) ?? 0 })),
+    now,
+  });
+
+  return {
+    reference: row.reference,
+    status: row.status as OrderStatus,
+    paymentStatus: row.paymentStatus as OrderPaymentStatus,
+    paymentMethodId: row.paymentMethod,
+    transferDetails: readTransferDetails(row.transferDetails),
+    placedAt: row.placedAt.toISOString(),
+    stageDates: {
+      confirmedAt: row.confirmedAt?.toISOString() ?? null,
+      packingAt: row.packingAt?.toISOString() ?? null,
+      shippedAt: row.shippedAt?.toISOString() ?? null,
+      deliveredAt: row.deliveredAt?.toISOString() ?? null,
+    },
+
+    contact: {
+      firstName: row.firstName,
+      lastName: row.lastName,
+      email: row.email,
+      phone: row.phone,
+    },
+
+    shippingAddress: {
+      fullName: row.shipFullName,
+      phone: row.shipPhone,
+      line1: row.shipLine1,
+      line2: row.shipLine2,
+      city: row.shipCity,
+      state: row.shipState,
+      country: row.shipCountry,
+      postalCode: row.shipPostalCode,
+    },
+
+    delivery: {
+      methodId: row.deliveryMethodId,
+      label: row.deliveryMethodLabel,
+      fee: toMinor(row.deliveryFee),
+      etaDays: [row.deliveryEtaMinDays, row.deliveryEtaMaxDays],
+      estimated: estimateWindow(row.placedAt, row.deliveryEtaMinDays, row.deliveryEtaMaxDays),
+    },
+
+    currency: row.currency,
+    totals: {
+      subtotal: toMinor(row.subtotal),
+      discount: toMinor(row.discount),
+      shipping: toMinor(row.deliveryFee),
+      tax: toMinor(row.taxAmount),
+      total: toMinor(row.totalAmount),
+    },
+    discountCode: row.discountCode,
+
+    note: row.note,
+    lines,
+    itemCount: lines.reduce((sum, line) => sum + line.quantity, 0),
+
+    cancellation:
+      row.status === 'CANCELLED'
+        ? { by: CANCELLED_BY[row.cancelReason ?? ''] ?? 'merchant', at: row.cancelledAt?.toISOString() ?? null }
+        : null,
+    refunds: {
+      total: refundedMinor,
+      owed,
+      lastAt: row.refunds.at(-1)?.createdAt.toISOString() ?? null,
+    },
+    returns: row.returns.map((r) => ({
+      id: r.id,
+      status: r.status as OrderReturnStatus,
+      reasonLabel: isReturnReason(r.reason) ? RETURN_REASONS[r.reason] : r.reason,
+      details: r.details,
+      storeNote: r.merchantNote,
+      requestedAt: r.requestedAt.toISOString(),
+      updatedAt: (r.refundedAt ?? r.rejectedAt ?? r.approvedAt ?? r.withdrawnAt)?.toISOString() ?? null,
+      refunded: refundedByReturn.get(r.id) ?? null,
+      lines: r.lines.map((line) => ({
+        orderLineItemId: line.orderLineItemId,
+        name: lineById.get(line.orderLineItemId)?.name ?? 'Item',
+        variantName: lineById.get(line.orderLineItemId)?.variantName ?? null,
+        quantity: line.quantity,
+      })),
+    })),
+    selfService: {
+      canCancel: customerCanCancel(row.status),
+      returns: eligibility.ok
+        ? { open: true, deadline: eligibility.deadline.toISOString(), remaining: Object.fromEntries(eligibility.remaining) }
+        : {
+            open: false,
+            reason: eligibility.reason,
+            deadline: returnDeadline(row.deliveredAt, windowDays)?.toISOString() ?? null,
+          },
+    },
+  };
+}
+
+export interface OrderScope {
+  organizationId: string;
+}
+
+/** A shopper's own orders, newest first. */
+export async function listOrdersForCustomer(
+  scope: OrderScope,
+  customerId: string,
+  limit = 50,
+): Promise<StorefrontOrder[]> {
+  const rows = await prisma.order.findMany({
+    where: { organizationId: scope.organizationId, customerId },
+    orderBy: { placedAt: 'desc' },
+    take: limit,
+    select: ORDER_SELECT,
+  });
+
+  return rows.map((row) => toStorefrontOrder(row));
+}
+
+/** One of a shopper's own orders. Their id is the permission. */
+export async function getOrderForCustomer(
+  scope: OrderScope,
+  customerId: string,
+  reference: string,
+): Promise<StorefrontOrder | null> {
+  const row = await prisma.order.findFirst({
+    where: { organizationId: scope.organizationId, customerId, reference: reference.trim() },
+    select: ORDER_SELECT,
+  });
+
+  return row ? toStorefrontOrder(row) : null;
+}
+
+/**
+ * Look an order up the way a guest has to: reference AND email, both.
+ *
+ * The email is compared normalised, and a mismatch reads exactly like a
+ * missing order — the caller says one thing for both, so this can't be used
+ * to find out which references exist.
+ */
+export async function findOrderByReferenceAndEmail(
+  scope: OrderScope,
+  reference: string,
+  email: string,
+): Promise<StorefrontOrder | null> {
+  const trimmed = reference.trim();
+  const normalized = normalizeEmail(email);
+  if (!trimmed || !normalized) return null;
+
+  const row = await prisma.order.findFirst({
+    where: {
+      organizationId: scope.organizationId,
+      reference: trimmed,
+      email: normalized,
+    },
+    select: ORDER_SELECT,
+  });
+
+  return row ? toStorefrontOrder(row) : null;
+}
+
+/**
+ * The just-placed order, for the confirmation page.
+ *
+ * Deliberately NOT protected by a session — a guest lands here seconds after
+ * ordering and must see their own confirmation. The lock is the token in the
+ * URL, which is random and 256 bits wide. The reference is NOT accepted here
+ * for exactly that reason: it counts upwards, so accepting it would let
+ * anyone read the whole store's orders by editing a number.
+ */
+export async function getOrderByConfirmationToken(
+  scope: OrderScope,
+  token: string,
+): Promise<StorefrontOrder | null> {
+  const trimmed = token.trim();
+  if (!trimmed) return null;
+
+  const row = await prisma.order.findFirst({
+    where: { organizationId: scope.organizationId, confirmationToken: trimmed },
+    select: ORDER_SELECT,
+  });
+
+  return row ? toStorefrontOrder(row) : null;
+}

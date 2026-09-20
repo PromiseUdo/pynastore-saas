@@ -1,0 +1,44 @@
+// lib/format.ts
+// The admin's single place for turning numbers and dates into text
+// (AGENTS.md §6). Fixed locale so server and client render identically.
+
+/** Organization has no currency column yet; every tenant trades in naira. */
+export const DEFAULT_CURRENCY = 'NGN';
+
+const LOCALE = 'en-NG';
+
+export function formatMoney(amount: number | null | undefined, currency = DEFAULT_CURRENCY): string {
+  if (amount === null || amount === undefined) return '—';
+  return new Intl.NumberFormat(LOCALE, {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+/** "₦5,000" or "₦5,000 – ₦9,000" */
+export function formatMoneyRange(min: number | null, max: number | null, currency = DEFAULT_CURRENCY): string {
+  if (min === null) return '—';
+  if (max === null || max === min) return formatMoney(min, currency);
+  return `${formatMoney(min, currency)} – ${formatMoney(max, currency)}`;
+}
+
+export function formatNumber(value: number | null | undefined, maxFractionDigits = 2): string {
+  if (value === null || value === undefined) return '—';
+  return new Intl.NumberFormat(LOCALE, { maximumFractionDigits: maxFractionDigits }).format(value);
+}
+
+/** "14 May 2026" */
+export function formatDate(value: string | Date | null | undefined): string {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Lagos' }).format(
+    new Date(value),
+  );
+}
+
+/** Plain-language label for a SCREAMING_SNAKE enum value: PARTIALLY_PAID → "Partially paid". */
+export function enumLabel(value: string): string {
+  const lower = value.toLowerCase().replace(/_/g, ' ');
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}

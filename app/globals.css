@@ -1,26 +1,302 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* Radius scale — compact/professional */
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  /* Subtle shadow scale */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.03);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.07), 0 8px 10px -6px rgb(0 0 0 / 0.03);
+
+  /* ── Storefront tokens ───────────────────────────────────────────────
+   * The VALUES live in app/store/[organizationSlug]/storefront.css, scoped
+   * to `[data-storefront]`. The utility MAPPING has to be here: that file is
+   * loaded as a standalone stylesheet by the storefront layout, so a `@theme`
+   * block inside it never reaches Tailwind's utility generator and
+   * `bg-brand`/`text-price`/… would silently produce nothing.
+   *
+   * Outside the storefront these resolve to their fallback, which is why each
+   * one carries a sensible non-storefront default. */
+  --color-brand: var(--brand, var(--primary));
+  --color-brand-hover: var(--brand-hover, var(--primary));
+  --color-highlight: var(--highlight, var(--primary));
+  --color-highlight-foreground: var(--highlight-foreground, var(--primary-foreground));
+  --color-teal: var(--teal, var(--primary));
+  --color-teal-soft: var(--teal-soft, var(--muted));
+  --color-sale: var(--sale, var(--destructive));
+  --color-sale-foreground: var(--sale-foreground, var(--primary-foreground));
+  --color-price: var(--price, var(--foreground));
+  --color-rating: var(--rating, var(--foreground));
+  --color-bar: var(--bar, var(--foreground));
+  --color-tile: var(--tile, var(--muted));
+  --color-elevated: var(--elevated, var(--popover));
+  --color-success: var(--success, var(--primary));
+  --font-display: var(--font-sf-display), Georgia, 'Times New Roman', serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ─────────────────────────────────────────────────
+   Light mode  –  professional neutral / slate tones
+   ───────────────────────────────────────────────── */
+:root {
+  /* Surfaces */
+  --background:      oklch(0.99 0 0);        /* #FAFAFA */
+  --foreground:      oklch(0.13 0.006 250);  /* near-black, cool tint */
+  --card:            oklch(1 0 0);           /* pure white */
+  --card-foreground: oklch(0.13 0.006 250);
+  --popover:         oklch(1 0 0);
+  --popover-foreground: oklch(0.13 0.006 250);
+
+  /* Brand — clean indigo (Linear / Vercel flavour) */
+  --primary:            oklch(0.52 0.19 264);  /* #4F46E5 range */
+  --primary-foreground: oklch(0.99 0 0);
+
+  /* Secondary — subtle fill */
+  --secondary:            oklch(0.96 0.004 250);
+  --secondary-foreground: oklch(0.25 0.006 250);
+
+  /* Muted — table rows, code blocks, disabled */
+  --muted:            oklch(0.965 0.004 250);
+  --muted-foreground: oklch(0.47 0.012 250);  /* ~zinc-500 */
+
+  /* Accent — hover backgrounds */
+  --accent:            oklch(0.955 0.006 264);
+  --accent-foreground: oklch(0.25 0.006 250);
+
+  /* Semantic */
+  --destructive:      oklch(0.56 0.22 27);  /* red-600 */
+  --border:           oklch(0.90 0.005 250); /* ~zinc-200 */
+  --input:            oklch(0.90 0.005 250);
+  --ring:             oklch(0.52 0.19 264);  /* same as primary */
+
+  /* Radius — 6 px; compact & professional */
+  --radius: 0.375rem;
+
+  /* Charts — purposeful data viz palette */
+  --chart-1: oklch(0.52 0.19 264);  /* indigo  */
+  --chart-2: oklch(0.60 0.15 142);  /* green   */
+  --chart-3: oklch(0.68 0.16 55);   /* amber   */
+  --chart-4: oklch(0.55 0.20 300);  /* violet  */
+  --chart-5: oklch(0.56 0.22 27);   /* red     */
+
+  /* Sidebar — slightly cooler off-white */
+  --sidebar:                   oklch(0.975 0.004 250);
+  --sidebar-foreground:        oklch(0.25 0.006 250);
+  --sidebar-primary:           oklch(0.52 0.19 264);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent:            oklch(0.93 0.007 264);
+  --sidebar-accent-foreground: oklch(0.20 0.006 250);
+  --sidebar-border:            oklch(0.88 0.005 250);
+  --sidebar-ring:              oklch(0.52 0.19 264);
+}
+
+/* ─────────────────────────────────────────────────
+   Dark mode  –  GitHub dark feel (not pure black)
+   ───────────────────────────────────────────────── */
+.dark {
+  --background:      oklch(0.17 0.006 250);  /* #0d1117 */
+  --foreground:      oklch(0.92 0.005 250);  /* #e6edf3 */
+  --card:            oklch(0.21 0.007 250);  /* #161b22 */
+  --card-foreground: oklch(0.92 0.005 250);
+  --popover:         oklch(0.21 0.007 250);
+  --popover-foreground: oklch(0.92 0.005 250);
+
+  --primary:            oklch(0.65 0.20 264);
+  --primary-foreground: oklch(0.99 0 0);
+
+  --secondary:            oklch(0.26 0.008 250);
+  --secondary-foreground: oklch(0.85 0.005 250);
+
+  --muted:            oklch(0.26 0.008 250);
+  --muted-foreground: oklch(0.60 0.012 250);
+
+  --accent:            oklch(0.26 0.009 264);
+  --accent-foreground: oklch(0.85 0.005 250);
+
+  --destructive:      oklch(0.65 0.22 27);
+  --border:           oklch(0.32 0.008 250);
+  --input:            oklch(0.28 0.008 250);
+  --ring:             oklch(0.65 0.20 264);
+
+  --chart-1: oklch(0.65 0.20 264);
+  --chart-2: oklch(0.65 0.15 142);
+  --chart-3: oklch(0.72 0.16 55);
+  --chart-4: oklch(0.65 0.20 300);
+  --chart-5: oklch(0.65 0.22 27);
+
+  --sidebar:                   oklch(0.145 0.006 250);
+  --sidebar-foreground:        oklch(0.85 0.005 250);
+  --sidebar-primary:           oklch(0.65 0.20 264);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent:            oklch(0.22 0.007 250);
+  --sidebar-accent-foreground: oklch(0.85 0.005 250);
+  --sidebar-border:            oklch(0.28 0.008 250);
+  --sidebar-ring:              oklch(0.65 0.20 264);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  html {
+    @apply font-sans;
+  }
+
+  /* Typography scale */
+  h1 { @apply text-2xl font-semibold tracking-tight; }
+  h2 { @apply text-xl font-semibold tracking-tight; }
+  h3 { @apply text-base font-semibold; }
+  h4 { @apply text-sm font-semibold; }
+
+  /* Smooth focus ring everywhere */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Scrollbar — subtle */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.80 0.005 250);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.65 0.008 250);
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: oklch(0.35 0.008 250);
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.45 0.008 250);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ─────────────────────────────────────────────────
+   Utility classes used across the design system
+   ───────────────────────────────────────────────── */
+@layer utilities {
+  /* Page container */
+  .page-container {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Content section max-width (forms, detail views) */
+  .content-container {
+    @apply mx-auto w-full max-w-4xl;
+  }
+
+  /* Card surface */
+  .surface {
+    @apply rounded-lg border bg-card text-card-foreground shadow-xs;
+  }
+
+  /* Subtle muted panel */
+  .panel {
+    @apply rounded-lg border bg-muted/40 p-4;
+  }
+
+  /* Status dot */
+  .status-dot {
+    @apply inline-block size-2 rounded-full;
+  }
+}
+
+/* ─────────────────────────────────────────────────
+   Mobile / Capacitor native shell
+   ───────────────────────────────────────────────── */
+@layer utilities {
+  /* Safe-area padding helpers (notch, home indicator, rounded corners).
+     max() keeps a sane minimum on devices with zero insets. */
+  .safe-top {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+  .safe-bottom {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+  .safe-y {
+    padding-top: max(0px, env(safe-area-inset-top));
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+  .safe-x {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
+}
+
+/* Native runtime only — the Capacitor WebView (data-native) or the mobile
+   web origin (data-runtime="mobile"). Kills browser-chrome affordances that
+   feel wrong in an app. */
+:root[data-native] body,
+:root[data-runtime='mobile'] body {
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Let inputs still be selectable/callout-able even with the rule above. */
+:root[data-native] input,
+:root[data-native] textarea,
+:root[data-runtime='mobile'] input,
+:root[data-runtime='mobile'] textarea {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* NativeShell toggles this on <html> around the software keyboard. */
+:root.keyboard-open {
+  --keyboard-inset: env(keyboard-inset-height, 0px);
 }

@@ -39,3 +39,21 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/lib/generated/prisma
+
+# capacitor — native projects ARE committed; only build artifacts are ignored
+/ios/App/Pods
+/ios/App/build
+/ios/App/output
+/ios/App/App/public
+/ios/DerivedData
+/android/.gradle
+/android/build
+/android/app/build
+/android/local.properties
+/android/app/src/main/assets/public
+/android/capacitor-cordova-android-plugins
+.capacitor-cli-*
+capacitor.settings.gradle
+*.apk

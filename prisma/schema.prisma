@@ -1,0 +1,2651 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// AUTH TABLES (Auth.js / NextAuth v5 compatible)
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String? // null if OAuth-only
+
+  // Bumped whenever all previously issued JWTs for this user must be
+  // invalidated (currently: on password reset). Compared against the
+  // JWT's own sessionVersion claim on every request.
+  sessionVersion Int @default(0)
+
+  accounts            Account[]
+  sessions            Session[]
+  memberships         Membership[]
+  auditLogs           AuditLog[]
+  passwordResetTokens PasswordResetToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// Single-use password reset tokens. Only a SHA-256 hash of the raw token
+// is ever stored — the raw token exists only in the emailed link.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================
+// MULTI-TENANCY CORE
+// ============================================================
+
+model Organization {
+  id      String             @id @default(cuid())
+  name    String
+  slug    String             @unique // subdomain label: {slug}.{ROOT_DOMAIN}
+  logoUrl String?
+  plan    OrganizationPlan   @default(FREE)
+  status  OrganizationStatus @default(ACTIVE)
+
+  // Paid-tier custom domains (e.g. dashboard.acme.com, acme.com). Null unless
+  // the org has provisioned + verified DNS for that domain.
+  customAdminDomain String? @unique
+  customStoreDomain String? @unique
+
+  /**
+   * Online store: days after delivery in which a customer may ask to return
+   * items. Null means the store doesn't take returns through the website, and
+   * then nothing anywhere promises that it does.
+   */
+  returnWindowDays Int?
+
+  memberships Membership[]
+  roles       Role[]
+  invitations Invitation[]
+
+  // ERP Modules
+  projects               Project[]
+  suppliers              Supplier[]
+  purchaseOrders         PurchaseOrder[]
+  warehouses             Warehouse[]
+  categories             Category[]
+  brands                 Brand[]
+  collections            Collection[]
+  productImages          ProductImage[]
+  inventoryItems         InventoryItem[]
+  stockMovements         StockMovement[]
+  cycleCounts            CycleCount[]
+  stockTransfers         StockTransfer[]
+  inventoryRequisitions  InventoryRequisition[]
+  customers              Customer[]
+  customerOAuthAccounts  CustomerOAuthAccount[]
+  orders                 Order[]
+  orderPayments          OrderPayment[]
+  orderStockAllocations  OrderStockAllocation[]
+  orderReturns           OrderReturn[]
+  orderRefunds           OrderRefund[]
+  bankAccounts           MerchantBankAccount[]
+  deliveryZones          DeliveryZone[]
+  deliveryRates          DeliveryRate[]
+  pickupLocations        PickupLocation[]
+  discountCodes          DiscountCode[]
+  storePages             StorePage[]
+  socialConnections      SocialConnection[]
+  socialConnectionDrafts SocialConnectionDraft[]
+  socialPosts            SocialPost[]
+  productReviews         ProductReview[]
+  productImageEmbeddings ProductImageEmbedding[]
+  visualSearchQueries    VisualSearchQuery[]
+  quotes                 Quote[]
+  invoices               Invoice[]
+  payments               Payment[]
+  returnRequests         ReturnRequest[]
+  fulfillments           Fulfillment[]
+  auditLogs              AuditLog[]
+
+  // Billing
+  subscription        Subscription?
+  billingTransactions BillingTransaction[]
+  domainOrders        DomainOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("organizations")
+}
+
+enum OrganizationPlan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+model Membership {
+  id             String           @id @default(cuid())
+  userId         String
+  organizationId String
+  roleId         String
+  status         MembershipStatus @default(ACTIVE)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+  INVITED
+}
+
+model Invitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  email          String
+  roleId         String
+  token          String           @unique @default(cuid())
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime
+  invitedById    String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+// ============================================================
+// RBAC — Roles & Permissions
+// ============================================================
+
+model Role {
+  id             String  @id @default(cuid())
+  organizationId String
+  name           String // "Admin", "Warehouse Manager", "Procurement Officer"
+  description    String?
+  isSystem       Boolean @default(false) // system roles can't be deleted
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships     Membership[]
+  rolePermissions RolePermission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("roles")
+}
+
+// Permissions are global constants (seeded), not per-org
+model Permission {
+  id          String  @id @default(cuid())
+  key         String  @unique // e.g. "inventory.create", "procurement.approve"
+  module      String // "inventory", "procurement", "sales", etc.
+  description String?
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ============================================================
+// AUDIT LOGGING
+// ============================================================
+
+model AuditLog {
+  id             String  @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String // "inventory.stock_movement.created", "procurement.po.approved"
+  entityType     String // "StockMovement", "PurchaseOrder"
+  entityId       String
+  metadata       Json? // diff, old values, new values
+  ipAddress      String?
+  userAgent      String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// PROJECTS MODULE
+// ============================================================
+
+model Project {
+  id             String        @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  status         ProjectStatus @default(DRAFT)
+  priority       Priority      @default(MEDIUM)
+  startDate      DateTime?
+  dueDate        DateTime?
+  completedAt    DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  tasks        Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("projects")
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+model Task {
+  id             String     @id @default(cuid())
+  organizationId String
+  projectId      String
+  title          String
+  description    String?
+  status         TaskStatus @default(TODO)
+  priority       Priority   @default(MEDIUM)
+  assignedToId   String? // userId
+  dueDate        DateTime?
+  completedAt    DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  BLOCKED
+  DONE
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// ============================================================
+// PROCUREMENT MODULE
+// ============================================================
+
+model Supplier {
+  id             String         @id @default(cuid())
+  organizationId String
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  taxId          String?
+  status         SupplierStatus @default(ACTIVE)
+  notes          String?
+
+  organization     Organization    @relation(fields: [organizationId], references: [id])
+  purchaseOrders   PurchaseOrder[]
+  preferredByItems InventoryItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("suppliers")
+}
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+}
+
+model PurchaseOrder {
+  id              String              @id @default(cuid())
+  organizationId  String
+  supplierId      String
+  warehouseId     String? // destination store stock is received into
+  customerId      String? // set only for drop-ship POs — ships to this customer instead of a store
+  poNumber        String // human-readable: PO-2024-0001
+  status          PurchaseOrderStatus @default(DRAFT)
+  currency        String              @default("USD")
+  subtotal        Decimal             @db.Decimal(12, 2)
+  taxAmount       Decimal             @default(0) @db.Decimal(12, 2)
+  totalAmount     Decimal             @db.Decimal(12, 2)
+  notes           String?
+  expectedAt      DateTime?
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectedById    String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  receivedAt      DateTime? // stamped when the last outstanding line item is fully received
+
+  organization      Organization      @relation(fields: [organizationId], references: [id])
+  supplier          Supplier          @relation(fields: [supplierId], references: [id])
+  warehouse         Warehouse?        @relation(fields: [warehouseId], references: [id])
+  customer          Customer?         @relation(fields: [customerId], references: [id])
+  lineItems         POLineItem[]
+  dropShipLineItems InvoiceLineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, poNumber])
+  @@index([organizationId])
+  @@map("purchase_orders")
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model POLineItem {
+  id              String  @id @default(cuid())
+  purchaseOrderId String
+  inventoryItemId String?
+  description     String
+  quantity        Decimal @db.Decimal(12, 4)
+  unitPrice       Decimal @db.Decimal(12, 2)
+  totalPrice      Decimal @db.Decimal(12, 2)
+  receivedQty     Decimal @default(0) @db.Decimal(12, 4)
+
+  purchaseOrder PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@map("po_line_items")
+}
+
+// ============================================================
+// INVENTORY MODULE
+// ============================================================
+
+model Warehouse {
+  id             String          @id @default(cuid())
+  organizationId String
+  name           String
+  location       String?
+  status         WarehouseStatus @default(ACTIVE)
+  sellsOnline    Boolean         @default(false) // the online store sells this store's available stock
+
+  organization          Organization           @relation(fields: [organizationId], references: [id])
+  stockMovements        StockMovement[]
+  inventoryLevels       InventoryLevel[]
+  purchaseOrders        PurchaseOrder[]
+  cycleCounts           CycleCount[]
+  transfersOut          StockTransfer[]        @relation("TransferFrom")
+  transfersIn           StockTransfer[]        @relation("TransferTo")
+  invoices              Invoice[]
+  fulfillments          Fulfillment[]
+  orderStockAllocations OrderStockAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("warehouses")
+}
+
+enum WarehouseStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// Hierarchical product categorization, scoped per org. Also the online
+// store's department tree: the storefront URL is the slug path from the root
+// (/c/fashion/women/skirts), so depth is capped at 3 levels — see
+// features/inventory/category-tree.ts for the depth/cycle rules.
+model Category {
+  id             String  @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String // unique among siblings; one URL path segment
+  parentId       String?
+  description    String? // shown on the storefront category page
+  imageUrl       String? // storefront banner (top level) / thumbnail (deeper)
+  isVisible      Boolean @default(true) // false = kept for stock/reporting, hidden from the online store
+  isFeatured     Boolean @default(false) // top level only: promoted in storefront navigation
+  sortOrder      Int     @default(0) // order among siblings, in admin and storefront
+
+  // "Goes well with": the merchant's own pairing of this category with others,
+  // best first. Drives the product page's companion rail and the bag's
+  // "Goes with items in your bag". Ids are re-checked against this org's
+  // visible categories on every storefront read, so a deleted or foreign id
+  // simply drops out. Empty = fall back to sibling categories.
+  companionIds   String[] @default([])
+  companionTitle String? // rail heading, e.g. "Complete the look"; null = "You may also need"
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  parent       Category?       @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  children     Category[]      @relation("CategoryTree")
+  items        InventoryItem[]
+  collections  Collection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, parentId, name])
+  @@unique([organizationId, parentId, slug])
+  @@index([organizationId])
+  @@index([parentId])
+  @@map("categories")
+}
+
+model InventoryItem {
+  id             String     @id @default(cuid())
+  organizationId String
+  categoryId     String?
+  sku            String
+  name           String
+  description    String?
+  unit           String     @default("pcs") // pcs, kg, m, L, etc.
+  barcode        String?
+  itemType       ItemType   @default(STANDARD)
+  reorderPoint   Decimal?   @db.Decimal(12, 4)
+  averageCost    Decimal    @default(0) @db.Decimal(12, 4) // moving-average unit cost, for valuation
+  sellingPrice   Decimal?   @db.Decimal(12, 2) // on a VARIANT, null = use the parent's price
+  compareAtPrice Decimal?   @db.Decimal(12, 2) // "was" price shown struck through online; must exceed sellingPrice
+  status         ItemStatus @default(ACTIVE)
+
+  // Online store (one catalogue: the inventory item IS the online product).
+  // Set on top-level products; variants inherit everything except price and image.
+  slug             String? // web address, unique per org: /products/{slug}
+  brandId          String?
+  shortDescription String?
+  highlights       String[]  @default([])
+  specs            Json? // [{ label, value }]
+  tags             String[]  @default([]) // see PRODUCT_TAGS in features/inventory/product-rules.ts
+  isPublished      Boolean   @default(false)
+  publishedAt      DateTime?
+  imageId          String? // VARIANT: which of the parent's images shows for this option
+
+  // Variants: a VARIANT item points to its STANDARD parent. The parent stores
+  // the option schema (e.g. [{"name":"Color","kind":"color","values":[{"label":"Red","swatch":"#c00"}]}];
+  // legacy rows hold ["Size","Color"] — read via normalizeVariantOptions);
+  // each variant stores its own values (e.g. {"Size":"M","Color":"Red"}).
+  parentItemId      String?
+  variantOptions    Json?
+  variantAttributes Json?
+
+  // Minimal supplier link, used to group auto-drafted reorder POs.
+  preferredSupplierId String?
+
+  organization          Organization            @relation(fields: [organizationId], references: [id])
+  category              Category?               @relation(fields: [categoryId], references: [id])
+  brand                 Brand?                  @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  images                ProductImage[]          @relation("ProductImages")
+  imageEmbeddings       ProductImageEmbedding[]
+  orderStockAllocations OrderStockAllocation[]
+  collections           CollectionItem[]
+  image                 ProductImage?           @relation("VariantImage", fields: [imageId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  preferredSupplier     Supplier?               @relation(fields: [preferredSupplierId], references: [id])
+  parentItem            InventoryItem?          @relation("ItemVariants", fields: [parentItemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variants              InventoryItem[]         @relation("ItemVariants")
+  stockMovements        StockMovement[]
+  inventoryLevels       InventoryLevel[]
+  poLineItems           POLineItem[]
+  requisitionItems      RequisitionItem[]
+  cycleCountItems       CycleCountItem[]
+  stockTransfers        StockTransfer[]
+  quoteLineItems        QuoteLineItem[]
+  invoiceLineItems      InvoiceLineItem[]
+  fulfillmentLineItems  FulfillmentLineItem[]
+  // KIT items list their components via kitComponents; a STANDARD item can be
+  // a component of many kits via kitComponentOf.
+  kitComponents         KitComponent[]          @relation("KitParent")
+  kitComponentOf        KitComponent[]          @relation("KitComponent")
+  wishlistedBy          CustomerWishlistItem[]
+  orderLineItems        OrderLineItem[]
+  reviews               ProductReview[]
+  socialPosts           SocialPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, sku])
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([organizationId, isPublished])
+  @@index([brandId])
+  @@index([categoryId])
+  @@index([parentItemId])
+  @@index([preferredSupplierId])
+  @@map("inventory_items")
+}
+
+model Brand {
+  id             String  @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  logoUrl        String?
+  logoPublicId   String? // Cloudinary public_id, for deleting the asset
+  description    String?
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  items        InventoryItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, slug])
+  @@map("brands")
+}
+
+// Images belong to the top-level product; a variant points at one via imageId.
+model ProductImage {
+  id              String  @id @default(cuid())
+  organizationId  String
+  inventoryItemId String
+  url             String
+  publicId        String? // Cloudinary public_id, for deleting the asset
+  alt             String?
+  width           Int?
+  height          Int?
+  sortOrder       Int     @default(0) // 0 = main image
+
+  organization  Organization           @relation(fields: [organizationId], references: [id])
+  inventoryItem InventoryItem          @relation("ProductImages", fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  variants      InventoryItem[]        @relation("VariantImage")
+  embedding     ProductImageEmbedding?
+
+  createdAt DateTime @default(now())
+
+  @@index([inventoryItemId])
+  @@map("product_images")
+}
+
+// Search by image: one embedding per product image, generated ONCE when the
+// image is added (lib/storefront/visual-search/indexing.ts) and reused by
+// every shopper search. A separate table rather than a column on
+// ProductImage so the vector never rides along with ordinary image reads, and
+// so its status/retry bookkeeping has a home.
+//
+// Lifecycle follows the image: the product editor replaces a changed image
+// with a new ProductImage row and deletes removed ones, and the cascades
+// below delete their embeddings with them — a deleted photo can't match.
+//
+// `embedding` is pgvector (the `vector` extension, enabled in the migration).
+// Prisma can't read or write that type, so every access goes through raw SQL
+// in lib/storefront/visual-search/vector-store.ts. The dimension is fixed by
+// the column; changing VISUAL_SEARCH dimensions means a migration + re-index.
+model ProductImageEmbedding {
+  id              String                      @id @default(cuid())
+  organizationId  String
+  productImageId  String                      @unique
+  inventoryItemId String
+  status          EmbeddingStatus             @default(PENDING)
+  embedding       Unsupported("vector(768)")?
+  /**
+   * the model that produced `embedding`, e.g. gemini-embedding-2
+   */
+  model           String?
+  dimensions      Int?
+  /**
+   * sha256 of the image bytes that were embedded — an unchanged image is never re-embedded
+   */
+  sourceHash      String?
+  attempts        Int                         @default(0)
+  lastError       String? // short, internal — never shown to shoppers
+  nextAttemptAt   DateTime?
+  indexedAt       DateTime?
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productImage  ProductImage  @relation(fields: [productImageId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([inventoryItemId])
+  @@index([organizationId, sourceHash])
+  @@map("product_image_embeddings")
+}
+
+enum EmbeddingStatus {
+  PENDING
+  INDEXED
+  FAILED
+}
+
+// A shopper's image search, kept briefly so the results page can be
+// refreshed, filtered and paged from its URL (?vq=<id>) without embedding the
+// photo again. Only the vector is stored — never the photo — and rows expire
+// after a day (purged by /api/cron/index-product-images). Always read back
+// with the store's organizationId, so an id from one store is useless in
+// another.
+model VisualSearchQuery {
+  id             String                     @id @default(cuid())
+  organizationId String
+  embedding      Unsupported("vector(768)")
+  model          String
+  expiresAt      DateTime
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([expiresAt])
+  @@map("visual_search_queries")
+}
+
+// A merchandising group that cuts across categories ("Travel essentials").
+// Either hand-picked members (CURATED) or a live rule (DYNAMIC) — the
+// storefront resolves both through the same product query.
+model Collection {
+  id             String  @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  tagline        String? // one line under the title
+  description    String?
+  imageUrl       String?
+  imagePublicId  String?
+  heroImageUrl   String?
+  heroPublicId   String?
+  isVisible      Boolean @default(true)
+  isFeatured     Boolean @default(false) // surfaced in storefront navigation
+  sortOrder      Int     @default(0)
+
+  kind CollectionKind @default(CURATED)
+  sort CollectionSort @default(RELEVANCE) // the order products read best in
+
+  // DYNAMIC rule — every set field must match (AND).
+  matchCategoryId        String?
+  matchTag               String? // see PRODUCT_TAGS
+  matchMinPrice          Decimal? @db.Decimal(12, 2)
+  matchMaxPrice          Decimal? @db.Decimal(12, 2)
+  matchCreatedWithinDays Int?
+
+  organization  Organization     @relation(fields: [organizationId], references: [id])
+  matchCategory Category?        @relation(fields: [matchCategoryId], references: [id], onDelete: SetNull)
+  items         CollectionItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@map("collections")
+}
+
+enum CollectionKind {
+  CURATED
+  DYNAMIC
+}
+
+enum CollectionSort {
+  RELEVANCE
+  NEWEST
+  PRICE_ASC
+  PRICE_DESC
+  BESTSELLING
+}
+
+// Membership of a CURATED collection, in editorial order.
+model CollectionItem {
+  collectionId    String
+  inventoryItemId String
+  position        Int    @default(0)
+
+  collection    Collection    @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, inventoryItemId])
+  @@index([inventoryItemId])
+  @@map("collection_items")
+}
+
+enum ItemStatus {
+  ACTIVE
+  DISCONTINUED
+  ARCHIVED
+}
+
+enum ItemType {
+  STANDARD
+  VARIANT
+  KIT
+}
+
+// Bill of materials: components (and quantities) consumed to assemble one unit of a KIT item.
+model KitComponent {
+  id              String  @id @default(cuid())
+  kitItemId       String
+  componentItemId String
+  quantity        Decimal @db.Decimal(12, 4)
+
+  kitItem       InventoryItem @relation("KitParent", fields: [kitItemId], references: [id], onDelete: Cascade)
+  componentItem InventoryItem @relation("KitComponent", fields: [componentItemId], references: [id])
+
+  @@unique([kitItemId, componentItemId])
+  @@index([kitItemId])
+  @@map("kit_components")
+}
+
+// Materialized current stock per item per warehouse (store).
+// Updated by application logic after each StockMovement.
+model InventoryLevel {
+  id              String   @id @default(cuid())
+  inventoryItemId String
+  warehouseId     String
+  quantity        Decimal  @db.Decimal(12, 4)
+  reservedQty     Decimal  @default(0) @db.Decimal(12, 4) // soft-reserved by issued invoices awaiting packing; available = quantity - reservedQty
+  reorderPoint    Decimal? @db.Decimal(12, 4) // per-store override; falls back to InventoryItem.reorderPoint
+  reorderQty      Decimal? @db.Decimal(12, 4) // suggested restock quantity for this store
+  location        String? // free-text shelf/bin tag within this store, e.g. "Aisle 4, Shelf B"
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id])
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([inventoryItemId, warehouseId])
+  @@map("inventory_levels")
+}
+
+// THE LEDGER — never delete rows, only append
+model StockMovement {
+  id              String       @id @default(cuid())
+  organizationId  String
+  inventoryItemId String
+  warehouseId     String // source warehouse
+  toWarehouseId   String? // destination (for TRANSFER type)
+  type            MovementType
+  quantity        Decimal      @db.Decimal(12, 4) // always positive
+  unitCost        Decimal?     @db.Decimal(12, 4) // cost captured on IN movements, drives averageCost
+  referenceType   String? // "PurchaseOrder", "SalesInvoice", "Requisition"
+  referenceId     String? // FK to the source document
+  notes           String?
+  performedById   String? // userId
+
+  organization  Organization  @relation(fields: [organizationId], references: [id])
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([inventoryItemId])
+  @@index([referenceType, referenceId])
+  @@map("stock_movements")
+}
+
+enum MovementType {
+  IN // goods received (from PO, production, etc.)
+  OUT // goods issued (to production, sales, etc.)
+  TRANSFER // warehouse-to-warehouse
+  ADJUSTMENT // manual correction (positive or negative via signed notes)
+  RESERVED // soft-reserved for a requisition
+}
+
+// A stocktaking session: snapshot expected quantities for chosen items at one
+// store, record counted quantities, then reconcile variances in one go.
+model CycleCount {
+  id             String           @id @default(cuid())
+  organizationId String
+  warehouseId    String
+  status         CycleCountStatus @default(OPEN)
+  notes          String?
+  startedById    String?
+  completedById  String?
+  completedAt    DateTime?
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  warehouse    Warehouse        @relation(fields: [warehouseId], references: [id])
+  items        CycleCountItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([warehouseId])
+  @@map("cycle_counts")
+}
+
+enum CycleCountStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+model CycleCountItem {
+  id              String   @id @default(cuid())
+  cycleCountId    String
+  inventoryItemId String
+  expectedQty     Decimal  @db.Decimal(12, 4) // InventoryLevel.quantity snapshotted when the count was created
+  countedQty      Decimal? @db.Decimal(12, 4) // null until counted
+  notes           String?
+
+  cycleCount    CycleCount    @relation(fields: [cycleCountId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([cycleCountId])
+  @@map("cycle_count_items")
+}
+
+// Tracked, two-step (dispatch -> receive) inter-store transfer. Stock is "in
+// transit" between the two StockMovements this creates — decremented at the
+// source on dispatch, not credited to the destination until received.
+// Additive to StockMovement's instant TRANSFER type, which stays for
+// same-day moves.
+model StockTransfer {
+  id              String              @id @default(cuid())
+  organizationId  String
+  inventoryItemId String
+  fromWarehouseId String
+  toWarehouseId   String
+  quantity        Decimal             @db.Decimal(12, 4)
+  status          StockTransferStatus @default(DISPATCHED)
+  notes           String?
+  dispatchedById  String?
+  dispatchedAt    DateTime            @default(now())
+  receivedById    String?
+  receivedAt      DateTime?
+
+  organization  Organization  @relation(fields: [organizationId], references: [id])
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  fromWarehouse Warehouse     @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse     @relation("TransferTo", fields: [toWarehouseId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@map("stock_transfers")
+}
+
+enum StockTransferStatus {
+  DISPATCHED
+  RECEIVED
+  CANCELLED
+}
+
+model InventoryRequisition {
+  id             String            @id @default(cuid())
+  organizationId String
+  projectId      String?
+  requestedById  String
+  status         RequisitionStatus @default(DRAFT)
+  notes          String?
+  approvedById   String?
+  approvedAt     DateTime?
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  items        RequisitionItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("inventory_requisitions")
+}
+
+enum RequisitionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  FULFILLED
+  CANCELLED
+}
+
+model RequisitionItem {
+  id              String  @id @default(cuid())
+  requisitionId   String
+  inventoryItemId String
+  requestedQty    Decimal @db.Decimal(12, 4)
+  issuedQty       Decimal @default(0) @db.Decimal(12, 4)
+
+  requisition   InventoryRequisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem        @relation(fields: [inventoryItemId], references: [id])
+
+  @@map("requisition_items")
+}
+
+// ============================================================
+// SALES MODULE
+// ============================================================
+
+/**
+ * A person the merchant sells to — created by staff in the admin, or by the
+ * shopper themselves on the storefront.
+ * There is deliberately no separate "shopper" table. A shopper who signs up
+ * on the online store IS a customer record in the merchant's Sales module
+ * from the moment they register, so an order never has to be reconciled
+ * against a second identity later.
+ * ACCOUNTS ARE PER MERCHANT. `email` is unique within an organization, not
+ * globally: the same person can hold an account at two stores on the
+ * platform, and signing in at one must never sign them in at the other.
+ * A staff-created customer has no `passwordHash` and cannot sign in until
+ * the person registers or links Google with that address.
+ */
+model Customer {
+  id             String         @id @default(cuid())
+  organizationId String
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  taxId          String?
+  status         CustomerStatus @default(ACTIVE)
+
+  // ── Storefront account (null for customers staff typed in) ──────────────
+  passwordHash    String? // null for Google-only accounts and staff-created records
+  emailVerifiedAt DateTime? // set when Google vouches for the address
+  lastLoginAt     DateTime?
+  // Bumped whenever every session issued so far must stop working
+  // (password reset / change). Compared against the session token's own
+  // claim on each request — mirrors User.sessionVersion.
+  sessionVersion  Int       @default(0)
+
+  organization           Organization                 @relation(fields: [organizationId], references: [id])
+  quotes                 Quote[]
+  invoices               Invoice[]
+  dropShipPurchaseOrders PurchaseOrder[]
+  oauthAccounts          CustomerOAuthAccount[]
+  addresses              CustomerAddress[]
+  passwordResetTokens    CustomerPasswordResetToken[]
+  emailChanges           CustomerEmailChange[]
+  wishlist               CustomerWishlistItem[]
+  orders                 Order[]
+  reviews                ProductReview[]
+  reviewVotes            ProductReviewVote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@map("customers")
+}
+
+/**
+ * A shopper's linked social identity. Scoped to the organization as well as
+ * the customer: one Google account may shop at many stores on the platform,
+ * but within a single store it maps to exactly one customer.
+ */
+model CustomerOAuthAccount {
+  id                String @id @default(cuid())
+  customerId        String
+  organizationId    String
+  provider          String // 'google'
+  providerAccountId String // the provider's stable user id (Google's `sub`)
+
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, provider, providerAccountId])
+  @@unique([customerId, provider])
+  @@index([customerId])
+  @@map("customer_oauth_accounts")
+}
+
+/**
+ * A saved delivery address. Structured, unlike Customer.address (a single
+ * free-text line staff type in), because checkout needs the parts.
+ */
+model CustomerAddress {
+  id         String  @id @default(cuid())
+  customerId String
+  fullName   String
+  phone      String
+  line1      String
+  line2      String?
+  city       String
+  state      String
+  country    String  @default("Nigeria")
+  postalCode String?
+  isDefault  Boolean @default(false)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@map("customer_addresses")
+}
+
+/**
+ * A product a shopper saved for later.
+ * Kept as a plain (customer, product) pair rather than a copy of the product:
+ * a saved item must show today's price and today's availability, not what
+ * they were on the day it was saved. The unique constraint makes saving
+ * twice a no-op instead of a duplicate row, which is what lets the merge on
+ * sign-in be careless about overlap.
+ * The foreign key is the point: when a merchant deletes a product it leaves
+ * every wishlist with it, so no shopper is left holding a link to nothing.
+ */
+model CustomerWishlistItem {
+  id         String @id @default(cuid())
+  customerId String
+  productId  String
+
+  customer Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  InventoryItem @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([customerId, productId])
+  @@index([customerId])
+  @@index([productId])
+  @@map("customer_wishlist_items")
+}
+
+/**
+ * A requested — not yet applied — change of the address an account signs in
+ * with.
+ * The change waits here until the person proves they can read the NEW inbox.
+ * An address nobody has proved is an address nobody should be able to
+ * recover the account with: a typo would otherwise hand that power to a
+ * stranger, silently, at the moment it is least likely to be noticed.
+ * Single-use and short-lived, like a reset token, and only the hash is
+ * stored. Requesting again replaces whatever was pending.
+ */
+model CustomerEmailChange {
+  id         String    @id @default(cuid())
+  customerId String
+  newEmail   String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([customerId])
+  @@index([expiresAt])
+  @@map("customer_email_changes")
+}
+
+/**
+ * Single-use, short-lived password reset token. Only the hash is stored.
+ */
+model CustomerPasswordResetToken {
+  id         String    @id @default(cuid())
+  customerId String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([customerId])
+  @@index([expiresAt])
+  @@map("customer_password_reset_tokens")
+}
+
+/**
+ * One-time ticket that carries a completed Google sign-in from the origin
+ * Google redirected to (always the root domain — see the note in
+ * lib/storefront/account/google.ts) back to the store's own origin, which is
+ * the only place allowed to hold that store's session cookie.
+ * Rows are consumed on first use and expire in a minute; a stale one is
+ * worthless. Only the token's id is stored — the token itself is signed, not
+ * looked up.
+ */
+model CustomerAuthHandoff {
+  id        String    @id // the token's jti
+  usedAt    DateTime?
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("customer_auth_handoffs")
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// ============================================================
+// ONLINE STORE ORDERS
+// ============================================================
+
+/**
+ * An order placed on the merchant's online store.
+ * Its own record rather than an Invoice, because an online order carries
+ * things an invoice does not: where it is being delivered, which delivery
+ * option was paid for, what the shopper wrote in the note, and how far
+ * through paying they are. Invoicing and fulfilment remain the admin's
+ * existing flows and can be raised from an order later.
+ * THE ADDRESS IS A SNAPSHOT, not a link to CustomerAddress. An order has to
+ * keep showing where it was actually sent, however the shopper edits their
+ * address book afterwards. Same reason line items copy the name and price:
+ * an order is a record of what was agreed, not a live view of a catalogue.
+ * GUESTS. `customer` is always set — a guest checkout finds or creates the
+ * customer by email, so the merchant sees one person rather than a stream of
+ * anonymous sales. `isGuest` remembers whether an account was used, because
+ * only an account-holder may read the order without knowing its email.
+ * MONEY is stored in major units as Decimal, like every other money column
+ * in this schema. The storefront works in minor units; the mapper converts
+ * at the boundary, exactly as it does for prices.
+ */
+model Order {
+  id             String @id @default(cuid())
+  organizationId String
+  customerId     String
+
+  /**
+   * Shopper-facing reference: ORD-2026-000123. Unique within the store.
+   */
+  reference String
+
+  /**
+   * Unguessable key for the confirmation page.
+   * The reference is sequential, so anyone who can count could otherwise
+   * read every order in the store by editing a URL. The confirmation link
+   * carries this instead; the reference stays the thing a shopper quotes to
+   * support, and a guest looking an order up later needs it AND the email.
+   */
+  confirmationToken String @unique
+
+  status        OrderStatus        @default(PENDING)
+  paymentStatus OrderPaymentStatus @default(AWAITING_PAYMENT)
+  /**
+   * The option the shopper chose, e.g. 'card' | 'transfer' | 'pod'.
+   */
+  paymentMethod String
+  isGuest       Boolean            @default(false)
+
+  // Who to contact about it — copied, so an account edit never rewrites history.
+  email     String
+  firstName String
+  lastName  String
+  phone     String
+
+  // Where it goes.
+  shipFullName   String
+  shipPhone      String
+  shipLine1      String
+  shipLine2      String?
+  shipCity       String
+  shipState      String
+  shipCountry    String
+  shipPostalCode String?
+
+  // How it gets there.
+  deliveryMethodId    String
+  deliveryMethodLabel String
+  deliveryFee         Decimal @db.Decimal(12, 2)
+  /**
+   * Working days, as quoted at checkout.
+   */
+  deliveryEtaMinDays  Int
+  deliveryEtaMaxDays  Int
+
+  currency    String  @default("NGN")
+  subtotal    Decimal @db.Decimal(12, 2)
+  discount    Decimal @default(0) @db.Decimal(12, 2)
+  taxAmount   Decimal @default(0) @db.Decimal(12, 2)
+  totalAmount Decimal @db.Decimal(12, 2)
+
+  /**
+   * The code the shopper typed, and what it was worth, copied onto the order.
+   * A snapshot: editing or deleting the code later never rewrites an order
+   * that already used it. `discountCodeId` is the live record, kept only so
+   * the merchant can see how often a code was used.
+   */
+  discountCodeId    String?
+  discountCode      String?
+  discountCodeLabel String?
+
+  note String?
+
+  placedAt        DateTime  @default(now())
+  /**
+   * When the payment provider confirmed the money arrived — set only by a
+   * server-side verification (lib/storefront/checkout/payment-service.ts).
+   */
+  paidAt          DateTime?
+  /**
+   * When the order reached each stage — shown on the shopper's progress track
+   * and the merchant's order page. Null until it happens; nothing is backdated.
+   */
+  confirmedAt     DateTime?
+  packingAt       DateTime?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  cancelledAt     DateTime?
+  /**
+   * Why it was cancelled: 'payment-timeout' (an online payment never
+   * arrived, so the held stock went back), 'merchant', or 'customer' (the
+   * shopper cancelled it themselves before packing began). A payment that
+   * lands after a timeout may revive the order; any other cancellation stays
+   * cancelled.
+   */
+  cancelReason    String?
+  /**
+   * The shopper's own words when they cancelled, shown to the merchant.
+   */
+  cancelNote      String?
+  /**
+   * Bank transfer orders only: the merchant's account details exactly as the
+   * shopper was shown them — [{ bankName, accountName, accountNumber }].
+   * A snapshot, so editing or removing an account later never changes the
+   * instructions on an order someone is already paying.
+   */
+  transferDetails Json?
+
+  organization    Organization           @relation(fields: [organizationId], references: [id])
+  customer        Customer               @relation(fields: [customerId], references: [id])
+  discountCodeRef DiscountCode?          @relation(fields: [discountCodeId], references: [id], onDelete: SetNull)
+  lineItems       OrderLineItem[]
+  payments        OrderPayment[]
+  allocations     OrderStockAllocation[]
+  reviews         ProductReview[]
+  returns         OrderReturn[]
+  refunds         OrderRefund[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, placedAt])
+  @@index([customerId])
+  @@index([discountCodeId])
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+/**
+ * How far through paying an order is. Nothing here says "paid" until a
+ * server has heard it from the provider — see lib/storefront/checkout/
+ * payment-service.ts, which is deliberately unable to claim it.
+ */
+enum OrderPaymentStatus {
+  AWAITING_PAYMENT
+  AWAITING_TRANSFER
+  DUE_ON_DELIVERY
+  PAID
+  /**
+   * Some of the money has gone back (a returned item, say); the rest stays paid.
+   */
+  PARTIALLY_REFUNDED
+  REFUNDED
+  FAILED
+}
+
+/**
+ * One attempt to pay for an online order through a payment provider.
+ * An order can have several: the provider refuses a reused transaction
+ * reference, so a shopper who abandons the payment page and tries again
+ * starts a new attempt. The order is PAID once any attempt is verified
+ * server-to-server with the provider — never on the word of a browser
+ * redirect or an unverified webhook body.
+ * `amount` is what we asked the provider to collect (major units, like every
+ * money column); verification refuses a transaction whose amount or currency
+ * differs from it.
+ */
+model OrderPayment {
+  id             String @id @default(cuid())
+  organizationId String
+  orderId        String
+
+  provider  String // 'squad'
+  /**
+   * Our transaction reference, unique across the provider account.
+   */
+  reference String                    @unique
+  status    OrderPaymentAttemptStatus @default(PENDING)
+
+  amount   Decimal @db.Decimal(12, 2)
+  currency String
+
+  /**
+   * The provider's hosted payment page for this attempt.
+   */
+  checkoutUrl     String?
+  /**
+   * Where to send the shopper's browser once the provider returns them.
+   */
+  returnUrl       String
+  /**
+   * Started inside the phone app, where Squad opens in an in-app browser:
+   * the callback then hands the shopper back to the app by deep link.
+   */
+  nativeApp       Boolean @default(false)
+  /**
+   * e.g. 'Card', 'Transfer' — as the provider reported it.
+   */
+  channel         String?
+  gatewayRef      String?
+  /**
+   * The last verification response, for support and reconciliation.
+   */
+  providerPayload Json?
+
+  verifiedAt DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([organizationId, createdAt])
+  @@map("order_payments")
+}
+
+enum OrderPaymentAttemptStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  ABANDONED
+  /**
+   * the provider says paid, but not the amount or currency we asked for
+   */
+  MISMATCH
+}
+
+/**
+ * Stock held for one line of an online order, in one store.
+ * An order line can draw on several stores that sell online, so a line may
+ * have several rows. While RESERVED, the quantity sits in that store's
+ * InventoryLevel.reservedQty — the same hold an issued invoice places — so
+ * nobody else can buy it. DISPATCHED means it physically left (quantity and
+ * reservedQty both came down, with an OUT movement); RELEASED means the hold
+ * was given back (the order was cancelled).
+ */
+/**
+ * A merchant's bank account, offered to shoppers who choose to pay by bank
+ * transfer. The merchant checks their own bank and confirms each transfer by
+ * hand (Sales → Orders); nothing here talks to a bank.
+ */
+model MerchantBankAccount {
+  id             String  @id @default(cuid())
+  organizationId String
+  bankName       String
+  accountName    String
+  accountNumber  String
+  /**
+   * shown at checkout only while active
+   */
+  isActive       Boolean @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("merchant_bank_accounts")
+}
+
+/**
+ * Where a merchant delivers, and what it costs. Nigeria only for now.
+ * A zone covers places in one of three ways, and a shopper's address is
+ * matched to the MOST SPECIFIC zone that covers it:
+ * CITIES      — named cities/areas inside one state ("Port Harcourt",
+ * "Obio-Akpor" in Rivers)                        most specific
+ * STATES      — whole states ("Rivers", "Bayelsa")
+ * NATIONWIDE  — everywhere in Nigeria not covered above         least specific
+ * The shopper is offered that one zone's rates, plus every pickup location.
+ * See lib/storefront/delivery/match.ts.
+ */
+model DeliveryZone {
+  id             String           @id @default(cuid())
+  organizationId String
+  name           String
+  kind           DeliveryZoneKind
+  /**
+   * CITIES zones: the state the cities are in
+   */
+  state          String?
+  /**
+   * STATES zones: the states covered
+   */
+  states         String[]         @default([])
+  /**
+   * CITIES zones: the city/area names, as the merchant typed them
+   */
+  cities         String[]         @default([])
+  isActive       Boolean          @default(true)
+  sortOrder      Int              @default(0)
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rates        DeliveryRate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("delivery_zones")
+}
+
+enum DeliveryZoneKind {
+  CITIES
+  STATES
+  NATIONWIDE
+}
+
+/**
+ * One way of delivering within a zone — "Standard", "Same day" — and its price.
+ */
+model DeliveryRate {
+  id             String   @id @default(cuid())
+  organizationId String
+  zoneId         String
+  name           String
+  /**
+   * major units, like every money column
+   */
+  price          Decimal  @db.Decimal(12, 2)
+  /**
+   * working days from dispatch
+   */
+  minDays        Int
+  maxDays        Int
+  /**
+   * delivery is free when the goods come to at least this much; null = never
+   */
+  freeOver       Decimal? @db.Decimal(12, 2)
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  zone         DeliveryZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([zoneId])
+  @@index([organizationId])
+  @@map("delivery_rates")
+}
+
+/**
+ * A place customers can collect orders from, offered at checkout wherever they live.
+ */
+model PickupLocation {
+  id             String  @id @default(cuid())
+  organizationId String
+  name           String
+  address        String
+  city           String
+  state          String
+  /**
+   * shown to the customer, e.g. opening hours or who to ask for
+   */
+  instructions   String?
+  /**
+   * working days until an order is ready to collect
+   */
+  readyInDays    Int     @default(1)
+  /**
+   * major units; usually free
+   */
+  price          Decimal @default(0) @db.Decimal(12, 2)
+  isActive       Boolean @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@map("pickup_locations")
+}
+
+/**
+ * A discount code a shopper types at checkout — "WELCOME10", "TAKE5K".
+ * The merchant owns the whole list (Sales → Discount codes); nothing is
+ * built in. Money is MAJOR units (naira), like every other money column;
+ * the storefront converts to kobo at its edge.
+ * `usageCount` is the number of orders that have used it, incremented in the
+ * same transaction that writes the order, so a code limited to 50 uses
+ * cannot be used a 51st time by two shoppers checking out at once. Orders
+ * carry their own copy of the code and its label, so editing or deleting a
+ * code never rewrites history.
+ */
+model DiscountCode {
+  id               String       @id @default(cuid())
+  organizationId   String
+  /**
+   * What the shopper types, stored upper-case. Unique within the store.
+   */
+  code             String
+  /**
+   * Shown to the shopper once it's applied, e.g. "10% off your first order".
+   */
+  label            String
+  kind             DiscountKind
+  /**
+   * PERCENT: 1–100. FIXED: an amount off, in major units.
+   */
+  value            Decimal      @db.Decimal(12, 2)
+  /**
+   * The goods must come to at least this much; null = no minimum.
+   */
+  minSubtotal      Decimal?     @db.Decimal(12, 2)
+  /**
+   * When it can be used. Null on either side means "no limit that way".
+   */
+  startsAt         DateTime?
+  endsAt           DateTime?
+  /**
+   * How many orders may use it in total, and per customer; null = unlimited.
+   */
+  usageLimit       Int?
+  perCustomerLimit Int?
+  usageCount       Int          @default(0)
+  isActive         Boolean      @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  orders       Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("discount_codes")
+}
+
+enum DiscountKind {
+  PERCENT
+  FIXED
+}
+
+model OrderStockAllocation {
+  id              String                     @id @default(cuid())
+  organizationId  String
+  orderId         String
+  orderLineItemId String
+  inventoryItemId String
+  warehouseId     String
+  quantity        Decimal                    @db.Decimal(12, 4)
+  status          OrderStockAllocationStatus @default(RESERVED)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id])
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  lineItem      OrderLineItem @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([inventoryItemId, warehouseId])
+  @@map("order_stock_allocations")
+}
+
+enum OrderStockAllocationStatus {
+  RESERVED
+  DISPATCHED
+  RELEASED
+}
+
+/**
+ * One line of an order, with the product's name, SKU and price copied in.
+ * `product` stays a nullable link so the admin can still reach the catalogue
+ * entry, but nothing on this row depends on it: a product deleted next year
+ * must not change what an order says was bought at what price.
+ */
+model OrderLineItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String?
+
+  /**
+   * The variant's id when the product has options; null when it doesn't.
+   */
+  variantId   String?
+  name        String
+  variantName String?
+  sku         String?
+  imageUrl    String?
+  /**
+   * The product's web address at the time, so history can still link to it.
+   */
+  slug        String?
+
+  quantity   Int
+  unitPrice  Decimal @db.Decimal(12, 2)
+  totalPrice Decimal @db.Decimal(12, 2)
+
+  order       Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     InventoryItem?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  allocations OrderStockAllocation[]
+  returnLines OrderReturnLine[]
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_line_items")
+}
+
+/**
+ * A shopper asking to send back items from a delivered online order.
+ * Only the customer the order belongs to can raise one, only within the
+ * store's return window (Organization.returnWindowDays, counted from
+ * deliveredAt), and never for more of a line than is left unreturned — all
+ * re-checked on the server (lib/storefront/orders/returns.ts).
+ * REQUESTED → APPROVED (the store tells them how to send it back) → REFUNDED,
+ * or REJECTED with a reason the shopper sees. The shopper may withdraw a
+ * request the store hasn't answered yet.
+ * Separate from ReturnRequest, which belongs to invoices raised by staff.
+ */
+model OrderReturn {
+  id             String            @id @default(cuid())
+  organizationId String
+  orderId        String
+  status         OrderReturnStatus @default(REQUESTED)
+  /**
+   * one of RETURN_REASONS in lib/storefront/orders/policy.ts
+   */
+  reason         String
+  /**
+   * the shopper's own words
+   */
+  details        String?
+  /**
+   * what the store told the shopper: how to send it back, or why not
+   */
+  merchantNote   String?
+  /**
+   * whether the items were put back into stock when it was refunded
+   */
+  restocked      Boolean           @default(false)
+
+  requestedAt DateTime  @default(now())
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  refundedAt  DateTime?
+  withdrawnAt DateTime?
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  order        Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  lines        OrderReturnLine[]
+  refunds      OrderRefund[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([orderId])
+  @@map("order_returns")
+}
+
+enum OrderReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  REFUNDED
+  WITHDRAWN
+}
+
+model OrderReturnLine {
+  id              String @id @default(cuid())
+  returnId        String
+  orderLineItemId String
+  quantity        Int
+
+  orderReturn OrderReturn   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  lineItem    OrderLineItem @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
+
+  @@index([returnId])
+  @@index([orderLineItemId])
+  @@map("order_return_lines")
+}
+
+/**
+ * Money the merchant says they sent back to the shopper.
+ * The app moves no money itself — there is no refund API — so this is a
+ * record the merchant makes AFTER refunding (Squad dashboard, bank transfer),
+ * and the shopper is told exactly that. The order's payment status follows
+ * the sum: some of it back is PARTIALLY_REFUNDED, all of it is REFUNDED.
+ */
+model OrderRefund {
+  id             String  @id @default(cuid())
+  organizationId String
+  orderId        String
+  /**
+   * set when the refund settles a return; null for a cancelled order
+   */
+  returnId       String?
+  /**
+   * major units, like every money column
+   */
+  amount         Decimal @db.Decimal(12, 2)
+  /**
+   * how it was sent, for the merchant's records — never shown to the shopper
+   */
+  note           String?
+  recordedById   String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderReturn  OrderReturn? @relation(fields: [returnId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([organizationId])
+  @@map("order_refunds")
+}
+
+/**
+ * A shopper's review of a product they bought from this store.
+ * Every review is tied to the delivered order that earned it: `orderId` is
+ * required, so there is no way to write one without having received the
+ * goods, and "Verified purchase" is a fact about the row rather than a badge
+ * someone decided to print. A merchant cannot write one either — reviews
+ * only ever come from a customer account.
+ * One per shopper per product (the unique below). A second opinion replaces
+ * the first rather than stacking, which is what keeps an average honest.
+ * Published on arrival: the purchase is the gate, not a queue. A merchant
+ * may HIDE one that breaks the rules (see features/sales/reviews.ts), which
+ * takes it off the storefront and out of the average but keeps the row, so
+ * hiding is answerable for and reversible.
+ */
+model ProductReview {
+  id             String @id @default(cuid())
+  organizationId String
+  /**
+   * the top-level product, never a variant — a review is of the thing, not the size
+   */
+  productId      String
+  customerId     String
+  /**
+   * the delivered order this review is entitled by
+   */
+  orderId        String
+
+  rating Int // 1–5
+  title  String
+  body   String
+
+  status       ProductReviewStatus @default(PUBLISHED)
+  /**
+   * the merchant's note on why it was hidden — internal, never shown to shoppers
+   */
+  hiddenReason String?
+  hiddenAt     DateTime?
+
+  /**
+   * how many other shoppers said it helped them (see ProductReviewVote)
+   */
+  helpfulCount Int @default(0)
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      InventoryItem       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer     Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order        Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  votes        ProductReviewVote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([customerId, productId])
+  @@index([organizationId, status, createdAt])
+  @@index([productId, status])
+  @@index([orderId])
+  @@map("product_reviews")
+}
+
+enum ProductReviewStatus {
+  PUBLISHED
+  HIDDEN
+}
+
+/**
+ * "This was helpful" — one vote per signed-in shopper per review, which is
+ * what the unique below enforces. An anonymous counter anyone could press
+ * repeatedly would sort the reviews by whoever pressed hardest.
+ */
+model ProductReviewVote {
+  id         String @id @default(cuid())
+  reviewId   String
+  customerId String
+
+  review   ProductReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  customer Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([reviewId, customerId])
+  @@index([customerId])
+  @@map("product_review_votes")
+}
+
+model Quote {
+  id                   String      @id @default(cuid())
+  organizationId       String
+  customerId           String
+  quoteNumber          String // QT-2024-0001
+  status               QuoteStatus @default(DRAFT)
+  currency             String      @default("USD")
+  subtotal             Decimal     @db.Decimal(12, 2)
+  taxAmount            Decimal     @default(0) @db.Decimal(12, 2)
+  totalAmount          Decimal     @db.Decimal(12, 2)
+  validUntil           DateTime?
+  notes                String?
+  convertedToInvoiceId String? // if converted
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  customer     Customer        @relation(fields: [customerId], references: [id])
+  lineItems    QuoteLineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, quoteNumber])
+  @@index([organizationId])
+  @@map("quotes")
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CONVERTED
+}
+
+model QuoteLineItem {
+  id              String  @id @default(cuid())
+  quoteId         String
+  inventoryItemId String?
+  description     String
+  quantity        Decimal @db.Decimal(12, 4)
+  unitPrice       Decimal @db.Decimal(12, 2)
+  totalPrice      Decimal @db.Decimal(12, 2)
+
+  quote         Quote          @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([quoteId])
+  @@map("quote_line_items")
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  organizationId String
+  customerId     String
+  quoteId        String?
+  warehouseId    String? // fulfillment store — reserved on issue, decremented on packing
+  invoiceNumber  String // INV-2024-0001
+  status         InvoiceStatus @default(DRAFT)
+  currency       String        @default("USD")
+  subtotal       Decimal       @db.Decimal(12, 2)
+  taxAmount      Decimal       @default(0) @db.Decimal(12, 2)
+  totalAmount    Decimal       @db.Decimal(12, 2)
+  paidAmount     Decimal       @default(0) @db.Decimal(12, 2)
+  dueDate        DateTime?
+  paidAt         DateTime?
+  notes          String?
+
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  customer       Customer          @relation(fields: [customerId], references: [id])
+  warehouse      Warehouse?        @relation(fields: [warehouseId], references: [id])
+  lineItems      InvoiceLineItem[]
+  payments       Payment[]
+  returnRequests ReturnRequest[]
+  fulfillment    Fulfillment?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId])
+  @@map("invoices")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+  WRITTEN_OFF
+}
+
+model InvoiceLineItem {
+  id                      String   @id @default(cuid())
+  invoiceId               String
+  inventoryItemId         String?
+  description             String
+  quantity                Decimal  @db.Decimal(12, 4)
+  unitPrice               Decimal  @db.Decimal(12, 2)
+  totalPrice              Decimal  @db.Decimal(12, 2)
+  unitCost                Decimal? @db.Decimal(12, 4) // snapshotted from InventoryItem.averageCost when issued, for profitability
+  returnedQty             Decimal  @default(0) @db.Decimal(12, 4)
+  isDropShip              Boolean  @default(false)
+  dropShipPurchaseOrderId String?
+
+  invoice               Invoice               @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  inventoryItem         InventoryItem?        @relation(fields: [inventoryItemId], references: [id])
+  returnLineItems       ReturnLineItem[]
+  fulfillmentLineItems  FulfillmentLineItem[]
+  dropShipPurchaseOrder PurchaseOrder?        @relation(fields: [dropShipPurchaseOrderId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_line_items")
+}
+
+model ReturnRequest {
+  id             String       @id @default(cuid())
+  organizationId String
+  invoiceId      String
+  status         ReturnStatus @default(REQUESTED)
+  reason         String?
+  notes          String?
+  requestedById  String?
+  approvedById   String?
+  approvedAt     DateTime?
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  invoice      Invoice          @relation(fields: [invoiceId], references: [id])
+  lineItems    ReturnLineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([invoiceId])
+  @@map("return_requests")
+}
+
+enum ReturnStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+}
+
+model ReturnLineItem {
+  id                String  @id @default(cuid())
+  returnRequestId   String
+  invoiceLineItemId String
+  quantity          Decimal @db.Decimal(12, 4)
+
+  returnRequest   ReturnRequest   @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  invoiceLineItem InvoiceLineItem @relation(fields: [invoiceLineItemId], references: [id])
+
+  @@index([returnRequestId])
+  @@map("return_line_items")
+}
+
+// Pick -> pack -> ship execution for one invoice. Stock is soft-reserved
+// (InventoryLevel.reservedQty) when the invoice is issued, and only actually
+// decremented when a line is recorded as packed (see features/sales/fulfillment.ts).
+model Fulfillment {
+  id             String            @id @default(cuid())
+  organizationId String
+  invoiceId      String            @unique
+  warehouseId    String
+  status         FulfillmentStatus @default(PENDING)
+  carrier        String?
+  trackingNumber String?
+  notes          String?
+  pickedById     String?
+  packedById     String?
+  shippedById    String?
+  shippedAt      DateTime?
+
+  organization Organization          @relation(fields: [organizationId], references: [id])
+  invoice      Invoice               @relation(fields: [invoiceId], references: [id])
+  warehouse    Warehouse             @relation(fields: [warehouseId], references: [id])
+  lineItems    FulfillmentLineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([warehouseId])
+  @@map("fulfillments")
+}
+
+enum FulfillmentStatus {
+  PENDING
+  PARTIALLY_PICKED
+  PICKED
+  PARTIALLY_PACKED
+  PACKED
+  SHIPPED
+  CANCELLED
+}
+
+model FulfillmentLineItem {
+  id                String  @id @default(cuid())
+  fulfillmentId     String
+  invoiceLineItemId String
+  inventoryItemId   String
+  quantity          Decimal @db.Decimal(12, 4)
+  pickedQty         Decimal @default(0) @db.Decimal(12, 4)
+  packedQty         Decimal @default(0) @db.Decimal(12, 4)
+
+  fulfillment     Fulfillment     @relation(fields: [fulfillmentId], references: [id], onDelete: Cascade)
+  invoiceLineItem InvoiceLineItem @relation(fields: [invoiceLineItemId], references: [id])
+  inventoryItem   InventoryItem   @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([fulfillmentId])
+  @@map("fulfillment_line_items")
+}
+
+// Payment history against an invoice — Invoice.paidAmount is the running
+// total; each Payment row is the auditable record of one contribution to it.
+model Payment {
+  id             String        @id @default(cuid())
+  organizationId String
+  invoiceId      String
+  amount         Decimal       @db.Decimal(12, 2)
+  method         PaymentMethod
+  reference      String?
+  notes          String?
+  recordedById   String?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  OTHER
+}
+
+// ============================================================
+// BILLING MODULE — plan catalog lives in lib/billing/plans.ts;
+// these tables hold per-org subscription state driven by Paystack.
+// ============================================================
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+enum BillingTransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum BillingTransactionType {
+  CHECKOUT
+  RENEWAL
+}
+
+model Subscription {
+  id             String             @id @default(cuid())
+  organizationId String             @unique
+  plan           OrganizationPlan   @default(FREE)
+  billingCycle   BillingCycle       @default(MONTHLY)
+  status         SubscriptionStatus @default(ACTIVE)
+
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean   @default(false)
+
+  paystackCustomerCode      String?
+  paystackSubscriptionCode  String? @unique
+  paystackEmailToken        String?
+  paystackAuthorizationCode String?
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  transactions BillingTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("subscriptions")
+}
+
+// Caches the Paystack Plan object created per (plan, billingCycle) pair so
+// checkout doesn't need to hit the Paystack API to look it up every time.
+model BillingPlanCode {
+  id               String           @id @default(cuid())
+  plan             OrganizationPlan
+  billingCycle     BillingCycle
+  paystackPlanCode String           @unique
+
+  createdAt DateTime @default(now())
+
+  @@unique([plan, billingCycle])
+  @@map("billing_plan_codes")
+}
+
+model BillingTransaction {
+  id             String                   @id @default(cuid())
+  organizationId String
+  subscriptionId String?
+  reference      String                   @unique // Paystack transaction reference
+  type           BillingTransactionType
+  status         BillingTransactionStatus @default(PENDING)
+  plan           OrganizationPlan
+  billingCycle   BillingCycle
+  amount         Decimal                  @db.Decimal(12, 2)
+  currency       String                   @default("NGN")
+  rawPayload     Json?
+  // False only for a domain-only add-on charge (purchaseDomain, an
+  // already-paid org buying/changing a domain outside the upgrade flow) —
+  // tells applySuccessfulCharge() not to touch Subscription's plan/period
+  // or set up a second Paystack recurring subscription for that charge.
+  isPlanChange   Boolean                  @default(true)
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  domainOrder  DomainOrder?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("billing_transactions")
+}
+
+// ============================================================
+// CUSTOM DOMAINS — search/pricing via Namecheap; registration and DNS
+// setup are performed manually by platform admins (see DomainOrder.status).
+// ============================================================
+
+enum DomainOrderType {
+  FREE
+  EXISTING
+  REGISTER
+}
+
+enum DomainOrderStatus {
+  PENDING_FULFILLMENT
+  ACTIVE
+  FAILED
+  CANCELLED
+}
+
+model DomainOrder {
+  id                   String            @id @default(cuid())
+  organizationId       String
+  billingTransactionId String?           @unique
+  type                 DomainOrderType
+  domain               String? // null only for type=FREE
+  status               DomainOrderStatus @default(PENDING_FULFILLMENT)
+
+  usdPrice     Decimal? @db.Decimal(10, 2) // REGISTER only
+  ngnPrice     Decimal? @db.Decimal(12, 2) // REGISTER only; null for FREE/EXISTING
+  exchangeRate Decimal? @db.Decimal(10, 4) // rate snapshot used at charge time
+
+  notes       String? // filled in manually by admins during fulfillment
+  fulfilledAt DateTime?
+
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  billingTransaction BillingTransaction? @relation(fields: [billingTransactionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+  @@map("domain_orders")
+}
+
+// Generic key-value store for platform-wide, admin-tunable settings (e.g.
+// the USD->NGN rate used to price domain registrations). Not org-scoped.
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_settings")
+}
+
+// ============================================================
+// ONLINE STORE PAGES
+// ============================================================
+
+/**
+ * What a store page is for. It decides where the storefront links to it
+ * (footer column, checkout footer, cookie notice, product page) — never
+ * what it says. CUSTOM is any other page the merchant wants.
+ */
+enum StorePageKind {
+  ABOUT
+  DELIVERY_RETURNS
+  FAQ
+  SIZE_GUIDE
+  CONTACT
+  TERMS
+  PRIVACY
+  CUSTOM
+}
+
+/**
+ * A page of the online store written by the merchant: About, Delivery and
+ * returns, Terms, Privacy, FAQ, Size guide, Contact, or their own.
+ * The words are the merchant's and only the merchant's: the app never
+ * generates or pre-fills a body, because a policy page is the store's
+ * promise (often its legal position) in its own name.
+ * One page per kind except CUSTOM, enforced in features/settings/store-pages.ts.
+ */
+model StorePage {
+  id             String        @id @default(cuid())
+  organizationId String
+  kind           StorePageKind
+  title          String
+  /**
+   * Web address: /pages/{slug}. Set when the page is created and changed
+   * only by an explicit edit — never regenerated from a new title, so links
+   * customers saved keep working.
+   */
+  slug           String
+  /**
+   * The page text in the storefront's small formatting language (headings,
+   * lists, bold, links, tables) — see lib/storefront/pages/format.ts. Stored
+   * as the merchant typed it; never HTML.
+   */
+  body           String        @db.Text
+  isPublished    Boolean       @default(false)
+  publishedAt    DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, isPublished])
+  @@map("store_pages")
+}
+
+// ============================================================
+// SOCIAL COMMERCE — connected social accounts
+// ============================================================
+
+/**
+ * Where a connected account lives. One MansaaS Meta app authorises every
+ * merchant (see lib/social/providers/meta.ts); the platform is what decides
+ * which endpoints and which token a connection operates with.
+ * TIKTOK exists so the provider registry is complete and the UI can say
+ * "not available yet" truthfully. Nothing publishes to it in this phase.
+ */
+enum SocialPlatform {
+  FACEBOOK_PAGE
+  INSTAGRAM_BUSINESS
+  TIKTOK
+}
+
+enum SocialConnectionStatus {
+  /**
+   * Working: we hold a token Meta still accepts.
+   */
+  ACTIVE
+  /**
+   * The stored token passed its expiry — the merchant must reconnect.
+   */
+  EXPIRED
+  /**
+   * Meta rejected the token (password change, permission removed, app removed).
+   */
+  REVOKED
+  /**
+   * The merchant disconnected it here. Kept so history reads sensibly.
+   */
+  DISCONNECTED
+}
+
+/**
+ * One social account a merchant has authorised MansaaS to act for.
+ * Every row belongs to exactly one organization and is only ever reached
+ * through lib/social/service.ts, which filters by the organizationId from
+ * the session — never by an id the browser supplied on its own.
+ * `accessTokenCipher` is AES-256-GCM (lib/social/crypto.ts) and is never
+ * selected into anything that reaches a client component.
+ */
+model SocialConnection {
+  id             String         @id @default(cuid())
+  organizationId String
+  platform       SocialPlatform
+
+  /**
+   * Facebook Page ID, or Instagram professional account (IG User) ID.
+   */
+  platformAccountId String
+  /**
+   * What the merchant sees: the Page name or the IG account's display name.
+   */
+  accountName       String
+  /**
+   * @handle, when the platform has one. Facebook Pages often don't.
+   */
+  username          String?
+  avatarUrl         String?
+
+  /**
+   * The operating credential, encrypted. For a Facebook Page this is the
+   * Page access token (derived from a long-lived user token, so it does not
+   * expire on a clock); an Instagram account publishes with the token of the
+   * Page it is linked to.
+   */
+  accessTokenCipher String
+  /**
+   * Null when the token has no expiry, which is the normal Page-token case.
+   */
+  tokenExpiresAt    DateTime?
+  /**
+   * Scopes Meta actually granted, as reported by /me/permissions.
+   */
+  scopes            String[]
+
+  status        SocialConnectionStatus @default(ACTIVE)
+  /**
+   * Last time a Graph call confirmed the token still works.
+   */
+  lastCheckedAt DateTime?
+  /**
+   * Meta's error subcode from the last failure, for the reconnect hint.
+   */
+  lastErrorCode String?
+
+  /**
+   * The Facebook Page connection an Instagram account was resolved through.
+   * Instagram publishing runs on the Page's token, so removing the Page
+   * removes its Instagram account with it.
+   */
+  parentConnectionId String?
+  parentConnection   SocialConnection?  @relation("SocialConnectionChildren", fields: [parentConnectionId], references: [id], onDelete: Cascade)
+  childConnections   SocialConnection[] @relation("SocialConnectionChildren")
+
+  /**
+   * Who clicked Connect. Kept for the audit trail, not for publishing.
+   */
+  connectedByUserId String?
+  connectedAt       DateTime  @default(now())
+  disconnectedAt    DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  posts        SocialPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, platform, platformAccountId])
+  @@index([organizationId, status])
+  @@map("social_connections")
+}
+
+/**
+ * The accounts Meta returned, parked between the OAuth callback and the
+ * merchant choosing which ones to connect.
+ * It exists because the callback lands on the marketing domain (Meta allows
+ * no wildcard redirect URI) while the chooser renders on the merchant's own
+ * subdomain: the candidate list — which contains Page access tokens — has to
+ * cross that hop without ever going through the browser. Rows are encrypted,
+ * bound to the organization AND the user who started the flow, single-use,
+ * and short-lived.
+ */
+model SocialConnectionDraft {
+  id             String         @id @default(cuid())
+  organizationId String
+  /**
+   * The member who started the flow; only they can complete it.
+   */
+  userId         String
+  provider       SocialPlatform
+
+  /**
+   * AES-256-GCM over the candidate accounts, tokens included.
+   */
+  payloadCipher String
+  expiresAt     DateTime
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, userId])
+  @@index([expiresAt])
+  @@map("social_connection_drafts")
+}
+
+/**
+ * How far a post has got. A vendor sees these words, so they say what
+ * happened rather than what the code did.
+ * DRAFT → PUBLISHING → PUBLISHED
+ * ↘ FAILED → PUBLISHING (retry)
+ * PUBLISHING is a claim, not a wish: `publishSocialPost` moves a row into it
+ * with a conditional update, so a second click finds nothing to move and
+ * stops. Nothing reports PUBLISHED without an id from the platform.
+ */
+enum SocialPostStatus {
+  DRAFT
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+/**
+ * One post a merchant made from a product, and what became of it.
+ * Holds NO tokens — publishing opens the token from the SocialConnection at
+ * the moment it publishes and never writes it here.
+ * The account name and platform are snapshotted alongside `connectionId` so
+ * history still reads sensibly after the account is disconnected or renamed:
+ * "we posted this to Acme Store on Facebook" stays true even once that
+ * connection is gone.
+ */
+model SocialPost {
+  id             String           @id @default(cuid())
+  organizationId String
+  connectionId   String
+  platform       SocialPlatform
+  status         SocialPostStatus @default(DRAFT)
+
+  /**
+   * Snapshot of the destination as it was when the post was made.
+   */
+  accountName String
+
+  /**
+   * The product this was made from. Null once a product is deleted.
+   */
+  inventoryItemId String?
+  /**
+   * Snapshot, for the same reason as accountName.
+   */
+  productName     String?
+  /**
+   * The public storefront link, built server-side from the org's own domain.
+   */
+  productUrl      String?
+
+  caption   String   @db.Text
+  hashtags  String[] @default([])
+  /**
+   * The product images chosen, already public URLs (Cloudinary).
+   */
+  imageUrls String[] @default([])
+
+  /**
+   * The platform's own id for the published post, once it has one.
+   */
+  externalPostId String?
+  /**
+   * A link a merchant can open to see it live, when the platform gives one.
+   */
+  externalUrl    String?
+
+  /**
+   * Why the last attempt failed — kept so a retry can explain itself.
+   */
+  errorCode    String?
+  errorMessage String?
+  attempts     Int     @default(0)
+
+  /**
+   * One submission from one composer. Unique per store, so a double-click
+   * (or a retried server action) collapses onto the same row instead of
+   * posting twice.
+   */
+  idempotencyKey String
+
+  createdByUserId String?
+  publishedAt     DateTime?
+
+  organization  Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection    SocialConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  inventoryItem InventoryItem?   @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([connectionId])
+  @@index([inventoryItemId])
+  @@map("social_posts")
+}

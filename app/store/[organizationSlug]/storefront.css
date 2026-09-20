@@ -1,0 +1,303 @@
+/*
+ * Storefront theme layer — warm editorial retail.
+ *
+ * Scoped entirely to the `[data-storefront]` wrapper on the shop layout so it
+ * never touches the admin/marketing design system in app/globals.css.
+ *
+ * PALETTE: cream · petrol ink · golden yellow · teal.
+ *   cream  #f6f2e2   the canvas — warm, calm, a little paper-like
+ *   ink    #001822   near-black with a teal cast; text and primary buttons
+ *   yellow #ffda29   the delight accent — badges, highlights, the deal band
+ *   teal   #114d59   supporting colour for links, icons, quiet surfaces
+ *
+ * CREAM IS THE DEFAULT. The bare `[data-storefront]` block holds the light
+ * values; `[data-sf-theme='dark']` opts into a warm petrol dark (NOT a cold
+ * navy — same hue family, inverted). The theme is server-rendered from a
+ * cookie, see lib/storefront/theme.ts.
+ *
+ * `--brand` is the per-tenant hook: a branded mobile build or a merchant theme
+ * setting only has to override that one value.
+ *
+ * NOTE: the `@theme` mapping for these tokens (--color-brand, --color-ink,
+ * --color-highlight, …) lives in app/globals.css, NOT here. This file is
+ * loaded as a standalone stylesheet by the storefront layout rather than being
+ * `@import`ed into the Tailwind entry, so a `@theme` block here would never
+ * reach the utility generator and `bg-brand` & friends would silently emit
+ * nothing. Values here, mapping there.
+ */
+
+[data-storefront] {
+  /* ── surfaces ──────────────────────────────────────────────────────── */
+  --background: oklch(0.96 0.022 95);      /* #f6f2e2 cream canvas          */
+  --foreground: oklch(0.195 0.038 227);    /* #001822 petrol ink            */
+  --card: oklch(0.988 0.009 95);           /* warm white — lifts off cream  */
+  --card-foreground: oklch(0.195 0.038 227);
+  --popover: oklch(0.991 0.007 95);
+  --popover-foreground: oklch(0.195 0.038 227);
+
+  /* ── brand ─────────────────────────────────────────────────────────── */
+  /* Primary is the ink, not the yellow: a solid dark button on cream reads
+   * as confident and premium, and it leaves the yellow free to mean
+   * "something good is happening here" wherever it appears. */
+  --brand: oklch(0.195 0.038 227);
+  --brand-hover: oklch(0.285 0.046 222);
+  --primary: var(--brand);
+  --primary-foreground: oklch(0.97 0.018 95);
+
+  /* the delight accent */
+  --highlight: oklch(0.894 0.176 96);      /* #ffda29                       */
+  --highlight-foreground: oklch(0.195 0.038 227);
+
+  /* supporting teal */
+  --teal: oklch(0.389 0.061 214);          /* #114d59                       */
+  --teal-soft: oklch(0.942 0.017 125);     /* #e9eee2 pale green-grey       */
+
+  /* ── neutrals, tuned warm ──────────────────────────────────────────── */
+  --secondary: oklch(0.935 0.021 95);
+  --secondary-foreground: oklch(0.265 0.036 224);
+  --muted: oklch(0.935 0.021 95);
+  --muted-foreground: oklch(0.462 0.026 220);
+  --accent: oklch(0.915 0.026 95);
+  --accent-foreground: oklch(0.225 0.038 226);
+
+  --destructive: oklch(0.58 0.2 25);
+  --border: oklch(0.885 0.022 95);
+  --input: oklch(0.885 0.022 95);
+  --ring: oklch(0.389 0.061 214);
+
+  /* ── storefront-specific surfaces ──────────────────────────────────── */
+  --bar: oklch(0.195 0.038 227);   /* utility strip — an ink band up top    */
+  --tile: oklch(0.978 0.014 95);   /* product image tile, always light      */
+  --elevated: oklch(0.991 0.007 95); /* flyouts, dropdowns, floating cart   */
+
+  /* ── retail semantics ──────────────────────────────────────────────── */
+  --sale: oklch(0.894 0.176 96);           /* yellow pill, ink text         */
+  --sale-foreground: oklch(0.195 0.038 227);
+  --price: oklch(0.195 0.038 227);
+  --rating: oklch(0.80 0.155 86);
+  --success: oklch(0.52 0.1 160);
+
+  --radius: 1rem;
+
+  color: var(--foreground);
+  background-color: var(--background);
+  /* Warm, slightly open text colour rendering on the cream ground. */
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-storefront][data-sf-theme='dark'] {
+  /* Same hue family, inverted — a warm petrol night, not a cold navy. */
+  --background: oklch(0.185 0.036 227);
+  --foreground: oklch(0.955 0.018 95);
+  --card: oklch(0.238 0.034 224);
+  --card-foreground: oklch(0.955 0.018 95);
+  --popover: oklch(0.238 0.034 224);
+  --popover-foreground: oklch(0.955 0.018 95);
+
+  /* On ink, the yellow becomes the primary — it's the only thing with
+   * enough life to carry a call to action against this background. */
+  --brand: oklch(0.894 0.176 96);
+  --brand-hover: oklch(0.845 0.17 94);
+  --primary: var(--brand);
+  --primary-foreground: oklch(0.185 0.036 227);
+
+  --highlight: oklch(0.894 0.176 96);
+  --highlight-foreground: oklch(0.185 0.036 227);
+
+  --teal: oklch(0.70 0.117 216);
+  --teal-soft: oklch(0.30 0.04 214);
+
+  --secondary: oklch(0.278 0.034 223);
+  --secondary-foreground: oklch(0.94 0.016 95);
+  --muted: oklch(0.278 0.034 223);
+  --muted-foreground: oklch(0.715 0.025 216);
+  --accent: oklch(0.312 0.036 222);
+  --accent-foreground: oklch(0.955 0.018 95);
+
+  --destructive: oklch(0.63 0.2 25);
+  --border: oklch(0.315 0.034 222);
+  --input: oklch(0.315 0.034 222);
+  --ring: oklch(0.894 0.176 96);
+
+  --bar: oklch(0.148 0.032 228);
+  --tile: oklch(0.975 0.012 95);
+  --elevated: oklch(0.262 0.035 223);
+
+  --sale: oklch(0.894 0.176 96);
+  --sale-foreground: oklch(0.185 0.036 227);
+  --price: oklch(0.955 0.018 95);
+  --rating: oklch(0.85 0.16 90);
+  --success: oklch(0.72 0.14 158);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   Typography — a soft serif for display, the app grotesque for everything
+   else. Fraunces' optical sizing and gentle wonk are what make the page
+   read "warm" rather than "corporate"; it is loaded in the storefront root
+   layout as `--font-sf-display`.
+   ──────────────────────────────────────────────────────────────────────── */
+[data-storefront] .font-display,
+[data-storefront] h1,
+[data-storefront] h2 {
+  font-family: var(--font-sf-display), Georgia, 'Times New Roman', serif;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  font-variation-settings: 'SOFT' 30, 'WONK' 1;
+}
+
+/* h3 stays in the sans — sub-headings this small in a serif get muddy. */
+[data-storefront] h3 {
+  letter-spacing: -0.01em;
+}
+
+/* Retail buttons run larger and rounder than the admin scale. */
+[data-storefront] [data-slot='button'][data-size='default'] {
+  height: 2.75rem;
+  padding-inline: 1.25rem;
+  border-radius: 999px;
+}
+[data-storefront] [data-slot='button'][data-size='lg'] {
+  height: 3.25rem;
+  padding-inline: 2rem;
+  font-size: 0.95rem;
+  border-radius: 999px;
+}
+[data-storefront] [data-slot='button'][data-size='sm'] {
+  height: 2.25rem;
+  padding-inline: 0.875rem;
+  border-radius: 999px;
+}
+
+/* ── layout helpers ──────────────────────────────────────────────────── */
+.sf-container {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 82rem;
+  padding-inline: 1.25rem;
+}
+@media (min-width: 640px) {
+  .sf-container {
+    padding-inline: 2rem;
+  }
+}
+@media (min-width: 1024px) {
+  .sf-container {
+    padding-inline: 2.5rem;
+  }
+}
+
+/* Vertical rhythm between homepage sections — one knob, applied everywhere,
+ * so the page breathes consistently instead of each section guessing.
+ *
+ * Kept deliberately modest because adjacent bands BOTH apply it: the gap a
+ * reader actually sees between two cream sections is double this. */
+.sf-section {
+  padding-block: 2.5rem;
+}
+@media (min-width: 1024px) {
+  .sf-section {
+    padding-block: 3.5rem;
+  }
+}
+
+/* Full-bleed colour bands (the deal slab, the trust block, the newsletter)
+ * carry their own, larger padding: they have no neighbour contributing to the
+ * gap, and a colour block needs more air inside it than a cream one. */
+.sf-band {
+  padding-block: 4rem;
+}
+@media (min-width: 1024px) {
+  .sf-band {
+    padding-block: 6rem;
+  }
+}
+
+/* A highlighter block behind the one word we want to land on.
+ *
+ * It covers the FULL height of the word, not just a stroke across the
+ * baseline. A partial stroke forces a compromise: the text colour has to work
+ * both over the yellow and over the section behind it, and there is no colour
+ * that does — on the ink newsletter band the ink text vanished everywhere the
+ * stroke didn't reach. Covering the whole word means the text is always ink on
+ * yellow, in either theme and on any background.
+ *
+ * The mismatched corner radii are deliberate: they keep it feeling cut by hand
+ * rather than drawn by a border-radius. */
+.sf-marker {
+  color: var(--highlight-foreground);
+  background-color: var(--highlight);
+  padding-inline: 0.14em;
+  border-radius: 0.2em 0.45em 0.22em 0.4em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* ── motion ──────────────────────────────────────────────────────────── */
+@keyframes sf-accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+@keyframes sf-accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}
+.animate-accordion-down { animation: sf-accordion-down 0.2s ease-out; }
+.animate-accordion-up { animation: sf-accordion-up 0.2s ease-out; }
+
+@keyframes sf-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.sf-marquee { animation: sf-marquee 38s linear infinite; }
+
+@keyframes sf-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.sf-fade-in { animation: sf-fade-in 0.16s ease-out; }
+
+@keyframes sf-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+.sf-rise { animation: sf-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-marquee,
+  .sf-fade-in,
+  .sf-rise,
+  .animate-accordion-down,
+  .animate-accordion-up {
+    animation: none;
+  }
+}
+
+/* ── scrollbars ──────────────────────────────────────────────────────── */
+.sf-no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sf-no-scrollbar::-webkit-scrollbar { display: none; }
+
+.sf-thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.sf-thin-scrollbar::-webkit-scrollbar { width: 6px; }
+.sf-thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 3px;
+}
+
+/* The product page's sticky buy bar (phones and tablets) owns the bottom of
+ * the screen while it is showing; lift the back-to-top button clear of it
+ * rather than letting it sit on "Add to bag". The bar is ~4.5rem tall, and
+ * in the app it sits on top of the 3.5rem tab bar. */
+@media (max-width: 1023.98px) {
+  :root[data-sticky-buy-bar='web'] .sf-back-to-top {
+    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+  :root[data-sticky-buy-bar='app'] .sf-back-to-top {
+    bottom: calc(9rem + env(safe-area-inset-bottom));
+  }
+}
