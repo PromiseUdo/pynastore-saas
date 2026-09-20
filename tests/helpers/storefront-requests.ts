@@ -18,9 +18,9 @@ export function pinDomains(): void {
   process.env.NEXT_PUBLIC_MOBILE_DOMAIN = MOBILE_DOMAIN;
 }
 
-export const storefrontHost = (slug: string) => `shop.${slug}.${ROOT_DOMAIN}`;
+export const storefrontHost = (slug: string) => `shop-${slug}.${ROOT_DOMAIN}`;
 
-/** A call from a page on the store's own domain (shop.{slug}.{root}). */
+/** A call from a page on the store's own domain (shop-{slug}.{root}). */
 export function storefrontRequest(
   slug: string,
   path: string,

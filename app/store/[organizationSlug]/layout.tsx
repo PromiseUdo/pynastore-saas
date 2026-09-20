@@ -1,7 +1,7 @@
 /*
  * app/store/[organizationSlug]/ — storefront root layout.
  *
- * Reached via proxy.ts rewriting shop.{slug}.{ROOT_DOMAIN} (or the mobile
+ * Reached via proxy.ts rewriting shop-{slug}.{ROOT_DOMAIN} (or the mobile
  * origin's /s/{slug}) to /store/{slug}/.... Resolves the tenant, scopes the
  * retail theme (storefront.css, `[data-storefront]`) and mounts the client
  * providers (cart/wishlist/compare stores, toasts). Chrome (header/footer)

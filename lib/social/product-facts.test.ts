@@ -153,7 +153,7 @@ describe('the product URL', () => {
   it('is built from the platform subdomain by default', async () => {
     addProduct('p1', 'org_a');
     expect((await getProductFacts('org_a', 'p1'))?.productUrl).toBe(
-      'https://shop.adire.app.example.com/products/ankara-wrap-dress',
+      'https://shop-adire.app.example.com/products/ankara-wrap-dress',
     );
   });
 

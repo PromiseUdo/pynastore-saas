@@ -10,7 +10,7 @@
  * field of the request body instead, which let any request name any store.
  * This resolves it the proxy's way:
  *
- *   STORE HOSTS — shop.{slug}.{ROOT_DOMAIN}, or a merchant's custom store
+ *   STORE HOSTS — shop-{slug}.{ROOT_DOMAIN}, or a merchant's custom store
  *   domain. The hostname IS the store (resolveHostname → resolveTenant,
  *   exactly as the proxy does). A body `org` is still accepted from older
  *   clients, but only if it names this same store; anything else is refused.

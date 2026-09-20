@@ -13,9 +13,10 @@ The web app is multi-tenant **by hostname** (`proxy.ts`):
 
 | host | site |
 |---|---|
-| `{ROOT_DOMAIN}` | marketing / auth |
+| `{ROOT_DOMAIN}`, `www.` | marketing |
+| `{PLATFORM_HOST}` (prod: `app.{ROOT_DOMAIN}`) | platform / auth |
 | `{slug}.{ROOT_DOMAIN}` | admin dashboard |
-| `shop.{slug}.{ROOT_DOMAIN}` | storefront |
+| `shop-{slug}.{ROOT_DOMAIN}` | storefront |
 | custom domain | admin or storefront (DB lookup) |
 
 A Capacitor app loads **one origin** (`server.url`) and the native bridge (plugins)
@@ -25,7 +26,7 @@ WebView, and cross-subdomain navigation would kill the bridge.
 ### The solution — a dedicated single-origin "mobile" host
 
 A new site type, **`mobile`**, served on `NEXT_PUBLIC_MOBILE_DOMAIN`
-(dev: `m.app.localhost:3000`, prod e.g. `m.yourdomain.com`). On that host:
+(dev: `m.app.localhost:3000`, prod: `m.getnotely.io`). On that host:
 
 - The org slug travels **in the path**: `/s/{slug}/...`
 - `proxy.ts` rewrites `/s/{slug}/...` → the existing `app/store/[organizationSlug]`
@@ -112,7 +113,7 @@ npm run dev
 ```
 - Marketing: `http://app.localhost:3000`
 - Admin: `http://{slug}.app.localhost:3000`
-- Storefront: `http://shop.{slug}.app.localhost:3000`
+- Storefront: `http://shop-{slug}.app.localhost:3000`
 - Mobile origin (browser preview): `http://m.app.localhost:3000` → picker;
   `http://m.app.localhost:3000/s/{slug}` → storefront;
   `http://m.app.localhost:3000/dashboard` → redirected to picker (admin blocked).
@@ -169,8 +170,10 @@ If your LAN IP changes, re-run the sync + build.
 ### Production build
 
 1. Deploy the app with a real mobile origin and set `NEXT_PUBLIC_MOBILE_URL`
-   (e.g. `https://m.yourdomain.com`) plus `NEXT_PUBLIC_MOBILE_DOMAIN`
-   (`m.yourdomain.com`).
+   (`https://m.getnotely.io`) plus `NEXT_PUBLIC_MOBILE_DOMAIN`
+   (`m.getnotely.io`). Both are build-time: changing them needs a native
+   rebuild and a store release before installed apps follow, so keep the old
+   mobile origin serving until that release has been adopted.
 2. `npm run cap:sync`
 3. iOS: open in Xcode (`npm run cap:open:ios`), set signing, Archive.
    Android: `npm run cap:open:android`, Build → Generate Signed Bundle.

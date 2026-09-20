@@ -54,6 +54,7 @@ The goal is a calm, professional tool that a busy shop owner or warehouse clerk 
 - Plan-gated features are **not** hidden in navigation. Show a lock or upgrade hint that explains what the feature does and links to `/upgrade`.
 - Every sidebar entry must lead to a real page. Don't add nav items or header controls (search, notifications) that do nothing; build them or leave them out.
 - Links are slug-free (hostname-based tenancy; see `proxy.ts`).
+- **Hostnames.** Every platform host is one label under `NEXT_PUBLIC_ROOT_DOMAIN`: `{PLATFORM_HOST}` (marketing/auth, `app.` in production), `{slug}.` (admin), `shop-{slug}.` (storefront), `m.` (mobile). Never build one of these by hand — use `getMarketingUrl`/`getAdminUrl`/`getStorefrontUrl` in `lib/tenant/urls.ts`, and `storefrontHostsFor()` in `lib/tenant/resolveHostname.ts` if you need the host itself. A slug is therefore a hostname, so new orgs are checked against `lib/tenant/reserved-slugs.ts`; existing orgs are never renamed.
 
 ## 8. Responsive and accessible
 - The admin must work on a tablet and stay usable on a phone. Below `lg`, the sidebar becomes an off-canvas drawer, and page actions wrap instead of overflowing.

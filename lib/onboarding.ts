@@ -1,5 +1,6 @@
 import { prisma as db } from '@/lib/prisma';
 import { PERMISSIONS, SYSTEM_ROLES } from '@/lib/permissions';
+import { isReservedSlug } from '@/lib/tenant/reserved-slugs';
 
 export async function bootstrapOrganization({
   name,
@@ -10,6 +11,12 @@ export async function bootstrapOrganization({
   slug: string;
   ownerUserId: string;
 }) {
+  // Last line of defence: both callers check this and show a friendly
+  // message, but no org may ever be created on a reserved hostname.
+  if (isReservedSlug(slug)) {
+    throw new Error(`Reserved organization slug: ${slug}`);
+  }
+
   return db.$transaction(async (tx) => {
     // 1. Create organization
     const org = await tx.organization.create({

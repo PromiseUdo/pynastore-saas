@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { bootstrapOrganization } from '@/lib/onboarding';
 import { updateCurrentOrganization } from '@/lib/session';
 import { getAdminUrl } from '@/lib/tenant/urls';
+import { isReservedSlug, RESERVED_SLUG_MESSAGE } from '@/lib/tenant/reserved-slugs';
 import { z } from 'zod';
 
 const CreateOrgSchema = z.object({
@@ -41,6 +42,12 @@ export async function createOrganizationAction(
 
   if (!slug) {
     return { error: 'Organization name must contain at least one letter or number.' };
+  }
+
+  // The slug becomes a hostname ({slug}.{ROOT_DOMAIN}), so it can't be one
+  // the platform already answers on — see lib/tenant/reserved-slugs.ts.
+  if (isReservedSlug(slug)) {
+    return { error: RESERVED_SLUG_MESSAGE };
   }
 
   // Ensure slug uniqueness — append a short random suffix if taken

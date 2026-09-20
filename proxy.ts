@@ -11,9 +11,12 @@
  * still happens in lib/organization.ts inside Server Components/Actions.
  *
  * Tenant identification comes from the request HOSTNAME, not the URL path:
- *   {ROOT_DOMAIN}              -> marketing (auth pages, home gate)
+ *   {ROOT_DOMAIN}, www.        -> marketing
+ *   {PLATFORM_HOST}            -> marketing (auth pages, home gate). In
+ *                                 production its own host, app.{ROOT_DOMAIN};
+ *                                 in local dev the root domain itself.
  *   {slug}.{ROOT_DOMAIN}       -> admin, internally rewritten to /${slug}/...
- *   shop.{slug}.{ROOT_DOMAIN}  -> storefront, rewritten to /store/${slug}/...
+ *   shop-{slug}.{ROOT_DOMAIN}  -> storefront, rewritten to /store/${slug}/...
  *   a registered custom domain -> resolved via DB (see resolveTenant.ts)
  *
  * The public URL never shows the org slug — see lib/tenant/resolveHostname.ts

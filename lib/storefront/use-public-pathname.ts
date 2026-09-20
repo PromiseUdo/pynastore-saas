@@ -4,7 +4,7 @@
  * The storefront's slug-free pathname.
  *
  * proxy.ts rewrites the public URL to an internal, slug-prefixed route:
- *   shop.{slug}.{ROOT_DOMAIN}/cart  ->  /store/{slug}/cart
+ *   shop-{slug}.{ROOT_DOMAIN}/cart  ->  /store/{slug}/cart
  *   {mobile origin}/s/{slug}/cart   ->  /store/{slug}/cart
  *
  * `usePathname()` reports whichever path actually matched for the current

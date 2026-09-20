@@ -39,6 +39,12 @@ describe('safeNextPath', () => {
 
 describe('storeReturnUrl', () => {
   it('accepts the store subdomain', () => {
+    expect(storeReturnUrl('https://shop-acme.example.com/cart', ACME)).toBe(
+      'https://shop-acme.example.com/cart',
+    );
+  });
+
+  it('accepts the legacy two-label store subdomain', () => {
     expect(storeReturnUrl('https://shop.acme.example.com/cart', ACME)).toBe(
       'https://shop.acme.example.com/cart',
     );
@@ -49,11 +55,21 @@ describe('storeReturnUrl', () => {
   });
 
   it('refuses another store on the same platform', () => {
+    expect(storeReturnUrl('https://shop-zed.example.com/account', ACME)).toBeNull();
     expect(storeReturnUrl('https://shop.zed.example.com/account', ACME)).toBeNull();
+    // A slug this one is merely a prefix of is still a different store.
+    expect(storeReturnUrl('https://shop-acme-outlet.example.com/account', ACME)).toBeNull();
+  });
+
+  it('refuses the platform and admin hosts', () => {
+    expect(storeReturnUrl('https://app.example.com/account', ACME)).toBeNull();
+    expect(storeReturnUrl('https://acme.example.com/account', ACME)).toBeNull();
+    expect(storeReturnUrl('https://example.com/account', ACME)).toBeNull();
   });
 
   it('refuses an unrelated host, including a lookalike', () => {
     expect(storeReturnUrl('https://evil.example/steal', ACME)).toBeNull();
+    expect(storeReturnUrl('https://shop-acme.example.com.evil.test/x', ACME)).toBeNull();
     expect(storeReturnUrl('https://shop.acme.example.com.evil.test/x', ACME)).toBeNull();
   });
 
@@ -71,6 +87,7 @@ describe('storeReturnUrl', () => {
 
   it('lists exactly the hosts a store is served on', () => {
     expect(allowedStoreHosts(ACME)).toEqual([
+      'shop-acme.example.com',
       'shop.acme.example.com',
       'm.example.com',
       'shop.acme.com',
@@ -85,7 +102,7 @@ describe('storeUrl', () => {
     );
   });
 
-  it('falls back to the platform subdomain', () => {
-    expect(storeUrl({ slug: 'acme' }, '/account')).toBe('https://shop.acme.example.com/account');
+  it('falls back to the platform subdomain, in its current one-label shape', () => {
+    expect(storeUrl({ slug: 'acme' }, '/account')).toBe('https://shop-acme.example.com/account');
   });
 });

@@ -102,7 +102,7 @@ export function DomainSetupStep({
             selected={option === 'FREE'}
             onClick={() => setOption('FREE')}
             title="Keep my free SafeBase domain"
-            description={`${orgSlug}.${rootDomain} · shop.${orgSlug}.${rootDomain}`}
+            description={`${orgSlug}.${rootDomain} · shop-${orgSlug}.${rootDomain}`}
             price="No additional cost"
           />
         )}

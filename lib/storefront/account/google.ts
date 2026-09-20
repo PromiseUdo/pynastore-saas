@@ -5,7 +5,7 @@
  *
  * THE PROBLEM THIS FILE SOLVES. Google only redirects to redirect URIs
  * registered in advance, exactly. This platform serves each store on
- * shop.{slug}.{ROOT_DOMAIN}, on the merchant's own custom domain, and on the
+ * shop-{slug}.{ROOT_DOMAIN}, on the merchant's own custom domain, and on the
  * mobile origin — an open-ended set that grows every time a merchant signs
  * up. None of it can be registered ahead of time.
  *

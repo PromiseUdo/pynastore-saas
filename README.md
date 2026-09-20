@@ -24,17 +24,27 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 Organizations are identified by request **hostname**, not URL path — see `proxy.ts` and `lib/tenant/`. The public URL never contains an org slug.
 
-- `{ROOT_DOMAIN}` (e.g. `localhost:3000`) — marketing site: home, login, register, onboarding, invites.
+- `{ROOT_DOMAIN}` and `www.{ROOT_DOMAIN}` — marketing.
+- `{PLATFORM_HOST}` — the platform site: login, register, onboarding, invites, OAuth callbacks.
 - `{slug}.{ROOT_DOMAIN}` — a tenant's admin dashboard (rewritten internally to `/${slug}/...`).
-- `shop.{slug}.{ROOT_DOMAIN}` — that tenant's storefront (placeholder route, not built yet).
+- `shop-{slug}.{ROOT_DOMAIN}` — that tenant's storefront (rewritten to `/store/${slug}/...`).
+- `m.{ROOT_DOMAIN}` — the mobile app's single origin; the slug travels in the path as `/s/{slug}`. See MOBILE.md.
+- anything else — a merchant's custom domain, resolved by a DB lookup.
+
+Every platform hostname is a **single label** under `{ROOT_DOMAIN}`, which is why the storefront prefix is `shop-` and not `shop.`: one wildcard certificate (`*.{ROOT_DOMAIN}`) then covers the whole platform, and adding a tenant needs no DNS or certificate work. The two-label `shop.{slug}.` shape is still *parsed* so old links keep working, but nothing generates it.
+
+Because a slug is a hostname, some names can't be handed out — see `lib/tenant/reserved-slugs.ts`.
 
 `NEXT_PUBLIC_ROOT_DOMAIN` in `.env` controls the root domain for both local dev and prod. Locally it's set to `app.localhost:3000` rather than bare `localhost:3000` — see the comment above it in `.env` for why (a `next dev`-specific redirect quirk outside of Vercel).
+
+`NEXT_PUBLIC_PLATFORM_HOST` splits the platform host from the root domain, and is only needed in production (`app.getnotely.io`): without it, `app.{ROOT_DOMAIN}` would parse as a tenant called "app". **Leave it unset locally** — it then falls back to `NEXT_PUBLIC_ROOT_DOMAIN`, which locally already *is* the platform host.
 
 **Testing tenant subdomains locally**: Chrome and Firefox resolve any `*.localhost` hostname to `127.0.0.1` automatically — no `/etc/hosts` edit needed. With `npm run dev` running:
 
 - `http://app.localhost:3000` — marketing/login
 - `http://test-company.app.localhost:3000` — that org's admin dashboard
-- `http://shop.test-company.app.localhost:3000` — that org's storefront placeholder
+- `http://shop-test-company.app.localhost:3000` — that org's storefront
+- `http://shop.test-company.app.localhost:3000` — the same storefront, legacy shape, still accepted
 
 Safari's support for `*.localhost` subdomains is inconsistent — use Chrome or Firefox for this.
 

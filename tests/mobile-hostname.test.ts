@@ -25,6 +25,7 @@ describe('resolveHostname — mobile origin', () => {
 
   it('does not treat a normal tenant subdomain as mobile', () => {
     expect(resolveHostname(`acme.${ROOT_DOMAIN}`)).toMatchObject({ siteType: 'admin' });
+    expect(resolveHostname(`shop-acme.${ROOT_DOMAIN}`)).toMatchObject({ siteType: 'storefront' });
     expect(resolveHostname(`shop.acme.${ROOT_DOMAIN}`)).toMatchObject({ siteType: 'storefront' });
   });
 

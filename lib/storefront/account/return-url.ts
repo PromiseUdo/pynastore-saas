@@ -21,7 +21,7 @@
  *                      only if its host is one of the three shapes this
  *                      platform actually serves the store on, for THAT slug.
  */
-import { getMobileDomain, getRootDomain } from '@/lib/tenant/resolveHostname';
+import { getMobileDomain, isLocalHostname, storefrontHostsFor } from '@/lib/tenant/resolveHostname';
 
 /** A same-origin path, or the given fallback. */
 export function safeNextPath(value: string | null | undefined, fallback = '/account'): string {
@@ -40,9 +40,16 @@ export interface StoreOrigins {
   customStoreDomain?: string | null;
 }
 
-/** Every hostname this store is legitimately served on. */
+/**
+ * Every hostname this store is legitimately served on.
+ *
+ * The platform hostnames come from storefrontHostsFor() — the same function
+ * getStorefrontUrl() builds links from — so this allow-list cannot fall out
+ * of step with the host shoppers are actually on. It stays an exact match
+ * against hosts built for THIS slug; nothing here widens to a pattern.
+ */
 export function allowedStoreHosts({ slug, customStoreDomain }: StoreOrigins): string[] {
-  const hosts = [`shop.${slug}.${getRootDomain()}`];
+  const hosts = storefrontHostsFor(slug);
   const mobile = getMobileDomain();
   if (mobile) hosts.push(mobile);
   if (customStoreDomain) hosts.push(customStoreDomain.toLowerCase());
@@ -86,7 +93,7 @@ export function storeReturnUrl(candidate: string, store: StoreOrigins): string |
  */
 export function storeUrl(store: StoreOrigins, path = '/'): string {
   const suffix = path.startsWith('/') ? path : `/${path}`;
-  const host = store.customStoreDomain?.toLowerCase() || `shop.${store.slug}.${getRootDomain()}`;
-  const protocol = host.includes('localhost') ? 'http' : 'https';
+  const host = store.customStoreDomain?.toLowerCase() || storefrontHostsFor(store.slug)[0];
+  const protocol = isLocalHostname(host) ? 'http' : 'https';
   return `${protocol}://${host}${suffix}`;
 }

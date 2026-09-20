@@ -13,18 +13,17 @@
  * registered in the Meta app's "Valid OAuth Redirect URIs" goes here
  * verbatim. Nothing about that host is assumed or invented.
  *
- * The fallback is the marketing (root) origin, NOT a tenant subdomain: Meta
- * allows no wildcard in a redirect URI, so one registered URL has to serve
- * every merchant. The store travels in the signed state instead — see
+ * The fallback is the platform origin (NEXT_PUBLIC_PLATFORM_HOST, e.g.
+ * app.getnotely.io), NOT a tenant subdomain and not the apex: Meta allows no
+ * wildcard in a redirect URI, so one registered URL has to serve every
+ * merchant. The store travels in the signed state instead — see
  * lib/social/state.ts.
  */
-import { getRootDomain, isLocalHostname } from '@/lib/tenant/resolveHostname';
+import { getMarketingUrl } from '@/lib/tenant/urls';
 
 export function metaRedirectUri(): string {
   const configured = process.env.META_REDIRECT_URI?.trim();
   if (configured) return configured;
 
-  const root = getRootDomain();
-  const protocol = isLocalHostname(root) ? 'http' : 'https';
-  return `${protocol}://${root}/api/social/meta/callback`;
+  return getMarketingUrl('/api/social/meta/callback');
 }
