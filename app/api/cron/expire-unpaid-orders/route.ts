@@ -19,11 +19,15 @@ function authorized(req: NextRequest): boolean {
   if (!secret) return false;
   const given = Buffer.from(req.headers.get('authorization') ?? '');
   const expected = Buffer.from(`Bearer ${secret}`);
-  return given.length === expected.length && crypto.timingSafeEqual(given, expected);
+
+  return (
+    given.length === expected.length && crypto.timingSafeEqual(given, expected)
+  );
 }
 
 export async function GET(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!authorized(req))
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const result = await expireUnpaidOrders({ limit: 200 });
