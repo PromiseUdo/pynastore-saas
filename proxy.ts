@@ -36,8 +36,22 @@ const { auth } = NextAuth(authConfig);
 
 /* Routes that need no session at all — exact matches. Only meaningful on
  * the marketing domain; there is nothing at these paths on a tenant
- * subdomain. */
-const PUBLIC_PATHS = new Set(['/', '/login', '/register', '/forgot-password', '/reset-password']);
+ * subdomain.
+ *
+ * /privacy and /terms are the platform's public legal pages
+ * (app/(legal)/...). They must load for anyone, signed in or not — a Meta
+ * App Review reviewer opens https://getnotely.io/privacy in a private
+ * window — so they belong here and nowhere else: as marketing-host paths
+ * they never become tenant routes. */
+const PUBLIC_PATHS = new Set([
+  '/',
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/privacy',
+  '/terms',
+]);
 
 /* Route prefixes that are fully public (no auth required to load). */
 const PUBLIC_PREFIXES = ['/invite'];
