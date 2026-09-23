@@ -6,7 +6,8 @@
  * Layout is a three-part column — scrolling transcript, quick prompts,
  * pinned composer — so the input is always reachable without scrolling,
  * which is the thing that matters most on a phone (§41). The composer
- * carries `safe-bottom` for the home indicator inside the Capacitor shell,
+ * carries `safe-pb-4` — its own bottom padding plus the home-indicator
+ * inset inside the Capacitor shell —
  * and the transcript scrolls under it rather than the whole panel moving
  * when the keyboard opens.
  *
@@ -152,7 +153,7 @@ export function AssistantPanel() {
       {/* ── composer ────────────────────────────────────────────────── */}
       <form
         onSubmit={onSubmit}
-        className="safe-bottom shrink-0 border-t bg-background px-5 py-3"
+        className="safe-pb-4 shrink-0 border-t bg-background px-5 pt-3"
       >
         <label htmlFor="sf-assistant-input" className="sr-only">
           Ask the shopping assistant about products in this store

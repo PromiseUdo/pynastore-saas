@@ -27,6 +27,7 @@
  */
 import * as React from 'react';
 import Image from 'next/image';
+import { ProductImage } from '@/components/storefront/product/product-image';
 import Link from 'next/link';
 import { ChevronDown, Lock, Pencil } from 'lucide-react';
 import type { AppliedCoupon, CartItem } from '@/lib/storefront/types';
@@ -43,8 +44,9 @@ function Line({ item }: { item: CartItem }) {
   return (
     <li className="flex gap-3 py-3">
       <div className="relative shrink-0">
-        <Image
+        <ProductImage
           src={item.imageUrl}
+          name={item.name}
           alt=""
           width={56}
           height={70}

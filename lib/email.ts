@@ -17,13 +17,34 @@ import {
   type StoreOrderAlertEmailProps,
 } from '@/emails/store-order-alert';
 import { DomainOrderNotificationEmail } from '@/emails/domain-order-notification';
+import { InvoiceEmail, type InvoiceEmailProps } from '@/emails/invoice';
 import {
   StorefrontOrderUpdateEmail,
   orderEmailSubject,
   type StorefrontOrderUpdateEmailProps,
 } from '@/emails/storefront-order-update';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+/*
+ * Every message leaves from the platform's own verified sender. There is no
+ * hard-coded fallback: an unset EMAIL_FROM is a misconfiguration, and sending
+ * from someone else's domain would silently fail SPF/DKIM anyway. `sendFrom()`
+ * logs and the caller skips the send, which matches this module's contract of
+ * never throwing.
+ *
+ * Per-merchant sending domains are a Phase 3 decision (docs/ROADMAP.md).
+ */
+const FROM = process.env.EMAIL_FROM;
+
+function sendFrom(): string | null {
+  if (!FROM) {
+    console.error('[email] EMAIL_FROM is not set — no email was sent.');
+    return null;
+  }
+  return FROM;
+}
 
 type InvitationEmailPayload = {
   to: string;
@@ -37,10 +58,12 @@ export async function sendInvitationEmail(
   payload: InvitationEmailPayload,
 ): Promise<void> {
   try {
+    const from = sendFrom();
+    if (!from) return;
     await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? 'noreply@versetwofit.com',
+      from,
       to: payload.to,
-      subject: `You've been invited to ${payload.orgName} on SafeBase`,
+      subject: `You've been invited to ${payload.orgName} on ${PLATFORM_NAME}`,
       react: InvitationEmail(payload),
     });
   } catch (err) {
@@ -58,10 +81,12 @@ export async function sendPasswordResetEmail(
   payload: ResetPasswordEmailPayload,
 ): Promise<void> {
   try {
+    const from = sendFrom();
+    if (!from) return;
     await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? 'noreply@versetwofit.com',
+      from,
       to: payload.to,
-      subject: 'Reset your SafeBase password',
+      subject: `Reset your ${PLATFORM_NAME} password`,
       react: ResetPasswordEmail(payload),
     });
   } catch (err) {
@@ -84,8 +109,10 @@ export async function sendStorefrontPasswordResetEmail(
   payload: StorefrontPasswordResetPayload,
 ): Promise<void> {
   try {
+    const from = sendFrom();
+    if (!from) return;
     await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? 'noreply@versetwofit.com',
+      from,
       to: payload.to,
       subject: `Reset your ${payload.storeName} password`,
       react: StorefrontResetPasswordEmail(payload),
@@ -107,8 +134,10 @@ export async function sendStorefrontConfirmEmailChange(
   payload: ConfirmEmailChangePayload,
 ): Promise<void> {
   try {
+    const from = sendFrom();
+    if (!from) return;
     await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? 'noreply@versetwofit.com',
+      from,
       to: payload.to,
       subject: `Confirm this email for your ${payload.storeName} account`,
       react: StorefrontConfirmEmailChangeEmail(payload),
@@ -130,8 +159,10 @@ export async function sendStorefrontEmailChangeNotice(
   payload: EmailChangeNoticePayload,
 ): Promise<void> {
   try {
+    const from = sendFrom();
+    if (!from) return;
     await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? 'noreply@versetwofit.com',
+      from,
       to: payload.to,
       subject: `Someone asked to change the email on your ${payload.storeName} account`,
       react: StorefrontEmailChangeNoticeEmail(payload),
@@ -145,9 +176,11 @@ export async function sendStorefrontEmailChangeNotice(
 export async function sendStoreOrderAlertEmail(payload: StoreOrderAlertEmailProps & { to: string[] }): Promise<void> {
   if (payload.to.length === 0) return;
   try {
+    const from = sendFrom();
+    if (!from) return;
     const { to, ...props } = payload;
     await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? 'noreply@versetwofit.com',
+      from,
       to,
       subject: storeOrderAlertSubject(props),
       react: StoreOrderAlertEmail(props),
@@ -172,8 +205,10 @@ export async function sendLowStockAlertEmail(
 ): Promise<void> {
   if (payload.to.length === 0) return;
   try {
+    const from = sendFrom();
+    if (!from) return;
     await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? 'noreply@versetwofit.com',
+      from,
       to: payload.to,
       subject: `Low stock: ${payload.itemName} at ${payload.warehouseName}`,
       react: LowStockAlertEmail(payload),
@@ -200,8 +235,10 @@ export async function sendDomainOrderNotificationEmail(
     return;
   }
   try {
+    const from = sendFrom();
+    if (!from) return;
     await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? 'noreply@versetwofit.com',
+      from,
       to,
       subject: `New domain order: ${payload.domain} (${payload.orgName})`,
       react: DomainOrderNotificationEmail(payload),
@@ -212,13 +249,39 @@ export async function sendDomainOrderNotificationEmail(
 }
 
 /** Tells a shopper where their order has got to — see lib/storefront/orders/notifications.ts. */
+/**
+ * An invoice, or a reminder about one — sent in the merchant's name, to their
+ * customer. Carries the merchant's own logo and name; nothing in it mentions
+ * the platform.
+ */
+export async function sendInvoiceEmail(payload: InvoiceEmailProps & { to: string }): Promise<void> {
+  try {
+    const from = sendFrom();
+    if (!from) return;
+    const { to, ...props } = payload;
+    await resend.emails.send({
+      from,
+      to,
+      subject:
+        props.kind === 'reminder'
+          ? `Reminder: invoice ${props.invoiceNumber} from ${props.businessName}`
+          : `Invoice ${props.invoiceNumber} from ${props.businessName}`,
+      react: InvoiceEmail(props),
+    });
+  } catch (err) {
+    console.error('[email] Failed to send invoice email:', err);
+  }
+}
+
 export async function sendStorefrontOrderUpdateEmail(
   payload: StorefrontOrderUpdateEmailProps & { to: string },
 ): Promise<void> {
   try {
+    const from = sendFrom();
+    if (!from) return;
     const { to, ...props } = payload;
     await resend.emails.send({
-      from: process.env.EMAIL_FROM ?? 'noreply@versetwofit.com',
+      from,
       to,
       subject: orderEmailSubject(props.kind, props.storeName, props.reference),
       react: StorefrontOrderUpdateEmail(props),

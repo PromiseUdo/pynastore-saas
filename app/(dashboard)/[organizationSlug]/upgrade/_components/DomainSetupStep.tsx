@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { searchDomain } from '@/features/domains/actions';
 import { formatNaira } from '@/lib/billing/format';
 import type { DomainChoiceInput } from '@/lib/billing/checkout';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 type DomainOption = 'FREE' | 'EXISTING' | 'REGISTER';
 
@@ -101,7 +102,7 @@ export function DomainSetupStep({
           <OptionCard
             selected={option === 'FREE'}
             onClick={() => setOption('FREE')}
-            title="Keep my free SafeBase domain"
+            title={`Keep my free ${PLATFORM_NAME} domain`}
             description={`${orgSlug}.${rootDomain} · shop-${orgSlug}.${rootDomain}`}
             price="No additional cost"
           />

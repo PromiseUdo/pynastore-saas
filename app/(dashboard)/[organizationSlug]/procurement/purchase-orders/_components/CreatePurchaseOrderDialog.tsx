@@ -116,7 +116,6 @@ export function CreatePurchaseOrderDialog({
     const result = await createPurchaseOrder({
       supplierId,
       warehouseId,
-      currency: 'USD',
       notes: notes.trim() || undefined,
       taxAmount: taxAmount ? Number(taxAmount) : undefined,
       lineItems: rows.map((r) => ({

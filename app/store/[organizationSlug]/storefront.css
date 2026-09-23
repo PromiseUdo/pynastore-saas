@@ -301,3 +301,93 @@
     bottom: calc(9rem + env(safe-area-inset-bottom));
   }
 }
+
+/* The floating "Ask the assistant" button shares the bottom-right corner with
+ * the back-to-top arrow, so only one of them owns that spot at a time: it
+ * rests at the bottom of the screen and slides up by one arrow's height while
+ * the arrow is showing (`data-lifted`, set from the same scroll state the
+ * arrow uses). The two offsets come in as custom properties because the rest
+ * position depends on whether the app's tab bar is under it.
+ *
+ * On a desktop the corner is roomy and the arrow sits at 1.5rem, so the rest
+ * position is fixed there rather than following the phone's tab bar. */
+.sf-assistant-fab {
+  bottom: calc(var(--sf-fab-rest, 1.25rem) + env(safe-area-inset-bottom));
+  transition: bottom 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sf-assistant-fab[data-lifted='true'] {
+  bottom: calc(var(--sf-fab-lift, 4.5rem) + env(safe-area-inset-bottom));
+}
+@media (min-width: 1024px) {
+  .sf-assistant-fab {
+    bottom: 1.5rem;
+  }
+  .sf-assistant-fab[data-lifted='true'] {
+    bottom: 4.75rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-assistant-fab {
+    transition: none;
+  }
+}
+
+/* ─── Campaign announcement bar ───────────────────────────────────────────
+ *
+ * A marquee for a notice a merchant wants scrolling.
+ *
+ * The track is sized to its CONTENT (`w-max` in the component), not to the
+ * bar, and holds two identical groups. Sliding it by exactly -50% moves it by
+ * one whole group, so the second lands precisely where the first started and
+ * the loop has no seam and no gap. Sizing the track to the bar instead makes
+ * -50% half the BAR's width — which is why the first attempt set off from the
+ * middle, ran off the left and reappeared in the middle.
+ *
+ * Each group is at least a viewport wide, so a short notice is spread evenly
+ * across the screen rather than leaving a hole behind it.
+ *
+ * It stops entirely for anyone whose system asks for less motion — text that
+ * moves and cannot be paused is unreadable for some people, and a sale
+ * notice is not worth that. They get the same words, sitting still.
+ */
+.sf-marquee {
+  animation: sf-marquee 15s linear infinite;
+  will-change: transform;
+}
+
+.sf-marquee:hover {
+  animation-play-state: paused;
+}
+
+@keyframes sf-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    /* Exactly one group — the second is now where the first was. */
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-marquee {
+    animation: none;
+    /* Standing still, the filler groups are just repetition: show one
+     * screen's worth, centred, and drop the rest. */
+    width: 100%;
+  }
+
+  .sf-marquee > [aria-hidden='true'] {
+    display: none;
+  }
+
+  .sf-marquee > div {
+    min-width: 0;
+    flex: 1;
+    justify-content: center;
+  }
+
+  .sf-marquee span[aria-hidden='true'] {
+    display: none;
+  }
+}

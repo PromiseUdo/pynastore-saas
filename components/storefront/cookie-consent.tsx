@@ -29,7 +29,7 @@ export function CookieConsent({ privacyHref = null }: { privacyHref?: string | n
   if (!visible) return null;
 
   return (
-    <div className="safe-bottom fixed inset-x-3 bottom-3 z-40 mx-auto max-w-2xl rounded-xl border bg-card p-4 shadow-lg lg:inset-x-6">
+    <div className="safe-pb-4 fixed inset-x-3 bottom-3 z-40 mx-auto max-w-2xl rounded-xl border bg-card p-4 shadow-lg lg:inset-x-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {/* The link appears only when the merchant has published a privacy
           * page — pointing at a 404 from a consent notice is worse than not

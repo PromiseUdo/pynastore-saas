@@ -1,23 +1,21 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import {
-  ShoppingCart,
-  Package,
-  TrendingUp,
-  Users,
-  MoreHorizontal,
-  Plus,
-  ArrowUpRight,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-} from "lucide-react";
-import { PageHeader, PageBody } from "@/components/layout/page-header";
-import { StatCard, StatGrid } from "@/components/dashboard/stat-card";
-import { ActivityFeed } from "@/components/dashboard/activity-feed";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button-variants";
+/*
+ * The home page.
+ *
+ * What a shop owner wants in the first three seconds: what sold today, what
+ * is waiting on them, and what has just come in. Every figure is this
+ * store's own — the page used to show a hard-coded set of purchase orders in
+ * dollars.
+ *
+ * Sections follow permissions: someone with only `inventory.view` sees the
+ * stock line and no money at all.
+ */
+import type { Metadata } from 'next';
+import Link from 'next/link';
+import { AlertCircle, ArrowUpRight, Banknote, HelpCircle, PackageX, ShoppingBag, Undo2 } from 'lucide-react';
+import { PageHeader, PageBody } from '@/components/layout/page-header';
+import { StatCard, StatGrid } from '@/components/dashboard/stat-card';
+import { EmptyState } from '@/components/layout/empty-state';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableWrapper,
@@ -26,236 +24,252 @@ import {
   TableRow,
   TableColumnHeader,
   TableCell,
-} from "@/components/ui/table";
-import { TablePagination } from "@/components/ui/table-pagination";
+} from '@/components/ui/table';
+import { formatMoney, formatNumber, formatRelativeTime } from '@/lib/format';
+import {
+  ORDER_CHANNEL_LABEL,
+  ORDER_STATUS_LABEL,
+  ORDER_STATUS_VARIANT,
+  ORDER_PAYMENT_LABEL,
+  ORDER_PAYMENT_VARIANT,
+} from '@/lib/sales/order-labels';
+import { getDashboardOverview } from '@/features/dashboard/overview';
 
-export const metadata: Metadata = { title: "Dashboard" };
+export const metadata: Metadata = { title: 'Dashboard' };
 
-/* ─── Mock data ─────────────────────────────────────────────────────────── */
+export default async function DashboardPage() {
+  const overview = await getDashboardOverview();
+  const { sales, inventory, currency } = overview;
+  const now = new Date();
 
-const recentOrders = [
-  {
-    id: "PO-2441",
-    supplier: "Acme Supplies Ltd",
-    items: 12,
-    amount: "$4,820.00",
-    status: "approved" as const,
-    date: "May 14, 2026",
-  },
-  {
-    id: "PO-2440",
-    supplier: "Global Parts Co",
-    items: 5,
-    amount: "$1,240.00",
-    status: "pending" as const,
-    date: "May 13, 2026",
-  },
-  {
-    id: "PO-2439",
-    supplier: "TechSource Inc",
-    items: 8,
-    amount: "$9,100.00",
-    status: "processing" as const,
-    date: "May 12, 2026",
-  },
-  {
-    id: "PO-2438",
-    supplier: "Nortek Supplies",
-    items: 3,
-    amount: "$540.00",
-    status: "completed" as const,
-    date: "May 11, 2026",
-  },
-  {
-    id: "PO-2437",
-    supplier: "Delta Wholesale",
-    items: 20,
-    amount: "$22,310.00",
-    status: "cancelled" as const,
-    date: "May 10, 2026",
-  },
-];
+  /* Things that are actually waiting on someone, in the order a shop owner
+   * would deal with them. Anything at zero simply isn't mentioned. */
+  const attention = [
+    sales?.openOrders
+      ? {
+          key: 'orders',
+          icon: ShoppingBag,
+          href: '/sales/orders',
+          text:
+            sales.openOrders === 1
+              ? '1 order is waiting to be packed or confirmed'
+              : `${formatNumber(sales.openOrders)} orders are waiting to be packed or confirmed`,
+          action: 'Open orders',
+        }
+      : null,
+    sales?.returnsAwaiting
+      ? {
+          key: 'returns',
+          icon: Undo2,
+          href: '/sales/returns',
+          text:
+            sales.returnsAwaiting === 1
+              ? '1 customer is waiting on a return decision'
+              : `${formatNumber(sales.returnsAwaiting)} customers are waiting on a return decision`,
+          action: 'Review returns',
+        }
+      : null,
+    sales?.unansweredQuestions
+      ? {
+          key: 'questions',
+          icon: HelpCircle,
+          href: '/sales/questions',
+          text:
+            sales.unansweredQuestions === 1
+              ? '1 customer question has no answer yet'
+              : `${formatNumber(sales.unansweredQuestions)} customer questions have no answer yet`,
+          action: 'Answer them',
+        }
+      : null,
+    inventory?.lowStockCount
+      ? {
+          key: 'stock',
+          icon: PackageX,
+          href: '/inventory/reports',
+          text:
+            inventory.lowStockCount === 1
+              ? '1 product has run down to its reorder point'
+              : `${formatNumber(inventory.lowStockCount)} products have run down to their reorder point`,
+          action: 'See low stock',
+        }
+      : null,
+    sales?.overdueInvoices
+      ? {
+          key: 'invoices',
+          icon: AlertCircle,
+          href: '/sales/invoices',
+          text:
+            sales.overdueInvoices === 1
+              ? '1 invoice is past its due date'
+              : `${formatNumber(sales.overdueInvoices)} invoices are past their due date`,
+          action: 'Chase them',
+        }
+      : null,
+  ].filter((item): item is NonNullable<typeof item> => item !== null);
 
-const activity = [
-  {
-    id: "1",
-    title: "Purchase order PO-2441 approved",
-    description: "Approved by James Okonkwo",
-    time: "2 hours ago",
-    icon: CheckCircle2,
-    iconClassName: "text-emerald-600 dark:text-emerald-400",
-  },
-  {
-    id: "2",
-    title: "Low stock alert — SKU-0984",
-    description: "Safety stock threshold reached for Bolt M8 x 40",
-    time: "5 hours ago",
-    icon: AlertCircle,
-    iconClassName: "text-amber-600 dark:text-amber-400",
-  },
-  {
-    id: "3",
-    title: "Supplier invoice received",
-    description: "Global Parts Co — INV-8821 — $1,240.00",
-    time: "Yesterday at 4:12 PM",
-    icon: Clock,
-  },
-  {
-    id: "4",
-    title: "New staff member added",
-    description: "Amara Osei joined as Procurement Officer",
-    time: "Yesterday at 11:30 AM",
-    icon: Users,
-  },
-];
-
-/* ─── Page ──────────────────────────────────────────────────────────────── */
-
-export default function DashboardPage() {
   return (
     <>
-      <PageHeader
-        title="Dashboard"
-        description="Overview of your operations for May 2026"
-        actions={
-          <Button size="sm">
-            <Plus className="size-3.5" />
-            New Order
-          </Button>
-        }
-      />
+      <PageHeader title="Dashboard" description={`What's happening at ${overview.organizationName} today.`} />
 
-      <PageBody>
-        <div className="space-y-6">
-          {/* KPI stats */}
+      <PageBody className="space-y-6">
+        {attention.length > 0 && (
+          <section aria-label="Needs attention" className="space-y-2">
+            {attention.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                className="flex items-center gap-3 rounded-md border bg-card px-4 py-3 text-sm transition-colors hover:bg-muted/50"
+              >
+                <item.icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 flex-1 font-medium text-foreground">{item.text}</span>
+                <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:flex">
+                  {item.action}
+                  <ArrowUpRight className="size-3" />
+                </span>
+              </Link>
+            ))}
+          </section>
+        )}
+
+        {(sales || inventory) && (
           <StatGrid>
-            <StatCard
-              title="Total Revenue"
-              value="$128,450"
-              description="vs last month"
-              icon={TrendingUp}
-              trend={{ value: 12.4 }}
-            />
-            <StatCard
-              title="Open Orders"
-              value="34"
-              description="6 require attention"
-              icon={ShoppingCart}
-              trend={{ value: -3.1 }}
-            />
-            <StatCard
-              title="Inventory Items"
-              value="1,284"
-              description="98 low-stock alerts"
-              icon={Package}
-              trend={{ value: 0 }}
-            />
-            <StatCard
-              title="Active Suppliers"
-              value="62"
-              description="3 new this month"
-              icon={Users}
-              trend={{ value: 5.0 }}
-            />
+            {sales && (
+              <>
+                <ClickableStat href="/sales/orders">
+                  <StatCard
+                    title="Paid today"
+                    value={formatMoney(sales.revenueToday, currency)}
+                    description="Money confirmed since midnight"
+                    icon={Banknote}
+                  />
+                </ClickableStat>
+                <ClickableStat href="/sales/orders">
+                  <StatCard
+                    title="Orders today"
+                    value={formatNumber(sales.ordersToday)}
+                    description={channelSplit(sales.todayByChannel)}
+                    icon={ShoppingBag}
+                  />
+                </ClickableStat>
+                <ClickableStat href="/sales/orders">
+                  <StatCard
+                    title="Waiting on you"
+                    value={formatNumber(sales.openOrders)}
+                    description="Not yet shipped"
+                    icon={AlertCircle}
+                  />
+                </ClickableStat>
+              </>
+            )}
+            {inventory && (
+              <ClickableStat href="/inventory/reports">
+                <StatCard
+                  title="Low stock"
+                  value={formatNumber(inventory.lowStockCount)}
+                  description="At or below the reorder point"
+                  icon={PackageX}
+                />
+              </ClickableStat>
+            )}
           </StatGrid>
+        )}
 
-          {/* Main content: table + activity feed */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
-            {/* Recent purchase orders */}
-            <div className="flex flex-col gap-0 rounded-lg border bg-card shadow-xs">
-              <div className="flex items-center justify-between px-5 py-4 border-b">
-                <div>
-                  <h2 className="text-sm font-semibold text-foreground">
-                    Recent Purchase Orders
-                  </h2>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Last 5 orders across all suppliers
-                  </p>
-                </div>
-                <Link
-                  href="/procurement"
-                  className={buttonVariants({ variant: "ghost", size: "sm" })}
-                >
-                  View all
-                  <ArrowUpRight className="size-3.5" />
-                </Link>
-              </div>
+        {overview.canViewSales && (
+          <section className="rounded-lg border bg-card">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <h2 className="text-sm font-semibold">Latest orders</h2>
+              <Link href="/sales/orders" className="text-xs font-medium text-primary hover:underline">
+                View all
+              </Link>
+            </div>
 
-              <TableWrapper flush>
+            {overview.recentOrders.length === 0 ? (
+              <EmptyState
+                icon={ShoppingBag}
+                title="No orders yet"
+                description="When someone buys from your online store, their order shows up here."
+              />
+            ) : (
+              <TableWrapper>
                 <Table>
                   <TableHead>
-                    <tr>
-                      <TableColumnHeader>Order ID</TableColumnHeader>
-                      <TableColumnHeader>Supplier</TableColumnHeader>
-                      <TableColumnHeader align="center">Items</TableColumnHeader>
-                      <TableColumnHeader align="right">Amount</TableColumnHeader>
+                    <TableRow>
+                      <TableColumnHeader>Order</TableColumnHeader>
+                      <TableColumnHeader>Customer</TableColumnHeader>
                       <TableColumnHeader>Status</TableColumnHeader>
-                      <TableColumnHeader>Date</TableColumnHeader>
-                      <TableColumnHeader align="right" />
-                    </tr>
+                      <TableColumnHeader>Payment</TableColumnHeader>
+                      <TableColumnHeader className="text-right">Items</TableColumnHeader>
+                      <TableColumnHeader className="text-right">Total</TableColumnHeader>
+                      <TableColumnHeader className="text-right">Placed</TableColumnHeader>
+                    </TableRow>
                   </TableHead>
                   <TableBody>
-                    {recentOrders.map((order) => (
-                      <TableRow key={order.id} clickable>
+                    {overview.recentOrders.map((order) => (
+                      <TableRow key={order.id}>
                         <TableCell>
-                          <span className="font-medium font-mono text-xs text-foreground">
-                            {order.id}
-                          </span>
+                          <Link
+                            href={`/sales/orders/${order.id}`}
+                            className="font-medium text-foreground hover:underline"
+                          >
+                            {order.reference}
+                          </Link>
                         </TableCell>
-                        <TableCell>{order.supplier}</TableCell>
-                        <TableCell align="center" muted>
-                          {order.items}
-                        </TableCell>
-                        <TableCell align="right" className="font-medium tabular-nums">
-                          {order.amount}
-                        </TableCell>
+                        <TableCell>{order.customerName || '—'}</TableCell>
                         <TableCell>
-                          <Badge variant={order.status} dot>
-                            {order.status.charAt(0).toUpperCase() +
-                              order.status.slice(1)}
+                          <Badge variant={ORDER_STATUS_VARIANT[order.status] ?? 'draft'}>
+                            {ORDER_STATUS_LABEL[order.status] ?? '—'}
                           </Badge>
                         </TableCell>
-                        <TableCell muted>{order.date}</TableCell>
-                        <TableCell align="right">
-                          <button
-                            aria-label="More actions"
-                            className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover/row:opacity-100 [tr:hover_&]:opacity-100"
-                          >
-                            <MoreHorizontal className="size-4" />
-                          </button>
+                        <TableCell>
+                          <Badge variant={ORDER_PAYMENT_VARIANT[order.paymentStatus] ?? 'draft'}>
+                            {ORDER_PAYMENT_LABEL[order.paymentStatus] ?? '—'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(order.itemCount)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatMoney(order.totalAmount, currency)}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {formatRelativeTime(order.placedAt, now)}
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </TableWrapper>
+            )}
+          </section>
+        )}
 
-              <TablePagination
-                defaultPage={1}
-                totalPages={12}
-                totalItems={57}
-                pageSize={5}
-                className="rounded-b-lg"
-              />
-            </div>
-
-            {/* Activity feed */}
-            <div className="rounded-lg border bg-card shadow-xs">
-              <div className="border-b px-5 py-4">
-                <h2 className="text-sm font-semibold text-foreground">
-                  Recent Activity
-                </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Latest updates across modules
-                </p>
-              </div>
-              <div className="p-5">
-                <ActivityFeed items={activity} />
-              </div>
-            </div>
-          </div>
-        </div>
+        {!sales && !inventory && (
+          <EmptyState
+            icon={AlertCircle}
+            title="Nothing to show yet"
+            description="Your role doesn't include sales or stock. Ask an admin if you think you should see more here."
+          />
+        )}
       </PageBody>
     </>
+  );
+}
+
+/**
+ * "8 online · 3 in store" — or just "Placed since midnight" when everything
+ * came from one place, because naming a single channel adds nothing.
+ */
+function channelSplit(counts: { channel: string; count: number }[]): string {
+  const named = counts.filter((c) => c.count > 0);
+  if (named.length < 2) return 'Placed since midnight';
+  return named
+    .map((c) => `${formatNumber(c.count)} ${(ORDER_CHANNEL_LABEL[c.channel] ?? c.channel).toLowerCase()}`)
+    .join(' · ');
+}
+
+/* Each stat leads to the list it counts (AGENTS §2). */
+function ClickableStat({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="rounded-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      {children}
+    </Link>
   );
 }

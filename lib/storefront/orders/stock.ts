@@ -9,10 +9,12 @@
  * order holds a unit, no other shopper, invoice, transfer or manual stock-out
  * can take it.
  *
- * WHERE FROM: only stores that sell online (the same stores the storefront
- * counts), fullest first, spilling into the next store when one can't cover
- * a line. Each store's share is an OrderStockAllocation row, so releasing or
- * dispatching later touches exactly what was held.
+ * WHERE FROM: for an online order, only stores that sell online (the same
+ * stores the storefront counts), fullest first, spilling into the next store
+ * when one can't cover a line. For a counter sale, the one store the customer
+ * is standing in — `warehouseId` — whether or not it sells online. Each
+ * store's share is an OrderStockAllocation row, so releasing or dispatching
+ * later touches exactly what was held.
  *
  * RACES: the hold is a conditional UPDATE — "add to reservedQty only if what
  * remains available still covers it" — so two shoppers after the last unit
@@ -46,7 +48,16 @@ export interface StockLine {
  */
 export async function reserveOrderStock(
   tx: Tx,
-  input: { organizationId: string; orderId: string; lines: StockLine[] },
+  input: {
+    organizationId: string;
+    orderId: string;
+    lines: StockLine[];
+    /**
+     * Take it all from this one store (a counter sale). Without it, stock
+     * comes from the stores that sell online, as the storefront counts them.
+     */
+    warehouseId?: string;
+  },
 ): Promise<void> {
   for (const line of input.lines) {
     let remaining = line.quantity;
@@ -54,7 +65,9 @@ export async function reserveOrderStock(
     const levels = await tx.inventoryLevel.findMany({
       where: {
         inventoryItemId: line.inventoryItemId,
-        warehouse: { organizationId: input.organizationId, sellsOnline: true, status: 'ACTIVE' },
+        ...(input.warehouseId
+          ? { warehouseId: input.warehouseId, warehouse: { organizationId: input.organizationId, status: 'ACTIVE' } }
+          : { warehouse: { organizationId: input.organizationId, sellsOnline: true, status: 'ACTIVE' } }),
       },
       select: { id: true, warehouseId: true, quantity: true, reservedQty: true },
     });
@@ -100,7 +113,7 @@ export async function reserveOrderStock(
           quantity: take,
           referenceType: 'Order',
           referenceId: input.orderId,
-          notes: 'Held for an online order',
+          notes: input.warehouseId ? 'Held for a counter sale' : 'Held for an online order',
         },
       });
 

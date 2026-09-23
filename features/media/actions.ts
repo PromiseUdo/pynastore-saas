@@ -10,6 +10,12 @@ const CAN_UPLOAD: Record<UploadPurpose, PermissionKey[]> = {
   products: [PERMISSIONS.INVENTORY_CREATE, PERMISSIONS.INVENTORY_EDIT],
   categories: [PERMISSIONS.INVENTORY_CATEGORY_MANAGE],
   brands: [PERMISSIONS.INVENTORY_CREATE, PERMISSIONS.INVENTORY_EDIT],
+  /** The store's own logo, in Settings → General. */
+  organization: [PERMISSIONS.SETTINGS_EDIT],
+  /** Artwork for a campaign's announcement. */
+  campaigns: [PERMISSIONS.SALES_DISCOUNT_MANAGE],
+  /** Hero slides and the shop's share image. */
+  storefront: [PERMISSIONS.SETTINGS_EDIT],
 };
 
 /** Short-lived signed parameters for one direct browser → Cloudinary upload. */

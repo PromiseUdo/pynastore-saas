@@ -1,10 +1,14 @@
 'use server';
 
+import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
+import { sendInvoiceEmail } from '@/lib/email';
+import { formatDate, formatMoney } from '@/lib/format';
+import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { InvoiceStatus, PaymentMethod, PurchaseOrderStatus } from '@/lib/generated/prisma/enums';
 import { generatePoNumber } from '@/features/procurement/shared';
 import { type ActionResult, toActionError, generateDocumentNumber } from './shared';
@@ -20,7 +24,8 @@ const LineItemInputSchema = z.object({
 const CreateInvoiceSchema = z.object({
   customerId: z.string().cuid(),
   warehouseId: z.string().cuid(),
-  currency: z.string().min(1).max(10).default('USD'),
+  /** Omitted by the UI — a document is written in the org's currency (AGENTS §4). */
+  currency: z.string().min(1).max(10).optional(),
   notes: z.string().max(1000).optional(),
   dueDate: z.coerce.date().optional(),
   taxAmount: z.number().nonnegative().optional(),
@@ -65,6 +70,13 @@ export type PaymentRow = {
 
 export type InvoiceDetail = InvoiceListRow & {
   customerId: string;
+  /** null when the customer has no email — nothing can be sent to them */
+  customerEmail: string | null;
+  /** when it was first emailed, and last chased */
+  sentAt: Date | null;
+  lastReminderAt: Date | null;
+  /** the customer's own link, once it has been sent at least once */
+  publicUrl: string | null;
   warehouseId: string | null;
   subtotal: number;
   taxAmount: number;
@@ -142,7 +154,7 @@ export async function createInvoice(
           customerId: data.customerId,
           warehouseId: data.warehouseId,
           invoiceNumber,
-          currency: data.currency,
+          currency: data.currency ?? ctx.organization.currency,
           subtotal,
           taxAmount,
           totalAmount,
@@ -228,7 +240,7 @@ export async function getInvoice(invoiceId: string): Promise<ActionResult<Invoic
     const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: {
-        customer: { select: { name: true } },
+        customer: { select: { name: true, email: true } },
         warehouse: { select: { name: true } },
         lineItems: {
           include: {
@@ -264,6 +276,12 @@ export async function getInvoice(invoiceId: string): Promise<ActionResult<Invoic
         createdAt: invoice.createdAt,
         dueDate: invoice.dueDate,
         isOverdue: isOverdue(invoice.status, invoice.dueDate),
+        customerEmail: invoice.customer.email,
+        sentAt: invoice.sentAt,
+        lastReminderAt: invoice.lastReminderAt,
+        publicUrl: invoice.publicToken
+          ? getStorefrontUrl(ctx.organization.slug, `/invoice/${invoice.publicToken}`)
+          : null,
         lineItems: invoice.lineItems.map((li) => ({
           id: li.id,
           inventoryItemId: li.inventoryItemId,
@@ -602,5 +620,195 @@ export async function voidInvoice(invoiceId: string): Promise<ActionResult> {
     return { success: true, data: undefined };
   } catch (err) {
     return toActionError(err, 'Failed to void invoice');
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Sending it to the customer
+ *
+ * An invoice could be issued but never reach anyone: there was no email, no
+ * customer-facing page and nothing to link to (docs/ROADMAP.md Phase 3).
+ *
+ * The link's key is `publicToken`, minted on the first send. The invoice
+ * number counts upwards, so it can never be what opens the page — anyone who
+ * could count would otherwise read the whole store's invoices by editing a
+ * URL. Same reasoning, and the same 256 bits, as Order.confirmationToken.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+/** An invoice that can still be chased: sent or part-paid, and not void. */
+const CHASEABLE: InvoiceStatus[] = [InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.OVERDUE];
+
+async function invoiceForSending(invoiceId: string, organizationId: string) {
+  return prisma.invoice.findFirst({
+    where: { id: invoiceId, organizationId },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      status: true,
+      currency: true,
+      totalAmount: true,
+      paidAmount: true,
+      dueDate: true,
+      notes: true,
+      publicToken: true,
+      sentAt: true,
+      customer: { select: { name: true, email: true } },
+      lineItems: { select: { description: true, quantity: true, totalPrice: true } },
+      organization: { select: { slug: true, name: true, logoUrl: true } },
+    },
+  });
+}
+
+type SendableInvoice = NonNullable<Awaited<ReturnType<typeof invoiceForSending>>>;
+
+/**
+ * Put the email together and send it. Shared by the first send and every
+ * reminder, so the two can't drift apart.
+ */
+async function deliverInvoice(
+  invoice: SendableInvoice,
+  kind: 'issued' | 'reminder',
+  organizationId: string,
+): Promise<string> {
+  const token = invoice.publicToken ?? randomBytes(32).toString('base64url');
+
+  const outstanding = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+  const overdueDays =
+    invoice.dueDate && invoice.dueDate < new Date()
+      ? Math.floor((Date.now() - invoice.dueDate.getTime()) / 86_400_000)
+      : null;
+
+  /* The same accounts the online checkout offers. A customer who can't see
+   * where to send the money has been sent a bill they can't pay. */
+  const accounts = await prisma.merchantBankAccount.findMany({
+    where: { organizationId, isActive: true },
+    select: { bankName: true, accountName: true, accountNumber: true },
+  });
+
+  const money = (value: number) => formatMoney(value, invoice.currency);
+
+  await sendInvoiceEmail({
+    to: invoice.customer.email!,
+    kind,
+    businessName: invoice.organization.name,
+    businessLogoUrl: invoice.organization.logoUrl,
+    customerName: invoice.customer.name,
+    invoiceNumber: invoice.invoiceNumber,
+    invoiceUrl: getStorefrontUrl(invoice.organization.slug, `/invoice/${token}`),
+    total: money(Number(invoice.totalAmount)),
+    outstanding: money(outstanding),
+    dueDate: invoice.dueDate ? formatDate(invoice.dueDate) : null,
+    daysOverdue: overdueDays,
+    lines: invoice.lineItems.map((line) => ({
+      name: line.description,
+      quantity: Number(line.quantity),
+      total: money(Number(line.totalPrice)),
+    })),
+    bankAccounts: accounts,
+    notes: invoice.notes,
+  });
+
+  return token;
+}
+
+/**
+ * Email the invoice to its customer, minting the link if this is the first
+ * time. A draft is issued first — sending one is what "issue" means, and
+ * splitting them would let a merchant email a bill whose stock was never
+ * committed.
+ */
+export async function sendInvoice(invoiceId: string): Promise<ActionResult> {
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_INVOICE_EDIT);
+    const organizationId = ctx.organization.id;
+
+    let invoice = await invoiceForSending(invoiceId, organizationId);
+    if (!invoice) return { success: false, error: 'Invoice not found' };
+
+    if (invoice.status === InvoiceStatus.VOID) {
+      return { success: false, error: 'This invoice has been voided' };
+    }
+    if (!invoice.customer.email) {
+      return {
+        success: false,
+        error: `${invoice.customer.name} has no email address. Add one on the customer before sending.`,
+      };
+    }
+
+    if (invoice.status === InvoiceStatus.DRAFT) {
+      const issued = await issueInvoice(invoiceId);
+      if (!issued.success) return issued;
+      invoice = (await invoiceForSending(invoiceId, organizationId))!;
+    }
+
+    const token = await deliverInvoice(invoice, 'issued', organizationId);
+
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { publicToken: token, sentAt: new Date() },
+    });
+
+    await createAuditLog({
+      organizationId,
+      userId: ctx.userId,
+      action: 'sales.invoice.sent',
+      entityType: 'Invoice',
+      entityId: invoiceId,
+      metadata: { invoiceNumber: invoice.invoiceNumber, to: invoice.customer.email, resent: Boolean(invoice.sentAt) },
+    });
+
+    return { success: true, data: undefined };
+  } catch (err) {
+    return toActionError(err, 'We couldn’t send that invoice');
+  }
+}
+
+/**
+ * Chase an unpaid one. Deliberately a button rather than a schedule: an
+ * automatic dunning sequence is the merchant's relationship with their
+ * customer, not ours to run on their behalf.
+ */
+export async function sendInvoiceReminder(invoiceId: string): Promise<ActionResult> {
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_INVOICE_EDIT);
+    const organizationId = ctx.organization.id;
+
+    const invoice = await invoiceForSending(invoiceId, organizationId);
+    if (!invoice) return { success: false, error: 'Invoice not found' };
+
+    if (!CHASEABLE.includes(invoice.status)) {
+      return {
+        success: false,
+        error:
+          invoice.status === InvoiceStatus.PAID
+            ? 'This invoice is already paid'
+            : 'Only an invoice that has been sent can be chased',
+      };
+    }
+    if (!invoice.customer.email) {
+      return { success: false, error: `${invoice.customer.name} has no email address` };
+    }
+
+    const token = await deliverInvoice(invoice, 'reminder', organizationId);
+
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { publicToken: token, lastReminderAt: new Date() },
+    });
+
+    await createAuditLog({
+      organizationId,
+      userId: ctx.userId,
+      action: 'sales.invoice.reminded',
+      entityType: 'Invoice',
+      entityId: invoiceId,
+      metadata: { invoiceNumber: invoice.invoiceNumber, to: invoice.customer.email },
+    });
+
+    return { success: true, data: undefined };
+  } catch (err) {
+    return toActionError(err, 'We couldn’t send that reminder');
   }
 }

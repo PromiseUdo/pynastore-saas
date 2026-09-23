@@ -43,9 +43,13 @@ import { loadStorePage, loadStorePageLinks, type PublishedStorePage } from './da
 import { isValidPageSlug, type StorePageLink } from './pages/rules';
 import type { Catalogue } from './data/catalogue';
 import { deliveryOverview } from './delivery/quote';
+import { loadLiveAnnouncements } from './data/announcements';
+import { loadStorefrontLook, type StorefrontLook } from './data/appearance';
+import type { Announcement } from '@/lib/marketing/announcement';
 
 export type { PublishedStorePage } from './data/pages';
 export type { StorePageLink } from './pages/rules';
+export type { StorefrontLook } from './data/appearance';
 
 export {
   specValueId,
@@ -493,14 +497,20 @@ export async function getReviews(
 /* ---------------- questions & answers ---------------- */
 
 /**
- * Customer Q&A for a product. Like reviews, there is no source of real
- * questions yet, so a store shows none until there is.
+ * Customer Q&A for a product: the questions shoppers asked and the merchant
+ * answered, newest answer first.
+ *
+ * Only answered ones cross this seam — see `questionsFor` on the catalogue
+ * (./data/catalogue.ts). A question still waiting is the merchant's to deal
+ * with (Sales → Questions), and the shopper who asked it sees their own
+ * through ./questions/read.ts rather than through the catalogue.
  */
 export async function getProductQuestions(
-  _productId: string,
-  _scope?: StoreScope,
+  productId: string,
+  scope?: StoreScope,
 ): Promise<ProductQuestion[]> {
-  return ok([]);
+  const cat = await getCatalogue(scope);
+  return ok(await cat.questionsFor(productId));
 }
 
 /* ---------------- delivery ---------------- */
@@ -782,6 +792,33 @@ async function serviceFeatures(
  * store with no pages shows no links to any, and every link to a page is
  * built from this list, so a link can't point at a page that isn't there.
  */
+
+/* ---------------- the shop's own look ---------------- */
+
+/**
+ * The merchant's hero slides, colours and listing details.
+ *
+ * Empty everywhere they have filled nothing in, which is what keeps a shop
+ * that hasn't touched any of this looking exactly as it did.
+ */
+export async function getStorefrontLook(scope?: StoreScope): Promise<StorefrontLook> {
+  return loadStorefrontLook(await resolveStoreSlug(scope));
+}
+
+/* ---------------- campaign announcements ---------------- */
+
+/**
+ * What a live campaign is telling shoppers, in the merchant's own words.
+ *
+ * Empty unless a merchant both turned an announcement on AND wrote
+ * something — see lib/marketing/announcement.ts.
+ */
+export async function getCampaignAnnouncements(scope?: StoreScope): Promise<Announcement[]> {
+  /* A demo catalogue has no campaigns behind it, and inventing one would put
+   * words in a merchant's mouth on a page meant to look like theirs — the
+   * lookup simply finds nothing, which is the right answer. */
+  return loadLiveAnnouncements(await resolveStoreSlug(scope));
+}
 
 /** Links to the store's published pages — for footers, checkout, the cookie notice. */
 export async function getStorePages(scope?: StoreScope): Promise<StorePageLink[]> {

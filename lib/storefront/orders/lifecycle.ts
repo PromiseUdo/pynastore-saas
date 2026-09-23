@@ -64,7 +64,7 @@ type Scope = { organizationId: string; orderId: string };
 async function load(scope: Scope) {
   return prisma.order.findFirst({
     where: { id: scope.orderId, organizationId: scope.organizationId },
-    select: { id: true, status: true, paymentStatus: true, paymentMethod: true, discountCodeId: true },
+    select: { id: true, status: true, paymentStatus: true, paymentMethod: true, channel: true, discountCodeId: true },
   });
 }
 
@@ -277,16 +277,34 @@ export async function confirmTransferReceived(scope: Scope): Promise<TransitionR
 }
 
 /** Pay on delivery: the money arrived. */
+/**
+ * The money arrived in person: the courier collected it on delivery, or a
+ * counter customer who was "paying later" came back and settled up.
+ *
+ * Both are the same act — cash handed over, away from any gateway — so they
+ * are the same transition. An order still waiting on an ONLINE payment is
+ * deliberately not included: that one is settled by verifying with the
+ * provider (../checkout/payment-service.ts), never by a button.
+ */
 export async function recordDeliveryPayment(scope: Scope): Promise<TransitionResult> {
   const order = await load(scope);
   if (!order) return NOT_FOUND;
-  if (order.paymentStatus !== 'DUE_ON_DELIVERY') {
-    return { ok: false, error: 'Only a pay-on-delivery order can be marked as paid here.' };
+
+  const payableInPerson =
+    order.paymentStatus === 'DUE_ON_DELIVERY' ||
+    (order.paymentStatus === 'AWAITING_PAYMENT' && order.channel !== 'ONLINE');
+
+  if (!payableInPerson) {
+    return { ok: false, error: 'This order isn’t one that gets paid in person.' };
   }
   if (order.status === 'CANCELLED') return { ok: false, error: 'This order was cancelled.' };
 
   const claimed = await prisma.order.updateMany({
-    where: { id: order.id, paymentStatus: 'DUE_ON_DELIVERY', status: { not: 'CANCELLED' } },
+    where: {
+      id: order.id,
+      paymentStatus: order.paymentStatus,
+      status: { not: 'CANCELLED' },
+    },
     data: { paymentStatus: 'PAID', paidAt: new Date() },
   });
   return claimed.count ? { ok: true } : CHANGED;
@@ -375,7 +393,12 @@ export async function cancelOrderForCustomer(input: {
 
 /* ---------------- helpers ---------------- */
 
-async function alertLowStock(scope: { organizationId: string; organizationSlug: string }, moved: DispatchedStock[]) {
+/**
+ * Tell whoever restocks that a shelf just went below its reorder point.
+ * Exported because a counter sale takes stock out too
+ * (features/sales/counter-sale.ts) and the rule should be written once.
+ */
+export async function alertLowStock(scope: { organizationId: string; organizationSlug: string }, moved: DispatchedStock[]) {
   for (const entry of moved) {
     try {
       const [item, level] = await Promise.all([

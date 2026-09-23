@@ -9,6 +9,7 @@ import {
   Text,
 } from '@react-email/components';
 import * as React from 'react';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 type DomainOrderNotificationEmailProps = {
   orgName: string;
@@ -33,7 +34,7 @@ export function DomainOrderNotificationEmail({
       </Preview>
       <Body style={main}>
         <Container style={container}>
-          <Text style={logo}>SafeBase</Text>
+          <Text style={logo}>{PLATFORM_NAME}</Text>
 
           <Section style={card}>
             <Text style={heading}>New domain order pending fulfillment</Text>

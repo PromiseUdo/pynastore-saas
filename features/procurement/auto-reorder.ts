@@ -118,7 +118,6 @@ export async function generateReorderDrafts(
       const result = await createPurchaseOrder({
         supplierId: group.supplierId,
         warehouseId: group.warehouseId,
-        currency: 'USD',
         notes: 'Auto-drafted from low-stock reorder suggestions',
         lineItems,
       });

@@ -1,16 +1,13 @@
 'use client';
 
-import * as React from 'react';
 import { ArrowUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePageScrolled } from '@/lib/storefront/use-page-scrolled';
 
 export function BackToTop() {
-  const [show, setShow] = React.useState(false);
-  React.useEffect(() => {
-    const onScroll = () => setShow(window.scrollY > 800);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  /* Shared with the floating assistant launcher, which moves aside for this
+   * button at exactly the same moment. */
+  const show = usePageScrolled();
 
   return (
     <button

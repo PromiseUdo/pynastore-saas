@@ -37,7 +37,8 @@ export default async function OrderDetailPage({
   /* Same safety net as the confirmation page: a payment that went through but
    * hasn't been heard about yet is settled before the order is shown. */
   const row = await prisma.order.findFirst({
-    where: { organizationId: shopper.organizationId, customerId: shopper.id, reference },
+    // Online orders only: an in-store purchase has no payment link to offer.
+    where: { organizationId: shopper.organizationId, customerId: shopper.id, reference, channel: 'ONLINE' },
     select: { id: true, paymentStatus: true, confirmationToken: true },
   });
   if (row?.paymentStatus === 'AWAITING_PAYMENT') {
@@ -75,7 +76,7 @@ export default async function OrderDetailPage({
         showReorder
         selfService="account"
         paymentAction={
-          payment?.canPay && row ? (
+          payment?.canPay && row?.confirmationToken ? (
             <div className="space-y-2">
               {payment.lastAttemptFailed && (
                 <p className="text-sm text-muted-foreground">

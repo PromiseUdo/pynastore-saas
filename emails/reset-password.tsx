@@ -10,6 +10,7 @@ import {
   Text,
 } from '@react-email/components';
 import * as React from 'react';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 type ResetPasswordEmailProps = {
   resetUrl: string;
@@ -23,16 +24,16 @@ export function ResetPasswordEmail({
   return (
     <Html>
       <Head />
-      <Preview>Reset your SafeBase password</Preview>
+      <Preview>Reset your {PLATFORM_NAME} password</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Text style={logo}>SafeBase</Text>
+          <Text style={logo}>{PLATFORM_NAME}</Text>
 
           <Section style={card}>
             <Text style={heading}>Reset your password</Text>
 
             <Text style={paragraph}>
-              We received a request to reset the password for your SafeBase
+              We received a request to reset the password for your {PLATFORM_NAME}
               account. Click the button below to choose a new password.
             </Text>
 

@@ -29,10 +29,14 @@ import { prisma } from '@/lib/prisma';
 import { open } from './crypto';
 import { getProviderForPlatform } from './registry';
 import { getProductFacts, resolveImageUrls } from './product-facts';
+import type { Prisma } from '@/lib/generated/prisma/client';
 import {
   SocialProviderError,
   type PublishRules,
   type SocialPlatform,
+  type SocialPostDetail,
+  type SocialPostListParams,
+  type SocialPostListResult,
   type SocialPostRow,
   type SocialPostStatus,
 } from './types';
@@ -113,14 +117,117 @@ function toRow(record: PostRecord): SocialPostRow {
   };
 }
 
-export async function listPosts(organizationId: string, limit = 100): Promise<SocialPostRow[]> {
-  const rows = await prisma.socialPost.findMany({
-    where: { organizationId },
-    select: POST_FIELDS,
-    orderBy: { createdAt: 'desc' },
-    take: Math.min(Math.max(limit, 1), 200),
+/**
+ * One page of history, filtered and searched IN THE DATABASE.
+ *
+ * Every clause is ANDed onto `organizationId`, which comes from the session —
+ * so a filter can only ever narrow what this store may already see, never
+ * widen it. There is no code path here that reads a tenant from `params`.
+ *
+ * Searching and paging are deliberately not done in the browser: a store that
+ * posts daily would otherwise ship its whole history to the client to hide
+ * most of it again.
+ */
+export async function listPosts(
+  organizationId: string,
+  params: SocialPostListParams = {},
+): Promise<SocialPostListResult> {
+  const perPage = Math.min(Math.max(params.perPage ?? 20, 5), 100);
+  const page = Math.max(params.page ?? 1, 1);
+  const q = params.q?.trim();
+
+  const where: Prisma.SocialPostWhereInput = {
+    organizationId,
+    ...(params.status ? { status: params.status } : {}),
+    ...(params.platform ? { platform: params.platform } : {}),
+    ...(params.productId ? { inventoryItemId: params.productId } : {}),
+    ...(params.from || params.to
+      ? { createdAt: { ...(params.from ? { gte: params.from } : {}), ...(params.to ? { lte: params.to } : {}) } }
+      : {}),
+    /* The three things a merchant would actually type: what it was about,
+     * what it said, and where it went. */
+    ...(q
+      ? {
+          OR: [
+            { productName: { contains: q, mode: 'insensitive' } },
+            { caption: { contains: q, mode: 'insensitive' } },
+            { accountName: { contains: q, mode: 'insensitive' } },
+          ],
+        }
+      : {}),
+  };
+
+  const [rows, total, historySize] = await Promise.all([
+    prisma.socialPost.findMany({
+      where,
+      select: POST_FIELDS,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * perPage,
+      take: perPage,
+    }),
+    prisma.socialPost.count({ where }),
+    prisma.socialPost.count({ where: { organizationId } }),
+  ]);
+
+  const pageCount = Math.max(1, Math.ceil(total / perPage));
+  return { rows: rows.map(toRow), total, page: Math.min(page, pageCount), perPage, pageCount, historySize };
+}
+
+/**
+ * One post in full, or null when this store doesn't own it.
+ *
+ * The compound `where` is the tenant check, exactly as everywhere else: a
+ * post id belonging to another store is a miss, not a leak. The connection
+ * and product are read through the post's own relations, so they cannot be
+ * anything but this store's either — and the token column is not selected.
+ */
+export async function getPost(organizationId: string, postId: string): Promise<SocialPostDetail | null> {
+  const post = await prisma.socialPost.findFirst({
+    where: { id: postId, organizationId },
+    select: {
+      ...POST_FIELDS,
+      externalPostId: true,
+      connection: { select: { username: true, status: true } },
+      inventoryItem: {
+        select: {
+          id: true,
+          organizationId: true,
+          images: { select: { url: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
+        },
+      },
+    },
   });
-  return rows.map(toRow);
+  if (!post) return null;
+
+  /* Belt and braces. The relation cannot point outside the store, but this
+   * is the one place a product reaches the UI from a post, and the check
+   * costs nothing. */
+  const product = post.inventoryItem?.organizationId === organizationId ? post.inventoryItem : null;
+
+  return {
+    ...toRow(post),
+    externalPostId: post.externalPostId,
+    accountUsername: post.connection.username,
+    accountStatus: post.connection.status,
+    productId: product?.id ?? null,
+    productImageUrl: product?.images[0]?.url ?? null,
+    errorCode: post.errorCode,
+  };
+}
+
+/**
+ * Removes a post from history.
+ *
+ * Only a DRAFT or a FAILED row: a published post is a record of something
+ * that actually happened and is not the app's to erase, and a PUBLISHING row
+ * may still be in flight. Nothing is deleted at the platform — this forgets
+ * our record, it does not reach into Facebook or Instagram.
+ */
+export async function discardPost(organizationId: string, postId: string): Promise<boolean> {
+  const removed = await prisma.socialPost.deleteMany({
+    where: { id: postId, organizationId, status: { in: ['DRAFT', 'FAILED'] } },
+  });
+  return removed.count > 0;
 }
 
 /* ─── Composing ─────────────────────────────────────────────────────────── */

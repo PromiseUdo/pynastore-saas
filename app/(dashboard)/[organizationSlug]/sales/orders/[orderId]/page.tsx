@@ -9,7 +9,7 @@
  */
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Printer } from 'lucide-react';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { requireFeature } from '@/lib/billing/entitlements';
@@ -29,6 +29,8 @@ import {
 import { formatDate, formatMoney } from '@/lib/format';
 import { getStoreOrder } from '@/features/sales/orders';
 import {
+  ORDER_CHANNEL_LABEL,
+  ORDER_CHANNEL_VARIANT,
   ORDER_PAYMENT_LABEL,
   ORDER_PAYMENT_VARIANT,
   ORDER_STATUS_LABEL,
@@ -65,6 +67,10 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
   const canManage = hasPermission(ctx.membership.role.permissions, PERMISSIONS.SALES_FULFILLMENT_MANAGE);
   const canManageReturns = hasPermission(ctx.membership.role.permissions, PERMISSIONS.SALES_RETURN_MANAGE);
   const refundOwed = order.status === 'CANCELLED' && order.refundable > 0;
+  /* A counter sale never went through confirming, packing and shipping — it
+   * happened all at once — so the online progress track would be a row of
+   * ticks for steps nobody took. */
+  const isCounterSale = order.channel !== 'ONLINE';
   const STAGES = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'] as const;
   const reached = order.status === 'CANCELLED' ? -1 : STAGES.indexOf(order.status as (typeof STAGES)[number]);
   const stageAt = [order.placedAt, order.confirmedAt, order.packingAt, order.shippedAt, order.deliveredAt];
@@ -78,6 +84,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
   const hint = nextStepHint({
     status: order.status,
     paymentStatus: order.paymentStatus,
+    channel: order.channel,
     cancelReason: order.cancelReason,
     holdMinutes: UNPAID_ORDER_HOLD_MINUTES,
     transferHoldHours: TRANSFER_HOLD_HOURS,
@@ -100,6 +107,13 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
               <ChevronLeft className="size-3.5" />
               All orders
             </Link>
+            <Link
+              href={`/sales/orders/${order.id}/receipt`}
+              className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <Printer className="size-3.5" />
+              Receipt
+            </Link>
             {canManageReturns && refundOwed && (
               <RecordOrderRefundButton
                 orderId={order.id}
@@ -113,6 +127,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
                 orderId={order.id}
                 status={order.status}
                 paymentStatus={order.paymentStatus}
+                channel={order.channel}
                 cancelReason={order.cancelReason}
                 reference={order.reference}
                 totalAmount={order.totalAmount}
@@ -131,10 +146,14 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
           <Badge variant={ORDER_PAYMENT_VARIANT[order.paymentStatus] ?? 'draft'}>
             {ORDER_PAYMENT_LABEL[order.paymentStatus] ?? order.paymentStatus}
           </Badge>
-          {order.isGuest && <Badge variant="draft">Guest checkout</Badge>}
+          <Badge variant={ORDER_CHANNEL_VARIANT[order.channel] ?? 'draft'}>
+            {ORDER_CHANNEL_LABEL[order.channel] ?? order.channel}
+          </Badge>
+          {order.isGuest && !isCounterSale && <Badge variant="draft">Guest checkout</Badge>}
         </div>
         {hint && <p className="mt-2 text-sm text-muted-foreground">{hint}</p>}
 
+        {!isCounterSale && (
         <section className="mt-4 rounded-lg border bg-card p-4">
           <h2 className="text-sm font-semibold">Progress</h2>
           <ol className="mt-3 grid gap-3 text-sm sm:grid-cols-5">
@@ -168,6 +187,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
             </p>
           )}
         </section>
+        )}
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <section className="rounded-lg border bg-card p-4">
@@ -179,7 +199,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Email</dt>
-                <dd className="break-all">{order.customerEmail}</dd>
+                <dd className="break-all">{order.customerEmail ?? '—'}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Phone</dt>
@@ -189,25 +209,50 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
           </section>
 
           <section className="rounded-lg border bg-card p-4">
-            <h2 className="text-sm font-semibold">Deliver to</h2>
-            <address className="mt-3 space-y-0.5 text-sm not-italic">
-              <span className="block">{order.shipFullName}</span>
-              <span className="block text-muted-foreground">{order.shipLine1}</span>
-              {order.shipLine2 && <span className="block text-muted-foreground">{order.shipLine2}</span>}
-              <span className="block text-muted-foreground">
-                {[order.city, order.state].filter(Boolean).join(', ')}
-              </span>
-              <span className="block text-muted-foreground">
-                {[order.shipCountry, order.shipPostalCode].filter(Boolean).join(' ')}
-              </span>
-              <span className="block text-muted-foreground">{order.shipPhone}</span>
-            </address>
+            {/* A counter sale was carried out of the shop; there is no address
+              * to show, so the card says where it was sold instead of leaving
+              * an empty one that looks like missing data. */}
+            {isCounterSale ? (
+              <>
+                <h2 className="text-sm font-semibold">Sold in</h2>
+                <dl className="mt-3 space-y-1.5 text-sm">
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Store</dt>
+                    <dd>{order.storeName ?? '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Served by</dt>
+                    <dd>{order.soldByName ?? '—'}</dd>
+                  </div>
+                </dl>
+              </>
+            ) : (
+              <>
+                <h2 className="text-sm font-semibold">Deliver to</h2>
+                <address className="mt-3 space-y-0.5 text-sm not-italic">
+                  <span className="block">{order.shipFullName ?? '—'}</span>
+                  <span className="block text-muted-foreground">{order.shipLine1 ?? '—'}</span>
+                  {order.shipLine2 && <span className="block text-muted-foreground">{order.shipLine2}</span>}
+                  <span className="block text-muted-foreground">
+                    {[order.city, order.state].filter(Boolean).join(', ')}
+                  </span>
+                  <span className="block text-muted-foreground">
+                    {[order.shipCountry, order.shipPostalCode].filter(Boolean).join(' ')}
+                  </span>
+                  <span className="block text-muted-foreground">{order.shipPhone ?? '—'}</span>
+                </address>
+              </>
+            )}
           </section>
 
           <section className="rounded-lg border bg-card p-4">
-            <h2 className="text-sm font-semibold">Delivery and payment</h2>
-            <p className="mt-3 text-sm">{order.deliveryMethodLabel}</p>
-            <p className="text-sm text-muted-foreground">{formatMoney(order.deliveryFee, order.currency)}</p>
+            <h2 className="text-sm font-semibold">{isCounterSale ? 'Payment' : 'Delivery and payment'}</h2>
+            {!isCounterSale && (
+              <>
+                <p className="mt-3 text-sm">{order.deliveryMethodLabel ?? '—'}</p>
+                <p className="text-sm text-muted-foreground">{formatMoney(order.deliveryFee, order.currency)}</p>
+              </>
+            )}
             <dl className="mt-3 space-y-1.5 border-t pt-3 text-sm">
               <div>
                 <dt className="text-xs text-muted-foreground">Payment</dt>

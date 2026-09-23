@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { NativeShell } from '@/components/native/native-shell';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -18,8 +19,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'SafeBase',
-    template: '%s · SafeBase',
+    default: PLATFORM_NAME,
+    template: `%s · ${PLATFORM_NAME}`,
   },
   description: 'Modern multi-tenant ERP platform',
 };

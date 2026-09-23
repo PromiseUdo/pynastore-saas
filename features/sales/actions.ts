@@ -23,6 +23,8 @@ export {
   listInvoices,
   getInvoice,
   issueInvoice,
+  sendInvoice,
+  sendInvoiceReminder,
   recordPayment,
   voidInvoice,
   type InvoiceListRow,

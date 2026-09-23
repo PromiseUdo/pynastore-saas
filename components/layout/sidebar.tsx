@@ -8,14 +8,12 @@ import {
   ShoppingCart,
   Package,
   TrendingUp,
-  Building2,
-  Users,
-  BarChart3,
   Settings,
   ChevronLeft,
   ChevronRight,
   FolderKanban,
   LogOut,
+  Megaphone,
   Share2,
   ArrowUpCircle,
 } from 'lucide-react';
@@ -90,7 +88,7 @@ const navGroups: NavGroup[] = [
         href: '/sales',
         icon: TrendingUp,
         children: [
-          { title: 'Online orders', href: '/sales/orders' },
+          { title: 'Orders', href: '/sales/orders' },
           { title: 'Customers', href: '/sales/customers' },
           { title: 'Quotes', href: '/sales/quotes' },
           { title: 'Invoices', href: '/sales/invoices' },
@@ -98,6 +96,7 @@ const navGroups: NavGroup[] = [
           { title: 'Returns', href: '/sales/returns' },
           { title: 'Discount codes', href: '/sales/discounts' },
           { title: 'Reviews', href: '/sales/reviews' },
+          { title: 'Questions', href: '/sales/questions' },
         ],
       },
     ],
@@ -105,10 +104,13 @@ const navGroups: NavGroup[] = [
   {
     label: 'Business',
     items: [
+      /* Every entry here must lead to a real page (AGENTS §7). "Suppliers"
+       * and "Staff" used to sit here pointing at routes that never existed —
+       * they live at /procurement/suppliers and /settings/members. A
+       * business-wide Reports hub is Phase 7 in docs/ROADMAP.md; it goes back
+       * in when the page exists, not before. */
+      { title: 'Marketing', href: '/marketing/campaigns', icon: Megaphone },
       { title: 'Social', href: '/social', icon: Share2 },
-      { title: 'Suppliers', href: '/suppliers', icon: Building2 },
-      { title: 'Staff', href: '/staff', icon: Users },
-      { title: 'Reports', href: '/reports', icon: BarChart3 },
     ],
   },
   {
@@ -121,7 +123,9 @@ const navGroups: NavGroup[] = [
         children: [
           { title: 'General', href: '/settings' },
           { title: 'Members', href: '/settings/members' },
+          { title: 'Activity', href: '/settings/activity' },
           { title: 'Roles & Permissions', href: '/settings/roles' },
+          { title: 'Storefront', href: '/settings/storefront' },
           { title: 'Payments', href: '/settings/payments' },
           { title: 'Delivery and returns', href: '/settings/delivery' },
           { title: 'Store pages', href: '/settings/pages' },

@@ -14,6 +14,7 @@
  */
 import Link from 'next/link';
 import Image from 'next/image';
+import { ProductImage } from '@/components/storefront/product/product-image';
 import { Bookmark, Trash2 } from 'lucide-react';
 import { QuantityStepper } from '@/components/storefront/product/quantity-stepper';
 import { lineKey } from '@/lib/storefront/cart';
@@ -40,8 +41,9 @@ export function CartLineItem({
   return (
     <li className="flex gap-4 py-5 first:pt-0">
       <Link href={`/products/${item.productSlug}`} className="shrink-0" aria-hidden tabIndex={-1}>
-        <Image
+        <ProductImage
           src={item.imageUrl}
+          name={item.name}
           alt=""
           width={112}
           height={140}

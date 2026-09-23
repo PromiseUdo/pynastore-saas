@@ -165,7 +165,7 @@ const PAY_FAILURE: Record<'already-paid' | 'not-payable' | 'unavailable', string
 };
 
 async function payFor(
-  find: (organizationId: string) => Promise<{ id: string; confirmationToken: string } | null>,
+  find: (organizationId: string) => Promise<{ id: string; confirmationToken: string | null } | null>,
   nativeApp: boolean,
 ): Promise<PayForOrderResult> {
   const slug = await currentStoreSlug();
@@ -177,7 +177,9 @@ async function payFor(
   }
 
   const order = await find(store.id);
-  if (!order) return { ok: false, message: 'We couldn’t find that order.' };
+  /* No confirmation token means this is not a storefront order — a counter
+   * sale is settled at the till and has no online payment to start. */
+  if (!order || !order.confirmationToken) return { ok: false, message: 'We couldn’t find that order.' };
 
   const { origin, pathPrefix } = await storeLocation(slug);
   const started = await startOrderPayment({

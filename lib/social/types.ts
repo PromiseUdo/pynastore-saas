@@ -85,6 +85,59 @@ export interface SocialPostRow {
   publishedAt: string | null;
 }
 
+/**
+ * One post in full, for the detail page.
+ *
+ * Everything in SocialPostRow plus the few fields the list doesn't need —
+ * kept as a separate shape so the history query stays lean rather than
+ * selecting detail columns for every row on every page.
+ *
+ * Same rule as everywhere else: no token, no organizationId, no credential.
+ */
+export interface SocialPostDetail extends SocialPostRow {
+  /** The platform's own id for the post. Shown when no public link exists. */
+  externalPostId: string | null;
+  /** @handle of the account it went to, when the platform has one. */
+  accountUsername: string | null;
+  /** Whether that account can still be posted to. */
+  accountStatus: SocialConnectionStatus;
+  /**
+   * The catalogue product, when it still exists — for the dashboard link.
+   * Null once a product is deleted; the post keeps its name snapshot.
+   */
+  productId: string | null;
+  /** Main image of the product as it is now, for the summary card. */
+  productImageUrl: string | null;
+  /** The raw failure code, for the detail page's diagnostics line. */
+  errorCode: string | null;
+}
+
+/** What the history page asks for. Every field is optional and validated. */
+export interface SocialPostListParams {
+  status?: SocialPostStatus;
+  platform?: SocialPlatform;
+  /** Matches product name, caption or account name. */
+  q?: string;
+  /** Posts created on or after this instant. */
+  from?: Date;
+  /** Posts created before the END of this day. */
+  to?: Date;
+  /** Only posts made from one product. */
+  productId?: string;
+  page?: number;
+  perPage?: number;
+}
+
+export interface SocialPostListResult {
+  rows: SocialPostRow[];
+  total: number;
+  page: number;
+  perPage: number;
+  pageCount: number;
+  /** Posts in the store at all, ignoring filters — tells "no results" from "no posts". */
+  historySize: number;
+}
+
 /* ─── What only the server sees ─────────────────────────────────────────── */
 
 /**

@@ -1,11 +1,13 @@
 /*
- * Sales → Orders: what the online store has sold.
+ * Sales → Orders: everything the business has sold, through any channel.
  *
- * A read-only list for now. Orders arrive from the storefront
- * (lib/storefront/orders/create.ts) already carrying their delivery address
- * and payment state; moving one along its lifecycle — confirming, packing,
- * invoicing — is the next piece of work and deliberately isn't faked here
- * with buttons that don't do anything.
+ * Online orders arrive from the storefront
+ * (lib/storefront/orders/create.ts) carrying a delivery address and a
+ * payment state; counter sales are rung up here
+ * (features/sales/counter-sale.ts) and are already done when they land.
+ *
+ * Filters, search and the page number live in the URL (AGENTS §3) and are
+ * applied by the database.
  */
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -15,15 +17,29 @@ import { AccessDenied } from '@/components/layout/access-denied';
 import { listStoreOrders } from '@/features/sales/orders';
 import { OrdersPageClient } from './_components/OrdersPageClient';
 
-export default async function StoreOrdersPage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function one(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value || undefined;
+}
+
+export default async function StoreOrdersPage({ searchParams }: { searchParams: SearchParams }) {
   await requireFeature(FEATURES.SALES_MODULE);
   const ctx = await getOrganizationContext();
+  const perms = ctx.membership.role.permissions;
 
-  if (!hasPermission(ctx.membership.role.permissions, PERMISSIONS.SALES_VIEW)) {
-    return <AccessDenied what="online store orders" />;
+  if (!hasPermission(perms, PERMISSIONS.SALES_VIEW)) {
+    return <AccessDenied what="orders" />;
   }
 
-  const result = await listStoreOrders();
+  const raw = await searchParams;
+  const page = Number(one(raw.page));
+  const result = await listStoreOrders({
+    channel: one(raw.channel),
+    status: one(raw.status),
+    q: one(raw.q),
+    page: Number.isFinite(page) && page > 0 ? page : 1,
+  });
 
   /*
    * A failed load is thrown, not printed. The boundary next door says
@@ -33,5 +49,10 @@ export default async function StoreOrdersPage() {
    */
   if (!result.success) throw new Error(result.error);
 
-  return <OrdersPageClient orders={result.data} />;
+  return (
+    <OrdersPageClient
+      list={result.data}
+      canSell={hasPermission(perms, PERMISSIONS.SALES_ORDER_CREATE)}
+    />
+  );
 }

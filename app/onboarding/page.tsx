@@ -5,6 +5,7 @@ import { createOrganizationAction, type OnboardingState } from './actions';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 function toSlugPreview(name: string): string {
   return name
@@ -33,7 +34,7 @@ export default function OnboardingPage() {
           S
         </div>
         <span className="text-base font-semibold text-foreground">
-          SafeBase
+          {PLATFORM_NAME}
         </span>
       </div>
 

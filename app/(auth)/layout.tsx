@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 export const metadata: Metadata = {
   title: {
     default: 'Sign in',
-    template: '%s · SafeBase',
+    template: `%s · ${PLATFORM_NAME}`,
   },
 };
 
@@ -20,7 +21,7 @@ export default function AuthLayout({
           S
         </div>
         <span className="text-base font-semibold text-foreground">
-          SafeBase
+          {PLATFORM_NAME}
         </span>
       </a>
 

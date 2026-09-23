@@ -38,6 +38,34 @@ function toMinor(value: Prisma.Decimal | number): Money {
   return Math.round(Number(value) * 100);
 }
 
+/*
+ * A shopper only ever sees what they bought on the website.
+ *
+ * Since Phase 2 an Order can also be a counter sale (channel WALK_IN /
+ * PHONE), which has no delivery, no shipping address and often no email —
+ * their columns are nullable now. Every query in this file therefore filters
+ * on ONLINE, which keeps those columns present in practice and keeps this
+ * file's promises to a shopper true: a track-order lookup can't surface an
+ * in-store purchase, and an account's order list can't show a row with
+ * nothing to track.
+ *
+ * A merchant sees every channel — that's features/sales/orders.ts.
+ */
+const ONLINE_ONLY = 'ONLINE' as const;
+
+/**
+ * The columns an ONLINE order is guaranteed to have. Reached only if a row
+ * got past the channel filter above without them, which would mean a writer
+ * has created an online order by some path that skipped checkout — worth a
+ * loud failure rather than "undefined" on a shopper's receipt.
+ */
+function onlineField<T>(value: T | null, column: string, reference: string): T {
+  if (value === null) {
+    throw new Error(`Order ${reference} is ONLINE but has no ${column}`);
+  }
+  return value;
+}
+
 const ORDER_SELECT = {
   reference: true,
   status: true,
@@ -195,6 +223,9 @@ function toStorefrontOrder(row: OrderRow, now = new Date()): StorefrontOrder {
     now,
   });
 
+  const etaMin = onlineField(row.deliveryEtaMinDays, 'deliveryEtaMinDays', row.reference);
+  const etaMax = onlineField(row.deliveryEtaMaxDays, 'deliveryEtaMaxDays', row.reference);
+
   return {
     reference: row.reference,
     status: row.status as OrderStatus,
@@ -210,36 +241,36 @@ function toStorefrontOrder(row: OrderRow, now = new Date()): StorefrontOrder {
     },
 
     contact: {
-      firstName: row.firstName,
-      lastName: row.lastName,
-      email: row.email,
-      phone: row.phone,
+      firstName: onlineField(row.firstName, 'firstName', row.reference),
+      lastName: onlineField(row.lastName, 'lastName', row.reference),
+      email: onlineField(row.email, 'email', row.reference),
+      phone: onlineField(row.phone, 'phone', row.reference),
     },
 
     shippingAddress: {
-      fullName: row.shipFullName,
-      phone: row.shipPhone,
-      line1: row.shipLine1,
+      fullName: onlineField(row.shipFullName, 'shipFullName', row.reference),
+      phone: onlineField(row.shipPhone, 'shipPhone', row.reference),
+      line1: onlineField(row.shipLine1, 'shipLine1', row.reference),
       line2: row.shipLine2,
-      city: row.shipCity,
-      state: row.shipState,
-      country: row.shipCountry,
+      city: onlineField(row.shipCity, 'shipCity', row.reference),
+      state: onlineField(row.shipState, 'shipState', row.reference),
+      country: onlineField(row.shipCountry, 'shipCountry', row.reference),
       postalCode: row.shipPostalCode,
     },
 
     delivery: {
-      methodId: row.deliveryMethodId,
-      label: row.deliveryMethodLabel,
-      fee: toMinor(row.deliveryFee),
-      etaDays: [row.deliveryEtaMinDays, row.deliveryEtaMaxDays],
-      estimated: estimateWindow(row.placedAt, row.deliveryEtaMinDays, row.deliveryEtaMaxDays),
+      methodId: onlineField(row.deliveryMethodId, 'deliveryMethodId', row.reference),
+      label: onlineField(row.deliveryMethodLabel, 'deliveryMethodLabel', row.reference),
+      fee: toMinor(row.deliveryFee ?? 0),
+      etaDays: [etaMin, etaMax],
+      estimated: estimateWindow(row.placedAt, etaMin, etaMax),
     },
 
     currency: row.currency,
     totals: {
       subtotal: toMinor(row.subtotal),
       discount: toMinor(row.discount),
-      shipping: toMinor(row.deliveryFee),
+      shipping: toMinor(row.deliveryFee ?? 0),
       tax: toMinor(row.taxAmount),
       total: toMinor(row.totalAmount),
     },
@@ -298,7 +329,7 @@ export async function listOrdersForCustomer(
   limit = 50,
 ): Promise<StorefrontOrder[]> {
   const rows = await prisma.order.findMany({
-    where: { organizationId: scope.organizationId, customerId },
+    where: { organizationId: scope.organizationId, customerId, channel: ONLINE_ONLY },
     orderBy: { placedAt: 'desc' },
     take: limit,
     select: ORDER_SELECT,
@@ -314,7 +345,7 @@ export async function getOrderForCustomer(
   reference: string,
 ): Promise<StorefrontOrder | null> {
   const row = await prisma.order.findFirst({
-    where: { organizationId: scope.organizationId, customerId, reference: reference.trim() },
+    where: { organizationId: scope.organizationId, customerId, reference: reference.trim(), channel: ONLINE_ONLY },
     select: ORDER_SELECT,
   });
 
@@ -342,6 +373,7 @@ export async function findOrderByReferenceAndEmail(
       organizationId: scope.organizationId,
       reference: trimmed,
       email: normalized,
+      channel: ONLINE_ONLY,
     },
     select: ORDER_SELECT,
   });
@@ -366,7 +398,7 @@ export async function getOrderByConfirmationToken(
   if (!trimmed) return null;
 
   const row = await prisma.order.findFirst({
-    where: { organizationId: scope.organizationId, confirmationToken: trimmed },
+    where: { organizationId: scope.organizationId, confirmationToken: trimmed, channel: ONLINE_ONLY },
     select: ORDER_SELECT,
   });
 

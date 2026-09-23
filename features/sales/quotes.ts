@@ -17,7 +17,8 @@ const LineItemInputSchema = z.object({
 
 const CreateQuoteSchema = z.object({
   customerId: z.string().cuid(),
-  currency: z.string().min(1).max(10).default('USD'),
+  /** Omitted by the UI — a document is written in the org's currency (AGENTS §4). */
+  currency: z.string().min(1).max(10).optional(),
   notes: z.string().max(1000).optional(),
   validUntil: z.coerce.date().optional(),
   taxAmount: z.number().nonnegative().optional(),
@@ -106,7 +107,7 @@ export async function createQuote(
           organizationId: ctx.organization.id,
           customerId: data.customerId,
           quoteNumber,
-          currency: data.currency,
+          currency: data.currency ?? ctx.organization.currency,
           subtotal,
           taxAmount,
           totalAmount,

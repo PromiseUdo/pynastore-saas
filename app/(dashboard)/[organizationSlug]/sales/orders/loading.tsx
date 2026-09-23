@@ -5,8 +5,8 @@ export default function OrdersLoading() {
   return (
     <>
       <PageHeader
-        title="Online orders"
-        description="Everything customers have bought on your online store."
+        title="Orders"
+        description="Everything you've sold — online and over the counter."
       />
       <PageBody>
         <div className="space-y-2">

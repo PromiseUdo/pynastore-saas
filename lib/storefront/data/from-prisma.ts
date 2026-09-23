@@ -22,6 +22,7 @@
  * file plus listProducts, and nothing above them changes.
  */
 import { prisma } from '@/lib/prisma';
+import { loadLiveCampaignPrices, type SalePrice } from './campaign-prices';
 import type { Prisma } from '@/lib/generated/prisma/client';
 import type {
   Brand,
@@ -40,6 +41,7 @@ import { urlKey } from '../product-helpers';
 import { normalizeVariantOptions, PRODUCT_TAGS, type VariantOption } from '@/features/inventory/product-rules';
 import { NO_RATING } from '../reviews/rules';
 import { listPublishedReviews, ratingSummaries } from '../reviews/read';
+import { listAnsweredQuestions } from '../questions/read';
 import { buildCatalogue, emptyCatalogue, type Catalogue, type CompanionRule } from './catalogue';
 import { boughtTogetherFromDb } from './bought-together';
 
@@ -156,6 +158,8 @@ function mapProduct(
   categoryPathIds: Map<string, string[]>,
   soldCount: number,
   rating: ReviewSummary,
+  /** sale prices in force right now, keyed by InventoryItem id */
+  salePrices?: Map<string, SalePrice>,
 ): Product | null {
   // A product must be reachable by URL; admin always assigns a slug.
   if (!row.slug) return null;
@@ -172,8 +176,27 @@ function mapProduct(
       values: o.values.map((v) => ({ id: optionValueId(o.name, v.label), label: v.label, ...(v.swatch ? { swatch: v.swatch } : {}) })),
     }));
 
+  /*
+   * A live campaign replaces the price and pushes the old one into the
+   * strike-through — which is what makes that strike-through TRUE: it is
+   * what this shop was charging until the sale started, snapshotted when the
+   * campaign was scheduled (lib/storefront/data/campaign-prices.ts).
+   *
+   * `sellingPrice` is never edited by a campaign, so when the window closes
+   * the real price is simply there again.
+   */
+  const saleFor = (itemId: string, listed: number | null, compareAt: number | null) => {
+    const sale = salePrices?.get(itemId);
+    if (!sale) return { price: listed, compareAtPrice: compareAt };
+    // Campaign prices are major units, like everything in the admin; the
+    // storefront counts in kobo (AGENTS: the mapper is the only converter).
+    const minor = (major: number) => Math.round(major * 100);
+    return { price: minor(sale.price), compareAtPrice: minor(sale.originalPrice) };
+  };
+
   const basePrice = toMinor(row.sellingPrice);
   const baseCompareAt = toMinor(row.compareAtPrice);
+  const base = saleFor(row.id, basePrice, baseCompareAt);
 
   const variants: ProductVariant[] = row.variants.length
     ? row.variants.map((variant) => {
@@ -184,8 +207,12 @@ function mapProduct(
           optionValueIds: optionDefs
             .map((o) => (attributes[o.name] ? optionValueId(o.name, attributes[o.name]) : null))
             .filter((id): id is string => id !== null),
-          price: toMinor(variant.sellingPrice) ?? basePrice ?? 0,
-          compareAtPrice: toMinor(variant.compareAtPrice) ?? baseCompareAt,
+          ...(() => {
+            const listed = toMinor(variant.sellingPrice) ?? basePrice ?? 0;
+            const compareAt = toMinor(variant.compareAtPrice) ?? baseCompareAt;
+            const sale = saleFor(variant.id, listed, compareAt);
+            return { price: sale.price ?? 0, compareAtPrice: sale.compareAtPrice };
+          })(),
           stock: onlineStock(variant.inventoryLevels),
           imageId: variant.imageId,
         };
@@ -198,8 +225,8 @@ function mapProduct(
           id: row.id,
           sku: row.sku,
           optionValueIds: [],
-          price: basePrice ?? 0,
-          compareAtPrice: baseCompareAt,
+          price: base.price ?? 0,
+          compareAtPrice: base.compareAtPrice,
           stock: onlineStock(row.inventoryLevels),
           imageId: row.images[0]?.id ?? null,
         },
@@ -340,7 +367,7 @@ export async function loadCatalogueFromDb(organizationSlug: string): Promise<Cat
   if (!organization) return null;
 
   const organizationId = organization.id;
-  const [categoryRows, productRows, brandRows, collectionRows, sold, ratings] = await Promise.all([
+  const [categoryRows, productRows, brandRows, collectionRows, sold, ratings, salePrices] = await Promise.all([
     prisma.category.findMany({
       where: { organizationId },
       select: {
@@ -372,6 +399,9 @@ export async function loadCatalogueFromDb(organizationSlug: string): Promise<Cat
     }),
     soldCounts(organizationId),
     ratingSummaries(organizationId),
+    /* Whatever is on sale at this instant. Built into the catalogue, so the
+     * price shown and the price charged are the same number. */
+    loadLiveCampaignPrices(organizationId),
   ]);
 
   const categories = mapCategories(categoryRows);
@@ -406,6 +436,7 @@ export async function loadCatalogueFromDb(organizationSlug: string): Promise<Cat
         // A product nobody has reviewed is unrated, not zero-rated — see the
         // note on the empty state in components/storefront/product/product-reviews.tsx.
         ratings.get(row.id) ?? NO_RATING,
+        salePrices,
       ),
     )
     .filter((p): p is Product => p !== null);
@@ -432,6 +463,10 @@ export async function loadCatalogueFromDb(organizationSlug: string): Promise<Cat
     /* Read on demand, and only ever the published ones — hidden reviews are
      * off the storefront entirely, including out of the average above. */
     reviewsFor: (productId) => listPublishedReviews(organizationId, productId),
+    /* Only the ones the merchant answered: a question waiting in their inbox
+     * is not store content, and an unanswered question on a product page is
+     * an objection nobody replied to. */
+    questionsFor: (productId) => listAnsweredQuestions(organizationId, productId),
     companions,
     boughtTogether: (productId) => boughtTogetherFromDb(organizationId, productId),
   });

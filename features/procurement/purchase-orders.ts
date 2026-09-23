@@ -19,7 +19,8 @@ const LineItemInputSchema = z.object({
 const CreatePOSchema = z.object({
   supplierId: z.string().cuid(),
   warehouseId: z.string().cuid(),
-  currency: z.string().min(1).max(10).default('USD'),
+  /** Omitted by the UI — a PO is written in the org's currency (AGENTS §4). */
+  currency: z.string().min(1).max(10).optional(),
   notes: z.string().max(1000).optional(),
   expectedAt: z.coerce.date().optional(),
   taxAmount: z.number().nonnegative().optional(),
@@ -108,7 +109,7 @@ export async function createPurchaseOrder(
           supplierId: data.supplierId,
           warehouseId: data.warehouseId,
           poNumber,
-          currency: data.currency,
+          currency: data.currency ?? ctx.organization.currency,
           subtotal,
           taxAmount,
           totalAmount,

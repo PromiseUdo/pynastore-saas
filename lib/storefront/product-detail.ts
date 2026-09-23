@@ -34,6 +34,7 @@ import {
 } from './catalog';
 import { getShopper } from './account/session';
 import { reviewOpportunity, votedReviewIds, type ReviewOpportunity } from './reviews/read';
+import { pendingQuestionsOf, type PendingQuestion } from './questions/read';
 import { DEFAULT_COMPANION_TITLE, interleave } from './recommendations/complements';
 import { similarityScore } from './recommendations/scoring';
 import type {
@@ -75,7 +76,14 @@ export interface ProductPageData {
     /** null for a guest — the section then invites them to sign in */
     signedIn: boolean;
   };
-  questions: ProductQuestion[];
+  questions: {
+    /** the pairs the merchant published */
+    items: ProductQuestion[];
+    /** the viewer's own questions, still waiting for an answer */
+    pending: PendingQuestion[];
+    /** false for a guest — the section then invites them to sign in to ask */
+    signedIn: boolean;
+  };
   delivery: DeliveryPromise;
   recommendations: ProductRecommendations;
 }
@@ -104,10 +112,11 @@ export async function loadProductPage(
     getShopper(),
   ]);
 
-  /* Who the reader is only changes the review section: whether there's a
-   * form, and which reviews already have their vote. Resolved here so the
-   * page itself stays a composition. */
-  const [viewer, voted] = await Promise.all([
+  /* Who the reader is changes two sections: whether there's a review form
+   * and which reviews already have their vote, and whether a question of
+   * their own is still waiting downstairs. Resolved here so the page itself
+   * stays a composition. */
+  const [viewer, voted, pendingQuestions] = await Promise.all([
     shopper
       ? reviewOpportunity({
           organizationId: shopper.organizationId,
@@ -116,6 +125,13 @@ export async function loadProductPage(
         })
       : Promise.resolve({ canReview: false, orderId: null, own: null } satisfies ReviewOpportunity),
     votedReviewIds(shopper?.id ?? null, reviews.items.map((r) => r.id)),
+    shopper
+      ? pendingQuestionsOf({
+          organizationId: shopper.organizationId,
+          customerId: shopper.id,
+          productId: product.id,
+        })
+      : Promise.resolve([] as PendingQuestion[]),
   ]);
 
   return {
@@ -129,7 +145,11 @@ export async function loadProductPage(
       votedIds: [...voted],
       signedIn: Boolean(shopper),
     },
-    questions,
+    questions: {
+      items: questions,
+      pending: pendingQuestions,
+      signedIn: Boolean(shopper),
+    },
     delivery,
     recommendations,
   };

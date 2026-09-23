@@ -15,6 +15,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { ProductImage } from './product-image';
 import { toast } from 'sonner';
 import { Eye, Heart, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -41,7 +42,10 @@ export function ProductCard({
   const toggleWishlist = useWishlistStore((s) => s.toggle);
   const setQuickView = useUIStore((s) => s.openQuickView);
 
-  const primary = product.images[0]?.url ?? '';
+  /* null, not '' — an empty src resolves to the current page, so an
+   * image-less product asked the browser to fetch the whole page again.
+   * ProductImage shows a plain tile instead. */
+  const primary = product.images[0]?.url ?? null;
   const secondary = product.images[1]?.url ?? primary;
   const pct = discountPercent(product.priceFrom, product.compareAtPrice);
   const href = `/products/${product.slug}`;
@@ -80,9 +84,10 @@ export function ProductCard({
       <div className="relative overflow-hidden rounded-2xl bg-tile">
         <Link href={href} aria-label={product.name} className="block">
           <span className="relative block aspect-square">
-            <Image
+            <ProductImage
               src={primary}
               alt={product.name}
+              name={product.name}
               fill
               priority={priority}
               sizes="(max-width:640px) 50vw, (max-width:1024px) 33vw, 22vw"
@@ -93,7 +98,7 @@ export function ProductCard({
               )}
             />
             {secondary !== primary && (
-              <Image
+              <ProductImage
                 src={secondary}
                 alt=""
                 fill

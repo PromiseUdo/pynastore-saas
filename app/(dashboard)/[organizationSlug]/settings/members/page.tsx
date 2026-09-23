@@ -15,6 +15,9 @@ export default async function MembersPage() {
 
   const canManage = hasPermission(ctx.membership.role.permissions, PERMISSIONS.STAFF_MANAGE);
   const canInvite = hasPermission(ctx.membership.role.permissions, PERMISSIONS.STAFF_INVITE);
+  /* The per-member link into Settings → Activity, shown only to someone who
+   * could open that page anyway. */
+  const canViewActivity = hasPermission(ctx.membership.role.permissions, PERMISSIONS.SETTINGS_VIEW);
 
   // Fetch active members
   const memberships = await prisma.membership.findMany({
@@ -100,6 +103,7 @@ export default async function MembersPage() {
             roles={roles}
             currentUserId={ctx.userId}
             canManage={canManage}
+            canViewActivity={canViewActivity}
           />
         </section>
 

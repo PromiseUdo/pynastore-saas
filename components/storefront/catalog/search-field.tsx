@@ -14,6 +14,7 @@
  */
 import * as React from 'react';
 import Image from 'next/image';
+import { ProductImage } from '@/components/storefront/product/product-image';
 import { useRouter } from 'next/navigation';
 import { Loader2, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -24,7 +25,7 @@ import { buildHref, patchCriteria, type DiscoveryCriteria } from '@/lib/storefro
 import type { OptionIndex } from '@/lib/storefront/types';
 
 interface Suggestions {
-  products: { id: string; slug: string; name: string; brand: string; image: string; priceFrom: number; currency: string }[];
+  products: { id: string; slug: string; name: string; brand: string; /** null when the merchant hasn't added one */ image: string | null; priceFrom: number; currency: string }[];
   categories: { id: string; name: string; path: string[] }[];
   brands: { id: string; name: string; slug: string }[];
   terms: string[];
@@ -237,8 +238,9 @@ export function SearchField({
               active={activeId === `p:${product.id}`}
               onSelect={() => go(`/products/${product.slug}`)}
             >
-              <Image
+              <ProductImage
                 src={product.image}
+                name={product.name}
                 alt=""
                 width={40}
                 height={40}

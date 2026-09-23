@@ -18,7 +18,10 @@
  * catalogue reads go through lib/storefront/catalog.ts, which is the single
  * seam where tenant scoping lands when this moves off fixtures onto Prisma.
  */
-import { getCategoryTree, getHomepageSections } from '@/lib/storefront/catalog';
+import { getCategoryTree, getHomepageSections, getStorefrontLook } from '@/lib/storefront/catalog';
+import { HeroCarousel } from '@/components/storefront/marketing/hero-carousel';
+import { AssistantLauncher } from '@/components/storefront/assistant/assistant-launcher';
+import { DiscoveryStrip } from '@/components/storefront/discovery/discovery-strip';
 import {
   getExampleQueries,
   getMissions,
@@ -45,12 +48,13 @@ export default async function StorefrontHomePage({ params }: Props) {
   const store = { organizationSlug };
   const currency = await getStoreCurrency(store);
 
-  const [sections, tree, missions, priceBands, examples] = await Promise.all([
+  const [sections, tree, missions, priceBands, examples, look] = await Promise.all([
     getHomepageSections(store),
     getCategoryTree(store),
     getMissions(6, store),
     getPriceBands(currency, store),
     getExampleQueries(currency, 3, store),
+    getStorefrontLook(),
   ]);
 
   const { serviceFeatures, featuredCategories, dealOfTheDay, collections, recommended } = sections;
@@ -76,19 +80,57 @@ export default async function StorefrontHomePage({ params }: Props) {
     .filter((c) => c.productCount > 0)
     .map((c) => ({ id: c.id, name: c.name, path: c.path, productCount: c.productCount }));
 
+  const hasSlides = look.hero.length > 0;
+
   return (
     <>
-      <DiscoveryHero
-        categories={rootCategories}
-        priceBands={priceBands.map(({ id, label, minPrice, maxPrice, productCount }) => ({
-          id,
-          label,
-          minPrice,
-          maxPrice,
-          productCount,
-        }))}
-        examples={examples}
-      />
+      {/*
+        * A merchant's own slides REPLACE the discovery hero rather than
+        * stacking above it. Two full-width openings in a row is two answers
+        * to "what is this shop", and the second one reads as leftover
+        * furniture.
+        *
+        * Nothing is lost by it: the header carries its search box from the
+        * first pixel when slides are in use (site-header.tsx), and the
+        * assistant moves to a floating button — so both ways in are still
+        * one press away.
+        */}
+      {hasSlides ? (
+        <>
+          <HeroCarousel slides={look.hero} />
+          {/* The discovery tools the hero used to carry: guided narrowing,
+            * image search, and — importantly — the surface that ANSWERS the
+            * mission and budget tiles below, which publish to the discovery
+            * store and had nothing listening once the hero went. */}
+          <DiscoveryStrip
+            categories={rootCategories}
+            priceBands={priceBands.map(({ id, label, minPrice, maxPrice, productCount }) => ({
+              id,
+              label,
+              minPrice,
+              maxPrice,
+              productCount,
+            }))}
+          />
+          <AssistantLauncher
+            seed={{ surface: 'home' }}
+            label="Ask the assistant"
+            variant="floating"
+          />
+        </>
+      ) : (
+        <DiscoveryHero
+          categories={rootCategories}
+          priceBands={priceBands.map(({ id, label, minPrice, maxPrice, productCount }) => ({
+            id,
+            label,
+            minPrice,
+            maxPrice,
+            productCount,
+          }))}
+          examples={examples}
+        />
+      )}
 
       <ShoppingMissions missions={missions} />
 

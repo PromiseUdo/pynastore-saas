@@ -12,8 +12,10 @@
 import * as React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { ProductImage } from '@/components/storefront/product/product-image';
 import { useRouter } from 'next/navigation';
 import { Loader2, Search, TrendingUp, X } from 'lucide-react';
+import { ImageSearchLink } from '@/components/storefront/visual-search/image-search-link';
 import { cn } from '@/lib/utils';
 import { formatMoney } from '@/lib/storefront/format';
 import { useStorefront } from '@/lib/storefront/context';
@@ -25,7 +27,8 @@ interface Suggestions {
     slug: string;
     name: string;
     brand: string;
-    image: string;
+    /** null when the merchant hasn't added one */
+    image: string | null;
     priceFrom: number;
     currency: string;
   }[];
@@ -135,6 +138,12 @@ export function HeaderSearch({ className }: { className?: string }) {
             <X className="size-4" />
           </button>
         )}
+
+        {/* Searching by a photo lives in the same box as searching by words:
+          * it is another way to ask the same question. It used to be offered
+          * only by the discovery hero and the mobile search sheet, so a shop
+          * whose own slides replaced that hero lost it on desktop entirely. */}
+        <ImageSearchLink variant="icon" />
         <button
           type="submit"
           aria-label="Search"
@@ -179,8 +188,9 @@ export function HeaderSearch({ className }: { className?: string }) {
                         onClick={() => setOpen(false)}
                         className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-accent"
                       >
-                        <Image
+                        <ProductImage
                           src={p.image}
+                          name={p.name}
                           alt=""
                           width={44}
                           height={44}

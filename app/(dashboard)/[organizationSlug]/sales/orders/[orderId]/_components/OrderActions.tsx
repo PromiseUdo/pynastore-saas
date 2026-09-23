@@ -53,6 +53,7 @@ export function OrderActions({
   orderId,
   status,
   paymentStatus,
+  channel,
   cancelReason,
   reference,
   totalAmount,
@@ -61,6 +62,8 @@ export function OrderActions({
   orderId: string;
   status: string;
   paymentStatus: string;
+  /** ONLINE | WALK_IN | PHONE */
+  channel: string;
   cancelReason: string | null;
   reference: string;
   /** major units */
@@ -73,7 +76,10 @@ export function OrderActions({
   const [paymentCollected, setPaymentCollected] = React.useState(true);
 
   const payOnDelivery = paymentStatus === 'DUE_ON_DELIVERY';
-  const awaitingOnlinePayment = paymentStatus === 'AWAITING_PAYMENT';
+  /* A counter sale rung up as "paying later" is settled the same way: in
+   * person, by someone pressing this button. */
+  const owesAtCounter = channel !== 'ONLINE' && paymentStatus === 'AWAITING_PAYMENT';
+  const awaitingOnlinePayment = channel === 'ONLINE' && paymentStatus === 'AWAITING_PAYMENT';
   const awaitingTransfer = paymentStatus === 'AWAITING_TRANSFER';
   /* A late transfer can still be confirmed after the order expired unpaid. */
   const canConfirmTransfer =
@@ -232,7 +238,7 @@ export function OrderActions({
         </>
       )}
 
-      {status === 'DELIVERED' && payOnDelivery && (
+      {status === 'DELIVERED' && (payOnDelivery || owesAtCounter) && (
         <Button size="sm" onClick={() => void run('record-payment')} disabled={pending !== null}>
           {spinner('record-payment')}
           Record payment

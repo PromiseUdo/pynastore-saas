@@ -21,6 +21,7 @@
  * store controls.
  */
 import Image from 'next/image';
+import { ProductImage } from '@/components/storefront/product/product-image';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 import type { CartItem } from '@/lib/storefront/types';
 import type {
@@ -164,8 +165,9 @@ export function ReviewStep({
         <ul className="mt-3 divide-y">
           {items.map((item) => (
             <li key={lineKey(item)} className="flex items-center gap-3 py-3">
-              <Image
+              <ProductImage
                 src={item.imageUrl}
+                name={item.name}
                 alt=""
                 width={48}
                 height={60}

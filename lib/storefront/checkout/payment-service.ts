@@ -89,7 +89,9 @@ export async function startOrderPayment(input: {
   }
 
   const order = await prisma.order.findFirst({
-    where: { id: input.orderId, organizationId: input.organizationId },
+    /* Online payment is for orders placed online. A counter sale is settled
+     * at the till and must never be pushed through a checkout link. */
+    where: { id: input.orderId, organizationId: input.organizationId, channel: 'ONLINE' },
     select: {
       id: true,
       reference: true,
@@ -103,7 +105,8 @@ export async function startOrderPayment(input: {
       lastName: true,
     },
   });
-  if (!order) return { ok: false, reason: 'not-payable' };
+  // The gateway needs somewhere to send the receipt; no email, no payment.
+  if (!order || !order.email) return { ok: false, reason: 'not-payable' };
 
   /* An earlier attempt may have been paid without us hearing yet (webhook
    * still on its way, shopper closed the tab before the redirect). Settle
@@ -145,7 +148,7 @@ export async function startOrderPayment(input: {
       amount: toMinor(order.totalAmount),
       currency: order.currency,
       email: order.email,
-      customerName: `${order.firstName} ${order.lastName}`.trim() || undefined,
+      customerName: `${order.firstName ?? ''} ${order.lastName ?? ''}`.trim() || undefined,
       transactionRef: reference,
       callbackUrl: `${input.origin}/api/payments/squad/callback?ref=${encodeURIComponent(reference)}`,
       metadata: { orderReference: order.reference },

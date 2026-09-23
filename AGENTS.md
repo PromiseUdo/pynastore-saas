@@ -4,6 +4,14 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+# Roadmap
+
+`docs/ROADMAP.md` holds the agreed build plan: the phases, what gap each one closes,
+and the design decisions already taken (e.g. walk-in sales go on `Order` with a
+`channel` field, campaigns write scheduled price overrides rather than editing
+`sellingPrice`). Read the relevant phase before starting work on it, and update its
+status there when it ships.
+
 # Admin dashboard UI rules
 
 These rules cover everything under `app/(dashboard)/`, `components/layout/`, `components/dashboard/`, `components/members/` and `components/ui/`. The customer storefront (`app/store/`, `components/storefront/`) has its own look and does **not** follow these rules. Never mix the two: no storefront tokens (`bg-brand`, `font-display`, `.sf-*`) in the admin, and no admin tokens in the storefront.
@@ -82,6 +90,28 @@ Inventory products ARE the online store's products. Online-store fields (web add
 
 Merchandising lives under Inventory: categories (what a product is), collections (why products are grouped — hand-picked or rule-based), brands (who makes it). All three are managed with `inventory.category.manage`. A **web address is never regenerated on rename** — links customers saved must keep working; only a new record gets one generated, and only an explicit edit changes it.
 
+# Social Commerce rules
+
+One Meta app belongs to the PLATFORM (`META_APP_ID`/`META_APP_SECRET`, server-side only). Merchants never supply credentials, never see a token, and never enter an app key: they authorise the one MansaaS app against their own Facebook account, and what we keep is a per-store connection.
+
+**Three pages, one nav** (`components/social/social-nav.tsx`): Connected accounts (`/social`), Create post (`/social/compose`), Post history (`/social/posts`, detail at `/social/posts/[postId]`).
+
+**The seam.** Everything goes `server action → lib/social/service.ts | publish.ts → registry.ts → providers/*`. No Graph call outside `lib/social/providers/`, and no Facebook-specific branch in a page or component — platform differences arrive as `provider.publishRules(platform)`. TikTok is a declared provider that fails closed; see the TODO in `providers/tiktok.ts` before implementing it.
+
+**Tenancy.** Every social function takes `organizationId` as its first argument, from `getOrganizationContext()` — never from a form. A connection, post, product or image id from the browser is only ever used TOGETHER with it (`where: { id, organizationId }`), so another store's id is a miss, not a leak. The OAuth callback is the one place without tenant headers (`/api` is outside the proxy matcher): the org travels in an HMAC-signed state and is re-authorised against a fresh membership read before anything is written.
+
+**Permissions.** `social.view` to see accounts and history; `social.manage` to connect, disconnect, publish, retry or remove. The composer also needs `inventory.view`, since it browses the catalogue. No plan gate — Social Commerce is on every plan.
+
+**Post statuses** are `DRAFT → PUBLISHING → PUBLISHED`, or `FAILED` (retryable back into `PUBLISHING`). Nothing reports `PUBLISHED` without an id from the platform. `PUBLISHING` is claimed with a conditional update and `(organizationId, idempotencyKey)` is unique, so a double-click posts once. A row stuck in `PUBLISHING` is released to `FAILED` after five minutes, opportunistically, when someone loads the history — no cron.
+
+**Failed posts stay.** They keep caption, images and destination so "Try again" is a real retry of that record (`retryPost`), rate-limited by `lib/social/publish-quota.ts`. Only a `DRAFT` or `FAILED` post can be removed, and removing it forgets OUR record — MansaaS never deletes anything from Facebook or Instagram.
+
+**History is queried in the database.** Status, platform, search, date range, product and page live in the URL and become Prisma `where` clauses. Never load a store's history into the browser to filter it there.
+
+**AI copy is a draft, never a publish.** Gemini reaches only `ProductFacts` (`lib/social/product-facts.ts`) — the merchant's own rows — and its output is fact-checked by `lib/ai/social/validate.ts`, which strips any price, discount, stock, delivery or warranty claim those rows don't support. A merchant edits and presses Publish themselves.
+
+**Say what the platform actually does.** An Instagram caption can't hold a clickable link, so we leave the product URL out rather than post a dead one; a Facebook Page post uses one image, because Meta documents single-photo publishing and we don't build on undocumented behaviour. Both are stated in the composer, not hidden.
+
 # Storefront data rules
 
 The customer storefront reads the merchant's real records. These rules keep that safe.
@@ -91,5 +121,6 @@ The customer storefront reads the merchant's real records. These rules keep that
 - **Server only.** `catalog.ts` reaches Prisma. Client components use `lib/storefront/product-helpers.ts` (variant/price helpers) and `lib/storefront/nav-types.ts` (nav shape and links) instead. Run `npx next build` after touching this boundary.
 - **Never invent a merchant's content.** No fabricated reviews, ratings, testimonials, Q&A, press, social posts, urgency countdowns or campaign copy. If there's no source for it yet, show nothing and let the page's empty state do the talking. Claims about delivery, returns or payment must restate what the app actually enforces.
 - **Reviews are earned, not collected.** A review can only be written by a signed-in shopper with a DELIVERED order containing that product, one per shopper per product, and that gate is re-checked server-side on every write (`lib/storefront/reviews/`). Ratings on products come from published reviews only. A merchant can hide a review (`sales.review.moderate`) — never write, edit or delete one. Don't add a review form anywhere the server hasn't already confirmed the purchase.
+- **Questions are answered, not generated.** A signed-in shopper asks from the product page; the question waits in the merchant's inbox (Sales → Questions, `sales.question.answer`) and reaches the storefront only when a human answers it — answering is publishing. A merchant never writes the question, never edits a shopper's words, and may hide a pair rather than delete it. `lib/storefront/questions/` is the seam; the catalogue exposes only the answered ones.
 - **What a shopper may see** is decided once, in `lib/storefront/data/from-prisma.ts`: published + active products, active variants, stock only from stores with `sellsOnline`, visible categories, visible collections. Don't re-implement those rules elsewhere.
 - Prices are minor units (kobo) on the storefront and major units in the admin; the mapper is the only place that converts.

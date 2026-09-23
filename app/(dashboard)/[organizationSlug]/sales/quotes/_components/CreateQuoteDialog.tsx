@@ -108,7 +108,6 @@ export function CreateQuoteDialog({ open, onOpenChange, customers, items }: Crea
 
     const result = await createQuote({
       customerId,
-      currency: 'USD',
       notes: notes.trim() || undefined,
       validUntil: validUntil ? new Date(validUntil) : undefined,
       taxAmount: taxAmount ? Number(taxAmount) : undefined,

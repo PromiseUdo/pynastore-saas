@@ -120,6 +120,10 @@ async function placed(productId: string, quantity: number, who = 'ada') {
     where: { id: result.orderId },
     select: { customerId: true, lineItems: { select: { id: true } } },
   });
+  /* Every order placed through checkout has a customer — guests get a record
+   * too. Order.customerId became nullable for counter sales (Phase 2), so
+   * this says so once rather than at each use. */
+  if (!row.customerId) throw new Error('placed() expected the order to have a customer');
   return { ...result, customerId: row.customerId, lineId: row.lineItems[0].id };
 }
 

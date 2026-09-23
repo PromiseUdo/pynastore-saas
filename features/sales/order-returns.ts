@@ -227,7 +227,7 @@ export async function listOrderReturns(params: {
           id: r.id,
           orderId: r.order.id,
           reference: r.order.reference,
-          customerName: `${r.order.firstName} ${r.order.lastName}`.trim() || r.order.email,
+          customerName: `${r.order.firstName ?? ''} ${r.order.lastName ?? ''}`.trim() || r.order.email || 'A customer',
           status: r.status,
           reasonLabel: isReturnReason(r.reason) ? RETURN_REASONS[r.reason] : r.reason,
           itemCount: r.lines.reduce((sum, line) => sum + line.quantity, 0),

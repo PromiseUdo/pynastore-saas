@@ -7,7 +7,7 @@
  * or from the demo fixtures (./from-fixtures.ts) — the engine can't tell
  * them apart, which is what keeps the fixtures useful for tests.
  */
-import type { Brand, Category, Collection, Product, Review } from '../types';
+import type { Brand, Category, Collection, Product, ProductQuestion, Review } from '../types';
 import { urlKey } from '../product-helpers';
 import { RESERVED_URL_KEYS } from '../discovery-url';
 import type { BoughtTogether } from './bought-together';
@@ -62,6 +62,15 @@ export interface Catalogue {
   reviewsFor: (productId: string) => Promise<Review[]>;
 
   /**
+   * The published questions and answers of one product, newest first.
+   *
+   * On demand for the same reason as reviews: only the product page shows
+   * them. A store with no answered question returns an empty list, and the
+   * section says so rather than inventing a FAQ.
+   */
+  questionsFor: (productId: string) => Promise<ProductQuestion[]>;
+
+  /**
    * The merchant's companion categories for a category, already narrowed to
    * categories this catalogue contains (and never the category itself).
    * null when the merchant hasn't set any.
@@ -88,6 +97,8 @@ export interface CataloguePartsInput {
   collections: Collection[];
   /** defaults to "this store has none", which is what an empty store has */
   reviewsFor?: (productId: string) => Promise<Review[]>;
+  /** defaults to "nothing answered yet", which is what a new store has */
+  questionsFor?: (productId: string) => Promise<ProductQuestion[]>;
   /** category id → its companion rule; categories without one are absent */
   companions?: Map<string, CompanionRule>;
   /** defaults to "no sales yet" */
@@ -183,6 +194,7 @@ export function buildCatalogue(parts: CataloguePartsInput): Catalogue {
     facetableSpecs: facetableSpecsOf(products),
     hasRatings: products.some((p) => p.rating.count > 0),
     reviewsFor: parts.reviewsFor ?? (async () => []),
+    questionsFor: parts.questionsFor ?? (async () => []),
     companionsFor: (categoryId) => companionsLookup(categoryId),
     boughtTogether: parts.boughtTogether ?? (async () => []),
   };

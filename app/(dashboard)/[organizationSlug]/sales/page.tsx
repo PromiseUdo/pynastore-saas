@@ -1,10 +1,11 @@
 import Link from 'next/link';
-import { FileText, Receipt, AlertCircle, Users } from 'lucide-react';
+import { FileText, Receipt, AlertCircle, Users, HelpCircle } from 'lucide-react';
 import { requireFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { listQuotes, listInvoices, listCustomers } from '@/features/sales/actions';
+import { pendingQuestionCount } from '@/features/sales/questions';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 
 function formatMoney(amount: number): string {
@@ -26,10 +27,11 @@ export default async function SalesDashboardPage() {
     );
   }
 
-  const [quotesResult, invoicesResult, customersResult] = await Promise.all([
+  const [quotesResult, invoicesResult, customersResult, unansweredQuestions] = await Promise.all([
     listQuotes(),
     listInvoices(),
     listCustomers(),
+    pendingQuestionCount(),
   ]);
 
   const quotes = quotesResult.success ? quotesResult.data : [];
@@ -48,6 +50,23 @@ export default async function SalesDashboardPage() {
         <h1 className="text-lg font-semibold tracking-tight text-foreground">Sales</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">Customers, quotes, and invoices.</p>
       </div>
+
+      {/* A shopper asking about a product is a sale waiting on an answer,
+        * and their question isn't on the store until someone gives one. */}
+      {unansweredQuestions > 0 && (
+        <Link
+          href="/sales/questions"
+          className="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm transition-colors hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
+        >
+          <HelpCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span className="font-medium text-foreground">
+            {unansweredQuestions === 1
+              ? '1 customer question is waiting for an answer'
+              : `${unansweredQuestions} customer questions are waiting for an answer`}
+          </span>
+          <span className="ml-auto text-muted-foreground">Answer them →</span>
+        </Link>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <Link href="/sales/quotes">

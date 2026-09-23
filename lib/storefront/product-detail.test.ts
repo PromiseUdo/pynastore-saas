@@ -314,8 +314,9 @@ describe('recommendations', () => {
 describe('questions and delivery', () => {
   it('25. serves the catalogue’s own reviews, and offers a guest no form', async () => {
     // Reviews come from the store's own records (here, the demo catalogue) —
-    // never from borrowed copy. Q&A still has no source, so it reads empty
-    // and the page renders its "be the first" state.
+    // never from borrowed copy. The demo catalogue has no customer questions
+    // (nothing invents them), so Q&A reads empty and the page renders its
+    // "yours would be the first" state with the ask form.
     const product = PRODUCTS[0];
     expect(await getProductQuestions(product.id, store)).toEqual([]);
 
@@ -329,6 +330,9 @@ describe('questions and delivery', () => {
 
     // Nobody is signed in in a test, so there is no form and no vote.
     expect(page!.reviews.signedIn).toBe(false);
+    expect(page!.questions.items).toEqual([]);
+    expect(page!.questions.pending).toEqual([]);
+    expect(page!.questions.signedIn).toBe(false);
     expect(page!.reviews.viewer.canReview).toBe(false);
     expect(page!.reviews.votedIds).toEqual([]);
   });

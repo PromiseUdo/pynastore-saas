@@ -3,11 +3,17 @@
 /*
  * features/sales/orders.ts
  *
- * Online-store orders, for the merchant.
+ * Orders, for the merchant — every channel.
  *
- * The storefront writes these (lib/storefront/orders/create.ts); this is the
- * admin's read of the same table, scoped to the signed-in staff member's
- * organization and gated on `sales.view` like every other sales screen.
+ * The storefront writes ONLINE orders (lib/storefront/orders/create.ts) and
+ * the counter writes WALK_IN and PHONE ones (features/sales/counter-sale.ts);
+ * this is the admin's read of the same table, scoped to the signed-in staff
+ * member's organization and gated on `sales.view` like every other sales
+ * screen.
+ *
+ * A counter sale has no delivery, no shipping address and often no contact
+ * details, so those fields are nullable here. Anything that renders them
+ * must say "—" rather than an empty line (AGENTS §3).
  *
  * Money comes back as a plain number in MAJOR units, which is what the admin
  * formats with `formatMoney` — the storefront's minor-unit convention stops
@@ -35,18 +41,22 @@ import type { ActionResult } from './shared';
 export interface StoreOrderRow {
   id: string;
   reference: string;
+  /** ONLINE | WALK_IN | PHONE */
+  channel: string;
   status: string;
   paymentStatus: string;
   paymentMethod: string;
   placedAt: string;
-  customerName: string;
-  customerEmail: string;
+  /** null on an anonymous counter sale, where nobody took a name */
+  customerName: string | null;
+  customerEmail: string | null;
   isGuest: boolean;
   itemCount: number;
   currency: string;
   totalAmount: number;
-  city: string;
-  state: string;
+  /** null on a counter sale — nothing was shipped anywhere */
+  city: string | null;
+  state: string | null;
   /** return requests waiting on the merchant */
   returnsAwaiting: number;
   /** cancelled after it was paid, and not all of it sent back yet */
@@ -73,16 +83,19 @@ export interface StoreOrderDetail extends StoreOrderRow {
   cancelledAt: string | null;
   /** units still held for this order, and units already sent */
   stock: { held: number; dispatched: number };
-  customerId: string;
-  phone: string;
-  shipFullName: string;
-  shipPhone: string;
-  shipLine1: string;
+  customerId: string | null;
+  phone: string | null;
+  shipFullName: string | null;
+  shipPhone: string | null;
+  shipLine1: string | null;
   shipLine2: string | null;
-  shipCountry: string;
+  shipCountry: string | null;
   shipPostalCode: string | null;
-  deliveryMethodLabel: string;
-  deliveryFee: number;
+  deliveryMethodLabel: string | null;
+  deliveryFee: number | null;
+  /** counter sales: which store served it, and who rang it up */
+  storeName: string | null;
+  soldByName: string | null;
   subtotal: number;
   discount: number;
   /** the code the shopper used, as it was when they used it */
@@ -119,63 +132,152 @@ export interface StoreOrderReturn {
   lines: { id: string; name: string; variantName: string | null; quantity: number; unitPrice: number }[];
 }
 
-export async function listStoreOrders(): Promise<ActionResult<StoreOrderRow[]>> {
+/** Whoever this was for, or null when nobody gave a name at the counter. */
+function customerName(order: { firstName: string | null; lastName: string | null }): string | null {
+  const name = `${order.firstName ?? ''} ${order.lastName ?? ''}`.trim();
+  return name || null;
+}
+
+/* Values off the URL are only ever used when they name something real, so a
+ * hand-edited query string narrows or does nothing — it can never widen. */
+const ORDER_CHANNELS = ['ONLINE', 'WALK_IN', 'PHONE'] as const;
+type OrderChannelValue = (typeof ORDER_CHANNELS)[number];
+function isOrderChannel(value: string | undefined): value is OrderChannelValue {
+  return ORDER_CHANNELS.includes(value as OrderChannelValue);
+}
+
+const ORDER_STATUSES = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const;
+type OrderStatusValue = (typeof ORDER_STATUSES)[number];
+function isOrderStatus(value: string | undefined): value is OrderStatusValue {
+  return ORDER_STATUSES.includes(value as OrderStatusValue);
+}
+
+export interface StoreOrderFilters {
+  /** ONLINE | WALK_IN | PHONE */
+  channel?: string;
+  status?: string;
+  /** reference, customer name, email or phone */
+  q?: string;
+  page?: number;
+}
+
+export interface StoreOrderList {
+  rows: StoreOrderRow[];
+  total: number;
+  page: number;
+  perPage: number;
+  pageCount: number;
+  /** orders before any filter — tells "no orders yet" from "none match" */
+  historySize: number;
+  /** how many of each channel exist, for the filter's counts */
+  channelCounts: { channel: string; count: number }[];
+}
+
+const ORDERS_PER_PAGE = 25;
+
+/**
+ * The merchant's order list — every channel, filtered and paged by the
+ * database.
+ *
+ * It used to take the newest 200 and let the browser filter them, which
+ * quietly stopped being the whole truth at order 201 and put every
+ * customer's email into the page source. Filters now live in the URL and
+ * become `where` clauses (AGENTS §3).
+ */
+export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<ActionResult<StoreOrderList>> {
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_VIEW);
+    const organizationId = ctx.organization.id;
 
     /* Unpaid online orders past their hold are cancelled before the list is
      * read, so the merchant never sees stock held by an abandoned checkout. */
-    await expireUnpaidOrders({ organizationId: ctx.organization.id, limit: 20 }).catch((error) => {
+    await expireUnpaidOrders({ organizationId, limit: 20 }).catch((error) => {
       console.error('[orders] Could not expire unpaid orders:', error);
     });
 
-    const orders = await prisma.order.findMany({
-      where: { organizationId: ctx.organization.id },
-      orderBy: { placedAt: 'desc' },
-      take: 200,
-      select: {
-        id: true,
-        reference: true,
-        status: true,
-        paymentStatus: true,
-        paymentMethod: true,
-        placedAt: true,
-        isGuest: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        currency: true,
-        totalAmount: true,
-        shipCity: true,
-        shipState: true,
-        lineItems: { select: { quantity: true } },
-        _count: { select: { returns: { where: { status: 'REQUESTED' } } } },
-      },
-    });
+    const page = filters.page && filters.page > 0 ? filters.page : 1;
+    const q = filters.q?.trim();
+
+    const where = {
+      organizationId,
+      ...(isOrderChannel(filters.channel) ? { channel: filters.channel } : {}),
+      ...(isOrderStatus(filters.status) ? { status: filters.status } : {}),
+      ...(q
+        ? {
+            OR: [
+              { reference: { contains: q, mode: 'insensitive' as const } },
+              { firstName: { contains: q, mode: 'insensitive' as const } },
+              { lastName: { contains: q, mode: 'insensitive' as const } },
+              { email: { contains: q, mode: 'insensitive' as const } },
+              { phone: { contains: q, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [orders, total, historySize, grouped] = await Promise.all([
+      prisma.order.findMany({
+        where,
+        orderBy: { placedAt: 'desc' },
+        skip: (page - 1) * ORDERS_PER_PAGE,
+        take: ORDERS_PER_PAGE,
+        select: {
+          id: true,
+          reference: true,
+          channel: true,
+          status: true,
+          paymentStatus: true,
+          paymentMethod: true,
+          placedAt: true,
+          isGuest: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          currency: true,
+          totalAmount: true,
+          shipCity: true,
+          shipState: true,
+          lineItems: { select: { quantity: true } },
+          _count: { select: { returns: { where: { status: 'REQUESTED' } } } },
+        },
+      }),
+      prisma.order.count({ where }),
+      prisma.order.count({ where: { organizationId } }),
+      prisma.order.groupBy({ by: ['channel'], where: { organizationId }, _count: { _all: true } }),
+    ]);
 
     return {
       success: true,
-      data: orders.map((order) => ({
-        id: order.id,
-        reference: order.reference,
-        status: order.status,
-        paymentStatus: order.paymentStatus,
-        paymentMethod: order.paymentMethod,
-        placedAt: order.placedAt.toISOString(),
-        customerName: `${order.firstName} ${order.lastName}`.trim(),
-        customerEmail: order.email,
-        isGuest: order.isGuest,
-        itemCount: order.lineItems.reduce((sum, line) => sum + line.quantity, 0),
-        currency: order.currency,
-        totalAmount: Number(order.totalAmount),
-        city: order.shipCity,
-        state: order.shipState,
-        returnsAwaiting: order._count.returns,
-        refundOwed:
-          order.status === 'CANCELLED' &&
-          (order.paymentStatus === 'PAID' || order.paymentStatus === 'PARTIALLY_REFUNDED'),
-      })),
+      data: {
+        rows: orders.map((order) => ({
+          id: order.id,
+          reference: order.reference,
+          channel: order.channel,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          paymentMethod: order.paymentMethod,
+          placedAt: order.placedAt.toISOString(),
+          customerName: customerName(order),
+          customerEmail: order.email,
+          isGuest: order.isGuest,
+          itemCount: order.lineItems.reduce((sum, line) => sum + line.quantity, 0),
+          currency: order.currency,
+          totalAmount: Number(order.totalAmount),
+          city: order.shipCity,
+          state: order.shipState,
+          returnsAwaiting: order._count.returns,
+          refundOwed:
+            order.status === 'CANCELLED' &&
+            (order.paymentStatus === 'PAID' || order.paymentStatus === 'PARTIALLY_REFUNDED'),
+        })),
+        total,
+        page,
+        perPage: ORDERS_PER_PAGE,
+        pageCount: Math.max(1, Math.ceil(total / ORDERS_PER_PAGE)),
+        historySize,
+        channelCounts: grouped.map((g) => ({ channel: g.channel, count: g._count._all })),
+      },
     };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to load orders' };
@@ -191,6 +293,9 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
       where: { id: orderId, organizationId: ctx.organization.id },
       include: {
         lineItems: true,
+        // Counter sales: which store served it, and who rang it up.
+        warehouse: { select: { name: true } },
+        soldBy: { select: { name: true, email: true } },
         allocations: { select: { status: true, quantity: true, orderLineItemId: true } },
         refunds: { orderBy: { createdAt: 'asc' } },
         returns: {
@@ -277,7 +382,7 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
             .reduce((sum, a) => sum + Number(a.quantity), 0),
         },
         customerId: order.customerId,
-        customerName: `${order.firstName} ${order.lastName}`.trim(),
+        customerName: customerName(order),
         customerEmail: order.email,
         isGuest: order.isGuest,
         phone: order.phone,
@@ -290,7 +395,10 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
         shipCountry: order.shipCountry,
         shipPostalCode: order.shipPostalCode,
         deliveryMethodLabel: order.deliveryMethodLabel,
-        deliveryFee: Number(order.deliveryFee),
+        deliveryFee: order.deliveryFee === null ? null : Number(order.deliveryFee),
+        channel: order.channel,
+        storeName: order.warehouse?.name ?? null,
+        soldByName: order.soldBy?.name ?? order.soldBy?.email ?? null,
         currency: order.currency,
         subtotal: Number(order.subtotal),
         discount: Number(order.discount),

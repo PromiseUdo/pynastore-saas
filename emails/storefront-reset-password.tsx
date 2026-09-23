@@ -2,7 +2,7 @@
  * Password reset for a SHOPPER, sent in the merchant's name.
  *
  * Deliberately not the staff template (emails/reset-password.tsx): this one
- * never says "SafeBase". A customer of Ada's Store asked Ada's Store for a
+ * never says the platform’s name. A customer of Ada's Store asked Ada's Store for a
  * new password, and an email from a platform they have never heard of reads
  * like phishing — which is exactly the reflex we want their real security
  * instincts to keep.

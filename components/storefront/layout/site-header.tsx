@@ -78,7 +78,18 @@ function IconAction({
   );
 }
 
-export function SiteHeader({ navItems }: { navItems: NavItem[] }) {
+export function SiteHeader({
+  navItems,
+  /**
+   * Whether the homepage's own hero carries a search box. False when the
+   * merchant's slides have replaced the discovery hero, in which case this
+   * header is the only search there is and shows from the first pixel.
+   */
+  heroHasSearch = true,
+}: {
+  navItems: NavItem[];
+  heroHasSearch?: boolean;
+}) {
   const { org } = useStorefront();
   const shopper = useShopper();
   const hydrated = useHydrated();
@@ -104,13 +115,17 @@ export function SiteHeader({ navItems }: { navItems: NavItem[] }) {
   }, []);
 
   /*
-   * The homepage hero IS the search box, so showing a second one in the header
-   * directly above it reads as a mistake. Hold it back until the hero has
-   * scrolled away, then it becomes the persistent one. Every other route shows
-   * it immediately.
+   * The discovery hero IS the search box, so showing a second one in the
+   * header directly above it reads as a mistake. Hold it back until the hero
+   * has scrolled away, then it becomes the persistent one.
+   *
+   * UNLESS the merchant uses their own slides: those replace the discovery
+   * hero, so there is no other search box on the page and holding this one
+   * back would leave the shop with no way to search above the fold. Every
+   * other route shows it immediately.
    */
   const pathname = usePublicPathname();
-  const showInlineSearch = pathname !== '/' || pastHero;
+  const showInlineSearch = pathname !== '/' || heroHasSearch === false || pastHero;
 
   return (
     <header

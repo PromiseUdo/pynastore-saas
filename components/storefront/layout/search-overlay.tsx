@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { ProductImage } from '@/components/storefront/product/product-image';
 import { useRouter } from 'next/navigation';
 import { Search, X, TrendingUp } from 'lucide-react';
 import { SheetRoot, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -13,7 +14,7 @@ import { categoryHref } from '@/lib/storefront/nav-types';
 import { ImageSearchLink } from '@/components/storefront/visual-search/image-search-link';
 
 interface Suggestions {
-  products: { id: string; slug: string; name: string; brand: string; image: string; priceFrom: number; currency: string }[];
+  products: { id: string; slug: string; name: string; brand: string; /** null when the merchant hasn't added one */ image: string | null; priceFrom: number; currency: string }[];
   categories: { id: string; name: string; path: string[] }[];
   brands: { id: string; name: string; slug: string }[];
 }
@@ -170,8 +171,9 @@ export function SearchOverlay() {
                             onClick={close}
                             className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-accent"
                           >
-                            <Image
+                            <ProductImage
                               src={p.image}
+                              name={p.name}
                               alt=""
                               width={48}
                               height={48}

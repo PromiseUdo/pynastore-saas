@@ -15,6 +15,7 @@
  */
 import Link from 'next/link';
 import Image from 'next/image';
+import { ProductImage } from '@/components/storefront/product/product-image';
 import { Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react';
 import {
   SheetRoot,
@@ -76,8 +77,9 @@ export function MiniCart() {
                 return (
                   <li key={key} className="flex gap-3 py-4">
                     <Link href={`/products/${item.productSlug}`} onClick={close} className="shrink-0">
-                      <Image
+                      <ProductImage
                         src={item.imageUrl}
+                        name={item.name}
                         alt={item.name}
                         width={72}
                         height={88}

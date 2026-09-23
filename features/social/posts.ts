@@ -25,7 +25,15 @@ import { hasPermission, requirePermission, PERMISSIONS } from '@/lib/permissions
 import { createAuditLog } from '@/lib/audit';
 import { listProducts, type ProductListRow } from '@/features/inventory/products';
 import { getProductFacts } from '@/lib/social/product-facts';
-import { listPosts, publishPost, retryPost, releaseStalePublishing } from '@/lib/social/publish';
+import {
+  discardPost,
+  getPost,
+  listPosts,
+  publishPost,
+  retryPost,
+  releaseStalePublishing,
+} from '@/lib/social/publish';
+import { checkRetryRequest } from '@/lib/social/publish-quota';
 import { listConnections } from '@/lib/social/service';
 import { getProviderForPlatform } from '@/lib/social/registry';
 import {
@@ -38,7 +46,15 @@ import {
   type GeneratedCaption,
 } from '@/lib/ai/social/copywriter';
 import { checkCopyRequest } from '@/lib/ai/social/quota';
-import type { PublishRules, SocialAccountRow, SocialPlatform, SocialPostRow } from '@/lib/social/types';
+import type {
+  PublishRules,
+  SocialAccountRow,
+  SocialPlatform,
+  SocialPostDetail,
+  SocialPostListParams,
+  SocialPostListResult,
+  SocialPostRow,
+} from '@/lib/social/types';
 
 export type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
 
@@ -352,6 +368,14 @@ export async function retrySocialPost(postId: string): Promise<ActionResult<Soci
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SOCIAL_MANAGE);
 
+    /* A retry is a real write to Meta, so it is limited like every other
+     * outward call here. Checked before anything is claimed, so a refusal
+     * costs neither a Graph call nor a status change. */
+    const limit = checkRetryRequest(ctx.organization.id, ctx.userId);
+    if (!limit.ok) {
+      return { success: false, error: 'You’re retrying very quickly. Give it a minute and try again.' };
+    }
+
     const outcome = await retryPost(ctx.organization.id, postId);
     if (!outcome.ok) return { success: false, error: outcome.reason };
 
@@ -363,7 +387,16 @@ export async function retrySocialPost(postId: string): Promise<ActionResult<Soci
 
 /* ─── History ───────────────────────────────────────────────────────────── */
 
-export async function getSocialPosts(): Promise<ActionResult<SocialPostRow[]>> {
+/**
+ * One page of post history.
+ *
+ * `params` only ever narrows: the organization comes from the session and is
+ * applied by lib/social/publish.ts regardless of what is passed here, so no
+ * filter can reach another store's rows.
+ */
+export async function getSocialPosts(
+  params: SocialPostListParams = {},
+): Promise<ActionResult<SocialPostListResult>> {
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SOCIAL_VIEW);
@@ -372,9 +405,56 @@ export async function getSocialPosts(): Promise<ActionResult<SocialPostRow[]>> {
      * whenever someone looks, rather than adding a cron service. */
     await releaseStalePublishing(ctx.organization.id);
 
-    return { success: true, data: await listPosts(ctx.organization.id) };
+    return { success: true, data: await listPosts(ctx.organization.id, params) };
   } catch (error) {
     return failure(error, 'We couldn’t load your posts');
+  }
+}
+
+/** One post in full. Viewing needs `social.view`, like the list. */
+export async function getSocialPost(postId: string): Promise<ActionResult<SocialPostDetail>> {
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.SOCIAL_VIEW);
+
+    const post = await getPost(ctx.organization.id, postId);
+    // Same words whether it never existed or belongs to another store.
+    if (!post) return { success: false, error: 'Post not found' };
+
+    return { success: true, data: post };
+  } catch (error) {
+    return failure(error, 'We couldn’t load that post');
+  }
+}
+
+/**
+ * Forgets a draft or a failed post.
+ *
+ * Nothing is deleted at Facebook or Instagram — `discardPost` refuses any
+ * status but DRAFT and FAILED, so a published post can't be erased from the
+ * record by this path at all.
+ */
+export async function discardSocialPost(postId: string): Promise<ActionResult> {
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.SOCIAL_MANAGE);
+
+    const removed = await discardPost(ctx.organization.id, postId);
+    if (!removed) {
+      return { success: false, error: 'Only a draft or a failed post can be removed' };
+    }
+
+    await createAuditLog({
+      organizationId: ctx.organization.id,
+      userId: ctx.userId,
+      action: 'social.post.discarded',
+      entityType: 'SocialPost',
+      entityId: postId,
+    });
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    return failure(error, 'We couldn’t remove that post');
   }
 }
 

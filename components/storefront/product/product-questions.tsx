@@ -11,17 +11,26 @@
  * whether they are reading the merchant, another customer, or a machine
  * summarising both.
  *
- * Phase 9 supplies the other half through `ask` — the assistant launcher.
- * There is still no question-submission form (that needs an account and a
- * merchant inbox), but a shopper with a question no longer has to leave the
- * page: the assistant answers from this product's own specs, variants,
- * reviews and the store's policies, and says plainly when the listing cannot
- * answer.
+ * WHAT IS ON THIS PAGE was asked by a customer of this store and answered by
+ * the merchant (lib/storefront/questions/). Nothing here is generated, and a
+ * question the merchant hasn't answered is not shown — an unanswered
+ * objection under a product helps nobody. A store with no answered question
+ * yet shows the form and says so.
+ *
+ * Two ways to ask, side by side: the assistant (`ask`), which answers
+ * straight away from this product's own listing, reviews and the store's
+ * policies, and the form, which reaches a human and whose answer lands on
+ * this page for the next shopper. A guest is invited to sign in for the
+ * second — asking needs an account so the merchant knows who they are
+ * answering.
  */
 import type * as React from 'react';
+import Link from 'next/link';
 import { MessagesSquare, Sparkles } from 'lucide-react';
 import { relativeTime } from '@/lib/storefront/format';
-import type { ProductQuestion } from '@/lib/storefront/types';
+import { QuestionForm } from './question-form';
+import type { PendingQuestion } from '@/lib/storefront/questions/read';
+import type { Product, ProductQuestion } from '@/lib/storefront/types';
 
 const SOURCE_LABEL: Record<string, string> = {
   merchant: 'Store team',
@@ -29,19 +38,26 @@ const SOURCE_LABEL: Record<string, string> = {
   assistant: 'Store assistant',
 };
 
+export interface QuestionViewer {
+  /** the viewer's own questions the store hasn't answered yet */
+  pending: PendingQuestion[];
+  /** false for a guest — they're invited to sign in rather than shown a form */
+  signedIn: boolean;
+}
+
 export function ProductQuestions({
+  product,
   questions,
-  productName,
+  viewer,
   ask,
 }: {
+  product: Product;
   questions: ProductQuestion[];
-  productName: string;
-  /** the assistant launcher — the only client island in this section */
+  viewer: QuestionViewer;
+  /** the assistant launcher, offered beside the form */
   ask?: React.ReactNode;
 }) {
-  /* With neither existing questions nor a way to ask, there is nothing to
-   * show — an empty heading is worse than no section. */
-  if (!questions.length && !ask) return null;
+  const productName = product.name;
 
   return (
     <section id="questions" aria-labelledby="questions-heading" className="scroll-mt-24">
@@ -51,13 +67,29 @@ export function ProductQuestions({
       </h2>
       <p className="mt-2 text-sm text-muted-foreground">
         {questions.length > 0
-          ? `Answered by the store team. ${questions.length} ${
+          ? `Asked by customers, answered by the store team. ${questions.length} ${
               questions.length === 1 ? 'question' : 'questions'
             } so far.`
-          : 'No questions on this product yet.'}
+          : 'No questions answered on this product yet — yours would be the first.'}
       </p>
 
-      {ask && <div className="mt-4">{ask}</div>}
+      <div className="mt-4 max-w-xl space-y-3">
+        {viewer.signedIn ? (
+          <QuestionForm productId={product.id} productName={productName} pending={viewer.pending} />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Want to ask the store team something?{' '}
+            <Link
+              href={`/account/sign-in?next=${encodeURIComponent(`/products/${product.slug}`)}`}
+              className="font-semibold text-foreground underline underline-offset-2"
+            >
+              Sign in
+            </Link>{' '}
+            to ask — they answer here, on this page.
+          </p>
+        )}
+        {ask}
+      </div>
 
       {questions.length > 0 && (
         <ul className="mt-6 divide-y rounded-2xl border">

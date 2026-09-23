@@ -117,7 +117,7 @@ export default async function ProductDetailPage({ params }: Props) {
     cheaper.length ? { id: 'cheaper', href: '#cheaper', label: 'Something cheaper', icon: 'cheaper' as const } : null,
     premium.length ? { id: 'premium', href: '#premium', label: 'A step up', icon: 'premium' as const } : null,
     mayAlsoLike.total ? { id: 'similar', href: '#similar', label: 'Compare similar', icon: 'similar' as const } : null,
-    questions.length ? { id: 'ask', href: '#questions', label: 'Common questions', icon: 'ask' as const } : null,
+    questions.items.length ? { id: 'ask', href: '#questions', label: 'Common questions', icon: 'ask' as const } : null,
   ].filter((s): s is DecisionShortcut => s !== null);
 
   return (
@@ -172,14 +172,15 @@ export default async function ProductDetailPage({ params }: Props) {
 
       <div className="mt-10 border-t pt-8 lg:mt-14 lg:pt-10">
         <ProductQuestions
-          questions={questions}
-          productName={product.name}
-          /* Phase 4 shipped this section with no way to ask anything — the
-            * assistant is that missing half, and it answers from this
+          product={product}
+          questions={questions.items}
+          viewer={{ pending: questions.pending, signedIn: questions.signedIn }}
+          /* Two ways to ask: the form reaches the store team and its answer
+            * is published here, and the assistant answers now from this
             * product's own listing, reviews and the store's policies. */
           ask={
             <AssistantLauncher
-              label="Ask your own question"
+              label="Or ask the store assistant now"
               seed={{ surface: 'product', productSlug: product.slug, productName: product.name }}
             />
           }

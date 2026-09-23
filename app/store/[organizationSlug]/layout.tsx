@@ -12,7 +12,10 @@ import { cookies, headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { Fraunces } from 'next/font/google';
 import { prisma } from '@/lib/prisma';
+import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { StorefrontProviders } from '@/components/storefront/providers';
+import { StorefrontAnalytics } from '@/components/storefront/layout/storefront-analytics';
+import { getStorefrontLook } from '@/lib/storefront/catalog';
 import { parseTheme, themeCookieName } from '@/lib/storefront/theme';
 import { getShopper } from '@/lib/storefront/account/session';
 import { listWishlist } from '@/lib/storefront/account/wishlist';
@@ -44,15 +47,41 @@ export async function generateMetadata({
   const { organizationSlug } = await params;
   const org = await prisma.organization.findFirst({
     where: { slug: organizationSlug, status: 'ACTIVE' },
-    select: { name: true },
+    select: {
+      name: true,
+      logoUrl: true,
+      storefrontTagline: true,
+      storefrontSocialImageUrl: true,
+    },
   });
   if (!org) return {};
-  /* No claims about what the store sells or how it delivers: those were
-   * template words ("free 30-day returns") this app never enforced, in every
-   * merchant's search listing. Pages that know more set their own. */
+
+  /* The merchant's own line if they have written one. No claims about what
+   * the store sells or how it delivers: those were template words ("free
+   * 30-day returns") this app never enforced, appearing in every merchant's
+   * search listing. Pages that know more set their own. */
+  const description = org.storefrontTagline?.trim() || `Shop online at ${org.name}.`;
+  const image = org.storefrontSocialImageUrl ?? org.logoUrl ?? null;
+
   return {
+    metadataBase: new URL(getStorefrontUrl(organizationSlug)),
     title: { default: `${org.name} — Online Store`, template: `%s · ${org.name}` },
-    description: `Shop online at ${org.name}.`,
+    description,
+    alternates: { canonical: '/' },
+    openGraph: {
+      type: 'website',
+      siteName: org.name,
+      title: org.name,
+      description,
+      url: getStorefrontUrl(organizationSlug),
+      ...(image ? { images: [{ url: image }] } : {}),
+    },
+    twitter: {
+      card: image ? 'summary_large_image' : 'summary',
+      title: org.name,
+      description,
+      ...(image ? { images: [image] } : {}),
+    },
   };
 }
 
@@ -101,13 +130,23 @@ export default async function StorefrontRootLayout({
   const theme = parseTheme((await cookies()).get(themeCookieName(organization.slug))?.value);
 
   const privacyPage = pageOfKind(await getStorePages({ organizationSlug: organization.slug }), 'PRIVACY');
+  const look = await getStorefrontLook({ organizationSlug: organization.slug });
 
   return (
     <div
       data-storefront
       data-sf-theme={theme === 'dark' ? 'dark' : undefined}
+      /* The merchant's brand colour, set as the token every `bg-brand` and
+       * `text-brand` in the storefront already reads. Absent, the storefront
+       * keeps its own — nothing is chosen on their behalf. */
+      style={
+        look.accent
+          ? ({ '--brand': look.accent, '--brand-hover': look.accent } as React.CSSProperties)
+          : undefined
+      }
       className={`${display.variable} min-h-screen bg-background text-foreground`}
     >
+      <StorefrontAnalytics gaId={look.analytics.gaId} metaPixelId={look.analytics.metaPixelId} />
       <StorefrontProviders
         org={{ slug: organization.slug, name: organization.name, logoUrl: organization.logoUrl }}
         isMobileRuntime={isMobileRuntime}

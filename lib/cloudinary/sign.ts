@@ -8,7 +8,7 @@
 import { createHash } from 'node:crypto';
 import { getCloudinaryConfig, type CloudinaryConfig } from './config';
 
-export const UPLOAD_PURPOSES = ['products', 'categories', 'brands'] as const;
+export const UPLOAD_PURPOSES = ['products', 'categories', 'brands', 'organization', 'campaigns', 'storefront'] as const;
 export type UploadPurpose = (typeof UPLOAD_PURPOSES)[number];
 
 export const ALLOWED_IMAGE_FORMATS = 'jpg,jpeg,png,webp,avif,gif';

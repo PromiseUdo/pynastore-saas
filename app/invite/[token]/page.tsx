@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { AcceptForm } from './accept-form';
 import { getAdminUrl } from '@/lib/tenant/urls';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 type Params = { token: string };
 type SearchParams = { auto?: string; err?: string };
@@ -217,7 +218,7 @@ function Wordmark() {
       <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
         S
       </div>
-      <span className="text-base font-semibold text-foreground">SafeBase</span>
+      <span className="text-base font-semibold text-foreground">{PLATFORM_NAME}</span>
     </div>
   );
 }
@@ -251,7 +252,7 @@ function InviteErrorPage({ title, description }: { title: string; description: s
         <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
           S
         </div>
-        <span className="text-base font-semibold text-foreground">SafeBase</span>
+        <span className="text-base font-semibold text-foreground">{PLATFORM_NAME}</span>
       </div>
       <div className="w-full max-w-md rounded-xl border bg-card p-8 shadow-sm text-center">
         <div className="mb-4 flex justify-center">

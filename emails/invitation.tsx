@@ -10,6 +10,7 @@ import {
   Text,
 } from '@react-email/components';
 import * as React from 'react';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 type InvitationEmailProps = {
   orgName: string;
@@ -33,7 +34,7 @@ export function InvitationEmail({
       <Body style={main}>
         <Container style={container}>
           {/* Wordmark */}
-          <Text style={logo}>SafeBase</Text>
+          <Text style={logo}>{PLATFORM_NAME}</Text>
 
           <Section style={card}>
             <Text style={heading}>You have been invited</Text>

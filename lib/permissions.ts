@@ -40,6 +40,8 @@ export const PERMISSIONS = {
 
   // ─── Sales ───────────────────────────────────────────────
   SALES_VIEW: 'sales.view',
+  /** Ring up a sale at the counter or over the phone (features/sales/counter-sale.ts). */
+  SALES_ORDER_CREATE: 'sales.order.create',
   SALES_QUOTE_CREATE: 'sales.quote.create',
   SALES_QUOTE_EDIT: 'sales.quote.edit',
   SALES_INVOICE_CREATE: 'sales.invoice.create',
@@ -49,6 +51,7 @@ export const PERMISSIONS = {
   SALES_FULFILLMENT_MANAGE: 'sales.fulfillment.manage',
   SALES_DISCOUNT_MANAGE: 'sales.discount.manage',
   SALES_REVIEW_MODERATE: 'sales.review.moderate',
+  SALES_QUESTION_ANSWER: 'sales.question.answer',
   CUSTOMER_VIEW: 'customer.view',
   CUSTOMER_CREATE: 'customer.create',
   CUSTOMER_EDIT: 'customer.edit',
@@ -138,6 +141,7 @@ export const SYSTEM_ROLES = {
       PERMISSIONS.INVENTORY_CYCLE_COUNT_MANAGE,
       PERMISSIONS.PROCUREMENT_RECEIVE,
       PERMISSIONS.SALES_VIEW,
+      PERMISSIONS.SALES_ORDER_CREATE,
       PERMISSIONS.SALES_FULFILLMENT_MANAGE,
     ],
   },
@@ -160,11 +164,13 @@ export const SYSTEM_ROLES = {
     isSystem: true,
     permissions: [
       PERMISSIONS.SALES_VIEW,
+      PERMISSIONS.SALES_ORDER_CREATE,
       PERMISSIONS.SALES_QUOTE_CREATE,
       PERMISSIONS.SALES_QUOTE_EDIT,
       PERMISSIONS.SALES_INVOICE_CREATE,
       PERMISSIONS.SALES_INVOICE_EDIT,
       PERMISSIONS.SALES_RETURN_MANAGE,
+      PERMISSIONS.SALES_QUESTION_ANSWER,
       PERMISSIONS.CUSTOMER_VIEW,
       PERMISSIONS.CUSTOMER_CREATE,
       PERMISSIONS.CUSTOMER_EDIT,

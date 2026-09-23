@@ -8,6 +8,7 @@
  * Server component apart from the countdown, which has to tick.
  */
 import Image from 'next/image';
+import { ProductImage } from '@/components/storefront/product/product-image';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import type { Product } from '@/lib/storefront/types';
@@ -68,8 +69,9 @@ export function DealOfTheDay({ product, endsAt }: { product: Product; endsAt: st
 
           <Link href={href} className="group relative block">
             <div className="relative aspect-square overflow-hidden rounded-[2rem] bg-tile lg:rounded-[2.5rem]">
-              <Image
-                src={product.images[0]?.url ?? ''}
+              <ProductImage
+                src={product.images[0]?.url ?? null}
+                name={product.name}
                 alt={product.name}
                 fill
                 sizes="(max-width: 1024px) 100vw, 45vw"

@@ -31,19 +31,14 @@ import { Loader2, MessagesSquare, Search, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStorefront } from '@/lib/storefront/context';
 import { useDiscoveryStore } from '@/lib/storefront/stores/discovery-store';
-import { DiscoveryResults, type DiscoveryResult } from './discovery-results';
+import { DiscoveryResults } from './discovery-results';
+import { useDiscoveryRun } from './use-discovery-run';
 import { GuidedPicker, type GuidedSelection } from './guided-picker';
 import { ImageSearchLink } from '@/components/storefront/visual-search/image-search-link';
 import { useAssistantStore } from '@/lib/storefront/stores/assistant-store';
 import type { PriceBandOption, RootCategoryOption } from './types';
 
 type Mode = 'search' | 'guided';
-type State =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'done'; result: DiscoveryResult };
-
 export function DiscoveryHero({
   categories,
   priceBands,
@@ -57,90 +52,11 @@ export function DiscoveryHero({
   const { org } = useStorefront();
   const [mode, setMode] = React.useState<Mode>('search');
   const [q, setQ] = React.useState('');
-  const [state, setState] = React.useState<State>({ status: 'idle' });
-  const [heading, setHeading] = React.useState<string | undefined>();
+  /* The fetch, the supersede guard, the scroll and the focus move all live
+   * in one place now — <DiscoveryStrip> needs exactly the same behaviour
+   * when a merchant's slides replace this hero. */
+  const { state, heading, resultsRef, run, reset: resetRun } = useDiscoveryRun();
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const resultsRef = React.useRef<HTMLDivElement>(null);
-
-  // One in-flight request at a time: a fast second search must not be
-  // overwritten by a slow first one landing late.
-  const requestId = React.useRef(0);
-
-  /*
-   * Brings the top of the results — the "N matches for …" heading — to just
-   * under the sticky header.
-   *
-   * Not `scrollIntoView({ block: 'nearest' })`: the results are taller than
-   * the screen, so from a tile further down the page `nearest` only scrolls
-   * until the list's BOTTOM edge is in view, and it knows nothing about the
-   * sticky header covering whatever does land at the top. The header's height
-   * is measured rather than hardcoded because it differs by breakpoint (the
-   * category bar only exists from lg).
-   */
-  const scrollToResults = React.useCallback(() => {
-    const el = resultsRef.current;
-    if (!el) return;
-    const header = document.querySelector<HTMLElement>('[data-sf-header]');
-    const offset = (header?.getBoundingClientRect().height ?? 0) + 16;
-    const top = el.getBoundingClientRect().top + window.scrollY - offset;
-    if (Math.abs(window.scrollY - top) < 4) return;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.scrollTo({ top: Math.max(0, top), behavior: reduced ? 'auto' : 'smooth' });
-  }, []);
-
-  const run = React.useCallback(
-    async (body: Record<string, unknown>, label?: string) => {
-      const id = ++requestId.current;
-      setState({ status: 'loading' });
-      setHeading(label);
-      // Scroll now, not when the answer lands: a tile tapped far down the page
-      // should show its loading state immediately. The results' top edge
-      // doesn't move when they finish (everything that changes is below it),
-      // so this one scroll still ends on the heading.
-      requestAnimationFrame(scrollToResults);
-      try {
-        const res = await fetch('/api/storefront/discover', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ org: org.slug, limit: 8, ...body }),
-        });
-        if (res.status === 429) {
-          // Too many searches: say "slow down", not "the catalogue is broken".
-          const body = await res.json().catch(() => null);
-          if (id !== requestId.current) return;
-          setState({
-            status: 'error',
-            message:
-              typeof body?.error === 'string'
-                ? body.error
-                : 'You’re searching a little fast. Give it a moment and try again.',
-          });
-          return;
-        }
-        if (!res.ok) throw new Error(String(res.status));
-        const result: DiscoveryResult = await res.json();
-        if (id !== requestId.current) return; // superseded
-        setState({ status: 'done', result });
-        // Move focus to the results so a keyboard/screen-reader user is taken
-        // to the answer rather than left on the input. `preventScroll` because
-        // the scrolling is ours (above). A fast response can land while that
-        // smooth scroll is still running, and the taller results can make the
-        // browser's scroll anchoring nudge the page — so settle on the heading
-        // once more; it is a no-op when already there.
-        requestAnimationFrame(() => {
-          resultsRef.current?.focus({ preventScroll: true });
-          scrollToResults();
-        });
-      } catch {
-        if (id !== requestId.current) return;
-        setState({
-          status: 'error',
-          message: 'We couldn’t reach the catalogue just then.',
-        });
-      }
-    },
-    [org.slug, scrollToResults],
-  );
 
   const onSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,9 +105,7 @@ export function DiscoveryHero({
   }, [nonce]);
 
   const reset = () => {
-    requestId.current++;
-    setState({ status: 'idle' });
-    setHeading(undefined);
+    resetRun();
     setQ('');
   };
 

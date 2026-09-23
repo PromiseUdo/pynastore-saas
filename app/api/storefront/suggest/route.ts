@@ -31,7 +31,9 @@ export async function GET(request: Request) {
       slug: p.slug,
       name: p.name,
       brand: p.brandName,
-      image: p.images[0]?.url ?? '',
+      // '' would become an <img src="">, which the browser resolves to
+      // this page and downloads again. Absent means absent.
+      image: p.images[0]?.url ?? null,
       priceFrom: p.priceFrom,
       currency: p.currency,
     })),

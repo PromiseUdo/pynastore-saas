@@ -123,6 +123,7 @@ vi.mock('@/lib/prisma', () => ({
       },
       findMany: async ({ where, select }: { where?: Row; select?: Record<string, unknown> }) =>
         posts.filter((row) => matches(row, where)).map((row) => project(row, select)),
+      count: async ({ where }: { where?: Row }) => posts.filter((row) => matches(row, where)).length,
       update: async ({ where, data, select }: { where: { id: string }; data: Row; select?: Record<string, unknown> }) => {
         const row = posts.find((candidate) => candidate.id === where.id);
         if (!row) throw new Error('not found');
@@ -287,8 +288,8 @@ describe('store isolation', () => {
     await publishPost(STORE_A, 'user_a', input());
     await publishPost(STORE_B, 'user_b', input({ connectionId: 'conn_b', productId: 'b_product', imageIds: [] }));
 
-    expect(await listPosts(STORE_A)).toHaveLength(1);
-    expect(await listPosts(STORE_B)).toHaveLength(1);
+    expect((await listPosts(STORE_A)).rows).toHaveLength(1);
+    expect((await listPosts(STORE_B)).rows).toHaveLength(1);
   });
 
   it('drops image ids that belong to another product', async () => {

@@ -94,6 +94,11 @@ export async function notifyShopper(
     });
     if (!order) return;
 
+    /* Counter sales have nobody to write to: no email, no name, no
+     * confirmation page to link at. Nothing to send, so nothing is sent —
+     * this is not an error. */
+    if (!order.email || !order.firstName || !order.confirmationToken) return;
+
     const money = (value: { toString(): string }) => formatMoney(minor(value), order.currency);
     const returned = detail.returnId ? await returnSummary(detail.returnId, money) : null;
 
@@ -119,7 +124,7 @@ export async function notifyShopper(
       returnReason: returned?.reason,
       storeNote: returned?.merchantNote ?? undefined,
       refundAmount: detail.refundAmount !== undefined ? money(detail.refundAmount) : undefined,
-      deliveryLabel: order.deliveryMethodLabel,
+      deliveryLabel: order.deliveryMethodLabel ?? '',
       address: [
         order.shipFullName,
         order.shipLine1,
@@ -194,7 +199,7 @@ export async function notifyMerchant(
       kind,
       storeName: order.organization.name,
       reference: order.reference,
-      customerName: `${order.firstName} ${order.lastName}`.trim() || order.email,
+      customerName: `${order.firstName ?? ''} ${order.lastName ?? ''}`.trim() || order.email || 'A customer',
       orderUrl: getAdminUrl(order.organization.slug, `/sales/orders/${order.id}`),
       total: money(order.totalAmount),
       wasPaid: order.paymentStatus === 'PAID',

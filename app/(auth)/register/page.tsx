@@ -11,6 +11,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 export default function RegisterPage() {
   return (
@@ -35,7 +36,7 @@ function RegisterForm() {
         <p className="mt-1 text-sm text-muted-foreground">
           {inviteToken
             ? 'Create an account to accept your invitation'
-            : 'Set up your SafeBase account in seconds'}
+            : `Set up your ${PLATFORM_NAME} account in seconds`}
         </p>
       </div>
 

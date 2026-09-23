@@ -27,8 +27,10 @@ model User {
   accounts            Account[]
   sessions            Session[]
   memberships         Membership[]
+  answeredQuestions   ProductQuestion[]
   auditLogs           AuditLog[]
   passwordResetTokens PasswordResetToken[]
+  counterSales        Order[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -102,9 +104,62 @@ model Organization {
   id      String             @id @default(cuid())
   name    String
   slug    String             @unique // subdomain label: {slug}.{ROOT_DOMAIN}
-  logoUrl String?
+
+  /**
+   * The business's own logo. `logoPublicId` is kept so the asset can be
+   * verified as this org's and the old one destroyed on replacement —
+   * same pairing as Brand.logoUrl/logoPublicId.
+   */
+  logoUrl      String?
+  logoPublicId String?
   plan    OrganizationPlan   @default(FREE)
   status  OrganizationStatus @default(ACTIVE)
+
+  /**
+   * The currency this business trades in, as an ISO 4217 code. Every money
+   * column in the org is in this currency — it is set once in
+   * Settings → General and is what new quotes, invoices and purchase orders
+   * inherit. Only NGN is offered today; the column exists so that adding a
+   * second one is a settings change rather than a migration.
+   */
+  currency String @default("NGN")
+
+  /**
+   * How customers reach this business. Shown only where the merchant has
+   * filled it in — nothing here is invented or defaulted on their behalf.
+   */
+  supportEmail    String?
+  supportPhone    String?
+  businessAddress String?
+
+  /*
+   * ── The online store's own look and listing ─────────────────────────
+   *
+   * Every field is the merchant's, and every one is optional: a shop that
+   * fills in none of this gets the storefront's own defaults rather than
+   * something written for it.
+   */
+
+  /** #rrggbb, validated. The storefront's brand colour. */
+  storefrontAccent String?
+
+  /**
+   * One line about the shop, for search results and link previews. NOT shown
+   * on the storefront itself — it is what Google and WhatsApp read.
+   */
+  storefrontTagline String?
+
+  /** The picture that appears when someone shares a link to the shop. */
+  storefrontSocialImageUrl      String?
+  storefrontSocialImagePublicId String?
+
+  /**
+   * Measurement ids the merchant pastes in from their own accounts. Stored,
+   * never invented, and only loaded when set — a shop that hasn't asked for
+   * tracking gets none.
+   */
+  analyticsGaId        String?
+  analyticsMetaPixelId String?
 
   // Paid-tier custom domains (e.g. dashboard.acme.com, acme.com). Null unless
   // the org has provisioned + verified DNS for that domain.
@@ -153,8 +208,12 @@ model Organization {
   socialConnectionDrafts SocialConnectionDraft[]
   socialPosts            SocialPost[]
   productReviews         ProductReview[]
+  productQuestions       ProductQuestion[]
   productImageEmbeddings ProductImageEmbedding[]
   visualSearchQueries    VisualSearchQuery[]
+  heroSlides             StorefrontHeroSlide[]
+  campaigns              Campaign[]
+  campaignPrices         CampaignPrice[]
   quotes                 Quote[]
   invoices               Invoice[]
   payments               Payment[]
@@ -418,7 +477,7 @@ model PurchaseOrder {
   customerId      String? // set only for drop-ship POs — ships to this customer instead of a store
   poNumber        String // human-readable: PO-2024-0001
   status          PurchaseOrderStatus @default(DRAFT)
-  currency        String              @default("USD")
+  currency        String              @default("NGN")
   subtotal        Decimal             @db.Decimal(12, 2)
   taxAmount       Decimal             @default(0) @db.Decimal(12, 2)
   totalAmount     Decimal             @db.Decimal(12, 2)
@@ -488,6 +547,7 @@ model Warehouse {
 
   organization          Organization           @relation(fields: [organizationId], references: [id])
   stockMovements        StockMovement[]
+  counterSales    Order[]
   inventoryLevels       InventoryLevel[]
   purchaseOrders        PurchaseOrder[]
   cycleCounts           CycleCount[]
@@ -600,6 +660,7 @@ model InventoryItem {
   parentItem            InventoryItem?          @relation("ItemVariants", fields: [parentItemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   variants              InventoryItem[]         @relation("ItemVariants")
   stockMovements        StockMovement[]
+  campaignPrices        CampaignPrice[]
   inventoryLevels       InventoryLevel[]
   poLineItems           POLineItem[]
   requisitionItems      RequisitionItem[]
@@ -615,6 +676,7 @@ model InventoryItem {
   wishlistedBy          CustomerWishlistItem[]
   orderLineItems        OrderLineItem[]
   reviews               ProductReview[]
+  questions             ProductQuestion[]
   socialPosts           SocialPost[]
 
   createdAt DateTime @default(now())
@@ -781,6 +843,7 @@ model Collection {
   organization  Organization     @relation(fields: [organizationId], references: [id])
   matchCategory Category?        @relation(fields: [matchCategoryId], references: [id], onDelete: SetNull)
   items         CollectionItem[]
+  campaigns     Campaign[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1054,6 +1117,31 @@ model Customer {
   taxId          String?
   status         CustomerStatus @default(ACTIVE)
 
+  /**
+   * The merchant's own notes and labels. Internal: never shown to the
+   * customer, and never sent anywhere.
+   */
+  notes String?
+  tags  String[] @default([])
+
+  /**
+   * Whether this person agreed to marketing. Nothing may be sent to them
+   * without it (Phase 5), and the date records WHEN they agreed, which is
+   * the part that matters if anyone ever asks.
+   */
+  marketingConsent  Boolean   @default(false)
+  consentUpdatedAt  DateTime?
+
+  /**
+   * Set when this record was merged into another — the same person, met
+   * twice (a counter sale and an online account, say). Everything they did
+   * moves to the survivor; this row stays behind pointing at it, so the
+   * merge is answerable and a stale link still leads somewhere sensible.
+   * A merged record is excluded from every list and search.
+   */
+  mergedIntoId String?
+  mergedAt     DateTime?
+
   // ── Storefront account (null for customers staff typed in) ──────────────
   passwordHash    String? // null for Google-only accounts and staff-created records
   emailVerifiedAt DateTime? // set when Google vouches for the address
@@ -1075,12 +1163,17 @@ model Customer {
   orders                 Order[]
   reviews                ProductReview[]
   reviewVotes            ProductReviewVote[]
+  questions              ProductQuestion[]
+  mergedInto             Customer?                    @relation("CustomerMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom             Customer[]                   @relation("CustomerMerge")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([organizationId, email])
   @@index([organizationId])
+  @@index([organizationId, mergedIntoId])
+  @@index([mergedIntoId])
   @@map("customers")
 }
 
@@ -1255,8 +1348,23 @@ enum CustomerStatus {
  */
 model Order {
   id             String @id @default(cuid())
+  /**
+   * Null on a counter sale where nobody took a name — an anonymous cash sale
+   * is a real thing, and inventing a customer record for it would put a
+   * ghost in the customer list.
+   */
+  customerId     String?
   organizationId String
-  customerId     String
+
+  /**
+   * Which store served a counter sale, and therefore whose stock left the
+   * shelf. Null for an online order, where the stock may come from several
+   * stores at once (see OrderStockAllocation).
+   */
+  warehouseId String?
+
+  /** The member of staff who rang it up. Null for an online order. */
+  soldByUserId String?
 
   /**
    * Shopper-facing reference: ORD-2026-000123. Unique within the store.
@@ -1270,8 +1378,9 @@ model Order {
    * carries this instead; the reference stays the thing a shopper quotes to
    * support, and a guest looking an order up later needs it AND the email.
    */
-  confirmationToken String @unique
+  confirmationToken String? @unique
 
+  channel       OrderChannel       @default(ONLINE)
   status        OrderStatus        @default(PENDING)
   paymentStatus OrderPaymentStatus @default(AWAITING_PAYMENT)
   /**
@@ -1280,31 +1389,40 @@ model Order {
   paymentMethod String
   isGuest       Boolean            @default(false)
 
-  // Who to contact about it — copied, so an account edit never rewrites history.
-  email     String
-  firstName String
-  lastName  String
-  phone     String
+  /**
+   * Who to contact about it — copied, so an account edit never rewrites
+   * history. Null on a counter sale, where there may be nobody to contact:
+   * an empty string would read on screen as an address we simply failed to
+   * show. Every ONLINE order has all four (checkout requires them).
+   */
+  email     String?
+  firstName String?
+  lastName  String?
+  phone     String?
 
-  // Where it goes.
-  shipFullName   String
-  shipPhone      String
-  shipLine1      String
+  /**
+   * Where it goes. Null on a counter sale — the customer is carrying it out
+   * of the shop, and a blank address field would imply a delivery that was
+   * never promised.
+   */
+  shipFullName   String?
+  shipPhone      String?
+  shipLine1      String?
   shipLine2      String?
-  shipCity       String
-  shipState      String
-  shipCountry    String
+  shipCity       String?
+  shipState      String?
+  shipCountry    String?
   shipPostalCode String?
 
-  // How it gets there.
-  deliveryMethodId    String
-  deliveryMethodLabel String
-  deliveryFee         Decimal @db.Decimal(12, 2)
   /**
-   * Working days, as quoted at checkout.
+   * How it gets there. Null on a counter sale, for the same reason. Working
+   * days, as quoted at checkout.
    */
-  deliveryEtaMinDays  Int
-  deliveryEtaMaxDays  Int
+  deliveryMethodId    String?
+  deliveryMethodLabel String?
+  deliveryFee         Decimal? @db.Decimal(12, 2)
+  deliveryEtaMinDays  Int?
+  deliveryEtaMaxDays  Int?
 
   currency    String  @default("NGN")
   subtotal    Decimal @db.Decimal(12, 2)
@@ -1360,7 +1478,9 @@ model Order {
   transferDetails Json?
 
   organization    Organization           @relation(fields: [organizationId], references: [id])
-  customer        Customer               @relation(fields: [customerId], references: [id])
+  customer        Customer?              @relation(fields: [customerId], references: [id])
+  warehouse       Warehouse?             @relation(fields: [warehouseId], references: [id])
+  soldBy          User?                  @relation(fields: [soldByUserId], references: [id])
   discountCodeRef DiscountCode?          @relation(fields: [discountCodeId], references: [id], onDelete: SetNull)
   lineItems       OrderLineItem[]
   payments        OrderPayment[]
@@ -1374,9 +1494,25 @@ model Order {
 
   @@unique([organizationId, reference])
   @@index([organizationId, placedAt])
+  @@index([organizationId, channel, placedAt])
   @@index([customerId])
   @@index([discountCodeId])
+  @@index([warehouseId])
   @@map("orders")
+}
+
+/**
+ * Where a sale came from. ONLINE is the storefront checkout; WALK_IN is
+ * someone at the counter; PHONE is an order taken by a person.
+ *
+ * All three are Orders on purpose (docs/ROADMAP.md Phase 2): stock
+ * allocation, returns, customer history and every report then cover the whole
+ * business rather than the web half of it.
+ */
+enum OrderChannel {
+  ONLINE
+  WALK_IN
+  PHONE
 }
 
 enum OrderStatus {
@@ -1672,7 +1808,14 @@ model DiscountCode {
   usageCount       Int          @default(0)
   isActive         Boolean      @default(true)
 
+  /**
+   * The campaign this code belongs to, when it was made as part of one.
+   * A code can still stand alone — not every discount is a campaign.
+   */
+  campaignId String?
+
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaign     Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   orders       Order[]
 
   createdAt DateTime @default(now())
@@ -1935,6 +2078,85 @@ enum ProductReviewStatus {
  * what the unique below enforces. An anonymous counter anyone could press
  * repeatedly would sort the reviews by whoever pressed hardest.
  */
+/**
+ * A shopper's question about a product, and the merchant's answer to it.
+ * Unlike a review, a question needs no purchase: asking one is how a shopper
+ * decides whether to buy at all. What it does need is an account, so every
+ * question on a storefront belongs to a real customer of that store and a
+ * merchant answering it knows who they are talking to.
+ * NOTHING IS PUBLIC UNTIL THE MERCHANT ANSWERS IT. A question arrives
+ * PENDING — visible to the merchant (Sales → Questions) and to the shopper
+ * who asked it, nobody else. Answering publishes the pair; HIDDEN is the
+ * merchant declining to publish it, and keeps the row so the decision is
+ * answerable and reversible. The shopper is never told which, because a
+ * question that is not on the storefront is simply one that was not answered
+ * in public.
+ * The answer lives on this row rather than in a thread table: a store
+ * answers with one voice ("Store team"), and one answer per question is what
+ * the storefront shows. The public shape still carries `ProductAnswer.source`
+ * (lib/storefront/types.ts) so an assistant-drafted answer can be told apart
+ * from the merchant's own when that lands.
+ */
+model ProductQuestion {
+  id             String @id @default(cuid())
+  organizationId String
+  /**
+   * the top-level product, never a variant — a question is about the thing
+   */
+  productId      String
+  customerId     String
+
+  body String
+
+  status ProductQuestionStatus @default(PENDING)
+
+  /**
+   * the merchant's public answer; set together with answeredAt
+   */
+  answerBody       String?
+  answeredAt       DateTime?
+  /**
+   * the staff member who answered. Kept for the merchant's own record —
+   * shoppers only ever see "Store team"
+   */
+  answeredByUserId String?
+
+  /**
+   * why the merchant kept it off the storefront — internal, never shown
+   */
+  hiddenReason String?
+  hiddenAt     DateTime?
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      InventoryItem @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  answeredBy   User?         @relation(fields: [answeredByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status, createdAt])
+  @@index([productId, status])
+  @@index([customerId])
+  @@index([answeredByUserId])
+  @@map("product_questions")
+}
+
+enum ProductQuestionStatus {
+  /**
+   * asked, waiting for the merchant — off the storefront
+   */
+  PENDING
+  /**
+   * answered by the merchant — on the product page
+   */
+  ANSWERED
+  /**
+   * the merchant chose not to publish it — off the storefront, row kept
+   */
+  HIDDEN
+}
+
 model ProductReviewVote {
   id         String @id @default(cuid())
   reviewId   String
@@ -1956,7 +2178,7 @@ model Quote {
   customerId           String
   quoteNumber          String // QT-2024-0001
   status               QuoteStatus @default(DRAFT)
-  currency             String      @default("USD")
+  currency             String      @default("NGN")
   subtotal             Decimal     @db.Decimal(12, 2)
   taxAmount            Decimal     @default(0) @db.Decimal(12, 2)
   totalAmount          Decimal     @db.Decimal(12, 2)
@@ -2009,7 +2231,7 @@ model Invoice {
   warehouseId    String? // fulfillment store — reserved on issue, decremented on packing
   invoiceNumber  String // INV-2024-0001
   status         InvoiceStatus @default(DRAFT)
-  currency       String        @default("USD")
+  currency       String        @default("NGN")
   subtotal       Decimal       @db.Decimal(12, 2)
   taxAmount      Decimal       @default(0) @db.Decimal(12, 2)
   totalAmount    Decimal       @db.Decimal(12, 2)
@@ -2017,6 +2239,21 @@ model Invoice {
   dueDate        DateTime?
   paidAt         DateTime?
   notes          String?
+
+  /**
+   * The customer's key to their own copy of this invoice.
+   *
+   * The invoice number counts upwards and is therefore guessable, so it can
+   * never be what opens the page — anyone who can count would otherwise read
+   * the whole store's invoices by editing a URL. Same reasoning, and the same
+   * 256 bits, as Order.confirmationToken. Minted when the invoice is first
+   * sent; null on one that has only ever been a draft.
+   */
+  publicToken String? @unique
+
+  /** When the customer was first sent it, and last chased about it. */
+  sentAt         DateTime?
+  lastReminderAt DateTime?
 
   organization   Organization      @relation(fields: [organizationId], references: [id])
   customer       Customer          @relation(fields: [customerId], references: [id])
@@ -2635,6 +2872,10 @@ model SocialPost {
   createdByUserId String?
   publishedAt     DateTime?
 
+  /** the campaign this post was promoting, if it was part of one */
+  campaignId String?
+
+  campaign      Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   organization  Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   connection    SocialConnection @relation(fields: [connectionId], references: [id], onDelete: Restrict)
   inventoryItem InventoryItem?   @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
@@ -2648,4 +2889,252 @@ model SocialPost {
   @@index([connectionId])
   @@index([inventoryItemId])
   @@map("social_posts")
+}
+
+
+/*
+ * ============================================================
+ * STOREFRONT APPEARANCE
+ * ============================================================
+ */
+
+enum HeroAlign {
+  LEFT
+  CENTER
+  RIGHT
+}
+
+/** Whether the words sit light-on-dark or dark-on-light over the picture. */
+enum HeroTheme {
+  LIGHT
+  DARK
+}
+
+/**
+ * A slide at the top of the merchant's homepage.
+ *
+ * Until now every storefront opened the same way, because there was nowhere
+ * for a merchant to say anything of their own — `getHomepageSections`
+ * returned an empty hero because there was no table behind it.
+ *
+ * Everything here is written and uploaded by the merchant. A shop with no
+ * slides shows none, and the homepage below is unchanged.
+ */
+model StorefrontHeroSlide {
+  id             String @id @default(cuid())
+  organizationId String
+
+  /** a small line above the headline — "New in", "Until Sunday" */
+  eyebrow  String?
+  title    String
+  subtitle String?
+
+  /** a link, only offered when it has both a label and somewhere to go */
+  ctaLabel String?
+  ctaHref  String?
+
+  imageUrl      String?
+  imagePublicId String?
+
+  align HeroAlign @default(LEFT)
+  theme HeroTheme @default(DARK)
+
+  sortOrder Int     @default(0)
+  isVisible Boolean @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, sortOrder])
+  @@map("storefront_hero_slides")
+}
+
+/*
+ * ============================================================
+ * MARKETING CAMPAIGNS
+ * ============================================================
+ */
+
+/**
+ * Where a campaign is in its life.
+ *
+ * ACTIVE and ENDED are deliberately NOT stored: a campaign is live when the
+ * clock is inside its window, and over when it isn't. Storing them would mean
+ * something had to flip them on time — a cron, or a merchant remembering —
+ * and a sale that stayed on because a job didn't run is a real cost to a real
+ * shop. The window is the truth; `lib/marketing/campaign-status.ts` derives
+ * the rest.
+ */
+enum CampaignStatus {
+  /** being written; nothing is priced yet */
+  DRAFT
+  /** prices are fixed and it will run (or is running) in its window */
+  SCHEDULED
+  /** called off before or during its window */
+  CANCELLED
+}
+
+/**
+ * What the campaign does to a price. Both are expressible AS a price, which
+ * is what lets them be resolved once and pinned (see CampaignPrice).
+ *
+ * "Buy one get one", bundles and free delivery are NOT here: they are cart
+ * rules, not prices, and they belong with the checkout engine rather than
+ * with a price list. See docs/ROADMAP.md.
+ */
+enum CampaignMechanic {
+  PERCENT_OFF
+  FIXED_OFF
+}
+
+/**
+ * How a campaign announces itself on the storefront.
+ *
+ * NONE is the default on purpose: a sale does not have to shout, and a
+ * merchant who has nothing to say should not have something said for them.
+ */
+enum CampaignAnnouncementStyle {
+  NONE
+  /** a strip above the header, optionally scrolling */
+  BAR
+  /** shown once per visitor, for something that needs a sentence or two */
+  MODAL
+}
+
+enum CampaignTargetKind {
+  PRODUCT
+  COLLECTION
+  CATEGORY
+  /** everything the store sells online */
+  STORE
+}
+
+model Campaign {
+  id             String @id @default(cuid())
+  organizationId String
+
+  name        String
+  description String?
+
+  status   CampaignStatus   @default(DRAFT)
+  mechanic CampaignMechanic
+  /**
+   * PERCENT_OFF: 1–100. FIXED_OFF: an amount off, in major units.
+   */
+  value    Decimal          @db.Decimal(12, 2)
+
+  /**
+   * When it runs. `endsAt` null means "until I stop it" — which a merchant
+   * does by ending it, not by the app guessing.
+   */
+  startsAt DateTime
+  endsAt   DateTime?
+
+  targetKind CampaignTargetKind
+  /**
+   * Which products, collections or categories. Empty for STORE.
+   */
+  targetIds  String[]           @default([])
+
+  /**
+   * Set when a merchant ends a running campaign by hand, so "it stopped
+   * early" is answerable afterwards.
+   */
+  endedAt DateTime?
+
+  /*
+   * ── Telling customers about it ──────────────────────────────────────
+   *
+   * Every word here is the merchant's. Nothing is generated and nothing has
+   * a default sentence: a shop that writes nothing announces nothing, which
+   * is why `announcementText` being empty turns the whole thing off however
+   * the style is set (AGENTS: never invent a merchant's content).
+   *
+   * It exists because the discount is rarely the whole message — "orders for
+   * sale items ship from the 27th" is the sort of thing a merchant needs to
+   * say alongside it, and had nowhere to say.
+   */
+  announcementStyle CampaignAnnouncementStyle @default(NONE)
+  /** the one line a shopper reads first */
+  announcementText   String?
+  /** the rest of it — only a modal has room, so only a modal shows it */
+  announcementDetail String?
+  /**
+   * A picture for the pop-up. `publicId` is kept so the asset can be checked
+   * as this org's and the old one destroyed on replacement — the same
+   * pairing as Brand.logoUrl/logoPublicId.
+   */
+  announcementImageUrl      String?
+  announcementImagePublicId String?
+  /** an optional link: what it says, and where it goes */
+  announcementCta    String?
+  announcementHref   String?
+  /**
+   * #rrggbb, validated. A merchant's own colours, because a sale bar that
+   * clashes with their storefront is worse than none.
+   */
+  announcementBg String?
+  announcementFg String?
+  /** a bar long enough to need it can scroll instead of truncating */
+  announcementScroll Boolean @default(false)
+
+  /**
+   * The collection made FROM this campaign, when the merchant asked for one.
+   *
+   * It exists so the announcement has somewhere real to send people: a
+   * campaign prices products, it does not make a page, and "/anniversary-
+   * deals" typed by hand is a 404. Remembered here so the button becomes
+   * "view it" rather than making a second one, and so re-pricing the
+   * campaign can bring its membership along.
+   */
+  collectionId String?
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  collection    Collection?     @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  prices        CampaignPrice[]
+  discountCodes DiscountCode[]
+  socialPosts   SocialPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status, startsAt])
+  @@map("campaigns")
+}
+
+/**
+ * One product's price while a campaign runs.
+ *
+ * THIS IS THE WHOLE POINT. A sale is not a price edit: `sellingPrice` is what
+ * the thing costs, and a campaign is a temporary override with an end date.
+ * Editing `sellingPrice` instead would mean the real price is lost the moment
+ * the sale starts, ending it correctly depends on remembering what it was,
+ * and a shop that forgot would sell at the sale price forever.
+ *
+ * `originalPrice` is snapshotted when the campaign is scheduled, so the
+ * strike-through the shopper sees is what the merchant was charging — and a
+ * later edit to `sellingPrice` cannot silently move a live sale price.
+ */
+model CampaignPrice {
+  id              String @id @default(cuid())
+  organizationId  String
+  campaignId      String
+  inventoryItemId String
+
+  /** what it was selling for when the campaign was scheduled */
+  originalPrice Decimal @db.Decimal(12, 2)
+  /** what it sells for while the campaign runs */
+  price         Decimal @db.Decimal(12, 2)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaign      Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([campaignId, inventoryItemId])
+  @@index([organizationId, inventoryItemId])
+  @@map("campaign_prices")
 }

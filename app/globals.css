@@ -264,6 +264,15 @@
   .safe-bottom {
     padding-bottom: max(0px, env(safe-area-inset-bottom));
   }
+  /* Additive variants: they keep the element's own padding and only add the
+     inset on top of it. `safe-bottom` alone REPLACES a `p-4`/`py-3`, which on a
+     desktop browser (inset = 0) leaves content flush with the edge. */
+  .safe-pb-3 {
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+  .safe-pb-4 {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
   .safe-y {
     padding-top: max(0px, env(safe-area-inset-top));
     padding-bottom: max(0px, env(safe-area-inset-bottom));

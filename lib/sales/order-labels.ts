@@ -18,6 +18,31 @@ export type BadgeVariant =
   | 'info'
   | 'destructive';
 
+/**
+ * Where a sale came from. "In store" rather than "Walk-in" because that is
+ * what a shop owner calls it, and "Online" rather than "Storefront" because
+ * that is what their customer calls it.
+ */
+export const ORDER_CHANNEL_LABEL: Record<string, string> = {
+  ONLINE: 'Online',
+  WALK_IN: 'In store',
+  PHONE: 'Phone',
+};
+
+export const ORDER_CHANNEL_VARIANT: Record<string, BadgeVariant> = {
+  ONLINE: 'info',
+  WALK_IN: 'approved',
+  PHONE: 'draft',
+};
+
+/** How a counter sale was paid, in the merchant's words. */
+export const COUNTER_PAYMENT_LABEL: Record<string, string> = {
+  cash: 'Cash',
+  card: 'Card',
+  transfer: 'Bank transfer',
+  later: 'Paying later',
+};
+
 export const ORDER_STATUS_LABEL: Record<string, string> = {
   PENDING: 'New',
   CONFIRMED: 'Confirmed',
@@ -91,12 +116,17 @@ export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   pod: 'Pay on delivery',
   transfer: 'Bank transfer to you',
   card: 'Card',
+  // At the counter (features/sales/counter-sale.ts).
+  cash: 'Cash',
+  later: 'Paying later',
 };
 
 /** The one sentence under the badges that says what happens next. */
 export function nextStepHint(input: {
   status: string;
   paymentStatus: string;
+  /** ONLINE | WALK_IN | PHONE — a counter sale has a different life */
+  channel?: string;
   cancelReason: string | null;
   holdMinutes: number;
   transferHoldHours: number;
@@ -105,6 +135,22 @@ export function nextStepHint(input: {
 }): string | null {
   const { status, paymentStatus, cancelReason, holdMinutes } = input;
   const byCustomer = cancelReason === 'customer';
+
+  /* A counter sale is over the moment it is rung up: the goods have gone and
+   * there is no courier, no confirmation and no hold to expire. The only
+   * thing that can still be outstanding is the money. */
+  if (input.channel && input.channel !== 'ONLINE') {
+    if (status === 'CANCELLED') return 'Cancelled. The stock went back on the shelf.';
+    if (input.returnsAwaiting) {
+      return 'The customer has asked to return something — answer the request below.';
+    }
+    if (paymentStatus === 'AWAITING_PAYMENT') {
+      return 'Sold, but not paid for yet. Record the payment once the customer settles up.';
+    }
+    if (paymentStatus === 'PARTIALLY_REFUNDED') return 'Part of this sale has been refunded.';
+    if (paymentStatus === 'REFUNDED') return 'This sale has been refunded in full.';
+    return null;
+  }
 
   if (status === 'CANCELLED') {
     if (paymentStatus === 'AWAITING_TRANSFER' && cancelReason === 'payment-timeout') {

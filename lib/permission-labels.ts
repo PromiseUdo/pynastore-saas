@@ -38,6 +38,7 @@ const LABELS: Record<PermissionKey, string> = {
 
   // Sales
   'sales.view': 'View sales',
+  'sales.order.create': 'Sell at the counter',
   'sales.quote.create': 'Create quotes',
   'sales.quote.edit': 'Edit quotes',
   'sales.invoice.create': 'Create invoices',
@@ -47,6 +48,7 @@ const LABELS: Record<PermissionKey, string> = {
   'sales.fulfillment.manage': 'Manage fulfillment (pick/pack/ship)',
   'sales.discount.manage': 'Create and edit discount codes',
   'sales.review.moderate': 'Hide and restore customer reviews',
+  'sales.question.answer': 'Answer customer questions about products',
   'customer.view': 'View customers',
   'customer.create': 'Create customers',
   'customer.edit': 'Edit customers',
