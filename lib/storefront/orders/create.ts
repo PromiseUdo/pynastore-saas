@@ -34,6 +34,7 @@ import { normalizeEmail } from '../account/shopper';
 import { calculateCheckoutTotals } from '../checkout/totals';
 import { addressFromContact, countryName } from '../checkout/address';
 import { findPaymentMethod } from '../checkout/config';
+import { isPaymentMethodAllowed, PREPAYMENT_REQUIRED_MESSAGE } from '../checkout/payment-terms';
 import { quoteDelivery } from '../delivery/quote';
 import { resolveDiscount } from '../discounts/resolve';
 import { cartSubtotal } from '../pricing';
@@ -261,6 +262,15 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   const items = await resolveLines(input.organizationSlug, input.lines);
   if (!items) return fail('product-unavailable');
 
+  /* Payment terms come from the lines we just re-resolved, never from what
+   * the browser sent: an item the merchant wants paid for up front takes pay
+   * on delivery off the whole order, even if the checkout screen offered it
+   * (the merchant changed the product mid-checkout, or the bag was edited).
+   * This is the check that counts — the two in front of it are courtesy. */
+  if (!isPaymentMethodAllowed(paymentMethod, items)) {
+    return fail('invalid-payment-method', PREPAYMENT_REQUIRED_MESSAGE);
+  }
+
   /* Delivery is quoted HERE, from the merchant's zones, for this address and
    * this re-priced bag — whatever the checkout screen showed was a preview.
    * An option that isn't offered for this address (the shopper changed it,
@@ -356,8 +366,9 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           deliveryMethodId: deliveryMethod.id,
           deliveryMethodLabel: deliveryMethod.label,
           deliveryFee: toMajor(totals.shipping),
-          deliveryEtaMinDays: deliveryMethod.etaDays[0],
-          deliveryEtaMaxDays: deliveryMethod.etaDays[1],
+          deliveryEtaMinMinutes: deliveryMethod.eta.minMinutes,
+          deliveryEtaMaxMinutes: deliveryMethod.eta.maxMinutes,
+          deliveryEtaUnit: deliveryMethod.eta.unit,
 
           currency: totals.currency,
           subtotal: toMajor(totals.subtotal),

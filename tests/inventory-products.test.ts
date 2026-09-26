@@ -95,6 +95,20 @@ describe('products', () => {
     expect(product.publishedAt).not.toBeNull();
   });
 
+  it('stores payment terms, defaulting to pay on delivery being allowed', async () => {
+    const { id } = ok(await createProduct({ name: 'Smart Watch', sku: 'WATCH', sellingPrice: 120000 }));
+    expect(ok(await getProduct(id)).requiresPrepayment).toBe(false);
+
+    ok(await updateProduct(id, { name: 'Smart Watch', sku: 'WATCH', sellingPrice: 120000, requiresPrepayment: true }));
+    expect(ok(await getProduct(id)).requiresPrepayment).toBe(true);
+
+    /* Set at creation too, and switchable back off. */
+    const strict = ok(await createProduct({ name: 'Laptop', sku: 'LAPTOP', sellingPrice: 900000, requiresPrepayment: true }));
+    expect(ok(await getProduct(strict.id)).requiresPrepayment).toBe(true);
+    ok(await updateProduct(strict.id, { name: 'Laptop', sku: 'LAPTOP', sellingPrice: 900000 }));
+    expect(ok(await getProduct(strict.id)).requiresPrepayment).toBe(false);
+  });
+
   it('rejects images from another workspace and fake discounts', async () => {
     const foreign = await createProduct({
       name: 'Hat',

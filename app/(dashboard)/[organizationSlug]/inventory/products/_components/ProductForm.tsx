@@ -554,6 +554,33 @@ export function ProductForm({ product, categories, brands: initialBrands, suppli
               </Field>
             </FormCard>
 
+            {/* Payment terms. A shopper's bag can mix products, so this is a
+              * rule about the whole order: one strict item takes pay on
+              * delivery off the table for everything in that order (enforced
+              * server-side in lib/storefront/orders/create.ts). */}
+            <FormCard id="payment" title="Payment">
+              <Field>
+                <Label htmlFor="p-payment-terms">How customers may pay online</Label>
+                <SelectRoot
+                  value={state.requiresPrepayment ? 'prepaid' : 'flexible'}
+                  onValueChange={(v) => set('requiresPrepayment', v === 'prepaid')}
+                >
+                  <SelectTrigger id="p-payment-terms">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="flexible">Pay online or on delivery</SelectItem>
+                    <SelectItem value="prepaid">Payment required before delivery</SelectItem>
+                  </SelectContent>
+                </SelectRoot>
+                <FieldDescription>
+                  {state.requiresPrepayment
+                    ? 'Customers must pay before this item ships. If it’s in the bag, pay on delivery isn’t offered for that whole order.'
+                    : 'Customers can choose to pay the courier when the order arrives, if your store offers that.'}
+                </FieldDescription>
+              </Field>
+            </FormCard>
+
             <FormCard id="status" title="Status">
               <SelectRoot value={state.status} onValueChange={(v) => set('status', v as FormState['status'])}>
                 <SelectTrigger aria-label="Status">

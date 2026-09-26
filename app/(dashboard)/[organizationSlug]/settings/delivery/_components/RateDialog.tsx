@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SwitchRoot } from '@/components/ui/switch';
+import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Field, FieldDescription, FieldError } from '@/components/ui/form-field';
 import {
   DialogRoot,
@@ -20,6 +21,15 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { saveDeliveryRate, type DeliveryRateRow } from '@/features/settings/delivery';
+import { ETA_UNITS, ETA_UNIT_LABELS, formatEta, fromMinutes, toMinutes, type DeliveryEtaUnit } from '@/lib/storefront/delivery/eta';
+
+/* What each unit means for the two number boxes, in the merchant's words. */
+const UNIT_HINT: Record<DeliveryEtaUnit, string> = {
+  MINUTES: 'Minutes from when you dispatch. Use 30 and 45 for a rider who is there within the hour.',
+  HOURS: 'Hours from when you dispatch. Same-day orders usually sit here.',
+  DAYS: 'Working days from dispatch, weekends skipped. Use 0 and 0 for same-day delivery.',
+};
+const UNIT_NOUN: Record<DeliveryEtaUnit, string> = { MINUTES: 'minutes', HOURS: 'hours', DAYS: 'days' };
 
 export function RateDialog({
   open,
@@ -35,13 +45,21 @@ export function RateDialog({
   const router = useRouter();
   const [name, setName] = React.useState(editing?.name ?? 'Standard');
   const [price, setPrice] = React.useState(editing ? String(editing.price) : '');
-  const [minDays, setMinDays] = React.useState(editing ? String(editing.minDays) : '1');
-  const [maxDays, setMaxDays] = React.useState(editing ? String(editing.maxDays) : '3');
+  const [etaUnit, setEtaUnit] = React.useState<DeliveryEtaUnit>(editing?.etaUnit ?? 'DAYS');
+  const [minTime, setMinTime] = React.useState(editing ? String(fromMinutes(editing.minMinutes, editing.etaUnit)) : '1');
+  const [maxTime, setMaxTime] = React.useState(editing ? String(fromMinutes(editing.maxMinutes, editing.etaUnit)) : '3');
   const [freeOver, setFreeOver] = React.useState(editing?.freeOver != null ? String(editing.freeOver) : '');
   const [isActive, setIsActive] = React.useState(editing?.isActive ?? true);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [formError, setFormError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState(false);
+
+  /* Exactly the sentence checkout will show, so there are no surprises. */
+  const preview = formatEta({
+    minMinutes: toMinutes(Number(minTime) || 0, etaUnit),
+    maxMinutes: toMinutes(Number(maxTime) || 0, etaUnit),
+    unit: etaUnit,
+  });
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -52,8 +70,9 @@ export function RateDialog({
     const result = await saveDeliveryRate(zone.id, editing?.id ?? null, {
       name,
       price: price.trim() === '' ? Number.NaN : Number(price.replace(/,/g, '')),
-      minDays: Number(minDays),
-      maxDays: Number(maxDays),
+      etaUnit,
+      minTime: Number(minTime),
+      maxTime: Number(maxTime),
       freeOver: freeOver.trim() === '' ? null : Number(freeOver.replace(/,/g, '')),
       isActive,
     });
@@ -111,32 +130,49 @@ export function RateDialog({
               {errors.price ? <FieldError>{errors.price}</FieldError> : <FieldDescription>Enter 0 for free delivery.</FieldDescription>}
             </Field>
 
+            <Field>
+              <Label htmlFor="rate-unit">Delivery time is measured in *</Label>
+              <SelectRoot value={etaUnit} onValueChange={(value) => setEtaUnit(value as DeliveryEtaUnit)}>
+                <SelectTrigger id="rate-unit" aria-invalid={errors.etaUnit ? true : undefined}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ETA_UNITS.map((unit) => (
+                    <SelectItem key={unit} value={unit}>
+                      {ETA_UNIT_LABELS[unit]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </SelectRoot>
+              {errors.etaUnit && <FieldError>{errors.etaUnit}</FieldError>}
+            </Field>
+
             <div className="grid grid-cols-2 gap-3">
               <Field>
-                <Label htmlFor="rate-min">Fastest (days) *</Label>
+                <Label htmlFor="rate-min">Fastest ({UNIT_NOUN[etaUnit]}) *</Label>
                 <Input
                   id="rate-min"
                   inputMode="numeric"
-                  value={minDays}
-                  onChange={(e) => setMinDays(e.target.value)}
-                  aria-invalid={errors.minDays ? true : undefined}
+                  value={minTime}
+                  onChange={(e) => setMinTime(e.target.value)}
+                  aria-invalid={errors.minTime ? true : undefined}
                 />
-                {errors.minDays && <FieldError>{errors.minDays}</FieldError>}
+                {errors.minTime && <FieldError>{errors.minTime}</FieldError>}
               </Field>
               <Field>
-                <Label htmlFor="rate-max">Slowest (days) *</Label>
+                <Label htmlFor="rate-max">Slowest ({UNIT_NOUN[etaUnit]}) *</Label>
                 <Input
                   id="rate-max"
                   inputMode="numeric"
-                  value={maxDays}
-                  onChange={(e) => setMaxDays(e.target.value)}
-                  aria-invalid={errors.maxDays ? true : undefined}
+                  value={maxTime}
+                  onChange={(e) => setMaxTime(e.target.value)}
+                  aria-invalid={errors.maxTime ? true : undefined}
                 />
-                {errors.maxDays && <FieldError>{errors.maxDays}</FieldError>}
+                {errors.maxTime && <FieldError>{errors.maxTime}</FieldError>}
               </Field>
             </div>
             <p className="-mt-2 text-xs text-muted-foreground">
-              Working days from dispatch. Use 0 and 0 for same-day delivery.
+              {UNIT_HINT[etaUnit]} Customers see “{preview}”.
             </p>
 
             <Field>

@@ -15,6 +15,7 @@ import { requireFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { listStoreOrders } from '@/features/sales/orders';
+import { listWarehouses } from '@/features/inventory/actions';
 import { OrdersPageClient } from './_components/OrdersPageClient';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -34,12 +35,18 @@ export default async function StoreOrdersPage({ searchParams }: { searchParams: 
 
   const raw = await searchParams;
   const page = Number(one(raw.page));
-  const result = await listStoreOrders({
-    channel: one(raw.channel),
-    status: one(raw.status),
-    q: one(raw.q),
-    page: Number.isFinite(page) && page > 0 ? page : 1,
-  });
+  /* The store filter covers both channels: a counter sale rung up there, or
+     an online order its shelf supplied (ROADMAP Phase 8.4). */
+  const [result, warehouses] = await Promise.all([
+    listStoreOrders({
+      channel: one(raw.channel),
+      status: one(raw.status),
+      q: one(raw.q),
+      warehouseId: one(raw.store),
+      page: Number.isFinite(page) && page > 0 ? page : 1,
+    }),
+    listWarehouses(),
+  ]);
 
   /*
    * A failed load is thrown, not printed. The boundary next door says
@@ -52,6 +59,7 @@ export default async function StoreOrdersPage({ searchParams }: { searchParams: 
   return (
     <OrdersPageClient
       list={result.data}
+      stores={warehouses.success ? warehouses.data.map((w) => ({ id: w.id, name: w.name })) : []}
       canSell={hasPermission(perms, PERMISSIONS.SALES_ORDER_CREATE)}
     />
   );

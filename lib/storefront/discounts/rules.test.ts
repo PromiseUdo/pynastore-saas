@@ -117,7 +117,7 @@ describe('what a code takes off', () => {
   });
 
   it('never discounts delivery', () => {
-    const standard = { id: 's', label: 'Standard', description: '', price: 250_000, etaDays: [2, 4] as [number, number] };
+    const standard = { id: 's', label: 'Standard', description: '', price: 250_000, eta: { minMinutes: 2880, maxMinutes: 5760, unit: 'DAYS' as const } };
     const totals = computeTotals({
       items: [item()],
       coupon: toAppliedCoupon(code({ value: 100 })),

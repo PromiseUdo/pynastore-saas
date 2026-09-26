@@ -11,6 +11,11 @@ export type ActionResult<T = void> =
   | { success: false; error: string };
 
 export function toActionError(err: unknown, fallback: string): ActionResult<never> {
+  /* A store the member may not work in — the message already says what to do
+   * about it, so it is passed through rather than flattened (Phase 8.6). */
+  if (err instanceof Error && err.name === 'StoreAccessDeniedError') {
+    return { success: false, error: err.message };
+  }
   if (err instanceof Error && err.name === 'PermissionDeniedError') {
     return { success: false, error: 'You do not have permission to do this' };
   }
@@ -54,6 +59,17 @@ export async function getAvailableStock(
  * Shared by features/inventory/stock.ts and features/procurement/purchase-orders.ts
  * so the formula only lives in one place.
  */
+/**
+ * A variant's options as one line: "Red · M". Used wherever a stocked unit is
+ * shown under its product's name (a store's stock list, the picker that adds
+ * products to a store).
+ */
+export function variantNameOf(attributes: unknown): string | null {
+  if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) return null;
+  const values = Object.values(attributes as Record<string, unknown>).filter((v): v is string => typeof v === 'string');
+  return values.length ? values.join(' · ') : null;
+}
+
 export function computeMovingAverageCost(
   currentAvgCost: number,
   currentTotalQty: number,
@@ -68,19 +84,26 @@ export function computeMovingAverageCost(
  * Edge-triggered low-stock email: fires only when `previousQty` was above
  * `threshold` and `newQty` is now at or below it. No cron/background worker
  * in this app — every store-quantity decrease evaluates this inline.
- * Shared by features/inventory/stock.ts and features/inventory/cycle-counts.ts.
+ * Shared by features/inventory/stock.ts, features/inventory/cycle-counts.ts,
+ * features/sales/fulfillment.ts and lib/storefront/orders/lifecycle.ts.
+ *
+ * Stock is per store and so is the threshold, so the mail goes to the store
+ * that ran low, not to the org-wide reports page (ROADMAP Phase 8.3) — and it
+ * says WHOSE reorder point was crossed, since a merchant who set 10 for Lagos
+ * should not have to guess why an alert arrived at 4.
  */
 export async function maybeSendLowStockAlert(params: {
   organizationId: string;
   organizationSlug: string;
   itemName: string;
   itemSku: string;
+  warehouseId: string;
   warehouseName: string;
   previousQty: number;
   newQty: number;
   threshold: number | null;
 }): Promise<void> {
-  const { organizationId, organizationSlug, itemName, itemSku, warehouseName, previousQty, newQty, threshold } = params;
+  const { organizationId, organizationSlug, itemName, itemSku, warehouseId, warehouseName, previousQty, newQty, threshold } = params;
   if (threshold === null || previousQty <= threshold || newQty > threshold) return;
 
   const recipients = await prisma.membership.findMany({
@@ -103,6 +126,27 @@ export async function maybeSendLowStockAlert(params: {
     warehouseName,
     quantity: newQty,
     reorderPoint: threshold,
-    inventoryUrl: getAdminUrl(organizationSlug, '/inventory/reports'),
+    thresholdSource: await thresholdSourceFor(warehouseId, params),
+    storeUrl: getAdminUrl(organizationSlug, `/inventory/warehouses/${warehouseId}?tab=inventory&stock=low`),
   });
+}
+
+/**
+ * Whether the threshold that just fired is this store's own override or the
+ * product's, read from the level itself so no caller has to remember to say.
+ * Unknown (a level that has since gone) reads as the product's, which is the
+ * one every store shares.
+ */
+async function thresholdSourceFor(
+  warehouseId: string,
+  params: { itemSku: string; organizationId: string },
+): Promise<'store' | 'product'> {
+  const level = await prisma.inventoryLevel.findFirst({
+    where: {
+      warehouseId,
+      inventoryItem: { sku: params.itemSku, organizationId: params.organizationId },
+    },
+    select: { reorderPoint: true },
+  });
+  return level?.reorderPoint === null || level?.reorderPoint === undefined ? 'product' : 'store';
 }

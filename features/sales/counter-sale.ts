@@ -34,6 +34,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
+import { requireStoreAccess, storeScopeWhere } from '@/lib/store-access';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { OutOfStockError, dispatchOrderStock, reserveOrderStock } from '@/lib/storefront/orders/stock';
@@ -111,6 +112,9 @@ function failure(error: unknown, fallback: string): { success: false; error: str
   if (error instanceof Error && error.name === 'PermissionDeniedError') {
     return { success: false, error: 'You don’t have permission to record a sale' };
   }
+  if (error instanceof Error && error.name === 'StoreAccessDeniedError') {
+    return { success: false, error: error.message };
+  }
   console.error(`[counter-sale] ${fallback}:`, error);
   return { success: false, error: fallback };
 }
@@ -121,8 +125,10 @@ export async function listCounterStores(): Promise<ActionResult<CounterStore[]>>
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_ORDER_CREATE);
 
+    /* A sale takes stock off a shelf, so the till offers only the stores this
+     * member may work in — every store when they aren't scoped (Phase 8.6). */
     const stores = await prisma.warehouse.findMany({
-      where: { organizationId: ctx.organization.id, status: 'ACTIVE' },
+      where: { organizationId: ctx.organization.id, status: 'ACTIVE', ...storeScopeWhere(ctx.membership) },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });
@@ -252,6 +258,10 @@ export async function recordCounterSale(
       select: { id: true, name: true },
     });
     if (!store) return { success: false, error: 'That store isn’t in this workspace' };
+    /* The sale takes stock off this shop's shelf, so it is a write there — a
+     * member limited to certain stores can only ring up sales in those
+     * (ROADMAP Phase 8.6). */
+    requireStoreAccess(ctx.membership, store.id, store.name);
 
     const customer = await resolveCustomer(organizationId, ctx.userId, data);
     if ('error' in customer) return { success: false, error: customer.error };

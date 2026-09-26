@@ -288,6 +288,7 @@ function mapProduct(
     tags: row.tags.filter((t): t is ProductTag => VALID_TAGS.has(t)),
     rating,
     soldCount,
+    requiresPrepayment: row.requiresPrepayment,
     createdAt: row.createdAt.toISOString(),
     relatedIds: [],
   };

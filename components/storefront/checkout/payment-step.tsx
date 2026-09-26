@@ -22,12 +22,26 @@
  * The methods come from the tenant's checkout config, so a store that only
  * takes transfers simply has one option here. No component assumes every
  * store accepts the same things.
+ *
+ * WHAT'S IN THE BAG can rule a method out: a product the merchant wants paid
+ * for up front takes pay on delivery off the whole order. The option stays
+ * on screen, greyed out with the reason beside it — a choice that silently
+ * disappears looks like a bug, and the shopper still has to understand why
+ * before they can decide to pay online or drop the item. The rule itself is
+ * in lib/storefront/checkout/payment-terms.ts, and the server applies the
+ * same one to the order it actually writes.
  */
 import { useWatch, type UseFormReturn } from 'react-hook-form';
-import { Banknote, CreditCard, Landmark, ShieldCheck } from 'lucide-react';
+import { Banknote, CreditCard, Landmark, Lock, ShieldCheck } from 'lucide-react';
 import type { CheckoutConfig } from '@/lib/storefront/checkout/types';
 import type { CheckoutFormValues } from '@/lib/storefront/checkout/schema';
+import type { CartItem } from '@/lib/storefront/types';
 import { findPaymentMethod } from '@/lib/storefront/checkout/config';
+import {
+  isPaymentMethodAllowed,
+  prepaymentReason,
+  PREPAYMENT_REQUIRED_MESSAGE,
+} from '@/lib/storefront/checkout/payment-terms';
 import { FieldError } from '@/components/ui/form-field';
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group';
 
@@ -42,10 +56,13 @@ const ICONS: Record<string, typeof CreditCard> = {
 export function PaymentStep({
   form,
   config,
+  items,
   onSelect,
 }: {
   form: UseFormReturn<CheckoutFormValues>;
   config: CheckoutConfig;
+  /** the bag, because a line's payment terms decide what may be offered */
+  items: CartItem[];
   onSelect: (id: string) => void;
 }) {
   const { control, setValue, formState } = form;
@@ -54,6 +71,7 @@ export function PaymentStep({
   const selectedId = useWatch({ control, name: 'paymentMethodId' });
   const error = formState.errors.paymentMethodId?.message;
   const selected = findPaymentMethod(config, selectedId ?? null);
+  const reason = prepaymentReason(items);
 
   const choose = (id: string) => {
     setValue('paymentMethodId', id, { shouldValidate: true });
@@ -71,15 +89,30 @@ export function PaymentStep({
       >
         {config.paymentMethods.map((method) => {
           const Icon = ICONS[method.id];
+          const allowed = isPaymentMethodAllowed(method, items);
           return (
-            <RadioGroupCard key={method.id} value={method.id} id={`payment-${method.id}`}>
+            <RadioGroupCard
+              key={method.id}
+              value={method.id}
+              id={`payment-${method.id}`}
+              disabled={!allowed}
+            >
               <span className="flex items-start gap-3">
                 {Icon && <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />}
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold">{method.label}</span>
                   <span className="mt-0.5 block text-sm text-muted-foreground">
-                    {method.description}
+                    {allowed ? method.description : 'Not available for this order'}
                   </span>
+                  {!allowed && (
+                    <span className="mt-2 flex items-start gap-2 text-sm text-foreground">
+                      <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                      <span>
+                        {PREPAYMENT_REQUIRED_MESSAGE}
+                        {reason && <span className="mt-1 block text-muted-foreground">{reason}</span>}
+                      </span>
+                    </span>
+                  )}
                 </span>
               </span>
             </RadioGroupCard>
@@ -94,7 +127,7 @@ export function PaymentStep({
       )}
 
       {/* The honest sentence, in place of a fake card form. */}
-      {selected && (
+      {selected && isPaymentMethodAllowed(selected, items) && (
         <p
           role="status"
           className="mt-5 flex items-start gap-2.5 rounded-xl border bg-secondary/40 p-4 text-sm leading-relaxed text-muted-foreground"

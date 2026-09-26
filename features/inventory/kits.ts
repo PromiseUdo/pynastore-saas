@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
+import { requireStoreAccess } from '@/lib/store-access';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { getOrganizationEntitlements, hasFeature } from '@/lib/billing/entitlements';
@@ -136,6 +137,8 @@ export async function assembleKit(
     if (!warehouse || warehouse.organizationId !== ctx.organization.id) {
       return { success: false, error: 'Store not found' };
     }
+    // Assembling consumes components and creates kits on one shelf.
+    requireStoreAccess(ctx.membership, data.warehouseId);
 
     const requiredByComponent = kitItem.kitComponents.map((c) => ({
       componentItemId: c.componentItemId,

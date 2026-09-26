@@ -1,119 +1,93 @@
+/*
+ * Sales → the module's landing page: the few figures worth knowing, each one a
+ * way into the list it counts (AGENTS §2).
+ *
+ * The figures come from `features/sales/overview.ts`, which counts in the
+ * database. This page used to load every quote, every invoice and every
+ * customer to work out four numbers.
+ */
+import type { Metadata } from 'next';
 import Link from 'next/link';
-import { FileText, Receipt, AlertCircle, Users, HelpCircle } from 'lucide-react';
+import { AlertCircle, FileText, HelpCircle, Receipt, Users } from 'lucide-react';
 import { requireFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { listQuotes, listInvoices, listCustomers } from '@/features/sales/actions';
-import { pendingQuestionCount } from '@/features/sales/questions';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import { AccessDenied } from '@/components/layout/access-denied';
+import { PageHeader, PageBody } from '@/components/layout/page-header';
+import { StatCard, StatGrid } from '@/components/dashboard/stat-card';
+import { getSalesOverview } from '@/features/sales/overview';
+import { formatMoney, formatNumber } from '@/lib/format';
 
-function formatMoney(amount: number): string {
-  return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
-}
+export const metadata: Metadata = { title: 'Sales' };
 
 export default async function SalesDashboardPage() {
   await requireFeature(FEATURES.SALES_MODULE);
   const ctx = await getOrganizationContext();
 
   if (!hasPermission(ctx.membership.role.permissions, PERMISSIONS.SALES_VIEW)) {
-    return (
-      <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-        <h2 className="text-base font-semibold text-foreground">Access denied</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          You don&apos;t have permission to view sales.
-        </p>
-      </div>
-    );
+    return <AccessDenied what="sales" />;
   }
 
-  const [quotesResult, invoicesResult, customersResult, unansweredQuestions] = await Promise.all([
-    listQuotes(),
-    listInvoices(),
-    listCustomers(),
-    pendingQuestionCount(),
-  ]);
-
-  const quotes = quotesResult.success ? quotesResult.data : [];
-  const invoices = invoicesResult.success ? invoicesResult.data : [];
-  const customerCount = customersResult.success ? customersResult.data.length : 0;
-
-  const openQuoteCount = quotes.filter((q) => q.status === 'DRAFT' || q.status === 'SENT').length;
-  const unpaidTotal = invoices
-    .filter((inv) => inv.status === 'SENT' || inv.status === 'PARTIALLY_PAID')
-    .reduce((sum, inv) => sum + (inv.totalAmount - inv.paidAmount), 0);
-  const overdueCount = invoices.filter((inv) => inv.isOverdue).length;
+  const result = await getSalesOverview();
+  if (!result.success) throw new Error(result.error);
+  const overview = result.data;
 
   return (
-    <div className="space-y-6 px-6 py-6">
-      <div>
-        <h1 className="text-lg font-semibold tracking-tight text-foreground">Sales</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">Customers, quotes, and invoices.</p>
-      </div>
+    <>
+      <PageHeader title="Sales" description="Customers, quotes and invoices — and what needs answering today." />
 
-      {/* A shopper asking about a product is a sale waiting on an answer,
-        * and their question isn't on the store until someone gives one. */}
-      {unansweredQuestions > 0 && (
-        <Link
-          href="/sales/questions"
-          className="flex items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm transition-colors hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
-        >
-          <HelpCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <span className="font-medium text-foreground">
-            {unansweredQuestions === 1
-              ? '1 customer question is waiting for an answer'
-              : `${unansweredQuestions} customer questions are waiting for an answer`}
-          </span>
-          <span className="ml-auto text-muted-foreground">Answer them →</span>
-        </Link>
-      )}
+      <PageBody className="space-y-6">
+        {/* A shopper asking about a product is a sale waiting on an answer,
+          * and their question isn't on the store until someone gives one. */}
+        {overview.unansweredQuestions > 0 && (
+          <Link
+            href="/sales/questions"
+            className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm transition-colors hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
+          >
+            <HelpCircle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span className="font-medium text-foreground">
+              {overview.unansweredQuestions === 1
+                ? '1 customer question is waiting for an answer'
+                : `${formatNumber(overview.unansweredQuestions)} customer questions are waiting for an answer`}
+            </span>
+            <span className="ml-auto text-muted-foreground">Answer them →</span>
+          </Link>
+        )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-        <Link href="/sales/quotes">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Open quotes</CardTitle>
-                <p className="mt-1 text-2xl font-semibold text-foreground">{openQuoteCount}</p>
-              </div>
-              <FileText className="size-5 text-muted-foreground" />
-            </CardHeader>
-          </Card>
-        </Link>
-        <Link href="/sales/invoices">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Unpaid total</CardTitle>
-                <p className="mt-1 text-2xl font-semibold text-foreground">{formatMoney(unpaidTotal)}</p>
-              </div>
-              <Receipt className="size-5 text-muted-foreground" />
-            </CardHeader>
-          </Card>
-        </Link>
-        <Link href="/sales/invoices">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Overdue invoices</CardTitle>
-                <p className="mt-1 text-2xl font-semibold text-foreground">{overdueCount}</p>
-              </div>
-              <AlertCircle className="size-5 text-muted-foreground" />
-            </CardHeader>
-          </Card>
-        </Link>
-        <Link href="/sales/customers">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Customers</CardTitle>
-                <p className="mt-1 text-2xl font-semibold text-foreground">{customerCount}</p>
-              </div>
-              <Users className="size-5 text-muted-foreground" />
-            </CardHeader>
-          </Card>
-        </Link>
-      </div>
-    </div>
+        <StatGrid>
+          <Link href="/sales/quotes" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <StatCard
+              title="Open quotes"
+              value={formatNumber(overview.openQuotes)}
+              description="drafted or sent, not yet decided"
+              icon={FileText}
+            />
+          </Link>
+          <Link href="/sales/invoices" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <StatCard
+              title="Unpaid total"
+              value={formatMoney(overview.unpaidTotal, ctx.organization.currency)}
+              description="invoiced and still owed"
+              icon={Receipt}
+            />
+          </Link>
+          {/* The invoices list has no overdue filter yet, and it already leads
+              with an overdue callout — so this links there plainly rather than
+              carrying a query parameter nothing reads (AGENTS §7). */}
+          <Link href="/sales/invoices" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <StatCard
+              title="Overdue invoices"
+              value={formatNumber(overview.overdueInvoices)}
+              description="past their due date"
+              icon={AlertCircle}
+            />
+          </Link>
+          <Link href="/sales/customers" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <StatCard title="Customers" value={formatNumber(overview.customers)} description="people who have bought" icon={Users} />
+          </Link>
+        </StatGrid>
+      </PageBody>
+    </>
   );
 }

@@ -21,6 +21,7 @@ process.env.STOREFRONT_FIXTURES = '0';
 const {
   saveDeliveryZone,
   saveDeliveryRate,
+  deleteDeliveryRate,
   savePickupLocation,
   deleteDeliveryZone,
   createSuggestedDelivery,
@@ -133,9 +134,9 @@ describe('delivery zones and options', () => {
     const south = ok(await saveDeliveryZone(null, { name: 'South-South', kind: 'STATES', states: ['Rivers', 'Bayelsa'] }));
     const rest = ok(await saveDeliveryZone(null, { name: 'Rest of Nigeria', kind: 'NATIONWIDE' }));
 
-    phRateId = ok(await saveDeliveryRate(ph.id, null, { name: 'Local', price: 1500, minDays: 0, maxDays: 1, freeOver: 50000 })).id;
-    ok(await saveDeliveryRate(south.id, null, { name: 'Standard', price: 3000, minDays: 2, maxDays: 3 }));
-    restRateId = ok(await saveDeliveryRate(rest.id, null, { name: 'Standard', price: 5000, minDays: 3, maxDays: 7, freeOver: '' })).id;
+    phRateId = ok(await saveDeliveryRate(ph.id, null, { name: 'Local', price: 1500, minTime: 0, maxTime: 1, freeOver: 50000 })).id;
+    ok(await saveDeliveryRate(south.id, null, { name: 'Standard', price: 3000, minTime: 2, maxTime: 3 }));
+    restRateId = ok(await saveDeliveryRate(rest.id, null, { name: 'Standard', price: 5000, minTime: 3, maxTime: 7, freeOver: '' })).id;
 
     const settings = ok(await getDeliverySettings());
     expect(settings.zones.map((z) => [z.name, z.rates.map((r) => r.price)])).toEqual([
@@ -162,10 +163,34 @@ describe('delivery zones and options', () => {
     if (other.success) ok(await deleteDeliveryZone(other.data.id));
   });
 
+  /* Not every merchant delivers in days: a supermarket promises 45 minutes,
+   * a rider 2–3 hours. We keep the minutes AND the unit they typed in. */
+  it('takes a delivery time in minutes or hours, and words it the same way', async () => {
+    const settings = ok(await getDeliverySettings());
+    const zoneId = settings.zones[0].id;
+    const quick = ok(await saveDeliveryRate(zoneId, null, { name: 'Rider', price: 800, etaUnit: 'MINUTES', minTime: 30, maxTime: 45 }));
+
+    const after = ok(await getDeliverySettings());
+    const rate = after.zones[0].rates.find((r) => r.id === quick.id);
+    expect(rate).toMatchObject({ etaUnit: 'MINUTES', minMinutes: 30, maxMinutes: 45 });
+
+    const hours = ok(await saveDeliveryRate(zoneId, quick.id, { name: 'Rider', price: 800, etaUnit: 'HOURS', minTime: 2, maxTime: 3 }));
+    const reread = ok(await getDeliverySettings()).zones[0].rates.find((r) => r.id === hours.id);
+    expect(reread).toMatchObject({ etaUnit: 'HOURS', minMinutes: 120, maxMinutes: 180 });
+
+    ok(await deleteDeliveryRate(quick.id));
+  });
+
+  it('holds each unit to its own ceiling', async () => {
+    const zoneId = ok(await getDeliverySettings()).zones[0].id;
+    const tooLong = await saveDeliveryRate(zoneId, null, { name: 'Slow', price: 100, etaUnit: 'MINUTES', minTime: 30, maxTime: 2000 });
+    expect(tooLong).toMatchObject({ success: false, fieldErrors: { maxTime: expect.stringContaining('1440') } });
+  });
+
   it('refuses a delivery window that ends before it starts', async () => {
     const settings = ok(await getDeliverySettings());
-    const result = await saveDeliveryRate(settings.zones[0].id, null, { name: 'Odd', price: 100, minDays: 5, maxDays: 2 });
-    expect(result).toMatchObject({ success: false, fieldErrors: { maxDays: expect.any(String) } });
+    const result = await saveDeliveryRate(settings.zones[0].id, null, { name: 'Odd', price: 100, minTime: 5, maxTime: 2 });
+    expect(result).toMatchObject({ success: false, fieldErrors: { maxTime: expect.any(String) } });
   });
 
   it('shows the merchant exactly what a customer at an address would get', async () => {
@@ -216,7 +241,7 @@ describe('pickup locations', () => {
         city: 'Port Harcourt',
         state: 'Rivers',
         instructions: 'Ask at the counter',
-        readyInDays: 1,
+        readyTime: 1,
       }),
     );
 
@@ -233,7 +258,7 @@ describe('pickup locations', () => {
   });
 
   it('validate their fields', async () => {
-    const result = await savePickupLocation(null, { name: '', address: '', city: '', state: 'Atlantis' as never, readyInDays: -1 });
+    const result = await savePickupLocation(null, { name: '', address: '', city: '', state: 'Atlantis' as never, readyTime: -1 });
     expect(result).toMatchObject({ success: false, fieldErrors: { name: expect.any(String), address: expect.any(String), state: expect.any(String) } });
   });
 });

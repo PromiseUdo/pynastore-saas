@@ -6,6 +6,7 @@ import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { StockTransferStatus } from '@/lib/generated/prisma/enums';
+import { requireStoreAccess } from '@/lib/store-access';
 import { type ActionResult, toActionError, getAvailableStock } from './shared';
 
 export type TransferRow = {
@@ -54,6 +55,11 @@ export async function dispatchTransfer(
     if (!toWarehouse || toWarehouse.organizationId !== ctx.organization.id) {
       return { success: false, error: 'Destination store not found' };
     }
+
+    /* Sending stock away is the source store's act, so only the FROM store is
+     * gated — a shop may send goods to any of the business's stores, and the
+     * receiving end confirms the box arrived (ROADMAP Phase 8.6). */
+    requireStoreAccess(ctx.membership, data.fromWarehouseId);
 
     const { available } = await getAvailableStock(prisma, {
       inventoryItemId: data.inventoryItemId,
@@ -128,6 +134,11 @@ export async function receiveTransfer(transferId: string): Promise<ActionResult>
       return { success: false, error: 'This transfer is not awaiting receipt' };
     }
 
+    /* Receiving belongs to the DESTINATION store: whoever is standing there
+     * with the box. Someone limited to one store can send stock away and not
+     * receive it back — the other end does that (ROADMAP Phase 8.6). */
+    requireStoreAccess(ctx.membership, transfer.toWarehouseId);
+
     await prisma.$transaction(async (tx) => {
       await tx.stockMovement.create({
         data: {
@@ -186,6 +197,9 @@ export async function cancelTransfer(transferId: string): Promise<ActionResult> 
     if (transfer.status !== StockTransferStatus.DISPATCHED) {
       return { success: false, error: 'Only dispatched transfers can be cancelled' };
     }
+
+    // Cancelling puts the stock back on the sender's shelf, so it is theirs.
+    requireStoreAccess(ctx.membership, transfer.fromWarehouseId);
 
     await prisma.$transaction(async (tx) => {
       await tx.stockMovement.create({

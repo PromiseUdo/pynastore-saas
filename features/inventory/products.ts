@@ -107,6 +107,8 @@ export type ProductDetail = {
   slug: string | null;
   isPublished: boolean;
   publishedAt: string | null;
+  /** true = the customer must pay before delivery; pay on delivery isn't offered */
+  requiresPrepayment: boolean;
   tags: string[];
   highlights: string[];
   specs: { label: string; value: string }[];
@@ -157,6 +159,7 @@ const ProductSchema = z.object({
   compareAtPrice: money,
   status: z.enum(ItemStatus).default(ItemStatus.ACTIVE),
   isPublished: z.boolean().default(false),
+  requiresPrepayment: z.boolean().default(false),
   slug: z.string().trim().max(80).default(''),
   tags: z.array(z.string()).max(10).default([]),
   highlights: z.array(z.string().trim().min(1).max(120, 'Each highlight must be 120 characters or less')).max(8, 'Use at most 8 highlights').default([]),
@@ -567,6 +570,7 @@ export async function getProduct(productId: string): Promise<ActionResult<Produc
         slug: item.slug,
         isPublished: item.isPublished,
         publishedAt: item.publishedAt?.toISOString() ?? null,
+        requiresPrepayment: item.requiresPrepayment,
         tags: item.tags,
         highlights: item.highlights,
         specs,
@@ -619,6 +623,9 @@ function sharedFields(data: ParsedProduct, slug: string) {
     status: data.status,
     slug,
     isPublished: data.isPublished,
+    // Payment terms live on the top-level product only; a variant inherits
+    // them, so there is one row to read and one to change.
+    requiresPrepayment: data.requiresPrepayment,
     tags: [...new Set(data.tags)],
     highlights: data.highlights,
     specs: data.specs as Prisma.InputJsonValue,

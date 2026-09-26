@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
+import { requireStoreAccess } from '@/lib/store-access';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { maybeSendLowStockAlert } from '@/features/inventory/shared';
@@ -154,6 +155,9 @@ export async function recordPicked(
     if (fulfillment.status !== FulfillmentStatus.PENDING && fulfillment.status !== FulfillmentStatus.PARTIALLY_PICKED) {
       return { success: false, error: 'This fulfillment is not awaiting picking' };
     }
+    /* Picking and packing happen in one store, off its shelves — so a member
+     * limited to certain stores works only on those (ROADMAP Phase 8.6). */
+    requireStoreAccess(ctx.membership, fulfillment.warehouseId);
 
     const lineMap = new Map(fulfillment.lineItems.map((li) => [li.id, li]));
     for (const l of data.lines) {
@@ -219,6 +223,8 @@ export async function recordPacked(
     if (fulfillment.status !== FulfillmentStatus.PICKED && fulfillment.status !== FulfillmentStatus.PARTIALLY_PACKED) {
       return { success: false, error: 'This fulfillment is not awaiting packing' };
     }
+    // Packing is what takes the stock off this store's shelf.
+    requireStoreAccess(ctx.membership, fulfillment.warehouseId, fulfillment.warehouse.name);
 
     const lineMap = new Map(fulfillment.lineItems.map((li) => [li.id, li]));
     for (const l of data.lines) {
@@ -291,6 +297,7 @@ export async function recordPacked(
         organizationSlug: ctx.organization.slug,
         itemName: alert.itemName,
         itemSku: alert.itemSku,
+        warehouseId: fulfillment.warehouseId,
         warehouseName: fulfillment.warehouse.name,
         previousQty: alert.previousQty,
         newQty: alert.newQty,

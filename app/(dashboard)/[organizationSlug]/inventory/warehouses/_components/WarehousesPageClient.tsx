@@ -118,25 +118,42 @@ export function WarehousesPageClient({
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {warehouses.map((w) => (
-              <Card key={w.id}>
+              <Card key={w.id} className="relative focus-within:ring-2 focus-within:ring-ring">
+                {/* Covers the card so the whole thing opens the store; the
+                    switch and the edit button sit above it. */}
+                <Link
+                  href={`/inventory/warehouses/${w.id}`}
+                  aria-label={`Open ${w.name}`}
+                  tabIndex={-1}
+                  className="absolute inset-0 z-0 rounded-lg"
+                />
                 <CardHeader className="flex flex-row items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <CardTitle>{w.name}</CardTitle>
+                    {/* The name is a real link, so keyboard and middle-click work
+                        even though the whole card is clickable (AGENTS §3). */}
+                    <CardTitle>
+                      <Link href={`/inventory/warehouses/${w.id}`} className="relative z-10 hover:underline">
+                        {w.name}
+                      </Link>
+                    </CardTitle>
                     {w.location && <p className="mt-0.5 text-xs text-muted-foreground">{w.location}</p>}
                     <p className="mt-2 text-xs text-muted-foreground">{w.itemCount} product{w.itemCount === 1 ? "" : "s"} stocked here</p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
+                  <div className="relative z-10 flex shrink-0 items-center gap-1">
                     <Badge variant={w.status === 'ACTIVE' ? 'success' : 'muted'}>
                       {w.status === 'ACTIVE' ? 'Open' : 'Closed'}
                     </Badge>
-                    {canEdit && (
+                    {/* Said, not silently hidden: this member may look at this
+                        store but not change it (ROADMAP Phase 8.6). */}
+                    {!w.canWorkHere && <Badge variant="muted">View only</Badge>}
+                    {canEdit && w.canWorkHere && (
                       <Button variant="ghost" size="icon-sm" aria-label={`Edit ${w.name}`} onClick={() => openDialog(w)}>
                         <Pencil className="size-3.5" />
                       </Button>
                     )}
                   </div>
                 </CardHeader>
-                <label className="flex items-center justify-between gap-3 border-t px-4 py-3">
+                <label className="relative z-10 flex items-center justify-between gap-3 border-t px-4 py-3">
                   <span>
                     <span className="block text-sm font-medium text-foreground">Sells online</span>
                     <span className="block text-xs text-muted-foreground">
@@ -145,7 +162,7 @@ export function WarehousesPageClient({
                   </span>
                   <SwitchRoot
                     checked={w.sellsOnline}
-                    disabled={!canEdit || busyId === w.id || (w.status !== 'ACTIVE' && !w.sellsOnline)}
+                    disabled={!canEdit || !w.canWorkHere || busyId === w.id || (w.status !== 'ACTIVE' && !w.sellsOnline)}
                     onCheckedChange={(v) => toggleOnline(w, v)}
                     aria-label={`${w.name} sells online`}
                   />

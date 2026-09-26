@@ -16,6 +16,7 @@
  * says it is waiting for payment and offers "Pay now"; the payment line is
  * the order's real state with the one sentence that says what happens next.
  */
+import { formatEtaWindow } from '@/lib/storefront/delivery/eta';
 import Link from 'next/link';
 import Image from 'next/image';
 import { CheckCircle2, CircleAlert, Clock, Mail, PackageCheck } from 'lucide-react';
@@ -229,8 +230,7 @@ export function ConfirmationView({
           </h2>
           <p className="mt-2 text-sm font-medium">{order.delivery.label}</p>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Estimated {formatDate(order.delivery.estimated.from, config.locale)} –{' '}
-            {formatDate(order.delivery.estimated.to, config.locale)}
+            {formatEtaWindow(order.delivery.eta, order.delivery.estimated, config.locale)}
           </p>
           {order.note && (
             <p className="mt-3 border-t pt-3 text-sm text-muted-foreground">

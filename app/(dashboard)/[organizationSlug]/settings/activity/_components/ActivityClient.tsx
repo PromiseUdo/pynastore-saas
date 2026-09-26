@@ -221,7 +221,7 @@ export function ActivityClient({ result }: { result: ActivityResult }) {
         )}
       </PageToolbar>
 
-      <PageBody padded={false}>
+      <PageBody>
         {result.rows.length === 0 ? (
           <EmptyState
             variant="filtered"
@@ -279,17 +279,16 @@ export function ActivityClient({ result }: { result: ActivityResult }) {
                   ))}
                 </TableBody>
               </Table>
+              {result.pageCount > 1 && (
+                <TablePagination
+                  page={result.page}
+                  totalPages={result.pageCount}
+                  totalItems={result.total}
+                  pageSize={result.perPage}
+                  onPageChange={(next) => setParams({ page: String(next) })}
+                />
+              )}
             </TableWrapper>
-
-            {result.pageCount > 1 && (
-              <TablePagination
-                page={result.page}
-                totalPages={result.pageCount}
-                totalItems={result.total}
-                pageSize={result.perPage}
-                onPageChange={(next) => setParams({ page: String(next) })}
-              />
-            )}
           </>
         )}
       </PageBody>

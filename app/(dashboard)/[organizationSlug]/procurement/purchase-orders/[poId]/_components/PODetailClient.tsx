@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table';
 import { ReceiveLineItemsDialog } from './ReceiveLineItemsDialog';
 import { RejectPODialog } from './RejectPODialog';
+import { enumLabel, formatMoney } from '@/lib/format';
 import {
   submitForApproval,
   approvePurchaseOrder,
@@ -72,7 +73,7 @@ export function PODetailClient({ po, can }: PODetailClientProps) {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold tracking-tight text-foreground">{po.poNumber}</h1>
-            <Badge variant={STATUS_VARIANT[po.status]}>{po.status.replace('_', ' ')}</Badge>
+            <Badge variant={STATUS_VARIANT[po.status]}>{enumLabel(po.status)}</Badge>
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {po.customerId
@@ -134,7 +135,7 @@ export function PODetailClient({ po, can }: PODetailClientProps) {
             <CardHeader>
               <CardTitle>Subtotal</CardTitle>
               <p className="mt-1 text-lg font-semibold text-foreground">
-                {po.currency} {po.subtotal.toFixed(2)}
+                {formatMoney(po.subtotal, po.currency)}
               </p>
             </CardHeader>
           </Card>
@@ -142,7 +143,7 @@ export function PODetailClient({ po, can }: PODetailClientProps) {
             <CardHeader>
               <CardTitle>Tax</CardTitle>
               <p className="mt-1 text-lg font-semibold text-foreground">
-                {po.currency} {po.taxAmount.toFixed(2)}
+                {formatMoney(po.taxAmount, po.currency)}
               </p>
             </CardHeader>
           </Card>
@@ -150,7 +151,7 @@ export function PODetailClient({ po, can }: PODetailClientProps) {
             <CardHeader>
               <CardTitle>Total</CardTitle>
               <p className="mt-1 text-lg font-semibold text-foreground">
-                {po.currency} {po.totalAmount.toFixed(2)}
+                {formatMoney(po.totalAmount, po.currency)}
               </p>
             </CardHeader>
           </Card>
@@ -176,9 +177,9 @@ export function PODetailClient({ po, can }: PODetailClientProps) {
                   </TableCell>
                   <TableCell align="right">{li.quantity}</TableCell>
                   <TableCell align="right" muted>
-                    {li.unitPrice.toFixed(2)}
+                    {formatMoney(li.unitPrice, po.currency)}
                   </TableCell>
-                  <TableCell align="right">{li.totalPrice.toFixed(2)}</TableCell>
+                  <TableCell align="right">{formatMoney(li.totalPrice, po.currency)}</TableCell>
                   <TableCell align="right" muted>
                     {po.customerId ? (po.status === 'RECEIVED' ? 'Delivered' : '—') : `${li.receivedQty} / ${li.quantity}`}
                   </TableCell>

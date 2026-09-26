@@ -9,6 +9,11 @@ export type ActionResult<T = void> =
   | { success: false; error: string };
 
 export function toActionError(err: unknown, fallback: string): ActionResult<never> {
+  /* A store the member may not work in — the message already says what to do
+   * about it, so it is passed through rather than flattened (Phase 8.6). */
+  if (err instanceof Error && err.name === 'StoreAccessDeniedError') {
+    return { success: false, error: err.message };
+  }
   if (err instanceof Error && err.name === 'PermissionDeniedError') {
     return { success: false, error: 'You do not have permission to do this' };
   }

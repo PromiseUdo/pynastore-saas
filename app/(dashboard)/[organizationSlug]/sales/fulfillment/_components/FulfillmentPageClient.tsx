@@ -15,6 +15,7 @@ import {
   TableEmpty,
 } from '@/components/ui/table';
 import type { FulfillmentListRow } from '@/features/sales/actions';
+import { enumLabel, formatDate } from '@/lib/format';
 
 type FulfillmentPageClientProps = {
   fulfillments: FulfillmentListRow[];
@@ -70,10 +71,10 @@ export function FulfillmentPageClient({ fulfillments }: FulfillmentPageClientPro
                       <TableCell muted>{f.customerName}</TableCell>
                       <TableCell muted>{f.warehouseName}</TableCell>
                       <TableCell>
-                        <Badge variant={STATUS_VARIANT[f.status]}>{f.status.replace('_', ' ')}</Badge>
+                        <Badge variant={STATUS_VARIANT[f.status]}>{enumLabel(f.status)}</Badge>
                       </TableCell>
                       <TableCell align="right">{f.itemCount}</TableCell>
-                      <TableCell muted>{new Date(f.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell muted>{formatDate(f.createdAt)}</TableCell>
                     </TableRow>
                   ))
                 )}

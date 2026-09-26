@@ -18,6 +18,7 @@ import {
 import { CreatePurchaseOrderDialog } from './CreatePurchaseOrderDialog';
 import type { POListRow, SupplierRow } from '@/features/procurement/actions';
 import type { ItemListRow, WarehouseRow } from '@/features/inventory/actions';
+import { enumLabel, formatDate, formatMoney } from '@/lib/format';
 
 type PurchaseOrdersPageClientProps = {
   purchaseOrders: POListRow[];
@@ -103,12 +104,12 @@ export function PurchaseOrdersPageClient({
                       <TableCell muted>{po.supplierName}</TableCell>
                       <TableCell muted>{po.warehouseName ?? '—'}</TableCell>
                       <TableCell>
-                        <Badge variant={STATUS_VARIANT[po.status]}>{po.status.replace('_', ' ')}</Badge>
+                        <Badge variant={STATUS_VARIANT[po.status]}>{enumLabel(po.status)}</Badge>
                       </TableCell>
                       <TableCell align="right">
-                        {po.currency} {po.totalAmount.toFixed(2)}
+                        {formatMoney(po.totalAmount, po.currency)}
                       </TableCell>
-                      <TableCell muted>{new Date(po.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell muted>{formatDate(po.createdAt)}</TableCell>
                     </TableRow>
                   ))
                 )}

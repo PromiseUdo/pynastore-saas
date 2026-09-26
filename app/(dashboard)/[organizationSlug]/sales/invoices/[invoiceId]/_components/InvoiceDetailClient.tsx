@@ -248,7 +248,7 @@ export function InvoiceDetailClient({ invoice, can }: InvoiceDetailClientProps) 
                             <Link href={`/procurement/purchase-orders/${li.dropShipPurchaseOrder.id}`} className="text-primary hover:underline">
                               {li.dropShipPurchaseOrder.poNumber}
                             </Link>{' '}
-                            ({li.dropShipPurchaseOrder.status === 'RECEIVED' ? 'Delivered' : li.dropShipPurchaseOrder.status.replace('_', ' ')})
+                            ({li.dropShipPurchaseOrder.status === 'RECEIVED' ? 'Delivered' : enumLabel(li.dropShipPurchaseOrder.status)})
                           </>
                         ) : (
                           'Drop-ship'
@@ -285,8 +285,8 @@ export function InvoiceDetailClient({ invoice, can }: InvoiceDetailClientProps) 
                 ) : (
                   invoice.payments.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell muted>{new Date(p.createdAt).toLocaleDateString()}</TableCell>
-                      <TableCell>{p.method.replace('_', ' ')}</TableCell>
+                      <TableCell muted>{formatDate(p.createdAt)}</TableCell>
+                      <TableCell>{enumLabel(p.method)}</TableCell>
                       <TableCell muted>{p.reference ?? '—'}</TableCell>
                       <TableCell align="right">{money(p.amount)}</TableCell>
                     </TableRow>

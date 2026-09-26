@@ -19,6 +19,7 @@
  * Money crosses back here: the database holds major units, the storefront
  * works in minor ones.
  */
+import { MINUTES_PER_UNIT, type DeliveryEta } from '../delivery/eta';
 import type { TransferAccount } from '../checkout/types';
 import { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -94,8 +95,9 @@ const ORDER_SELECT = {
   deliveryMethodId: true,
   deliveryMethodLabel: true,
   deliveryFee: true,
-  deliveryEtaMinDays: true,
-  deliveryEtaMaxDays: true,
+  deliveryEtaMinMinutes: true,
+  deliveryEtaMaxMinutes: true,
+  deliveryEtaUnit: true,
   currency: true,
   subtotal: true,
   discount: true,
@@ -141,16 +143,17 @@ const ORDER_SELECT = {
 type OrderRow = Prisma.OrderGetPayload<{ select: typeof ORDER_SELECT }>;
 
 /**
- * The delivery window, in working days from when the order was placed.
+ * The delivery window as two dates, from when the order was placed.
  *
- * Weekends are skipped so a Friday "2 working days" order doesn't promise
- * Sunday — the same rule the checkout quoted, kept in one place now that the
- * order itself stores the days.
+ * A window measured in working days skips weekends, so a Friday "2 working
+ * days" order doesn't promise Sunday. A window measured in minutes or hours
+ * is a rider on the road: it runs from the clock, weekend or not. Either way
+ * it's the same window the checkout quoted, because the order stores it.
  */
-function estimateWindow(placedAt: Date, min: number, max: number) {
-  const addWorkingDays = (days: number) => {
+function estimateWindow(placedAt: Date, value: DeliveryEta) {
+  const addWorkingDays = (minutes: number) => {
     const date = new Date(placedAt);
-    let remaining = days;
+    let remaining = Math.round(minutes / MINUTES_PER_UNIT.DAYS);
     while (remaining > 0) {
       date.setDate(date.getDate() + 1);
       const day = date.getDay();
@@ -158,8 +161,10 @@ function estimateWindow(placedAt: Date, min: number, max: number) {
     }
     return date.toISOString();
   };
+  const addMinutes = (minutes: number) => new Date(placedAt.getTime() + minutes * 60_000).toISOString();
+  const add = value.unit === 'DAYS' ? addWorkingDays : addMinutes;
 
-  return { from: addWorkingDays(min), to: addWorkingDays(max) };
+  return { from: add(value.minMinutes), to: add(value.maxMinutes) };
 }
 
 /** The JSON snapshot, defensively: only well-formed accounts come out. */
@@ -223,8 +228,11 @@ function toStorefrontOrder(row: OrderRow, now = new Date()): StorefrontOrder {
     now,
   });
 
-  const etaMin = onlineField(row.deliveryEtaMinDays, 'deliveryEtaMinDays', row.reference);
-  const etaMax = onlineField(row.deliveryEtaMaxDays, 'deliveryEtaMaxDays', row.reference);
+  const deliveryEta: DeliveryEta = {
+    minMinutes: onlineField(row.deliveryEtaMinMinutes, 'deliveryEtaMinMinutes', row.reference),
+    maxMinutes: onlineField(row.deliveryEtaMaxMinutes, 'deliveryEtaMaxMinutes', row.reference),
+    unit: onlineField(row.deliveryEtaUnit, 'deliveryEtaUnit', row.reference),
+  };
 
   return {
     reference: row.reference,
@@ -262,8 +270,8 @@ function toStorefrontOrder(row: OrderRow, now = new Date()): StorefrontOrder {
       methodId: onlineField(row.deliveryMethodId, 'deliveryMethodId', row.reference),
       label: onlineField(row.deliveryMethodLabel, 'deliveryMethodLabel', row.reference),
       fee: toMinor(row.deliveryFee ?? 0),
-      etaDays: [etaMin, etaMax],
-      estimated: estimateWindow(row.placedAt, etaMin, etaMax),
+      eta: deliveryEta,
+      estimated: estimateWindow(row.placedAt, deliveryEta),
     },
 
     currency: row.currency,

@@ -26,6 +26,7 @@ import {
 import { createPurchaseOrder } from '@/features/procurement/actions';
 import type { SupplierRow } from '@/features/procurement/actions';
 import type { ItemListRow, WarehouseRow } from '@/features/inventory/actions';
+import { formatMoney } from '@/lib/format';
 
 type LineItemRow = { inventoryItemId: string; description: string; quantity: string; unitPrice: string };
 
@@ -226,7 +227,7 @@ export function CreatePurchaseOrderDialog({
               <Input id="po-tax" type="number" min="0" value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} />
             </div>
             <div className="flex items-end justify-end text-sm text-muted-foreground">
-              Subtotal: {subtotal.toFixed(2)}
+              Subtotal: {formatMoney(subtotal)}
             </div>
           </div>
 

@@ -61,6 +61,24 @@ export interface StoreOrderRow {
   returnsAwaiting: number;
   /** cancelled after it was paid, and not all of it sent back yet */
   refundOwed: boolean;
+  /**
+   * Which of the merchant's stores this order's stock came off, with the
+   * units each one gave. A counter sale has exactly one; an online order has
+   * one per store the hold was spread across, and none once it was released.
+   */
+  fulfilledFrom: OrderStoreShare[];
+  /**
+   * Units from the one store the list was filtered to — null when it wasn't.
+   * It answers "how much of this order is mine?" on a store's own page.
+   */
+  unitsFromStore: number | null;
+}
+
+/** One store's share of an order. */
+export interface OrderStoreShare {
+  warehouseId: string;
+  name: string;
+  units: number;
 }
 
 export interface StoreOrderDetail extends StoreOrderRow {
@@ -110,7 +128,11 @@ export interface StoreOrderDetail extends StoreOrderRow {
     unitPrice: number;
     totalPrice: number;
     productId: string | null;
+    /** Which store(s) this line's units came off — see `fulfilledFrom`. */
+    fromStores: OrderStoreShare[];
   }[];
+  /** True once the hold was given back (a cancelled or expired order). */
+  stockReleased: boolean;
 }
 
 export interface StoreOrderReturn {
@@ -130,6 +152,58 @@ export interface StoreOrderReturn {
   /** whether any returned line can go back on a shelf (it was sent from one) */
   canRestock: boolean;
   lines: { id: string; name: string; variantName: string | null; quantity: number; unitPrice: number }[];
+}
+
+/**
+ * Which stores an order's stock came off, biggest share first.
+ *
+ * The allocations are the record — one row per store per line, written when
+ * the hold was taken (lib/storefront/orders/stock.ts). A counter sale also
+ * carries `warehouseId`, which is used as the fallback so a sale rung up
+ * before allocations existed still names its shop instead of nothing.
+ */
+function storeShares(order: {
+  warehouseId: string | null;
+  warehouse: { id: string; name: string } | null;
+  allocations: { status: string; warehouseId: string; quantity: unknown; warehouse: { name: string } }[];
+}): OrderStoreShare[] {
+  const byStore = new Map<string, OrderStoreShare>();
+  for (const allocation of order.allocations) {
+    // A released hold is no longer any store's share of this order.
+    if (allocation.status === 'RELEASED') continue;
+    const share = byStore.get(allocation.warehouseId) ?? {
+      warehouseId: allocation.warehouseId,
+      name: allocation.warehouse.name,
+      units: 0,
+    };
+    share.units += Number(allocation.quantity);
+    byStore.set(allocation.warehouseId, share);
+  }
+  if (byStore.size === 0 && order.warehouse) {
+    return [{ warehouseId: order.warehouse.id, name: order.warehouse.name, units: 0 }];
+  }
+  return [...byStore.values()].sort((a, b) => b.units - a.units || a.name.localeCompare(b.name));
+}
+
+/** One line's stores, for an order that was split across more than one. */
+function lineShares(
+  order: {
+    allocations: { orderLineItemId: string; warehouseId: string; quantity: unknown; status: string; warehouse: { name: string } }[];
+  },
+  lineItemId: string,
+): OrderStoreShare[] {
+  const byStore = new Map<string, OrderStoreShare>();
+  for (const allocation of order.allocations) {
+    if (allocation.orderLineItemId !== lineItemId || allocation.status === 'RELEASED') continue;
+    const share = byStore.get(allocation.warehouseId) ?? {
+      warehouseId: allocation.warehouseId,
+      name: allocation.warehouse.name,
+      units: 0,
+    };
+    share.units += Number(allocation.quantity);
+    byStore.set(allocation.warehouseId, share);
+  }
+  return [...byStore.values()].sort((a, b) => b.units - a.units || a.name.localeCompare(b.name));
 }
 
 /** Whoever this was for, or null when nobody gave a name at the counter. */
@@ -159,6 +233,14 @@ export interface StoreOrderFilters {
   /** reference, customer name, email or phone */
   q?: string;
   page?: number;
+  /**
+   * Only orders this store served: a counter sale rung up there
+   * (`Order.warehouseId`) or an online order whose stock came off its shelf
+   * (`OrderStockAllocation`). One clause, both channels.
+   */
+  warehouseId?: string;
+  /** Oldest first is what a store packing its queue wants. */
+  sort?: 'newest' | 'oldest';
 }
 
 export interface StoreOrderList {
@@ -203,14 +285,31 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
       organizationId,
       ...(isOrderChannel(filters.channel) ? { channel: filters.channel } : {}),
       ...(isOrderStatus(filters.status) ? { status: filters.status } : {}),
-      ...(q
+      /* A store's orders are the counter sales it rang up AND the online
+       * orders its shelf supplied. The id is used together with the org, so
+       * another workspace's store simply matches nothing. */
+      ...(filters.warehouseId
         ? {
             OR: [
-              { reference: { contains: q, mode: 'insensitive' as const } },
-              { firstName: { contains: q, mode: 'insensitive' as const } },
-              { lastName: { contains: q, mode: 'insensitive' as const } },
-              { email: { contains: q, mode: 'insensitive' as const } },
-              { phone: { contains: q, mode: 'insensitive' as const } },
+              { warehouseId: filters.warehouseId },
+              { allocations: { some: { warehouseId: filters.warehouseId } } },
+            ],
+          }
+        : {}),
+      /* AND, not a second OR: a search and a store filter must both hold,
+       * and two `OR` keys in one object would silently keep only the last. */
+      ...(q
+        ? {
+            AND: [
+              {
+                OR: [
+                  { reference: { contains: q, mode: 'insensitive' as const } },
+                  { firstName: { contains: q, mode: 'insensitive' as const } },
+                  { lastName: { contains: q, mode: 'insensitive' as const } },
+                  { email: { contains: q, mode: 'insensitive' as const } },
+                  { phone: { contains: q, mode: 'insensitive' as const } },
+                ],
+              },
             ],
           }
         : {}),
@@ -219,7 +318,7 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
     const [orders, total, historySize, grouped] = await Promise.all([
       prisma.order.findMany({
         where,
-        orderBy: { placedAt: 'desc' },
+        orderBy: { placedAt: filters.sort === 'oldest' ? 'asc' : 'desc' },
         skip: (page - 1) * ORDERS_PER_PAGE,
         take: ORDERS_PER_PAGE,
         select: {
@@ -239,6 +338,11 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
           shipCity: true,
           shipState: true,
           lineItems: { select: { quantity: true } },
+          warehouseId: true,
+          warehouse: { select: { id: true, name: true } },
+          allocations: {
+            select: { status: true, warehouseId: true, quantity: true, warehouse: { select: { name: true } } },
+          },
           _count: { select: { returns: { where: { status: 'REQUESTED' } } } },
         },
       }),
@@ -267,6 +371,12 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
           city: order.shipCity,
           state: order.shipState,
           returnsAwaiting: order._count.returns,
+          fulfilledFrom: storeShares(order),
+          unitsFromStore: filters.warehouseId
+            ? order.allocations
+                .filter((a) => a.warehouseId === filters.warehouseId && a.status !== 'RELEASED')
+                .reduce((sum, a) => sum + Number(a.quantity), 0)
+            : null,
           refundOwed:
             order.status === 'CANCELLED' &&
             (order.paymentStatus === 'PAID' || order.paymentStatus === 'PARTIALLY_REFUNDED'),
@@ -294,9 +404,17 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
       include: {
         lineItems: true,
         // Counter sales: which store served it, and who rang it up.
-        warehouse: { select: { name: true } },
+        warehouse: { select: { id: true, name: true } },
         soldBy: { select: { name: true, email: true } },
-        allocations: { select: { status: true, quantity: true, orderLineItemId: true } },
+        allocations: {
+          select: {
+            status: true,
+            quantity: true,
+            orderLineItemId: true,
+            warehouseId: true,
+            warehouse: { select: { name: true } },
+          },
+        },
         refunds: { orderBy: { createdAt: 'asc' } },
         returns: {
           orderBy: { requestedAt: 'desc' },
@@ -372,6 +490,7 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
         shippedAt: order.shippedAt?.toISOString() ?? null,
         deliveredAt: order.deliveredAt?.toISOString() ?? null,
         cancelledAt: order.cancelledAt?.toISOString() ?? null,
+        unitsFromStore: null,
         transferDetails: readTransferDetails(order.transferDetails),
         stock: {
           held: order.allocations
@@ -407,6 +526,12 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
         totalAmount: Number(order.totalAmount),
         itemCount: order.lineItems.reduce((sum, line) => sum + line.quantity, 0),
         note: order.note,
+        fulfilledFrom: storeShares(order),
+        /* A hold that was given back leaves RELEASED rows behind, so an empty
+         * share list with allocations in the table means released, not
+         * never-held — and the page can say which. */
+        stockReleased:
+          order.allocations.length > 0 && order.allocations.every((a) => a.status === 'RELEASED'),
         lines: order.lineItems.map((line) => ({
           id: line.id,
           name: line.name,
@@ -415,6 +540,7 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
           unitPrice: Number(line.unitPrice),
           totalPrice: Number(line.totalPrice),
           productId: line.productId,
+          fromStores: lineShares(order, line.id),
         })),
       },
     };

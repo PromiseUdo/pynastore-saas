@@ -71,6 +71,10 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
    * happened all at once — so the online progress track would be a row of
    * ticks for steps nobody took. */
   const isCounterSale = order.channel !== 'ONLINE';
+  /* Which store's shelf this came off. One store is a fact for the summary
+     card; several means the parcel is packed in more than one place, so each
+     line has to say where its units are (ROADMAP Phase 8.4). */
+  const splitAcrossStores = order.fulfilledFrom.length > 1;
   const STAGES = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'] as const;
   const reached = order.status === 'CANCELLED' ? -1 : STAGES.indexOf(order.status as (typeof STAGES)[number]);
   const stageAt = [order.placedAt, order.confirmedAt, order.packingAt, order.shippedAt, order.deliveredAt];
@@ -261,6 +265,33 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
                   {order.paidAt ? ` · paid ${formatDate(order.paidAt)}` : ''}
                 </dd>
               </div>
+              {!isCounterSale && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Fulfilled from</dt>
+                  <dd>
+                    {order.fulfilledFrom.length === 0 ? (
+                      <span className="text-muted-foreground">
+                        {order.stockReleased ? 'Stock was released back to your stores' : 'No stock held yet'}
+                      </span>
+                    ) : (
+                      <span className="flex flex-wrap gap-x-2 gap-y-0.5">
+                        {order.fulfilledFrom.map((store) => (
+                          <Link
+                            key={store.warehouseId}
+                            href={`/inventory/warehouses/${store.warehouseId}`}
+                            className="hover:underline"
+                          >
+                            {store.name}
+                            {splitAcrossStores && (
+                              <span className="text-muted-foreground tabular-nums"> · {store.units}</span>
+                            )}
+                          </Link>
+                        ))}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt className="text-xs text-muted-foreground">Stock</dt>
                 <dd className="tabular-nums">
@@ -298,6 +329,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
               <TableHead>
                 <TableRow>
                   <TableColumnHeader>Product</TableColumnHeader>
+                  {splitAcrossStores && <TableColumnHeader>From</TableColumnHeader>}
                   <TableColumnHeader align="right">Qty</TableColumnHeader>
                   <TableColumnHeader align="right">Unit price</TableColumnHeader>
                   <TableColumnHeader align="right">Total</TableColumnHeader>
@@ -312,6 +344,15 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
                         <span className="text-xs text-muted-foreground">{line.variantName}</span>
                       )}
                     </TableCell>
+                    {splitAcrossStores && (
+                      <TableCell muted>
+                        {line.fromStores.length === 0
+                          ? '—'
+                          : line.fromStores
+                              .map((store) => (store.units === line.quantity ? store.name : `${store.name} × ${store.units}`))
+                              .join(', ')}
+                      </TableCell>
+                    )}
                     <TableCell align="right" className="tabular-nums">
                       {line.quantity}
                     </TableCell>

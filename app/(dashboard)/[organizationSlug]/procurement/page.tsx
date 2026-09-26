@@ -4,6 +4,7 @@ import { requireFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
+import { AccessDenied } from '@/components/layout/access-denied';
 import { listPurchaseOrders, listSuppliers, previewReorderDrafts } from '@/features/procurement/actions';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -12,14 +13,7 @@ export default async function ProcurementDashboardPage() {
   const ctx = await getOrganizationContext();
 
   if (!hasPermission(ctx.membership.role.permissions, PERMISSIONS.PROCUREMENT_VIEW)) {
-    return (
-      <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-        <h2 className="text-base font-semibold text-foreground">Access denied</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          You don&apos;t have permission to view procurement.
-        </p>
-      </div>
-    );
+    return <AccessDenied what="procurement" />;
   }
 
   const [posResult, suppliersResult, reorderResult] = await Promise.all([

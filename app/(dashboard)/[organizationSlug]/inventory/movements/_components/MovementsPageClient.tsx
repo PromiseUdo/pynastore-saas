@@ -13,7 +13,8 @@ import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } fro
 import { Table, TableWrapper, TableHead, TableBody, TableRow, TableColumnHeader, TableCell } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { ExportCsvButton } from '@/components/dashboard/export-csv-button';
-import { enumLabel, formatDate, formatMoney, formatNumber } from '@/lib/format';
+import { formatDate, formatMoney, formatNumber } from '@/lib/format';
+import { MOVEMENT_LABEL, MOVEMENT_VARIANT, movementReason, movementSign } from '@/lib/inventory-labels';
 import type { ItemListRow, MovementListParams, MovementListResult, MovementRow, WarehouseRow } from '@/features/inventory/actions';
 import { RecordMovementDialog } from './RecordMovementDialog';
 import { TransferStockDialog } from './TransferStockDialog';
@@ -25,43 +26,6 @@ type MovementsPageClientProps = {
   warehouses: WarehouseRow[];
   canRecord: boolean;
 };
-
-const TYPE_VARIANT: Record<MovementRow['type'], 'success' | 'destructive' | 'info' | 'warning'> = {
-  IN: 'success',
-  OUT: 'destructive',
-  TRANSFER: 'info',
-  ADJUSTMENT: 'warning',
-  RESERVED: 'warning',
-};
-
-/** Plain language for the ledger's own vocabulary. */
-const TYPE_LABEL: Record<MovementRow['type'], string> = {
-  IN: 'Stock in',
-  OUT: 'Stock out',
-  TRANSFER: 'Transfer',
-  ADJUSTMENT: 'Adjustment',
-  RESERVED: 'Reserved',
-};
-
-/** What created the movement, in words a shop owner uses. The keys are the
- *  `referenceType` values the app actually writes (see features/*). */
-const SOURCE_LABEL: Record<string, string> = {
-  PurchaseOrder: 'Purchase order',
-  Invoice: 'Customer order',
-  StockTransfer: 'Store transfer',
-  CycleCount: 'Stock count',
-  KitAssembly: 'Kit assembly',
-  Return: 'Customer return',
-  Requisition: 'Requisition',
-};
-
-function reasonOf(movement: MovementRow): string {
-  if (movement.referenceType) {
-    const label = SOURCE_LABEL[movement.referenceType] ?? movement.referenceType;
-    return movement.notes ? `${label} · ${movement.notes}` : label;
-  }
-  return movement.notes ?? 'Recorded by hand';
-}
 
 export function MovementsPageClient({ result, params, items, warehouses, canRecord }: MovementsPageClientProps) {
   const router = useRouter();
@@ -146,9 +110,9 @@ export function MovementsPageClient({ result, params, items, warehouses, canReco
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All types</SelectItem>
-                {(Object.keys(TYPE_LABEL) as MovementRow['type'][]).map((type) => (
+                {(Object.keys(MOVEMENT_LABEL) as MovementRow['type'][]).map((type) => (
                   <SelectItem key={type} value={type}>
-                    {TYPE_LABEL[type]}
+                    {MOVEMENT_LABEL[type]}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -201,12 +165,12 @@ export function MovementsPageClient({ result, params, items, warehouses, canReco
                 { header: 'Date', value: (m) => new Date(m.createdAt).toISOString() },
                 { header: 'Item', value: (m) => m.itemName },
                 { header: 'SKU', value: (m) => m.itemSku },
-                { header: 'Type', value: (m) => TYPE_LABEL[m.type] },
+                { header: 'Type', value: (m) => MOVEMENT_LABEL[m.type] },
                 { header: 'Store', value: (m) => m.warehouseName },
                 { header: 'Moved to', value: (m) => m.toWarehouseName },
                 { header: 'Quantity', value: (m) => m.quantity },
                 { header: 'Unit cost', value: (m) => m.unitCost },
-                { header: 'Reason', value: (m) => reasonOf(m) },
+                { header: 'Reason', value: (m) => movementReason(m) },
               ]}
             />
           </div>
@@ -262,21 +226,21 @@ export function MovementsPageClient({ result, params, items, warehouses, canReco
                       <p className="font-mono text-xs text-muted-foreground">{m.itemSku}</p>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={TYPE_VARIANT[m.type]}>{TYPE_LABEL[m.type]}</Badge>
+                      <Badge variant={MOVEMENT_VARIANT[m.type]}>{MOVEMENT_LABEL[m.type]}</Badge>
                     </TableCell>
                     <TableCell muted className="whitespace-nowrap">
                       {m.warehouseName}
                       {m.toWarehouseName && <span className="text-foreground"> → {m.toWarehouseName}</span>}
                     </TableCell>
                     <TableCell align="right" className="tabular-nums">
-                      {m.type === 'OUT' ? '−' : m.type === 'IN' ? '+' : ''}
+                      {movementSign(m.type)}
                       {formatNumber(m.quantity)}
                     </TableCell>
                     <TableCell align="right" muted className="hidden tabular-nums lg:table-cell">
                       {formatMoney(m.unitCost)}
                     </TableCell>
-                    <TableCell muted className="hidden max-w-56 truncate md:table-cell" title={reasonOf(m)}>
-                      {reasonOf(m)}
+                    <TableCell muted className="hidden max-w-56 truncate md:table-cell" title={movementReason(m)}>
+                      {movementReason(m)}
                     </TableCell>
                     <TableCell muted className="whitespace-nowrap">
                       {formatDate(m.createdAt)}

@@ -225,6 +225,36 @@ describe('placing an order', () => {
     ).resolves.toMatchObject({ ok: false, code: 'invalid-payment-method' });
   });
 
+  /*
+   * Payment terms are the merchant's, read from the row at order time — the
+   * browser's opinion about how this order is paid for is only a request.
+   */
+  it('refuses pay on delivery when a line must be paid for before delivery', async () => {
+    const pod = config.paymentMethods.find((m) => m.settlesOnDelivery)!;
+    const online = config.paymentMethods.find((m) => !m.settlesOnDelivery)!;
+    const strictId = await makeSellableProduct(store.id, 'Phone', 250_000);
+    await prisma.inventoryItem.update({ where: { id: strictId }, data: { requiresPrepayment: true } });
+
+    /* Mixed bag: the ordinary tote plus the item that must be prepaid. */
+    const mixed = [
+      { productId, variantId, quantity: 1 },
+      { productId: strictId, variantId: strictId, quantity: 1 },
+    ];
+
+    await expect(
+      placeOrder({ ...baseInput(), customerId, lines: mixed, paymentMethodId: pod.id }),
+    ).resolves.toMatchObject({ ok: false, code: 'invalid-payment-method' });
+
+    /* The same bag paid online goes through, and pay on delivery is still
+     * fine for a bag without that item. */
+    await expect(
+      placeOrder({ ...baseInput(), customerId, lines: mixed, paymentMethodId: online.id }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      placeOrder({ ...baseInput(), customerId, paymentMethodId: pod.id }),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
   it('refuses more than there is in stock', async () => {
     await expect(
       placeOrder({ ...baseInput(), lines: [{ productId, variantId, quantity: 999 }] }),

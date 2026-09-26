@@ -342,6 +342,8 @@ function buildProduct(template: Template, name: string, index: number): Product 
     tags,
     rating,
     soldCount: Math.max(0, soldCount),
+    // Demo products all take pay on delivery; the real flag is a merchant setting.
+    requiresPrepayment: false,
     createdAt,
     relatedIds: [],
   };

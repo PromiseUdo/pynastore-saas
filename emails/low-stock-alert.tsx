@@ -18,7 +18,10 @@ type LowStockAlertEmailProps = {
   warehouseName: string;
   quantity: number;
   reorderPoint: number;
-  inventoryUrl: string;
+  /** Whose reorder point fired — a store's own override, or the product's. */
+  thresholdSource?: 'store' | 'product';
+  /** The store's own page, filtered to what is low there. */
+  storeUrl: string;
 };
 
 export function LowStockAlertEmail({
@@ -27,7 +30,8 @@ export function LowStockAlertEmail({
   warehouseName,
   quantity,
   reorderPoint,
-  inventoryUrl,
+  thresholdSource,
+  storeUrl,
 }: LowStockAlertEmailProps) {
   return (
     <Html>
@@ -44,12 +48,23 @@ export function LowStockAlertEmail({
 
             <Text style={paragraph}>
               <strong>{itemName}</strong> ({sku}) at <strong>{warehouseName}</strong>{' '}
-              has dropped to {quantity}, at or below its reorder point of{' '}
-              {reorderPoint}.
+              has dropped to {quantity}, at or below the reorder point of{' '}
+              {reorderPoint}
+              {thresholdSource === 'store'
+                ? ` you set for ${warehouseName}`
+                : thresholdSource === 'product'
+                  ? ' set on the product'
+                  : ''}
+              .
             </Text>
 
-            <Button style={button} href={inventoryUrl}>
-              View inventory
+            <Text style={paragraph}>
+              Other stores may still have some — the link shows everything running low at{' '}
+              {warehouseName}, and what each one has.
+            </Text>
+
+            <Button style={button} href={storeUrl}>
+              See what&apos;s low at {warehouseName}
             </Button>
 
             <Hr style={hr} />

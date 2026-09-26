@@ -10,11 +10,18 @@
  * Server component.
  */
 import Link from 'next/link';
-import { ArrowRight, RotateCcw, Store, Truck } from 'lucide-react';
+import { ArrowRight, CreditCard, RotateCcw, Store, Truck } from 'lucide-react';
 import { formatMoney } from '@/lib/storefront/format';
 import type { DeliveryPromise } from '@/lib/storefront/types';
 
-export function ProductDelivery({ delivery }: { delivery: DeliveryPromise }) {
+export function ProductDelivery({
+  delivery,
+  requiresPrepayment = false,
+}: {
+  delivery: DeliveryPromise;
+  /** the merchant wants this item paid for before it's delivered */
+  requiresPrepayment?: boolean;
+}) {
   const { options, returnWindowDays, currency, policyPage } = delivery;
   const shipping = options.filter((o) => o.kind !== 'pickup');
   const pickups = options.filter((o) => o.kind === 'pickup');
@@ -71,10 +78,20 @@ export function ProductDelivery({ delivery }: { delivery: DeliveryPromise }) {
         </ul>
       )}
 
+      {/* Said here rather than sprung on the shopper at the payment step. */}
+      {requiresPrepayment && (
+        <p className="mt-4 flex items-start gap-2.5 border-t pt-4 text-sm">
+          <CreditCard aria-hidden className="mt-0.5 size-4 shrink-0 text-teal" />
+          <span>
+            This item is paid for before delivery — pay on delivery isn’t available for an order containing it.
+          </span>
+        </p>
+      )}
+
       {shipping.length > 0 && (
         <p className="mt-4 text-xs text-muted-foreground">
-          Delivery times are working days from dispatch. Your exact options and price depend on your address and are
-          confirmed at checkout.
+          Delivery times run from dispatch. Your exact options and price depend on your address and are confirmed at
+          checkout.
         </p>
       )}
 

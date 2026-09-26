@@ -10,6 +10,10 @@
  * details they were placed with, so editing or removing an account here never
  * changes the instructions a shopper is already following.
  *
+ * The merchant picks a bank and types the number; the account name always
+ * comes from the bank via Squad's lookup — checked again on save, so the
+ * name customers see can't be typed in by hand.
+ *
  * Viewing needs `settings.view`; changing needs `settings.edit`.
  */
 import { z } from 'zod';
@@ -17,6 +21,9 @@ import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { lookupAccountName } from '@/lib/payments/squad';
+import { bankByCode } from '@/lib/payments/nigerian-banks';
 
 export type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
 
@@ -28,15 +35,10 @@ export interface BankAccountRow {
   isActive: boolean;
 }
 
-export type BankAccountFieldErrors = Partial<Record<'bankName' | 'accountName' | 'accountNumber', string>>;
+export type BankAccountFieldErrors = Partial<Record<'bankCode' | 'accountNumber', string>>;
 
 const AccountSchema = z.object({
-  bankName: z.string().trim().min(2, 'Enter the bank’s name').max(80, 'Keep the bank name under 80 characters'),
-  accountName: z
-    .string()
-    .trim()
-    .min(2, 'Enter the name on the account')
-    .max(120, 'Keep the account name under 120 characters'),
+  bankCode: z.string().refine((code) => bankByCode(code) !== undefined, 'Choose your bank'),
   accountNumber: z
     .string()
     .transform((v) => v.replace(/\s+/g, ''))
@@ -45,6 +47,50 @@ const AccountSchema = z.object({
 });
 
 export type BankAccountInput = z.input<typeof AccountSchema>;
+
+type FieldFailure = { success: false; error: string; fieldErrors: BankAccountFieldErrors };
+
+function fieldFailure(error: z.ZodError): FieldFailure {
+  const fieldErrors: BankAccountFieldErrors = {};
+  for (const issue of error.issues) {
+    const key = issue.path[0] as keyof BankAccountFieldErrors;
+    if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
+  }
+  return { success: false, error: 'Check the highlighted fields', fieldErrors };
+}
+
+/** Lookups per store per window — each one is a paid call to Squad. */
+const LOOKUP_LIMIT = 30;
+const LOOKUP_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Ask the bank whose account this is. The name comes back from Squad, never
+ * from the merchant, so customers see exactly what their banking app will
+ * show when they transfer.
+ */
+async function resolveAccountName(
+  organizationId: string,
+  bankCode: string,
+  accountNumber: string,
+): Promise<{ ok: true; accountName: string } | FieldFailure | { success: false; error: string }> {
+  if (!checkRateLimit(`bank-lookup:${organizationId}`, LOOKUP_LIMIT, LOOKUP_WINDOW_MS)) {
+    return { success: false, error: 'Too many account checks. Wait a few minutes and try again.' };
+  }
+  try {
+    const accountName = await lookupAccountName(bankCode, accountNumber);
+    if (!accountName) {
+      return {
+        success: false,
+        error: 'Check the highlighted fields',
+        fieldErrors: { accountNumber: 'We couldn’t find this account at that bank. Check the number and the bank.' },
+      };
+    }
+    return { ok: true, accountName };
+  } catch (error) {
+    console.error('[settings] bank account lookup failed:', error);
+    return { success: false, error: 'We couldn’t reach the bank to check this account. Try again in a moment.' };
+  }
+}
 
 function failure(error: unknown, fallback: string): { success: false; error: string } {
   if (error instanceof Error && error.name === 'PermissionDeniedError') {
@@ -70,25 +116,47 @@ export async function listBankAccounts(): Promise<ActionResult<BankAccountRow[]>
   }
 }
 
-export async function saveBankAccount(
-  id: string | null,
-  input: BankAccountInput,
-): Promise<ActionResult<{ id: string }> | { success: false; error: string; fieldErrors: BankAccountFieldErrors }> {
+export async function lookupBankAccountName(
+  input: Omit<BankAccountInput, 'isActive'>,
+): Promise<ActionResult<{ accountName: string }> | FieldFailure> {
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SETTINGS_EDIT);
 
     const parsed = AccountSchema.safeParse(input);
-    if (!parsed.success) {
-      const fieldErrors: BankAccountFieldErrors = {};
-      for (const issue of parsed.error.issues) {
-        const key = issue.path[0] as keyof BankAccountFieldErrors;
-        if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
-      }
-      return { success: false, error: 'Check the highlighted fields', fieldErrors };
+    if (!parsed.success) return fieldFailure(parsed.error);
+
+    const resolved = await resolveAccountName(ctx.organization.id, parsed.data.bankCode, parsed.data.accountNumber);
+    if (!('ok' in resolved)) return resolved;
+    return { success: true, data: { accountName: resolved.accountName } };
+  } catch (error) {
+    return failure(error, 'We couldn’t check this account');
+  }
+}
+
+export async function saveBankAccount(
+  id: string | null,
+  input: BankAccountInput,
+): Promise<ActionResult<{ id: string }> | FieldFailure> {
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.SETTINGS_EDIT);
+
+    const parsed = AccountSchema.safeParse(input);
+    if (!parsed.success) return fieldFailure(parsed.error);
+
+    const { bankCode, accountNumber, isActive } = parsed.data;
+    if (id) {
+      const exists = await prisma.merchantBankAccount.count({ where: { id, organizationId: ctx.organization.id } });
+      if (exists === 0) return { success: false, error: 'That bank account no longer exists' };
     }
 
-    const data = parsed.data;
+    // Looked up again here rather than trusted from the dialog: the browser
+    // only ever tells us which account, never whose it is.
+    const resolved = await resolveAccountName(ctx.organization.id, bankCode, accountNumber);
+    if (!('ok' in resolved)) return resolved;
+
+    const data = { bankName: bankByCode(bankCode)!.name, accountName: resolved.accountName, accountNumber, isActive };
     let savedId: string;
 
     if (id) {

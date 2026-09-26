@@ -48,6 +48,8 @@ export type FormState = {
   compareAtPrice: string;
   status: ItemStatus;
   isPublished: boolean;
+  /** true = customers must pay before delivery; pay on delivery isn't offered */
+  requiresPrepayment: boolean;
   slug: string;
   slugTouched: boolean;
   tags: string[];
@@ -80,6 +82,7 @@ export function emptyFormState(): FormState {
     compareAtPrice: '',
     status: 'ACTIVE',
     isPublished: false,
+    requiresPrepayment: false,
     slug: '',
     slugTouched: false,
     tags: [],
@@ -140,6 +143,7 @@ export function formStateFromProduct(p: ProductDetail): FormState {
     compareAtPrice: str(p.compareAtPrice),
     status: p.status,
     isPublished: p.isPublished,
+    requiresPrepayment: p.requiresPrepayment,
     slug: p.slug ?? '',
     slugTouched: Boolean(p.slug),
     tags: p.tags,
@@ -316,6 +320,7 @@ export function toProductInput(state: FormState): ProductInput {
     compareAtPrice: state.hasVariants ? null : money(state.compareAtPrice),
     status: state.status,
     isPublished: state.isPublished,
+    requiresPrepayment: state.requiresPrepayment,
     slug: state.slugTouched ? state.slug.trim() : '',
     tags: state.tags,
     highlights: state.highlights.map((h) => h.trim()).filter(Boolean),

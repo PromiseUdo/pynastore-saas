@@ -13,6 +13,7 @@
  * Same shape as lib/storefront/catalog.ts: async, takes a `StoreScope`,
  * server-callable, resolves nothing tenant-specific yet.
  */
+import { formatEta, formatReady, type DeliveryEta } from '../delivery/eta';
 import type { StoreScope } from '../types';
 import type { CheckoutConfig } from './types';
 import { SHIPPING_METHODS } from '../pricing';
@@ -74,19 +75,13 @@ export function findPaymentMethod(config: CheckoutConfig, id: string | null) {
 }
 
 /**
- * The delivery window as a sentence: "2–4 working days", "Next working day".
+ * The delivery window as a sentence: "45 minutes", "2–3 hours", "3–5 working
+ * days", "Same day".
  *
- * Derived from `etaDays` rather than stored as prose, so the estimate the
- * shopper reads can never disagree with the dates the order carries (see
+ * Derived from the method's `eta` rather than stored as prose, so the estimate
+ * the shopper reads can never disagree with the dates the order carries (see
  * `estimateWindow` in ../orders/read.ts).
  */
-export function deliveryEstimate(method: { etaDays: [number, number]; kind?: 'delivery' | 'pickup' }): string {
-  const [from, to] = method.etaDays;
-  if (method.kind === 'pickup') {
-    if (to <= 0) return 'Ready to collect today';
-    return `Ready to collect in ${to} working day${to === 1 ? '' : 's'}`;
-  }
-  if (to <= 0) return 'Same day';
-  if (from === to) return from === 1 ? 'Next working day' : `${from} working days`;
-  return `${from}–${to} working days`;
+export function deliveryEstimate(method: { eta: DeliveryEta; kind?: 'delivery' | 'pickup' }): string {
+  return method.kind === 'pickup' ? formatReady(method.eta) : formatEta(method.eta);
 }

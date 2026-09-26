@@ -10,6 +10,8 @@
  * NGN) — never floats — matching `lib/billing/paystack.ts`'s `toKobo`.
  */
 
+import type { DeliveryEta } from './delivery/eta';
+
 export type Money = number; // minor units (kobo)
 
 export type ProductTag =
@@ -120,6 +122,14 @@ export interface Product {
   rating: ReviewSummary;
   /** lifetime units sold — surfaced as social proof on cards ("8 Sold") */
   soldCount: number;
+  /**
+   * The merchant requires this item to be paid for before it is delivered.
+   *
+   * A rule about the ORDER, not the line: one such item in the bag takes
+   * pay on delivery off the whole order, because a courier can't collect
+   * for half of it. Checkout says so; the server enforces it.
+   */
+  requiresPrepayment: boolean;
   createdAt: string; // ISO
   /** merchandising: related product ids (falls back to same-category) */
   relatedIds: string[];
@@ -505,6 +515,8 @@ export interface CartItem {
   quantity: number;
   maxQuantity: number;
   currency: string;
+  /** snapshot of the product's payment terms — re-derived by `reconcileCart` */
+  requiresPrepayment: boolean;
   addedAt: number;
 }
 
@@ -545,7 +557,8 @@ export interface ShippingMethod {
   description: string;
   /** what the shopper pays for it on this order (0 once a free-over threshold is met) */
   price: Money;
-  etaDays: [number, number];
+  /** how long it takes — minutes, plus the unit the merchant measures in */
+  eta: DeliveryEta;
   /** 'pickup' means nothing is delivered; absent on the demo fixtures */
   kind?: 'delivery' | 'pickup';
   /** the price before any free-delivery threshold */

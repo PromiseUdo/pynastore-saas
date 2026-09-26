@@ -18,6 +18,7 @@ const method = (id: string, label: string, provider: 'squad' | 'manual', enabled
   description: '',
   handoffNote: '',
   provider,
+  settlesOnDelivery: id === 'pod',
   enabled,
 });
 

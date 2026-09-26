@@ -99,6 +99,9 @@ const OVERRIDES: Record<string, string> = {
   'billing.subscription.payment_failed': 'A subscription payment failed',
   'inventory.putaway.location_set': 'Set a shelf location',
   'inventory.warehouse.sells_online_changed': 'Changed whether a store sells online',
+  'inventory.warehouse.products_added': 'Added products to a store',
+  'inventory.warehouse.stock_settings_updated': 'Changed a product’s stock settings at a store',
+  'inventory.warehouse.product_removed': 'Stopped a store carrying a product',
   'procurement.po.dropship_delivered': 'Marked a drop-shipped order delivered',
   'sales.invoice.payment_recorded': 'Recorded a payment on an invoice',
   'sales.invoice.reminded': 'Sent a reminder about an invoice',
@@ -115,6 +118,7 @@ const OVERRIDES: Record<string, string> = {
   'settings.storefront.updated': 'Changed the storefront’s look',
   'settings.returns.updated': 'Updated the returns policy',
   'staff.member.role_changed': 'Changed a member’s role',
+  'staff.member.stores_changed': 'Changed which stores a member can work in',
 };
 
 /**

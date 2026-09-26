@@ -8,6 +8,7 @@
  * database stores major units and ./read.ts converts at that boundary, the
  * same way the catalogue mapper does for prices.
  */
+import type { DeliveryEta } from '../delivery/eta';
 import type { Money } from '../types';
 import type { TransferAccount } from '../checkout/types';
 
@@ -88,8 +89,8 @@ export interface StorefrontOrder {
     methodId: string;
     label: string;
     fee: Money;
-    /** working days, as quoted at checkout */
-    etaDays: [number, number];
+    /** how long it takes, as quoted at checkout */
+    eta: DeliveryEta;
     /** ISO dates bracketing the estimate, worked out from `placedAt` */
     estimated: { from: string; to: string };
   };

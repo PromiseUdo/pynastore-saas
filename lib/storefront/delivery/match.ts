@@ -23,6 +23,7 @@
  */
 import { normalizePlace } from '@/lib/geo/nigeria';
 import type { Money, ShippingMethod } from '../types';
+import { eta, formatEta, type DeliveryEta, type DeliveryEtaUnit } from './eta';
 
 export type ZoneKind = 'CITIES' | 'STATES' | 'NATIONWIDE';
 
@@ -41,8 +42,10 @@ export interface RateSetup {
   id: string;
   name: string;
   price: Money;
-  minDays: number;
-  maxDays: number;
+  /** delivery time from dispatch, in minutes, said in `etaUnit` */
+  minMinutes: number;
+  maxMinutes: number;
+  etaUnit: DeliveryEtaUnit;
   freeOver: Money | null;
   isActive: boolean;
 }
@@ -54,7 +57,8 @@ export interface PickupSetup {
   city: string;
   state: string;
   instructions: string | null;
-  readyInDays: number;
+  readyMinutes: number;
+  readyUnit: DeliveryEtaUnit;
   price: Money;
   isActive: boolean;
 }
@@ -110,10 +114,9 @@ export function matchZone(setup: DeliverySetup, address: DeliveryAddress): ZoneS
   return best?.zone ?? null;
 }
 
-export function workingDays([min, max]: [number, number]): string {
-  if (max <= 0) return 'Same day';
-  if (min === max) return min === 1 ? 'Next working day' : `${min} working days`;
-  return `${min}–${max} working days`;
+/** The wording lives in ./eta.ts, so every screen says a window the same way. */
+export function etaText(value: DeliveryEta): string {
+  return formatEta(value);
 }
 
 function rateOption(zone: ZoneSetup, rate: RateSetup, subtotal: Money): ShippingMethod {
@@ -126,7 +129,7 @@ function rateOption(zone: ZoneSetup, rate: RateSetup, subtotal: Money): Shipping
     price: free ? 0 : rate.price,
     regularPrice: rate.price,
     freeOver: rate.freeOver,
-    etaDays: [rate.minDays, rate.maxDays],
+    eta: eta(rate.minMinutes, rate.maxMinutes, rate.etaUnit),
   };
 }
 
@@ -139,7 +142,7 @@ function pickupOption(pickup: PickupSetup): ShippingMethod {
     price: pickup.price,
     regularPrice: pickup.price,
     freeOver: null,
-    etaDays: [pickup.readyInDays, pickup.readyInDays],
+    eta: eta(pickup.readyMinutes, pickup.readyMinutes, pickup.readyUnit),
     pickup: {
       name: pickup.name,
       address: pickup.address,
@@ -162,7 +165,7 @@ export function quoteFromSetup(
     ? zone.rates
         .filter((rate) => rate.isActive)
         .map((rate) => rateOption(zone, rate, subtotal))
-        .sort((a, b) => a.price - b.price || a.etaDays[0] - b.etaDays[0])
+        .sort((a, b) => a.price - b.price || a.eta.minMinutes - b.eta.minMinutes)
     : [];
 
   const pickups = setup.pickups.filter((p) => p.isActive).map(pickupOption);

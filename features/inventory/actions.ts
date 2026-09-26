@@ -61,6 +61,32 @@ export {
 } from './warehouses';
 
 export {
+  getStoreDetail,
+  getStoreInventory,
+  getStoreActivity,
+  getStoreOpenTransfers,
+  type StoreDetail,
+  type StoreInventoryParams,
+  type StoreInventoryResult,
+  type StoreInventoryRow,
+  type StoreStockState,
+  type StoreActivityRow,
+  type StoreTransferRow,
+  type ThresholdSource,
+} from './store-detail';
+
+export {
+  searchStoreCandidates,
+  assignProductsToStore,
+  setStoreStockSettings,
+  removeProductFromStore,
+  type StoreCandidateRow,
+  type AssignProductsInput,
+  type AssignProductsResult,
+  type StoreStockSettingsInput,
+} from './store-products';
+
+export {
   createStockMovement,
   recordStockIn,
   getProductStockUnits,

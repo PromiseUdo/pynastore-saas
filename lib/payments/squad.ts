@@ -4,9 +4,9 @@
  * Thin server-only client for Squad (squadco.com). Never import from a client
  * component — it reads SQUADCO_SECRET_KEY.
  *
- * Only the three things the storefront needs: start a transaction (Squad
- * returns a hosted checkout URL), verify one by reference, and check a
- * webhook's signature. Deciding what a verified transaction MEANS for an
+ * Start a transaction (Squad returns a hosted checkout URL), verify one by
+ * reference, check a webhook's signature, and look up the name on a bank
+ * account (Settings → Payments). Deciding what a verified transaction MEANS for an
  * order is not this file's job — see lib/storefront/checkout/payment-service.ts.
  *
  * Amounts here are MINOR units (kobo), which is what Squad works in.
@@ -162,6 +162,38 @@ export async function verifyTransaction(transactionRef: string): Promise<SquadTr
     };
   } catch (error) {
     if (error instanceof SquadError && (error.httpStatus === 400 || error.httpStatus === 404)) return null;
+    throw error;
+  }
+}
+
+/* ---------------- account lookup ---------------- */
+
+/**
+ * The name the bank holds for an account, so a merchant confirms it rather
+ * than types it. Returns null when the bank says there's no such account
+ * (Squad answers that with a 400/404). Throws on anything else, so an outage
+ * is never shown to a merchant as "account not found".
+ *
+ * Squad also answers 400 "Merchant not eligible to use this endpoint" when the
+ * platform account hasn't had the Transfer API switched on — that's our
+ * problem, not the merchant's number, so it throws too.
+ */
+export async function lookupAccountName(bankCode: string, accountNumber: string): Promise<string | null> {
+  try {
+    const data = await squadFetch<{ account_name?: string }>('/payout/account/lookup', {
+      method: 'POST',
+      body: JSON.stringify({ bank_code: bankCode, account_number: accountNumber }),
+    });
+    const name = data.account_name?.trim();
+    return name ? name : null;
+  } catch (error) {
+    if (
+      error instanceof SquadError &&
+      (error.httpStatus === 400 || error.httpStatus === 404) &&
+      !/eligible|authori[sz]|permission|forbidden/i.test(error.message)
+    ) {
+      return null;
+    }
     throw error;
   }
 }

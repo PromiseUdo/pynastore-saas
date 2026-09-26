@@ -5,13 +5,14 @@ import { requireFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { getAgingInventoryReport, getSellThroughReport, getProfitabilityReport } from '@/features/inventory/actions';
+import { getSalesByStore } from '@/features/sales/store-sales';
 import { AdvancedReportsPageClient, type AdvancedView } from './_components/AdvancedReportsPageClient';
 
 export const metadata: Metadata = { title: 'Sales-based reports' };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v || undefined);
-const VIEWS: AdvancedView[] = ['aging', 'sell-through', 'profit'];
+const VIEWS: AdvancedView[] = ['aging', 'sell-through', 'profit', 'by-store'];
 const PERIODS = [30, 60, 90, 180, 365];
 
 export default async function AdvancedReportsPage({ searchParams }: { searchParams: SearchParams }) {
@@ -32,14 +33,17 @@ export default async function AdvancedReportsPage({ searchParams }: { searchPara
   const periodParam = Number(one(raw.days));
   const days = PERIODS.includes(periodParam) ? periodParam : 30;
 
-  const [aging, sellThrough, profitability] = await Promise.all([
+  const since = new Date(Date.now() - days * 86_400_000);
+  const [aging, sellThrough, profitability, byStore] = await Promise.all([
     getAgingInventoryReport(),
     getSellThroughReport({ sinceDays: days }),
-    getProfitabilityReport({ dateFrom: new Date(Date.now() - days * 86_400_000) }),
+    getProfitabilityReport({ dateFrom: since }),
+    getSalesByStore({ from: since, to: new Date() }),
   ]);
   if (!aging.success) throw new Error(aging.error);
   if (!sellThrough.success) throw new Error(sellThrough.error);
   if (!profitability.success) throw new Error(profitability.error);
+  if (!byStore.success) throw new Error(byStore.error);
 
   return (
     <AdvancedReportsPageClient
@@ -49,6 +53,7 @@ export default async function AdvancedReportsPage({ searchParams }: { searchPara
       aging={aging.data}
       sellThrough={sellThrough.data}
       profitability={profitability.data}
+      byStore={byStore.data}
     />
   );
 }

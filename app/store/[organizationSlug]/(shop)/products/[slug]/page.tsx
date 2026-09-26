@@ -131,7 +131,7 @@ export default async function ProductDetailPage({ params }: Props) {
 
       <ProductPurchase
         product={product}
-        deliveryPanel={<ProductDelivery delivery={delivery} />}
+        deliveryPanel={<ProductDelivery delivery={delivery} requiresPrepayment={product.requiresPrepayment} />}
         sizeGuideHref={sizeGuide?.href ?? null}
       />
 

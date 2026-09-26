@@ -421,6 +421,7 @@ export async function alertLowStock(scope: { organizationId: string; organizatio
         organizationSlug: scope.organizationSlug,
         itemName: item.name,
         itemSku: item.sku,
+        warehouseId: entry.warehouseId,
         warehouseName: level.warehouse.name,
         previousQty: entry.previousQty,
         newQty: entry.newQty,

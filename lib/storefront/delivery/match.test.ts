@@ -10,8 +10,9 @@ const rate = (id: string, price: number, over: Partial<ZoneSetup['rates'][number
   id,
   name: id,
   price,
-  minDays: 1,
-  maxDays: 3,
+  minMinutes: 1440,
+  maxMinutes: 4320,
+  etaUnit: 'DAYS' as const,
   freeOver: null,
   isActive: true,
   ...over,
@@ -27,7 +28,7 @@ const zone = (over: Partial<ZoneSetup> & Pick<ZoneSetup, 'id' | 'kind'>): ZoneSe
   ...over,
 });
 
-const PH = zone({ id: 'ph', name: 'Within Port Harcourt', kind: 'CITIES', state: 'Rivers', cities: ['Port Harcourt', 'Obio-Akpor'], rates: [rate('ph-local', 150_000), rate('ph-same-day', 300_000, { minDays: 0, maxDays: 0 })] });
+const PH = zone({ id: 'ph', name: 'Within Port Harcourt', kind: 'CITIES', state: 'Rivers', cities: ['Port Harcourt', 'Obio-Akpor'], rates: [rate('ph-local', 150_000), rate('ph-same-day', 300_000, { minMinutes: 0, maxMinutes: 0 })] });
 const SOUTH = zone({ id: 'south', name: 'South-South', kind: 'STATES', states: ['Rivers', 'Bayelsa', 'Delta'], rates: [rate('south-standard', 300_000)] });
 const REST = zone({ id: 'rest', name: 'Rest of Nigeria', kind: 'NATIONWIDE', rates: [rate('rest-standard', 500_000), rate('rest-express', 900_000)] });
 const SHOP = {
@@ -37,7 +38,8 @@ const SHOP = {
   city: 'Port Harcourt',
   state: 'Rivers',
   instructions: 'Ask at the counter',
-  readyInDays: 1,
+  readyMinutes: 1440,
+  readyUnit: 'DAYS' as const,
   price: 0,
   isActive: true,
 };

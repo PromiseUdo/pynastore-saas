@@ -26,6 +26,7 @@ import {
 import { createQuote } from '@/features/sales/actions';
 import type { CustomerRow } from '@/features/sales/actions';
 import type { ItemListRow } from '@/features/inventory/actions';
+import { formatMoney } from '@/lib/format';
 
 type LineItemRow = { inventoryItemId: string; description: string; quantity: string; unitPrice: string };
 
@@ -208,7 +209,7 @@ export function CreateQuoteDialog({ open, onOpenChange, customers, items }: Crea
               <Input id="quote-tax" type="number" min="0" value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} />
             </div>
             <div className="flex items-end justify-end text-sm text-muted-foreground">
-              Subtotal: {subtotal.toFixed(2)}
+              Subtotal: {formatMoney(subtotal)}
             </div>
           </div>
 

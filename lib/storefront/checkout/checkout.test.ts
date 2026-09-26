@@ -18,6 +18,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getCheckoutConfig, deliveryEstimate, findDeliveryMethod, findPaymentMethod } from './config';
 import { calculateCheckoutTotals, checkoutItemCount } from './totals';
 import { checkoutSchema, contactSchema, phoneDigits } from './schema';
+import {
+  isPaymentMethodAllowed,
+  orderRequiresPrepayment,
+  prepaymentReason,
+  PREPAYMENT_REQUIRED_MESSAGE,
+} from './payment-terms';
 import { addressFromContact, addressLines, emptyAddress, fromStoredAddress, toStoredAddress } from './address';
 /* The one call that leaves the browser. Mocked here so these tests stay
  * about the pre-flight contract: what gets sent, and what never does. */
@@ -121,8 +127,20 @@ describe('checkout configuration', () => {
   });
 
   it('reads a delivery window off the method rather than storing prose', () => {
-    expect(deliveryEstimate({ etaDays: [2, 4] })).toBe('2–4 working days');
-    expect(deliveryEstimate({ etaDays: [1, 1] })).toBe('Next working day');
+    expect(deliveryEstimate({ eta: { minMinutes: 2880, maxMinutes: 5760, unit: 'DAYS' } })).toBe('2–4 working days');
+    expect(deliveryEstimate({ eta: { minMinutes: 1440, maxMinutes: 1440, unit: 'DAYS' } })).toBe('Next working day');
+  });
+
+  /* Not every merchant delivers in days: a rider is minutes or hours away,
+   * and rounding that to "0 working days" would tell the shopper nothing. */
+  it('says a window in the unit the merchant measures in', () => {
+    expect(deliveryEstimate({ eta: { minMinutes: 45, maxMinutes: 45, unit: 'MINUTES' } })).toBe('Within 45 minutes');
+    expect(deliveryEstimate({ eta: { minMinutes: 30, maxMinutes: 60, unit: 'MINUTES' } })).toBe('30–60 minutes');
+    expect(deliveryEstimate({ eta: { minMinutes: 120, maxMinutes: 180, unit: 'HOURS' } })).toBe('2–3 hours');
+    expect(deliveryEstimate({ eta: { minMinutes: 0, maxMinutes: 0, unit: 'DAYS' } })).toBe('Same day');
+    expect(deliveryEstimate({ eta: { minMinutes: 120, maxMinutes: 120, unit: 'HOURS' }, kind: 'pickup' })).toBe(
+      'Ready to collect in 2 hours',
+    );
   });
 
   it('resolves only ids the store actually offers', () => {
@@ -310,7 +328,7 @@ describe('delivery and payment selection', () => {
    * address happens before submitting — and again on the server. */
   it('refuses a delivery option that was not quoted for the address', () => {
     expect(validateCheckout(draft({ deliveryMethodId: 'teleport' }))?.code).toBe('invalid-delivery-method');
-    const quoted = [{ id: 'rate_abc', label: 'Standard', description: '', price: 150_000, etaDays: [1, 2] as [number, number] }];
+    const quoted = [{ id: 'rate_abc', label: 'Standard', description: '', price: 150_000, eta: { minMinutes: 1440, maxMinutes: 2880, unit: 'DAYS' as const } }];
     expect(validateCheckout(draft({ deliveryMethodId: 'rate_abc', deliveryOptions: quoted }))).toBeNull();
     expect(validateCheckout(draft({ deliveryMethodId: config.deliveryMethods[0].id, deliveryOptions: quoted }))?.code).toBe(
       'invalid-delivery-method',
@@ -402,6 +420,51 @@ describe('checkout validation', () => {
       expect(failure.message).toMatch(/[.!]$/);
       expect(failure.message).not.toMatch(/undefined|Error|zod|\[object/i);
     }
+  });
+});
+
+/*
+ * A merchant can insist on payment before delivery for a product. The rule is
+ * about the ORDER — one such item takes pay on delivery off everything in the
+ * bag — and the same three functions answer for the screen, this pre-flight
+ * check and the server.
+ */
+describe('items that must be paid for before delivery', () => {
+  const pod = config.paymentMethods.find((m) => m.settlesOnDelivery)!;
+  const online = config.paymentMethods.find((m) => !m.settlesOnDelivery)!;
+  const strict = (item: CartItem): CartItem => ({ ...item, requiresPrepayment: true });
+
+  it('offers pay on delivery for an ordinary bag', () => {
+    expect(isPaymentMethodAllowed(pod, [line(A, 1)])).toBe(true);
+  });
+
+  it('withdraws it as soon as ONE line requires payment up front', () => {
+    const mixed = [line(A, 1), strict(line(B, 1))];
+    expect(isPaymentMethodAllowed(pod, mixed)).toBe(false);
+    expect(orderRequiresPrepayment(mixed)).toBe(true);
+  });
+
+  it('never withdraws paying online', () => {
+    expect(isPaymentMethodAllowed(online, [strict(line(A, 1))])).toBe(true);
+  });
+
+  it('refuses the checkout rather than quietly changing how they pay', () => {
+    const failure = validateCheckout(
+      draft({ items: [line(A, 1), strict(line(B, 1))], paymentMethodId: pod.id }),
+    );
+    expect(failure?.code).toBe('invalid-payment-method');
+    expect(failure?.message).toBe(PREPAYMENT_REQUIRED_MESSAGE);
+  });
+
+  it('names the items, so the shopper knows what to take out', () => {
+    const reason = prepaymentReason([line(A, 1), strict(line(B, 1))]);
+    expect(reason).toContain(B.name);
+    expect(reason).not.toContain(A.name);
+  });
+
+  it('summarises a long list instead of reciting it', () => {
+    const many = PRODUCTS.slice(0, 5).map((p) => strict(line(p, 1)));
+    expect(prepaymentReason(many)).toMatch(/and 2 other items/);
   });
 });
 

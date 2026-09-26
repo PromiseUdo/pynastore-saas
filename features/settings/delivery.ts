@@ -29,6 +29,7 @@ import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { NIGERIAN_STATES, normalizePlace, parsePlaceList } from '@/lib/geo/nigeria';
 import { quoteFromSetup, type DeliverySetup } from '@/lib/storefront/delivery/match';
+import { ETA_UNITS, toMinutes, type DeliveryEtaUnit } from '@/lib/storefront/delivery/eta';
 import { MAX_RETURN_WINDOW_DAYS } from '@/lib/storefront/orders/policy';
 
 type Result<T = void> = { success: true; data: T } | { success: false; error: string; fieldErrors?: Record<string, string> };
@@ -39,8 +40,10 @@ export interface DeliveryRateRow {
   id: string;
   name: string;
   price: number;
-  minDays: number;
-  maxDays: number;
+  /** the window in minutes, said in `etaUnit` — see lib/storefront/delivery/eta.ts */
+  minMinutes: number;
+  maxMinutes: number;
+  etaUnit: DeliveryEtaUnit;
   freeOver: number | null;
   isActive: boolean;
 }
@@ -63,7 +66,8 @@ export interface PickupLocationRow {
   city: string;
   state: string;
   instructions: string | null;
-  readyInDays: number;
+  readyMinutes: number;
+  readyUnit: DeliveryEtaUnit;
   price: number;
   isActive: boolean;
 }
@@ -118,8 +122,9 @@ async function loadSettings(organizationId: string): Promise<DeliverySettings> {
         id: rate.id,
         name: rate.name,
         price: Number(rate.price),
-        minDays: rate.minDays,
-        maxDays: rate.maxDays,
+        minMinutes: rate.minMinutes,
+        maxMinutes: rate.maxMinutes,
+        etaUnit: rate.etaUnit,
         freeOver: num(rate.freeOver),
         isActive: rate.isActive,
       })),
@@ -131,7 +136,8 @@ async function loadSettings(organizationId: string): Promise<DeliverySettings> {
       city: p.city,
       state: p.state,
       instructions: p.instructions,
-      readyInDays: p.readyInDays,
+      readyMinutes: p.readyMinutes,
+      readyUnit: p.readyUnit,
       price: Number(p.price),
       isActive: p.isActive,
     })),
@@ -334,12 +340,32 @@ const money = (label: string) =>
     .min(0, `${label[0].toUpperCase()}${label.slice(1)} can’t be negative`)
     .max(10_000_000, `That ${label} looks too high`);
 
+/*
+ * Delivery time. A merchant measures it in whatever unit fits their trade —
+ * a supermarket runs in minutes, a rider in hours, a wholesaler in working
+ * days — so the form takes a number in a unit and we keep both the minutes
+ * and the unit (lib/storefront/delivery/eta.ts). 0 to 0 means same day.
+ */
+const ETA_MAX: Record<DeliveryEtaUnit, number> = { MINUTES: 1440, HOURS: 72, DAYS: 60 };
+const ETA_NOUN: Record<DeliveryEtaUnit, string> = { MINUTES: 'minutes', HOURS: 'hours', DAYS: 'days' };
+
+const etaUnitEnum = z.enum(ETA_UNITS, { error: 'Choose minutes, hours or days' });
+
+const etaAmount = z.coerce.number().int('Use whole numbers').min(0, 'This can’t be negative');
+
+function checkEtaAmount(ctx: z.RefinementCtx, unit: DeliveryEtaUnit, value: number, path: string) {
+  if (value > ETA_MAX[unit]) {
+    ctx.addIssue({ code: 'custom', path: [path], message: `Keep it under ${ETA_MAX[unit]} ${ETA_NOUN[unit]}` });
+  }
+}
+
 const RateSchema = z
   .object({
     name: z.string().trim().min(2, 'Name this option, e.g. Standard or Same day').max(40, 'Keep the name under 40 characters'),
     price: money('a price'),
-    minDays: z.coerce.number().int('Use whole days').min(0, 'Days can’t be negative').max(60, 'Keep it under 60 days'),
-    maxDays: z.coerce.number().int('Use whole days').min(0, 'Days can’t be negative').max(60, 'Keep it under 60 days'),
+    etaUnit: etaUnitEnum.default('DAYS'),
+    minTime: etaAmount,
+    maxTime: etaAmount,
     freeOver: z
       .union([z.literal(''), z.null(), money('an amount')])
       .transform((v) => (v === '' || v === null ? null : v))
@@ -347,8 +373,10 @@ const RateSchema = z
     isActive: z.boolean().default(true),
   })
   .superRefine((rate, ctx) => {
-    if (rate.maxDays < rate.minDays) {
-      ctx.addIssue({ code: 'custom', path: ['maxDays'], message: 'Must be the same as or more than the fastest time' });
+    checkEtaAmount(ctx, rate.etaUnit, rate.minTime, 'minTime');
+    checkEtaAmount(ctx, rate.etaUnit, rate.maxTime, 'maxTime');
+    if (rate.maxTime < rate.minTime) {
+      ctx.addIssue({ code: 'custom', path: ['maxTime'], message: 'Must be the same as or more than the fastest time' });
     }
   });
 
@@ -364,7 +392,14 @@ export async function saveDeliveryRate(zoneId: string, rateId: string | null, in
     const zone = await prisma.deliveryZone.findFirst({ where: { id: zoneId, organizationId: ctx.organization.id }, select: { id: true } });
     if (!zone) return { success: false, error: 'That zone no longer exists' };
 
-    const data = { ...parsed.data, zoneId };
+    const { minTime, maxTime, etaUnit, ...rest } = parsed.data;
+    const data = {
+      ...rest,
+      zoneId,
+      etaUnit,
+      minMinutes: toMinutes(minTime, etaUnit),
+      maxMinutes: toMinutes(maxTime, etaUnit),
+    };
     let id: string;
     if (rateId) {
       const updated = await prisma.deliveryRate.updateMany({ where: { id: rateId, organizationId: ctx.organization.id }, data });
@@ -409,7 +444,8 @@ export async function deleteDeliveryRate(rateId: string): Promise<Result> {
 
 /* ---------------- pickup locations ---------------- */
 
-const PickupSchema = z.object({
+const PickupSchema = z
+  .object({
   name: z.string().trim().min(2, 'Name this location, e.g. Main shop').max(60, 'Keep the name under 60 characters'),
   address: z.string().trim().min(5, 'Enter the street address').max(200, 'Keep the address under 200 characters'),
   city: z.string().trim().min(2, 'Enter the city or town').max(80),
@@ -420,8 +456,11 @@ const PickupSchema = z.object({
     .max(200, 'Keep instructions under 200 characters')
     .transform((v) => v || null)
     .nullish(),
-  readyInDays: z.coerce.number().int('Use whole days').min(0, 'Days can’t be negative').max(30, 'Keep it under 30 days'),
+  readyUnit: etaUnitEnum.default('DAYS'),
+  readyTime: etaAmount,
   isActive: z.boolean().default(true),
+}).superRefine((pickup, ctx) => {
+  checkEtaAmount(ctx, pickup.readyUnit, pickup.readyTime, 'readyTime');
 });
 
 export type PickupLocationInput = z.input<typeof PickupSchema>;
@@ -433,7 +472,13 @@ export async function savePickupLocation(pickupId: string | null, input: PickupL
     if (!parsed.success) {
       return { success: false, error: 'Check the highlighted fields', fieldErrors: fieldErrors(parsed.error) };
     }
-    const data = { ...parsed.data, instructions: parsed.data.instructions ?? null };
+    const { readyTime, readyUnit, ...rest } = parsed.data;
+    const data = {
+      ...rest,
+      instructions: parsed.data.instructions ?? null,
+      readyUnit,
+      readyMinutes: toMinutes(readyTime, readyUnit),
+    };
 
     let id: string;
     if (pickupId) {
@@ -496,8 +541,8 @@ export async function createSuggestedDelivery(): Promise<Result> {
         kind: 'NATIONWIDE',
         rates: {
           create: [
-            { organizationId: ctx.organization.id, name: 'Standard', price: 3500, minDays: 3, maxDays: 5, sortOrder: 0 },
-            { organizationId: ctx.organization.id, name: 'Express', price: 7000, minDays: 1, maxDays: 2, sortOrder: 1 },
+            { organizationId: ctx.organization.id, name: 'Standard', price: 3500, minMinutes: toMinutes(3, 'DAYS'), maxMinutes: toMinutes(5, 'DAYS'), sortOrder: 0 },
+            { organizationId: ctx.organization.id, name: 'Express', price: 7000, minMinutes: toMinutes(1, 'DAYS'), maxMinutes: toMinutes(2, 'DAYS'), sortOrder: 1 },
           ],
         },
       },

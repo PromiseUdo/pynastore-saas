@@ -98,6 +98,14 @@ export interface PaymentMethodOption {
   /** what happens after Place Order, in the shopper's words */
   handoffNote: string;
   provider: 'squad' | 'manual';
+  /**
+   * The money is collected when the goods arrive, not before.
+   *
+   * The one thing a component may branch on: an order holding an item the
+   * merchant wants paid up front can't use a method like this — see
+   * ./payment-terms.ts.
+   */
+  settlesOnDelivery: boolean;
   enabled: boolean;
 }
 

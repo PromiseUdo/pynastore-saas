@@ -60,6 +60,7 @@ export const CHECKOUT_PAYMENT_METHODS: PaymentMethodOption[] = [
     handoffNote:
       'After you place this order you’ll go to Squad’s secure payment page to pay by card or bank transfer. No card details are entered on this site.',
     provider: 'squad',
+    settlesOnDelivery: false,
     enabled: true,
   },
   {
@@ -69,6 +70,7 @@ export const CHECKOUT_PAYMENT_METHODS: PaymentMethodOption[] = [
     handoffNote:
       'Nothing is charged now. The store will confirm your order, and you pay the courier when it arrives — have the exact total ready if you’re paying cash.',
     provider: 'manual',
+    settlesOnDelivery: true,
     enabled: true,
   },
 ];
@@ -83,6 +85,7 @@ export const BANK_TRANSFER_METHOD: PaymentMethodOption = {
   description: 'Transfer the total to the store’s bank account',
   handoffNote: `After you place this order you’ll see the store’s bank details. Transfer the exact total within ${TRANSFER_HOLD_HOURS} hours and use your order number as the reference — the store confirms your order once the money arrives.`,
   provider: 'manual',
+  settlesOnDelivery: false,
   enabled: true,
 };
 

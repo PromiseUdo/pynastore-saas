@@ -37,10 +37,20 @@ export default async function MembersPage() {
         },
       },
       role: {
-        select: { id: true, name: true },
+        select: { id: true, name: true, isSystem: true },
       },
+      /* Which stores each member may change stock in — no rows means every
+       * store (ROADMAP Phase 8.6). */
+      warehouses: { select: { warehouse: { select: { id: true, name: true } } } },
     },
     orderBy: { joinedAt: 'asc' },
+  });
+
+  // Every store, for the "which stores" dialog.
+  const stores = await prisma.warehouse.findMany({
+    where: { organizationId: ctx.organization.id },
+    select: { id: true, name: true, status: true },
+    orderBy: { name: 'asc' },
   });
 
   // Fetch pending invitations
@@ -75,6 +85,8 @@ export default async function MembersPage() {
     user: m.user,
     role: m.role,
     joinedAt: m.joinedAt,
+    storeIds: m.warehouses.map((w) => w.warehouse.id),
+    storeNames: m.warehouses.map((w) => w.warehouse.name),
   }));
 
   const invitationRows = invitations.map((inv) => ({
@@ -101,6 +113,7 @@ export default async function MembersPage() {
           <MembersTable
             members={memberRows}
             roles={roles}
+            stores={stores.map((s) => ({ id: s.id, name: s.name, isOpen: s.status === 'ACTIVE' }))}
             currentUserId={ctx.userId}
             canManage={canManage}
             canViewActivity={canViewActivity}

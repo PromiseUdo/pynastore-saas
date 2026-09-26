@@ -8,6 +8,7 @@ import { createAuditLog } from '@/lib/audit';
 import { getOrganizationEntitlements } from '@/lib/billing/entitlements';
 import { getPlanLimit } from '@/lib/billing/plans';
 import { WarehouseStatus } from '@/lib/generated/prisma/enums';
+import { canUseStore, requireStoreAccess } from '@/lib/store-access';
 import { type ActionResult, toActionError } from './shared';
 
 export type WarehouseRow = {
@@ -17,6 +18,13 @@ export type WarehouseRow = {
   status: WarehouseStatus;
   sellsOnline: boolean;
   itemCount: number;
+  /**
+   * Whether the signed-in member may change stock here (ROADMAP Phase 8.6).
+   * Every row is still returned — seeing that Port Harcourt has three left is
+   * how a clerk tells a customer where to go — but a store picker on a form
+   * that WRITES should offer only the ones where this is true.
+   */
+  canWorkHere: boolean;
 };
 
 const WarehouseSchema = z.object({
@@ -51,6 +59,7 @@ export async function listWarehouses(): Promise<ActionResult<WarehouseRow[]>> {
         status: w.status,
         sellsOnline: w.sellsOnline,
         itemCount: w._count.inventoryLevels,
+        canWorkHere: canUseStore(ctx.membership, w.id),
       })),
     };
   } catch (err) {
@@ -121,6 +130,7 @@ export async function updateWarehouse(
     if (!existing || existing.organizationId !== ctx.organization.id) {
       return { success: false, error: 'Store not found' };
     }
+    requireStoreAccess(ctx.membership, warehouseId);
 
     await prisma.warehouse.update({
       where: { id: warehouseId },
@@ -156,6 +166,7 @@ export async function setWarehouseSellsOnline(warehouseId: string, sellsOnline: 
       select: { name: true, status: true },
     });
     if (!existing) return { success: false, error: 'Store not found' };
+    requireStoreAccess(ctx.membership, warehouseId, existing.name);
     if (sellsOnline && existing.status !== WarehouseStatus.ACTIVE) {
       return { success: false, error: 'Reactivate this store before selling its stock online.' };
     }

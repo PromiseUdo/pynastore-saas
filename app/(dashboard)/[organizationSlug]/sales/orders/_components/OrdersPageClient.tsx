@@ -42,13 +42,22 @@ import type { StoreOrderList } from '@/features/sales/orders';
 const CHANNELS = ['ONLINE', 'WALK_IN', 'PHONE'] as const;
 const STATUSES = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const;
 
-export function OrdersPageClient({ list, canSell }: { list: StoreOrderList; canSell: boolean }) {
+export function OrdersPageClient({
+  list,
+  stores,
+  canSell,
+}: {
+  list: StoreOrderList;
+  stores: { id: string; name: string }[];
+  canSell: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const channel = searchParams.get('channel') ?? 'all';
   const status = searchParams.get('status') ?? 'all';
+  const store = searchParams.get('store') ?? 'all';
   const urlQuery = searchParams.get('q') ?? '';
   const [query, setQuery] = React.useState(urlQuery);
 
@@ -72,7 +81,7 @@ export function OrdersPageClient({ list, canSell }: { list: StoreOrderList; canS
     return () => clearTimeout(timer);
   }, [query, urlQuery, setParams]);
 
-  const filtered = channel !== 'all' || status !== 'all' || urlQuery !== '';
+  const filtered = channel !== 'all' || status !== 'all' || store !== 'all' || urlQuery !== '';
   const countFor = (key: string) => list.channelCounts.find((c) => c.channel === key)?.count ?? 0;
 
   const newSaleButton = canSell ? (
@@ -153,13 +162,29 @@ export function OrdersPageClient({ list, canSell }: { list: StoreOrderList; canS
           </SelectContent>
         </SelectRoot>
 
+        {stores.length > 1 && (
+          <SelectRoot value={store} onValueChange={(value) => setParams({ store: value })}>
+            <SelectTrigger className="w-44" aria-label="Filter by which store served it">
+              <SelectValue placeholder="All stores" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All stores</SelectItem>
+              {stores.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </SelectRoot>
+        )}
+
         {filtered && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => {
               setQuery('');
-              setParams({ q: null, channel: null, status: null });
+              setParams({ q: null, channel: null, status: null, store: null });
             }}
           >
             Clear filters
@@ -167,7 +192,7 @@ export function OrdersPageClient({ list, canSell }: { list: StoreOrderList; canS
         )}
       </PageToolbar>
 
-      <PageBody padded={false}>
+      <PageBody>
         {list.rows.length === 0 ? (
           <EmptyState
             variant="filtered"
@@ -179,7 +204,7 @@ export function OrdersPageClient({ list, canSell }: { list: StoreOrderList; canS
                 variant="outline"
                 onClick={() => {
                   setQuery('');
-                  setParams({ q: null, channel: null, status: null });
+                  setParams({ q: null, channel: null, status: null, store: null });
                 }}
               >
                 Clear filters
@@ -223,6 +248,12 @@ export function OrdersPageClient({ list, canSell }: { list: StoreOrderList; canS
                         </span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">
                           {order.city ? `${order.city}${order.state ? `, ${order.state}` : ''}` : '—'}
+                          {order.fulfilledFrom.length > 0 && (
+                            <>
+                              {' · '}
+                              {order.fulfilledFrom.map((s) => s.name).join(' + ')}
+                            </>
+                          )}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -254,17 +285,16 @@ export function OrdersPageClient({ list, canSell }: { list: StoreOrderList; canS
                   ))}
                 </TableBody>
               </Table>
+              {list.pageCount > 1 && (
+                <TablePagination
+                  page={list.page}
+                  totalPages={list.pageCount}
+                  totalItems={list.total}
+                  pageSize={list.perPage}
+                  onPageChange={(next) => setParams({ page: String(next) })}
+                />
+              )}
             </TableWrapper>
-
-            {list.pageCount > 1 && (
-              <TablePagination
-                page={list.page}
-                totalPages={list.pageCount}
-                totalItems={list.total}
-                pageSize={list.perPage}
-                onPageChange={(next) => setParams({ page: String(next) })}
-              />
-            )}
           </>
         )}
       </PageBody>

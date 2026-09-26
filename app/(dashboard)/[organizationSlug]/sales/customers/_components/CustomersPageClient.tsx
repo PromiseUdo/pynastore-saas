@@ -148,9 +148,12 @@ export function CustomersPageClient({
         <Figure label="Lifetime sales" value={money(list.summary.totalSpend)} />
       </div>
 
-      <div className="border-b bg-background px-6 pt-3">
+      {/* PageToolbar, like every other tabbed page: its `py-2.5` is exactly
+        * what PageTabs' `-mb-2.5` pulls back, so the active tab's underline
+        * lands ON the toolbar's bottom border instead of below it. */}
+      <PageToolbar className="gap-y-2">
         <PageTabs tabs={[...CUSTOMER_SEGMENTS]} current={segment} param="segment" />
-      </div>
+      </PageToolbar>
 
       <PageToolbar>
         <div className="relative min-w-52 flex-1 sm:max-w-xs">
@@ -195,7 +198,7 @@ export function CustomersPageClient({
         <p className="border-b bg-muted/30 px-6 py-2 text-xs text-muted-foreground">{segmentHint}</p>
       )}
 
-      <PageBody padded={false}>
+      <PageBody>
         {list.rows.length === 0 ? (
           <EmptyState
             variant="filtered"
@@ -286,17 +289,16 @@ export function CustomersPageClient({
                   ))}
                 </TableBody>
               </Table>
+              {list.pageCount > 1 && (
+                <TablePagination
+                  page={list.page}
+                  totalPages={list.pageCount}
+                  totalItems={list.total}
+                  pageSize={list.perPage}
+                  onPageChange={(next) => setParams({ page: String(next) })}
+                />
+              )}
             </TableWrapper>
-
-            {list.pageCount > 1 && (
-              <TablePagination
-                page={list.page}
-                totalPages={list.pageCount}
-                totalItems={list.total}
-                pageSize={list.perPage}
-                onPageChange={(next) => setParams({ page: String(next) })}
-              />
-            )}
           </>
         )}
       </PageBody>

@@ -26,6 +26,7 @@ import type {
   CheckoutContact,
 } from './types';
 import { findPaymentMethod } from './config';
+import { isPaymentMethodAllowed, PREPAYMENT_REQUIRED_MESSAGE } from './payment-terms';
 import { checkoutSchema } from './schema';
 import { MAX_LINE_QUANTITY } from '../cart';
 import { placeOrderAction } from '@/features/shop-orders/actions';
@@ -151,8 +152,15 @@ export function validateCheckout(input: SubmitCheckoutInput): CheckoutFailure | 
   if (!findDeliveryOption(input)) {
     return fail('invalid-delivery-method', 'That delivery option is no longer available. Pick another one.');
   }
-  if (!findPaymentMethod(input.config, input.paymentMethodId)) {
+  const paymentMethod = findPaymentMethod(input.config, input.paymentMethodId);
+  if (!paymentMethod) {
     return fail('invalid-payment-method', 'That payment method is no longer available. Pick another one.');
+  }
+  /* Pay on delivery against a bag the merchant wants paid up front. The
+   * payment step already greys this out; a bag edited in another tab, or a
+   * hand-edited draft, arrives here. */
+  if (!isPaymentMethodAllowed(paymentMethod, input.items)) {
+    return fail('invalid-payment-method', PREPAYMENT_REQUIRED_MESSAGE);
   }
 
   for (const item of input.items) {

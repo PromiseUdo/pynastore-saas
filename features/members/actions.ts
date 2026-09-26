@@ -19,6 +19,12 @@ const RemoveMemberSchema = z.object({
   membershipId: z.string().min(1),
 });
 
+const SetStoresSchema = z.object({
+  membershipId: z.string().min(1),
+  /** Empty = every store. */
+  warehouseIds: z.array(z.string().min(1)).max(100),
+});
+
 /**
  * Change a member's role within the organization.
  * Requires STAFF_MANAGE permission.
@@ -104,6 +110,79 @@ export async function updateMemberRole(
     }
     console.error('[updateMemberRole]', err);
     return { success: false, error: 'Failed to update role. Please try again.' };
+  }
+}
+
+/**
+ * Which stores a member may change stock in (ROADMAP Phase 8.6).
+ *
+ * An EMPTY list means every store, now and in future — that is the default and
+ * the way to undo a restriction, and it is why a new store doesn't have to be
+ * added to everyone by hand. An Owner is never scoped: someone has to be able
+ * to reach every shelf, and a business that locked its owner out of a store
+ * would have no way back in.
+ */
+export async function setMemberStores(input: {
+  membershipId: string;
+  warehouseIds: string[];
+}): Promise<ActionResult> {
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.STAFF_MANAGE);
+
+    const parsed = SetStoresSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0].message };
+    }
+    const { membershipId, warehouseIds } = parsed.data;
+
+    const membership = await prisma.membership.findFirst({
+      where: { id: membershipId, organizationId: ctx.organization.id, status: 'ACTIVE' },
+      select: { id: true, userId: true, role: { select: { name: true, isSystem: true } } },
+    });
+    if (!membership) {
+      return { success: false, error: 'Member not found.' };
+    }
+    if (membership.role.isSystem && membership.role.name === 'Owner' && warehouseIds.length > 0) {
+      return { success: false, error: 'An owner always has every store. Change their role first if you need to limit them.' };
+    }
+
+    /* Ids come from the browser, so they are only ever used together with this
+     * organization — another workspace's store id is simply not found. */
+    const ids = [...new Set(warehouseIds)];
+    if (ids.length > 0) {
+      const found = await prisma.warehouse.count({
+        where: { id: { in: ids }, organizationId: ctx.organization.id },
+      });
+      if (found !== ids.length) {
+        return { success: false, error: 'One of those stores is no longer in this workspace. Reload the page and try again.' };
+      }
+    }
+
+    // Replace the set outright: the dialog sends what the member should have.
+    await prisma.$transaction([
+      prisma.membershipWarehouse.deleteMany({ where: { membershipId } }),
+      ...(ids.length > 0
+        ? [prisma.membershipWarehouse.createMany({ data: ids.map((warehouseId) => ({ membershipId, warehouseId })) })]
+        : []),
+    ]);
+
+    await createAuditLog({
+      organizationId: ctx.organization.id,
+      userId: ctx.userId,
+      action: 'staff.member.stores_changed',
+      entityType: 'Membership',
+      entityId: membershipId,
+      metadata: { targetUserId: membership.userId, warehouseIds: ids, allStores: ids.length === 0 },
+    });
+
+    return { success: true, data: undefined };
+  } catch (err) {
+    if (err instanceof PermissionDeniedError) {
+      return { success: false, error: 'You do not have permission to manage members.' };
+    }
+    console.error('[setMemberStores]', err);
+    return { success: false, error: 'Failed to save their stores. Please try again.' };
   }
 }
 

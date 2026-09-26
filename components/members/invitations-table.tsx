@@ -16,6 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { revokeInvitation, resendInvitation } from '@/features/invitations/actions';
+import { formatDate } from '@/lib/format';
 
 export type InvitationRow = {
   id: string;
@@ -103,18 +104,10 @@ export function InvitationsTable({ invitations, canManage }: InvitationsTablePro
                       <Badge variant="secondary">{inv.role.name}</Badge>
                     </TableCell>
                     <TableCell muted className="text-xs">
-                      {new Date(inv.createdAt).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
+                      {formatDate(inv.createdAt)}
                     </TableCell>
                     <TableCell muted className="text-xs">
-                      {new Date(inv.expiresAt).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
+                      {formatDate(inv.expiresAt)}
                     </TableCell>
                     <TableCell>
                       <InvitationStatusBadge status={effectiveStatus} />

@@ -59,6 +59,7 @@ import { formatMoney } from '@/lib/storefront/format';
 import { CHECKOUT_STEPS, type CheckoutConfig, type CheckoutStepId } from '@/lib/storefront/checkout/types';
 import { checkoutSchema, STEP_FIELDS, type CheckoutFormValues } from '@/lib/storefront/checkout/schema';
 import { calculateCheckoutTotals, checkoutItemCount } from '@/lib/storefront/checkout/totals';
+import { isPaymentMethodAllowed } from '@/lib/storefront/checkout/payment-terms';
 import type { ShippingMethod } from '@/lib/storefront/types';
 import { emptyAddress, fromStoredAddress, toStoredAddress } from '@/lib/storefront/checkout/address';
 import { saveCheckoutAddressAction } from '@/features/shop-account/address-actions';
@@ -241,6 +242,21 @@ export function CheckoutView({
     [items, deliveryMethod, coupon, config],
   );
   const itemCount = checkoutItemCount(items);
+
+  /* A method the bag has ruled out must not survive as a stale choice: the
+   * shopper may have picked pay on delivery and then added an item the
+   * merchant wants paid up front. Clearing it sends them back to the step,
+   * where the option is greyed out with the reason — better than an order
+   * refused at the last moment. */
+  const paymentMethodId = useWatch({ control: form.control, name: 'paymentMethodId' });
+  React.useEffect(() => {
+    if (!paymentMethodId) return;
+    const method = config.paymentMethods.find((m) => m.id === paymentMethodId);
+    if (method && !isPaymentMethodAllowed(method, items)) {
+      form.setValue('paymentMethodId', '', { shouldValidate: false });
+      useCheckoutStore.getState().setPaymentMethod('');
+    }
+  }, [paymentMethodId, config.paymentMethods, items, form]);
 
   React.useEffect(() => {
     const store = useCheckoutStore.getState();
@@ -534,6 +550,7 @@ export function CheckoutView({
               <PaymentStep
                 form={form}
                 config={config}
+                items={items}
                 onSelect={(id) => useCheckoutStore.getState().setPaymentMethod(id)}
               />
             </StepShell>

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Clock, Percent, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Clock, Percent, Store, TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader, PageToolbar, PageBody } from '@/components/layout/page-header';
 import { PageTabs } from '@/components/layout/page-tabs';
@@ -14,13 +14,15 @@ import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } fro
 import { Table, TableWrapper, TableHead, TableBody, TableRow, TableColumnHeader, TableCell } from '@/components/ui/table';
 import { formatDate, formatMoney, formatNumber } from '@/lib/format';
 import type { AgingRow, ProfitabilityReport, SellThroughRow } from '@/features/inventory/actions';
+import type { StoreSalesReport } from '@/features/sales/store-sales';
 
-export type AdvancedView = 'aging' | 'sell-through' | 'profit';
+export type AdvancedView = 'aging' | 'sell-through' | 'profit' | 'by-store';
 
 const TABS = [
   { key: 'aging', label: 'Sitting too long' },
   { key: 'sell-through', label: 'How fast it sells' },
   { key: 'profit', label: 'What you made' },
+  { key: 'by-store', label: 'Which store sells' },
 ];
 
 /** Each report says, in one line, what it measures and how. */
@@ -29,6 +31,8 @@ const EXPLAINER: Record<AdvancedView, string> = {
   'sell-through':
     'Of what arrived in the period, how much sold. 100% means everything received also sold; a low number means it’s piling up.',
   profit: 'Revenue from issued invoices in the period, minus what those goods cost you at the time they were sold.',
+  'by-store':
+    'Goods that left each store’s shelf in the period, at the price the customer paid — counter sales and the website together. Delivery and discount codes belong to the whole order, so they are left out, and returns are not deducted.',
 };
 
 type Props = {
@@ -38,6 +42,7 @@ type Props = {
   aging: AgingRow[];
   sellThrough: SellThroughRow[];
   profitability: ProfitabilityReport;
+  byStore: StoreSalesReport;
 };
 
 function periodLabel(days: number): string {
@@ -46,7 +51,7 @@ function periodLabel(days: number): string {
   return `Last ${days} days`;
 }
 
-export function AdvancedReportsPageClient({ view, days, periods, aging, sellThrough, profitability }: Props) {
+export function AdvancedReportsPageClient({ view, days, periods, aging, sellThrough, profitability, byStore }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -127,6 +132,23 @@ export function AdvancedReportsPageClient({ view, days, periods, aging, sellThro
                 { header: 'Units received', value: (r) => r.unitsReceived },
                 { header: 'Units sold', value: (r) => r.unitsSold },
                 { header: 'Sell-through %', value: (r) => (r.sellThroughRate === null ? '' : Math.round(r.sellThroughRate * 100)) },
+              ]}
+            />
+          )}
+          {view === 'by-store' && (
+            <ExportCsvButton
+              name={`Sales by store ${days} days`}
+              rows={byStore.rows}
+              columns={[
+                { header: 'Store', value: (r) => r.warehouseName },
+                { header: 'Open', value: (r) => (r.isOpen ? 'Yes' : 'No') },
+                { header: 'Sells online', value: (r) => (r.sellsOnline ? 'Yes' : 'No') },
+                { header: 'Sales', value: (r) => r.goodsValue },
+                { header: 'Counter sales', value: (r) => r.counterValue },
+                { header: 'Online sales', value: (r) => r.onlineValue },
+                { header: 'Units sold', value: (r) => r.unitsSold },
+                { header: 'Orders', value: (r) => r.orderCount },
+                { header: 'Share %', value: (r) => Math.round(r.shareRatio * 100) },
               ]}
             />
           )}
@@ -334,6 +356,99 @@ export function AdvancedReportsPageClient({ view, days, periods, aging, sellThro
                   Counted by invoice date, and using each product’s average cost at the moment it was invoiced. Draft invoices
                   aren’t included.
                 </p>
+              </>
+            )}
+          </>
+        )}
+
+        {view === 'by-store' && (
+          <>
+            <StatGrid className="sm:grid-cols-2 lg:grid-cols-3">
+              <StatCard
+                title="Sold across every store"
+                value={formatMoney(byStore.totals.goodsValue)}
+                icon={Store}
+                description={periodLabel(days).toLowerCase()}
+              />
+              <StatCard title="Orders" value={formatNumber(byStore.totals.orderCount)} icon={TrendingUp} description="not counting cancelled ones" />
+              <StatCard title="Units sold" value={formatNumber(byStore.totals.unitsSold)} icon={Store} description="off every shelf" />
+            </StatGrid>
+
+            {byStore.rows.length === 0 ? (
+              <EmptyState
+                icon={Store}
+                title="No stores yet"
+                description="Stock is counted per store, so add the places you keep goods and their sales will be compared here."
+              />
+            ) : (
+              <>
+                <TableWrapper>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableColumnHeader>Store</TableColumnHeader>
+                        <TableColumnHeader align="right">Sales</TableColumnHeader>
+                        <TableColumnHeader align="right" className="hidden sm:table-cell">
+                          Counter
+                        </TableColumnHeader>
+                        <TableColumnHeader align="right" className="hidden sm:table-cell">
+                          Online
+                        </TableColumnHeader>
+                        <TableColumnHeader align="right">Units</TableColumnHeader>
+                        <TableColumnHeader align="right">Orders</TableColumnHeader>
+                        <TableColumnHeader align="right">Share</TableColumnHeader>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {byStore.rows.map((r) => (
+                        <TableRow key={r.warehouseId}>
+                          <TableCell className="py-2">
+                            <Link href={`/inventory/warehouses/${r.warehouseId}`} className="font-medium text-foreground hover:underline">
+                              {r.warehouseName}
+                            </Link>
+                            <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                              {!r.isOpen && <Badge variant="muted">Closed</Badge>}
+                              {r.sellsOnline ? 'Sells online too' : 'Counter only'}
+                            </p>
+                          </TableCell>
+                          <TableCell align="right" className="font-medium tabular-nums">
+                            {formatMoney(r.goodsValue)}
+                          </TableCell>
+                          <TableCell align="right" muted className="hidden tabular-nums sm:table-cell">
+                            {formatMoney(r.counterValue)}
+                          </TableCell>
+                          <TableCell align="right" muted className="hidden tabular-nums sm:table-cell">
+                            {formatMoney(r.onlineValue)}
+                          </TableCell>
+                          <TableCell align="right" className="tabular-nums">
+                            {formatNumber(r.unitsSold)}
+                          </TableCell>
+                          <TableCell align="right" className="tabular-nums">
+                            {formatNumber(r.orderCount)}
+                          </TableCell>
+                          <TableCell align="right" className="tabular-nums">
+                            {byStore.totals.goodsValue === 0 ? '—' : `${Math.round(r.shareRatio * 100)}%`}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableWrapper>
+
+                {/* What the table cannot tell you, said out loud (AGENTS §10). */}
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <p>
+                    An order filled from two stores counts for both, each with its own share of the goods — so the store rows add up to
+                    the total above, while the order counts do not.
+                  </p>
+                  {byStore.unattributed.orderCount > 0 && (
+                    <p>
+                      {formatNumber(byStore.unattributed.orderCount)} order
+                      {byStore.unattributed.orderCount === 1 ? '' : 's'} worth {formatMoney(byStore.unattributed.goodsValue)} can&apos;t be
+                      credited to any store — nothing was held for them, or the hold was given back. They are missing from the rows above.
+                    </p>
+                  )}
+                </div>
               </>
             )}
           </>

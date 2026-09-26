@@ -1,9 +1,12 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, Pencil, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PageHeader, PageBody } from '@/components/layout/page-header';
+import { EmptyState } from '@/components/layout/empty-state';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -17,14 +20,17 @@ import {
 } from '@/components/ui/table';
 import { SupplierDialog } from './SupplierDialog';
 import type { SupplierRow } from '@/features/procurement/actions';
+import { enumLabel } from '@/lib/format';
 
 type SuppliersPageClientProps = {
   suppliers: SupplierRow[];
   canManage: boolean;
+  /** Whether this plan includes the supplier performance report they open. */
+  performanceEnabled: boolean;
   organizationSlug: string;
 };
 
-export function SuppliersPageClient({ suppliers, canManage, organizationSlug }: SuppliersPageClientProps) {
+export function SuppliersPageClient({ suppliers, canManage, performanceEnabled, organizationSlug }: SuppliersPageClientProps) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<SupplierRow | null>(null);
@@ -41,26 +47,44 @@ export function SuppliersPageClient({ suppliers, canManage, organizationSlug }: 
 
   return (
     <>
-      <div className="flex items-center justify-between border-b bg-background px-6 py-5">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">Suppliers</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">Vendors you purchase inventory from.</p>
-        </div>
-        {canManage && (
-          <Button size="sm" onClick={openCreate}>
-            <Plus className="size-3.5" />
-            New supplier
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title="Suppliers"
+        description="The businesses you buy stock from."
+        actions={
+          canManage ? (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="size-3.5" />
+              New supplier
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <div className="px-6 py-6">
+      <PageBody className="space-y-4">
+        {/* Not hidden, and not a dead row either: what the locked page would
+            show, and where to see the plans (AGENTS §7). */}
+        {!performanceEnabled && suppliers.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Supplier performance — how reliably each one delivers, and what their prices have done — is on Pro.{' '}
+            <Link href="/upgrade" className="text-primary hover:underline">
+              See plans
+            </Link>
+          </p>
+        )}
         {suppliers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
-            <Building2 className="size-6 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">No suppliers yet</p>
-            <p className="max-w-sm text-xs text-muted-foreground">Add a supplier to start creating purchase orders.</p>
-          </div>
+          <EmptyState
+            icon={Building2}
+            title="No suppliers yet"
+            description="Add the businesses you buy stock from, and you can raise purchase orders to them and see how reliably they deliver."
+            action={
+              canManage ? (
+                <Button size="sm" onClick={openCreate}>
+                  <Plus className="size-3.5" />
+                  New supplier
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
           <TableWrapper>
             <Table>
@@ -80,11 +104,21 @@ export function SuppliersPageClient({ suppliers, canManage, organizationSlug }: 
                   suppliers.map((s) => (
                     <TableRow
                       key={s.id}
-                      clickable
-                      onClick={() => router.push(`/procurement/suppliers/${s.id}`)}
+                      clickable={performanceEnabled}
+                      onClick={performanceEnabled ? () => router.push(`/procurement/suppliers/${s.id}`) : undefined}
                     >
                       <TableCell>
-                        <span className="font-medium text-foreground">{s.name}</span>
+                        {performanceEnabled ? (
+                          <Link
+                            href={`/procurement/suppliers/${s.id}`}
+                            onClick={(event) => event.stopPropagation()}
+                            className="font-medium text-foreground hover:underline"
+                          >
+                            {s.name}
+                          </Link>
+                        ) : (
+                          <span className="font-medium text-foreground">{s.name}</span>
+                        )}
                         {s.taxId && <p className="text-xs text-muted-foreground">Tax ID: {s.taxId}</p>}
                       </TableCell>
                       <TableCell muted>
@@ -94,7 +128,7 @@ export function SuppliersPageClient({ suppliers, canManage, organizationSlug }: 
                       <TableCell align="right">{s.purchaseOrderCount}</TableCell>
                       <TableCell>
                         <Badge variant={s.status === 'ACTIVE' ? 'success' : s.status === 'BLACKLISTED' ? 'destructive' : 'muted'}>
-                          {s.status}
+                          {enumLabel(s.status)}
                         </Badge>
                       </TableCell>
                       <TableCell align="right">
@@ -118,7 +152,7 @@ export function SuppliersPageClient({ suppliers, canManage, organizationSlug }: 
             </Table>
           </TableWrapper>
         )}
-      </div>
+      </PageBody>
 
       <SupplierDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} />
     </>

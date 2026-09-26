@@ -24,6 +24,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { recordPayment } from '@/features/sales/actions';
+import { formatMoney } from '@/lib/format';
 
 type RecordPaymentDialogProps = {
   open: boolean;
@@ -89,7 +90,7 @@ export function RecordPaymentDialog({ open, onOpenChange, invoiceId, outstanding
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Record payment</DialogTitle>
-          <DialogDescription>Outstanding balance: {outstanding.toFixed(2)}</DialogDescription>
+          <DialogDescription>Outstanding balance: {formatMoney(outstanding)}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

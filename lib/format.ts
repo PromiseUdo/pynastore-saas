@@ -37,6 +37,12 @@ export function formatDate(value: string | Date | null | undefined): string {
   );
 }
 
+/** "September 2026" — for a figure that covers a whole month. */
+export function formatMonth(value: string | Date | null | undefined): string {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'Africa/Lagos' }).format(new Date(value));
+}
+
 /** Plain-language label for a SCREAMING_SNAKE enum value: PARTIALLY_PAID → "Partially paid". */
 export function enumLabel(value: string): string {
   const lower = value.toLowerCase().replace(/_/g, ' ');

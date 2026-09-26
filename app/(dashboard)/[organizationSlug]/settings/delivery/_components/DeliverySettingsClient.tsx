@@ -28,6 +28,7 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { formatMoney } from '@/lib/format';
+import { formatEta, formatEtaShort } from '@/lib/storefront/delivery/eta';
 import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
 import {
   createSuggestedDelivery,
@@ -53,10 +54,8 @@ function coverage(zone: DeliveryZoneRow): string {
   return `${zone.cities.join(', ')} (${zone.state})`;
 }
 
-function days(min: number, max: number): string {
-  if (max <= 0) return 'Same day';
-  return min === max ? `${min} day${min === 1 ? '' : 's'}` : `${min}–${max} days`;
-}
+/* The wording customers get, so the table and checkout can't drift apart. */
+const rateTime = (rate: DeliveryRateRow) => formatEta({ minMinutes: rate.minMinutes, maxMinutes: rate.maxMinutes, unit: rate.etaUnit });
 
 type Removing =
   | { type: 'zone'; zone: DeliveryZoneRow }
@@ -255,7 +254,7 @@ export function DeliverySettingsClient({ settings, canManage }: { settings: Deli
                               {pickup.address}, {pickup.city}, {pickup.state}
                             </span>
                           </TableCell>
-                          <TableCell className="tabular-nums">{pickup.readyInDays === 0 ? 'Same day' : days(pickup.readyInDays, pickup.readyInDays)}</TableCell>
+                          <TableCell className="tabular-nums">{formatEtaShort({ minMinutes: pickup.readyMinutes, maxMinutes: pickup.readyMinutes, unit: pickup.readyUnit })}</TableCell>
                           <TableCell>
                             <Badge variant={pickup.isActive ? 'success' : 'draft'}>{pickup.isActive ? 'On' : 'Off'}</Badge>
                           </TableCell>
@@ -439,7 +438,7 @@ function ZoneCard({
                   <TableCell align="right" className="tabular-nums">
                     {rate.price === 0 ? 'Free' : formatMoney(rate.price)}
                   </TableCell>
-                  <TableCell className="tabular-nums">{days(rate.minDays, rate.maxDays)}</TableCell>
+                  <TableCell className="tabular-nums">{rateTime(rate)}</TableCell>
                   <TableCell align="right" className="tabular-nums">
                     {rate.freeOver === null ? '—' : formatMoney(rate.freeOver)}
                   </TableCell>

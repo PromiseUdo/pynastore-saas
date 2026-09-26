@@ -12,10 +12,7 @@ import {
   TableEmpty,
 } from '@/components/ui/table';
 import type { SupplierPerformance } from '@/features/procurement/actions';
-
-function formatMoney(amount: number): string {
-  return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
-}
+import { formatDate, formatMoney } from '@/lib/format';
 
 export function SupplierPerformanceClient({ performance }: { performance: SupplierPerformance }) {
   return (
@@ -77,8 +74,8 @@ export function SupplierPerformanceClient({ performance }: { performance: Suppli
                   performance.costHistory.map((point, i) => (
                     <TableRow key={`${point.itemId}-${i}`}>
                       <TableCell className="font-medium text-foreground">{point.itemName}</TableCell>
-                      <TableCell muted>{new Date(point.date).toLocaleDateString()}</TableCell>
-                      <TableCell align="right">{point.unitPrice.toFixed(2)}</TableCell>
+                      <TableCell muted>{formatDate(point.date)}</TableCell>
+                      <TableCell align="right">{formatMoney(point.unitPrice)}</TableCell>
                     </TableRow>
                   ))
                 )}

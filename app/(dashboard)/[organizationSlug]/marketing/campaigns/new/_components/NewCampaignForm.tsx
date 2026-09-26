@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Field, FieldDescription, FieldError } from '@/components/ui/form-field';
 import { PageHeader, PageBody } from '@/components/layout/page-header';
 import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { SearchPicker } from '@/components/sales/search-picker';
+import { SearchPicker } from '@/components/ui/search-picker';
 import { formatMoney, formatNumber } from '@/lib/format';
 import { searchCatalogueProducts, type CatalogueProductMatch } from '@/features/sales/lookup';
 import { createCampaign, previewCampaignPrices, scheduleCampaign } from '@/features/marketing/campaigns';

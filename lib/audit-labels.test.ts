@@ -32,7 +32,10 @@ const ACTIONS = [
   'inventory.transfer.dispatched',
   'inventory.transfer.received',
   'inventory.warehouse.created',
+  'inventory.warehouse.product_removed',
+  'inventory.warehouse.products_added',
   'inventory.warehouse.sells_online_changed',
+  'inventory.warehouse.stock_settings_updated',
   'inventory.warehouse.updated',
   'marketing.campaign.announcement_updated',
   'marketing.campaign.cancelled',
@@ -109,6 +112,7 @@ const ACTIONS = [
   'staff.invitation.sent',
   'staff.member.removed',
   'staff.member.role_changed',
+  'staff.member.stores_changed',
 ];
 
 describe('describeAuditAction', () => {

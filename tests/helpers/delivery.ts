@@ -14,7 +14,7 @@ export async function giveStoreDelivery(organizationId: string): Promise<string>
       organizationId,
       name: 'Nigeria',
       kind: 'NATIONWIDE',
-      rates: { create: [{ organizationId, name: 'Standard', price: 2500, minDays: 2, maxDays: 4 }] },
+      rates: { create: [{ organizationId, name: 'Standard', price: 2500, minMinutes: 2880, maxMinutes: 5760 }] },
     },
     include: { rates: true },
   });

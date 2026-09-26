@@ -97,15 +97,15 @@ const quoteDeliveryAction = vi.fn(async (input: unknown) => {
         ok: true as const,
         zoneName: 'Within Port Harcourt',
         options: [
-          { id: 'rate_express', kind: 'delivery' as const, label: 'Same day', description: '', price: 400_000, regularPrice: 400_000, freeOver: null, etaDays: [0, 0] as [number, number] },
-          { id: 'rate_local', kind: 'delivery' as const, label: 'Local', description: '', price: 150_000, regularPrice: 150_000, freeOver: null, etaDays: [1, 2] as [number, number] },
+          { id: 'rate_express', kind: 'delivery' as const, label: 'Same day', description: '', price: 400_000, regularPrice: 400_000, freeOver: null, eta: { minMinutes: 0, maxMinutes: 0, unit: 'DAYS' as const } },
+          { id: 'rate_local', kind: 'delivery' as const, label: 'Local', description: '', price: 150_000, regularPrice: 150_000, freeOver: null, eta: { minMinutes: 1440, maxMinutes: 2880, unit: 'DAYS' as const } },
           {
             id: 'pickup_shop',
             kind: 'pickup' as const,
             label: 'Pick up: Main shop',
             description: '12 Aba Road, Port Harcourt, Rivers',
             price: 0,
-            etaDays: [1, 1] as [number, number],
+            eta: { minMinutes: 1440, maxMinutes: 1440, unit: 'DAYS' as const },
             pickup: { name: 'Main shop', address: '12 Aba Road', city: 'Port Harcourt', state: 'Rivers', instructions: null },
           },
         ],
@@ -137,6 +137,11 @@ const renderIn = (ui: React.ReactNode) =>
 function addToBag(product: typeof SIMPLE, quantity = 1) {
   const variant = product.variants.find((v) => v.stock > 2) ?? product.variants[0];
   useCartStore.getState().addItem(toCartLine(product, variant.id)!, quantity);
+}
+
+/** A product its merchant wants paid for before it's delivered. */
+function addPrepaidToBag(product: typeof SIMPLE, quantity = 1) {
+  addToBag({ ...product, requiresPrepayment: true }, quantity);
 }
 
 beforeEach(() => {
@@ -669,6 +674,44 @@ describe('placing the order', () => {
     expect(sent.nativeApp).toBe(false);
   });
 
+  it('takes pay on delivery off a bag holding an item that must be paid for first', async () => {
+    const user = userEvent.setup();
+    addToBag(SIMPLE, 1);
+    addPrepaidToBag(MULTI, 1);
+    renderIn(<CheckoutView config={config} account={null} />);
+    await fillInformation(user);
+    await chooseDelivery(user);
+
+    const podOption = screen.getByRole('radio', { name: /pay on delivery/i });
+    expect((podOption as HTMLInputElement).disabled).toBe(true);
+    /* The reason is on screen, naming the item, not hidden behind a toast. */
+    expect(screen.getByText(/require payment before delivery/i)).toBeDefined();
+    const reason = screen.getByText(/must be paid for before delivery/i);
+    expect(reason.textContent).toContain(MULTI.name);
+
+    /* Paying online is untouched, so the order can still be placed. */
+    await choosePayment(user, /^pay online/i);
+    await user.click(screen.getByRole('button', { name: /place order/i }));
+    await waitFor(() => expect(placeOrderAction).toHaveBeenCalled());
+    const sent = placeOrderAction.mock.calls[0][0] as unknown as { paymentMethodId: string };
+    expect(sent.paymentMethodId).toBe('squad');
+  });
+
+  it('drops a pay-on-delivery choice made before such an item was added', async () => {
+    const user = userEvent.setup();
+    addToBag(SIMPLE, 1);
+    renderIn(<CheckoutView config={config} account={null} />);
+    await fillInformation(user);
+    await chooseDelivery(user);
+    await user.click(screen.getByRole('radio', { name: /pay on delivery/i }));
+    expect(useCheckoutStore.getState().paymentMethodId).toBe('pod');
+
+    addPrepaidToBag(MULTI, 1);
+
+    await waitFor(() => expect(useCheckoutStore.getState().paymentMethodId).toBe(''));
+    expect((screen.getByRole('radio', { name: /pay on delivery/i }) as HTMLInputElement).disabled).toBe(true);
+  });
+
   it('makes ONE order out of a double-tap', async () => {
     const user = userEvent.setup();
     addToBag(SIMPLE, 1);
@@ -814,7 +857,7 @@ describe('confirmation', () => {
       methodId: 'standard',
       label: 'Standard delivery',
       fee: 250_000,
-      etaDays: [2, 4],
+      eta: { minMinutes: 2880, maxMinutes: 5760, unit: 'DAYS' as const },
       estimated: { from: '2026-09-18T10:00:00.000Z', to: '2026-09-22T10:00:00.000Z' },
     },
     currency: 'NGN',

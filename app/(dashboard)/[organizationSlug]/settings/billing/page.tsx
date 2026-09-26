@@ -22,6 +22,7 @@ import { formatNaira } from '@/lib/billing/format';
 import { getRootDomain } from '@/lib/tenant/resolveHostname';
 import { CancelSubscriptionButton } from './_components/CancelSubscriptionButton';
 import { DomainSettingsCard } from './_components/DomainSettingsCard';
+import { enumLabel, formatDate } from '@/lib/format';
 
 export const metadata: Metadata = { title: 'Billing' };
 
@@ -96,7 +97,7 @@ export default async function BillingSettingsPage({
                   <h2 className="text-base font-semibold text-foreground">{planConfig.name} plan</h2>
                   {subscription && (
                     <Badge variant={STATUS_VARIANT[subscription.status] ?? 'muted'}>
-                      {subscription.status.replace('_', ' ')}
+                      {enumLabel(subscription.status)}
                     </Badge>
                   )}
                 </div>
@@ -105,11 +106,7 @@ export default async function BillingSettingsPage({
                 {subscription?.currentPeriodEnd && (
                   <p className="mt-3 text-xs text-muted-foreground">
                     {subscription.cancelAtPeriodEnd ? 'Access ends' : 'Renews'} on{' '}
-                    {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
+                    {formatDate(subscription.currentPeriodEnd)}
                     {subscription.billingCycle && ` · Billed ${subscription.billingCycle.toLowerCase()}`}
                   </p>
                 )}
@@ -163,11 +160,7 @@ export default async function BillingSettingsPage({
                     {transactions.map((tx) => (
                       <TableRow key={tx.id}>
                         <TableCell muted>
-                          {tx.createdAt.toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
+                          {formatDate(tx.createdAt)}
                         </TableCell>
                         <TableCell>{PLANS[tx.plan].name}</TableCell>
                         <TableCell muted>{tx.type === 'CHECKOUT' ? 'Upgrade' : 'Renewal'}</TableCell>

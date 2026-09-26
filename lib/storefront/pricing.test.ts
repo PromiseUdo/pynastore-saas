@@ -23,6 +23,7 @@ function item(overrides: Partial<CartItem> = {}): CartItem {
     quantity: 1,
     maxQuantity: 10,
     currency: 'NGN',
+    requiresPrepayment: false,
     addedAt: 0,
     ...overrides,
   };
@@ -46,7 +47,7 @@ describe('cart math', () => {
   });
 
   it('charges the chosen option, whatever the size of the order', () => {
-    const standard = { id: 'rate_x', label: 'Standard', description: '', price: DEFAULT_SHIPPING, etaDays: [2, 4] as [number, number] };
+    const standard = { id: 'rate_x', label: 'Standard', description: '', price: DEFAULT_SHIPPING, eta: { minMinutes: 2880, maxMinutes: 5760, unit: 'DAYS' as const } };
     for (const quantity of [1, 6, 10]) {
       const t = computeTotals({ items: [item({ quantity })], shippingMethod: standard });
       expect(t.shipping, `quantity ${quantity}`).toBe(DEFAULT_SHIPPING);
@@ -77,7 +78,7 @@ describe('discount codes', () => {
   });
 
   it('never discounts delivery', () => {
-    const standard = { id: 'rate_x', label: 'Standard', description: '', price: DEFAULT_SHIPPING, etaDays: [2, 4] as [number, number] };
+    const standard = { id: 'rate_x', label: 'Standard', description: '', price: DEFAULT_SHIPPING, eta: { minMinutes: 2880, maxMinutes: 5760, unit: 'DAYS' as const } };
     const t = computeTotals({ items: [item({ quantity: 10 })], coupon: percent(20), shippingMethod: standard });
     expect(t.discount).toBe(2_000_000);
     expect(t.shipping).toBe(DEFAULT_SHIPPING);

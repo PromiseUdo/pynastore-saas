@@ -409,6 +409,351 @@ validation, tenancy).
 - **Merchant API and API keys** — ships `FEATURES.API_ACCESS`, sold on paid plans with
   zero call sites today.
 
+## Phase 8 — Stores as a real place — DONE (2026-09-25)
+
+Agreed 2026-09-25. A store today is a row a merchant picks in a dropdown: the list
+at `/inventory/warehouses` is the only screen, and it has no detail page at all. Yet
+almost everything in the app is already counted per store — `InventoryLevel` (with a
+per-store `reorderPoint`, `reorderQty` and shelf `location`), `StockMovement`,
+`StockTransfer`, `CycleCount`, `PurchaseOrder`, `Fulfillment`, `Order.warehouseId`
+for a counter sale, and `OrderStockAllocation` for an online one. **The data is
+there and the screens are missing.** Nothing in this phase needs a new source of
+truth; 8.6 is the only part that needs a new table.
+
+**The decision that shapes all of it:** a store's page never re-derives a number
+another screen already owns. Store stock comes from `InventoryLevel`, store
+movement from the ledger, store sales from `OrderStockAllocation` (online) plus
+`Order.warehouseId` (counter) — so the store page and the reports can never
+disagree. Where a figure would need a new definition, it is named and stated on
+screen (AGENTS §10) rather than quietly invented.
+
+Language, throughout: **Store**, never Warehouse, in anything a merchant reads —
+the model stays `Warehouse` (renaming it is a migration with no user-visible gain).
+
+### 8.1 The store page — DONE (2026-09-25)
+
+The gap: you could not open a store. Closes "how much of this product is at this
+store" and the stock half of "store performance".
+
+- `/inventory/warehouses/[warehouseId]`, reached by clicking a store card (the
+  whole card, with the name as a real `<Link>` — AGENTS §3).
+- `PageTabs` in the URL: **Overview | Inventory**. Transfers, Movements, Orders
+  and Adjustments are reached from the Overview, pre-filtered, rather than
+  rebuilding four tables that already exist elsewhere; the tabs that get their own
+  panel are added by the phase that gives them something this store page alone can
+  say (Orders in 8.4).
+- Overview: products stocked here, units on hand, units held for orders, low
+  stock, out of stock, stock value at average cost — each `StatCard` clickable
+  through to the list it counts. Then "needs attention" (low stock here, transfers
+  waiting to be received here) and the last movements at this store.
+- Inventory tab: this store's products with on hand / held / available, the
+  threshold in force and where it comes from (this store's own, or the product's),
+  and the shelf tag. Search, a stock filter, sorting and pagination, all in the
+  URL.
+- **Money is only the stock's value at cost in 8.1.** Sales and orders per store
+  arrive in 8.5, which is where the definition of "sales at a store" is settled.
+  The Overview says so rather than leaving a hole where the figure should be.
+
+**As shipped.** `features/inventory/store-detail.ts` — `getStoreDetail`,
+`getStoreInventory`, `getStoreActivity`, `getStoreOpenTransfers`, all four
+scoped by `{ id, organizationId }`, so another workspace's store id is a miss
+(`Store not found` → `notFound()`), not a leak. Low stock, out of stock, the
+threshold in force and the row's value are derived in Node, because the
+threshold is per level — this store's `reorderPoint` beats the product's, and
+Prisma can't express that; the same reason `listProducts` derives its stock
+state. `stock`, `sort`, `q`, `page` and the tab all live in the URL.
+
+Two things worth knowing:
+
+- **"Out of stock" means nothing AVAILABLE**, not an empty shelf: four units
+  all held for orders read as out of stock, because none of them can be sold.
+  The table shows on hand and held separately so the merchant can see why.
+- **A transfer arriving here is this store's news.** The ledger records it
+  against the SENDING store with `toWarehouseId` pointing here, so the activity
+  list matches on either side and each row says which way it went
+  (`incoming` + `otherStoreName`) rather than showing an arrival as a departure.
+
+Archived products are left out everywhere on this page, so a discontinued line
+with old stock can't inflate the count of what this store sells.
+
+Extracted on the way: `lib/inventory-labels.ts` (`MOVEMENT_LABEL`,
+`MOVEMENT_VARIANT`, `MOVEMENT_SOURCE_LABEL`, `movementReason`, `movementSign`).
+The movements list and the inventory landing page each had their own copy of
+the ledger's vocabulary — now one (AGENTS §9).
+
+Tests: `tests/store-detail.test.ts` (12 — the counts, a store override beating
+the product's threshold, held stock reading as out of stock, a variant listed
+under its product, search by SKU and by shelf, paging past the end, and no path
+to another workspace's store).
+
+### 8.2 Managing a store's products from the store side — DONE (2026-09-25)
+
+The gap: assignment only happened one product at a time, from the product form,
+so stocking a new shop meant editing every product in the catalogue.
+
+- **"Add products"** on the Inventory tab (and in its empty state): a Sheet —
+  line items don't belong in a dialog (AGENTS §4) — that searches the catalogue
+  through the shared `SearchPicker`, takes several, and gives each an opening
+  quantity and unit cost. Opening stock goes through `recordStockIn` →
+  `createStockMovement`, so the ledger, the moving-average cost and the
+  low-stock alert behave exactly as they do when a purchase order is received.
+- **The only row this file writes by hand is an empty one** (quantity 0). That
+  is what "this store carries this product" means, and it moves nothing — so a
+  store can list what it stocks before any stock arrives, and the product shows
+  up in its list ready to receive some.
+- **Per-store settings** — this store's `reorderPoint`, `reorderQty` and shelf
+  `location` — in a three-field dialog off the row's `⋯` menu. Only the store's
+  OWN override prefills; the product's value shows as the placeholder, so
+  pressing Save cannot silently copy the product's number into an override.
+  Clearing the field hands the decision back to the product, and the form says
+  so in both directions.
+- **Removing** goes through an `AlertDialog` that states which of the three
+  blockers is in the way — stock on the shelf, something held for an order, or
+  history at this store — and only offers the destructive button when it will
+  actually work. A product that has ever moved through this store keeps its row
+  at zero, because the ledger points at it.
+
+**Decisions worth keeping:**
+
+- **An opening quantity needs `inventory.movement.create`, not just
+  `inventory.edit`.** A member who may tidy the catalogue is not automatically a
+  member who may declare stock. Without it the sheet hides the quantity fields,
+  says why, and still lets them say what the store carries.
+- **Adding is idempotent.** A product the store already carries is skipped, not
+  reset, so a double-click can't wipe a quantity. The result says how many were
+  added, how many arrived with stock, and how many were already there.
+- **A closed store takes no new products** — reopen it first.
+- A product with options is offered (and refused) as its options, since a
+  quantity belongs to a variant, never to the parent.
+
+Extracted on the way: `components/ui/search-picker.tsx` (moved out of
+`components/sales/` — the till, the invoice form, the campaign form and now this
+sheet all use it) and `variantNameOf` in `features/inventory/shared.ts`.
+
+New audit actions, with labels and the label test updated:
+`inventory.warehouse.products_added`, `…stock_settings_updated`,
+`…product_removed`.
+
+Tests: `tests/store-products.test.ts` (17 — the picker excluding what the store
+already carries, archived products and variant parents; an empty row vs. a
+ledger-backed opening quantity; the second add not resetting a quantity; the
+movement permission refusing a quantity while still allowing the assignment;
+each removal blocker; and no path to another workspace's store or products).
+
+### 8.3 Low stock, per store — DONE (2026-09-25)
+
+The gap: thresholds were per store in the schema, but the merchant only ever met
+them org-wide — and the alert email sent them to a report covering every store.
+
+- **"Running low at {store}"** on the Overview: the products this store has
+  least of, worst first, each saying what is available, the reorder point in
+  force, **whose it is** ("set for this store" / "set on the product"), and this
+  store's restock quantity where it has one. It is the same read as the
+  Inventory tab (`getStoreInventory`, sorted worst-first), so the panel and the
+  tab cannot disagree about what is low here.
+- **The `stock=low` and `stock=out` views say what they mean** in one line: that
+  "low" uses this store's own reorder point where it has one and the product's
+  otherwise, that a product with no reorder point anywhere never appears, and
+  that stock held for an order counts as unavailable because it can't be sold
+  twice.
+- **The alert email goes to the store that ran low**, not to
+  `/inventory/reports`: the button opens that store filtered to what is low
+  there, and the sentence names whose reorder point fired. The source is read
+  from the level inside `maybeSendLowStockAlert`, so none of its four callers
+  (stock movements, cycle counts, fulfillment packing, order dispatch) has to
+  remember to say — they only pass `warehouseId`, which they all already had.
+- **"Order more" leads into the restocking list for that one store.**
+  `previewReorderDrafts(warehouseId?)` narrows by store (re-checking it against
+  the workspace, so a foreign id narrows to nothing rather than widening), and
+  `/procurement/reorder?store=<id>` says which store it is showing with an "All
+  stores" way back.
+
+**Decisions worth keeping:**
+
+- **The suggestions page is Pro, so the panel adapts rather than hides**
+  (AGENTS §7): with the feature, "Review restocking for {store}"; without it,
+  "Order more" → purchase orders, plus one line saying what Pro adds and a link
+  to `/upgrade`. A workspace whose member can't see procurement at all gets no
+  link, not a dead one.
+- A low product with **no preferred supplier stays out of the suggestions** —
+  there is nobody to order it from — and the empty state now says that instead
+  of pointing at an "Items page" that no longer exists under that name.
+
+Also tidied while in there (both were on the cleanups list): the reorder page
+hand-rolled its access-denied block and its header — now `AccessDenied` and
+`PageHeader`/`PageBody`.
+
+Tests: `tests/store-low-stock.test.ts` (8 — one product low in one store and
+fine in another on the same day, the store's own restock quantity winning over
+the computed fallback, suppliers missing, another workspace's store narrowing to
+nothing, the email's link and threshold source, and the edge trigger staying
+silent when the threshold was already crossed or never set).
+
+### 8.4 Which store an order came off — DONE (2026-09-25)
+
+The gap: `OrderStockAllocation` had recorded the answer since Phase 2 and no
+screen showed it. A merchant worked out where the parcel is packed by hand.
+
+- **Order detail** gained "Fulfilled from" beside the payment facts, each store
+  a link to its own page. One store is stated plainly; when an order draws on
+  two, the units per store are shown AND the Items table grows a "From" column
+  ("Lagos × 2, Port Harcourt × 1") — the column only appears for a split order,
+  because repeating one store on every line is noise.
+- **`fulfilledFrom` and per-line `fromStores`** come from the allocations, newest
+  definition of the truth: `storeShares`/`lineShares` in
+  `features/sales/orders.ts`. A counter sale falls back to `Order.warehouseId`,
+  so a sale rung up before allocations existed still names its shop.
+- **A released hold names nobody, and says so.** A cancelled or expired order
+  reads "Stock was released back to your stores" rather than still crediting a
+  store that gave its units back (`stockReleased`, RELEASED rows excluded from
+  every share).
+- **A store filter on the orders list** (`?store=`), plus each row naming the
+  store(s) that served it under the city. The filter is one clause covering both
+  channels: `warehouseId` (rung up there) OR an allocation at that store.
+- **An Orders tab on the store page**, `sales.view` only — the tab isn't offered
+  without it and a hand-typed `?tab=orders` falls back to the Overview rather
+  than an access-denied page inside a store. Oldest first, because that customer
+  has waited longest, with a status filter and a "From here — 3 of 4" column
+  (`unitsFromStore`), set only when the list was filtered to one store.
+
+**Two things worth knowing:**
+
+- **The search filter moved from `OR` to `AND`.** `listStoreOrders` built its
+  text search as `where.OR`, and the new store filter needed an `OR` too — two
+  `OR` keys in one object literal silently keep the last, which would have made
+  a search ignore the store (or the reverse). Both now sit under `AND`.
+- **A picking view is deliberately NOT here.** `Fulfillment` already carries a
+  `warehouseId` and its own lifecycle; changing how picking works belongs with
+  fulfillment, not with making the existing facts visible.
+
+Tests: `tests/store-orders.test.ts` (10 — a split order naming both stores line
+by line and biggest share first, a counter sale naming its shop, a released hold
+naming nobody, a store's list covering both channels, default newest vs. the
+store tab's oldest, search AND store both applying, another workspace's store
+narrowing to nothing while the unfiltered totals stay this workspace's, and the
+`sales.view` gate).
+
+### 8.5 What a store sells — DONE (2026-09-25)
+
+The gap: nothing told a merchant whether a store earned its rent.
+
+- **"Sold from here in September"** on the store Overview: sales, orders and
+  units, with the counter/website split underneath, and the definition in one
+  line above it. A "Compare your stores" link where that report is available.
+- **"Which store sells"**, a fourth view on `/inventory/reports/advanced`: every
+  store side by side for the period already in that page's URL (`?days=`), with
+  each one's share, a CSV export, and the stores that sold nothing still listed
+  — "nothing" is the answer a merchant is looking for.
+- **`features/sales/store-sales.ts`** owns the figure: `getStoreSales` for one
+  store, `getSalesByStore` for the comparison.
+
+**The definition, as built and as stated on screen:**
+
+- A store's sales are the **goods that left its shelf at the price charged** —
+  `OrderStockAllocation.quantity × OrderLineItem.unitPrice`. The allocations
+  already record which store filled which line (Phase 2), so a split order is
+  counted **exactly on each side, not apportioned** — better than the estimate
+  this phase was originally written around. A campaign price is included,
+  because it is the price actually charged.
+- **Delivery and an order-level discount code are excluded**, and the screens
+  say so: both belong to the order as a whole, and splitting them between two
+  shops would invent a number.
+- **Cancelled orders count towards nothing** (`status <> 'CANCELLED'`, the same
+  clause Phase 4 settled on for customer metrics), and a **released hold is no
+  store's sale**. Returns and refunds are **not** deducted — they are their own
+  records against the order — and that is stated rather than implied.
+- **An order filled from two stores counts for both**, so the store rows add up
+  to the total while the order counts do not. The report says that in a footnote
+  instead of letting a merchant find it by adding up.
+- **What cannot be credited is shown, not dropped:** orders with no live
+  allocation (nothing was ever held, or the hold went back) are reported as an
+  unattributed count and value beneath the table, so the rows can be seen not to
+  match the day's takings.
+
+**Decisions worth keeping:**
+
+- **One raw query**, parameterised: the figure multiplies a column on the
+  allocation by one on the line item and groups by store, which Prisma's
+  aggregates cannot express — the same reason Phase 4's customer list uses SQL.
+- **Per-store figures are not plan-gated; the cross-store comparison is**, since
+  it lives with the existing Pro sales reports. A merchant on any plan can see
+  what each store sold by opening that store; the link to the comparison is only
+  offered where it leads somewhere (AGENTS §7).
+- **This month means the merchant's month.** `startOfMonthInLagos` joins
+  `startOfTodayInLagos` in `lib/day.ts`, so a redeploy can't move a store's
+  takings between months. `formatMonth` was added to `lib/format.ts` for the
+  heading (AGENTS §6 — no ad-hoc date formatting).
+- Phase 7's `/reports` hub should move this view; it sits under Inventory today
+  only because that is where every other report currently lives.
+
+Tests: `tests/store-sales.test.ts` (10 — the split counted exactly on both
+sides, delivery and the discount code left out, cancelled and released counting
+for nobody, an exclusive `to`, a store that sold nothing, shares summing to 1,
+rows summing to the total while order counts don't, the unattributed line, and
+no path to another workspace's takings) and two more in `lib/day.test.ts` for
+the month boundary.
+
+### 8.6 Store access for staff — DONE (2026-09-25)
+
+The gap: a Lagos clerk could adjust Port Harcourt's stock. A role said what a
+member may do and never where.
+
+- **`MembershipWarehouse`** (migration `20260925120000_membership_warehouses`).
+  **NO ROWS MEANS EVERY STORE** — the only default that leaves an existing
+  workspace exactly as it was, that covers stores opened later, and that makes
+  forgetting to pick stores for a new member harmless instead of locking them
+  out of their own shop.
+- **`lib/store-access.ts`** is the whole rule: `allowedStoreIds` (null for every
+  store), `canUseStore`, `requireStoreAccess`, `storeScopeWhere`. The member's
+  stores ride on `getOrganizationContext()` (`membership.warehouseIds`), read in
+  the same query as their role, so no action pays for an extra round trip.
+- **Enforced on the server, in every door that names a store:** stock movements
+  (so stock-in too), transfer dispatch/receive/cancel, cycle count
+  create/record/cancel/complete, putaway, 8.2's assignment, per-store settings
+  and removal, counter sales, kit assembly, receiving a purchase order,
+  fulfillment picking and packing, and editing a store or its "sells online"
+  switch. `StoreAccessDeniedError` carries a message that names the store and
+  says what to do, and each feature's `toActionError` passes it straight through.
+- **Settings → Members** gained a Stores column ("All stores", the names, or "3
+  stores") and a dialog per member. "All stores" is a real choice there, not the
+  absence of one — it is how a restriction is undone.
+- **The pickers offer only what can be written to**: record movement, transfer
+  FROM, cycle count, kit assembly and the till. A transfer's TO keeps every
+  store, because sending stock to another branch is the point.
+- **The stores list marks the rest "View only"** and the store page says "You
+  can see this store, but not change its stock" rather than quietly hiding its
+  buttons (AGENTS §7).
+
+**Decisions worth keeping:**
+
+- **Reads are NOT scoped.** A clerk seeing that Port Harcourt has three left is
+  how they tell a customer where to go, and hiding other stores would make the
+  transfer screen unusable. Every list still returns every store, with
+  `canWorkHere` on the row.
+- **A transfer is gated at the FROM store; receiving at the TO store.** Someone
+  with one store can send stock away and cannot receive it back — the other end
+  confirms the box arrived, which is also the honest description of what happened.
+- **An Owner is never scoped.** `setMemberStores` refuses, and says to change
+  their role first: a business that locked its owner out of a store would have
+  no way back in.
+- **Raising a purchase order is not gated, receiving one is.** Ordering goods
+  for another branch is ordinary procurement work; it is the arrival that touches
+  someone else's shelf.
+- **The migration was written by hand, not by `migrate dev`.** The dev database
+  carries an unrelated foreign-key drift on `orders.customerId`, and a generated
+  diff would have rewritten that constraint too. `migrate diff` → hand-trimmed
+  `migration.sql` → `prisma db execute` → `migrate resolve --applied`, as the
+  Phase 3 notes describe. **`prisma db execute` takes no `--schema` flag in this
+  version** — it reads `prisma.config.ts`, and passing one makes it print its
+  usage and exit non-zero without touching the database.
+
+Tests: `lib/store-access.test.ts` (5 — the empty-means-everything rule from both
+ends, including a context with no field at all, which is what an older caller
+looks like) and `tests/store-access.test.ts` (10 — an unscoped member working
+everywhere as before, a Lagos member refused at Port Harcourt through movements,
+stock-in, transfers, counts, putaway, settings, assignment and the online switch,
+send-but-not-receive, and reads staying open with `canWorkHere` false).
+
 ---
 
 ## Sequencing
@@ -422,13 +767,51 @@ cheap now and very expensive in six months.
 
 **Phase 1 any time** — it depends on nothing and the data is already being written.
 
-## Smaller cleanups found during the audit
+**Phase 8 in order, and 8.6 last.** 8.1 builds the page the other five hang off,
+and every one of 8.2–8.5 puts something on it. 8.6 changes what existing actions
+accept, so it lands once those actions have stopped moving — and it is the only
+part with a migration.
 
-- `app/(dashboard)/[organizationSlug]/sales/page.tsx` defines its own `formatMoney`
-  instead of using `lib/format.ts` (AGENTS §6).
-- That page and `sales/customers/page.tsx` hand-roll an access-denied block instead of
-  using `components/layout/access-denied.tsx` (AGENTS §9).
-- `procurement/suppliers/[supplierId]/page.tsx` gates a supplier detail page behind
-  `FEATURES.REPORTS_ADVANCED` — looks like a copy-paste from the reports page.
-- The sales landing page counts by loading every quote, invoice and customer into
-  memory.
+## Smaller cleanups — DONE (2026-09-25)
+
+The four from the audit, plus everything of the same kind found while doing them.
+All display-layer or query-shape work; no behaviour a merchant chose was changed.
+
+- **Access denied, once.** Fifteen pages hand-rolled their own block; all now use
+  `components/layout/access-denied.tsx` (AGENTS §9) — sales, quotes, invoices,
+  returns, fulfillment, procurement, purchase orders, suppliers, supplier
+  performance, roles and the cycle-count detail page.
+- **Money through one formatter** (AGENTS §6). Bare `toFixed(2)` is gone from the
+  admin: quotes (list, detail, create), purchase orders (list, detail, create),
+  the payment dialog and the supplier report — each now `formatMoney` with the
+  document's own currency where it has one. Two local copies of `formatMoney`
+  (the sales landing page and the supplier report) are deleted. The only
+  `toFixed` left in the app is the storefront's JSON-LD, where a machine reads
+  `"1234.00"` and that is the correct output.
+- **Dates through one formatter.** `toLocaleDateString()` — which drifts between
+  server and client — is gone from quotes, invoices, fulfillment, purchase
+  orders, the supplier report, billing and the invitations table.
+- **No raw enums on screen.** `.replace('_', ' ')` and bare `{status}` are gone
+  from purchase orders, fulfillment, quotes, invoices, suppliers and billing;
+  they use `enumLabel`, so `PARTIALLY_RECEIVED` reads "Partially received".
+- **The sales landing page** is now `PageHeader` + `StatGrid` with clickable
+  stats (AGENTS §2), and its figures come from the new
+  `features/sales/overview.ts` — four counts and one aggregate in the database.
+  It used to load every quote, every invoice and every customer to work out four
+  numbers, which grew with the business and put every customer's email into the
+  page source. "Unpaid" is invoiced minus paid on invoices still owed; "overdue"
+  is the same rule the invoice list uses; a merged customer is counted once.
+- **The supplier plan gate, fixed the other way round.** The detail page IS a
+  performance report, so the `REPORTS_ADVANCED` gate was right — the bug was a
+  clickable row that bounced a non-Pro merchant to `/upgrade` with no
+  explanation. Rows now lead there only when the plan includes it, and the list
+  says in one line what the report shows and where the plans are (AGENTS §7).
+  The suppliers page also gained `PageHeader`/`PageBody` and a real
+  `EmptyState`.
+
+Tests: `tests/sales-overview.test.ts` (2 — the four figures, including a merged
+customer counted once and an invoice with no due date never being late).
+
+**Noted, not built:** the invoices list has no overdue filter, so the landing
+page's "Overdue invoices" tile links to the list plainly rather than carrying a
+`?status=overdue` nothing reads. Worth adding with Phase 7's reports work.

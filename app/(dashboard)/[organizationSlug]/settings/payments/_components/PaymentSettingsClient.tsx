@@ -3,12 +3,13 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Banknote, CreditCard, Landmark, Loader2, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Banknote, CircleCheck, CreditCard, Landmark, Loader2, MoreHorizontal, Pencil, Plus, RotateCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SwitchRoot } from '@/components/ui/switch';
+import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Field, FieldDescription, FieldError } from '@/components/ui/form-field';
 import { PageHeader, PageBody } from '@/components/layout/page-header';
 import { Table, TableWrapper, TableHead, TableBody, TableRow, TableColumnHeader, TableCell } from '@/components/ui/table';
@@ -39,11 +40,13 @@ import {
 } from '@/components/ui/dialog';
 import {
   deleteBankAccount,
+  lookupBankAccountName,
   saveBankAccount,
   setBankAccountActive,
   type BankAccountFieldErrors,
   type BankAccountRow,
 } from '@/features/settings/bank-accounts';
+import { NIGERIAN_BANKS, bankByName } from '@/lib/payments/nigerian-banks';
 
 export function PaymentSettingsClient({
   accounts,
@@ -275,6 +278,12 @@ export function PaymentSettingsClient({
   );
 }
 
+type Lookup =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'found'; accountName: string }
+  | { state: 'failed'; message: string };
+
 function BankAccountDialog({
   open,
   onOpenChange,
@@ -286,20 +295,58 @@ function BankAccountDialog({
   editing: BankAccountRow | null;
   onSaved: () => void;
 }) {
-  const [bankName, setBankName] = React.useState(editing?.bankName ?? '');
-  const [accountName, setAccountName] = React.useState(editing?.accountName ?? '');
+  const [bankCode, setBankCode] = React.useState(() => (editing ? bankByName(editing.bankName)?.code ?? '' : ''));
   const [accountNumber, setAccountNumber] = React.useState(editing?.accountNumber ?? '');
   const [isActive, setIsActive] = React.useState(editing?.isActive ?? true);
+  const [lookup, setLookup] = React.useState<Lookup>({ state: 'idle' });
+  const [attempt, setAttempt] = React.useState(0);
   const [errors, setErrors] = React.useState<BankAccountFieldErrors>({});
   const [formError, setFormError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState(false);
 
+  const digits = accountNumber.replace(/\s+/g, '');
+  const ready = bankCode !== '' && /^\d{10}$/.test(digits);
+
+  /* The name is looked up as soon as there's a bank and ten digits — the
+   * merchant confirms it rather than types it. */
+  React.useEffect(() => {
+    if (!open || !ready) {
+      setLookup({ state: 'idle' });
+      return;
+    }
+    let cancelled = false;
+    setLookup({ state: 'checking' });
+    setErrors({});
+    setFormError(null);
+    void lookupBankAccountName({ bankCode, accountNumber: digits }).then((result) => {
+      if (cancelled) return;
+      if (result.success) {
+        setLookup({ state: 'found', accountName: result.data.accountName });
+      } else if ('fieldErrors' in result) {
+        setErrors(result.fieldErrors);
+        setLookup({ state: 'idle' });
+      } else {
+        setLookup({ state: 'failed', message: result.error });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, ready, bankCode, digits, attempt]);
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (lookup.state !== 'found') {
+      setErrors({
+        bankCode: bankCode ? undefined : 'Choose your bank',
+        accountNumber: /^\d{10}$/.test(digits) ? undefined : 'Account numbers are 10 digits',
+      });
+      return;
+    }
     setPending(true);
     setErrors({});
     setFormError(null);
-    const result = await saveBankAccount(editing?.id ?? null, { bankName, accountName, accountNumber, isActive });
+    const result = await saveBankAccount(editing?.id ?? null, { bankCode, accountNumber: digits, isActive });
     setPending(false);
 
     if (!result.success) {
@@ -328,16 +375,25 @@ function BankAccountDialog({
             )}
 
             <Field>
-              <Label htmlFor="bank-name">Bank *</Label>
-              <Input
-                id="bank-name"
-                autoFocus
-                placeholder="e.g. GTBank"
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-                aria-invalid={errors.bankName ? true : undefined}
-              />
-              {errors.bankName && <FieldError>{errors.bankName}</FieldError>}
+              <Label htmlFor="bank-code">Bank *</Label>
+              <SelectRoot value={bankCode} onValueChange={setBankCode}>
+                <SelectTrigger id="bank-code" aria-invalid={errors.bankCode ? true : undefined}>
+                  <SelectValue placeholder="Choose your bank" />
+                </SelectTrigger>
+                <SelectContent>
+                  {NIGERIAN_BANKS.map((bank) => (
+                    <SelectItem key={bank.code} value={bank.code}>
+                      {bank.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </SelectRoot>
+              {errors.bankCode && <FieldError>{errors.bankCode}</FieldError>}
+              {!errors.bankCode && editing && !bankCode && (
+                <FieldDescription>
+                  Choose “{editing.bankName}” from the list so we can check the account with your bank.
+                </FieldDescription>
+              )}
             </Field>
 
             <Field>
@@ -351,29 +407,47 @@ function BankAccountDialog({
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value)}
                 aria-invalid={errors.accountNumber ? true : undefined}
+                aria-describedby="account-lookup"
               />
               {errors.accountNumber ? (
                 <FieldError>{errors.accountNumber}</FieldError>
               ) : (
-                <FieldDescription>Your 10-digit account number.</FieldDescription>
+                <FieldDescription>Your 10-digit account number. We’ll look up the name on it for you.</FieldDescription>
               )}
             </Field>
 
-            <Field>
-              <Label htmlFor="account-name">Account name *</Label>
-              <Input
-                id="account-name"
-                placeholder="As it appears on the account"
-                value={accountName}
-                onChange={(e) => setAccountName(e.target.value)}
-                aria-invalid={errors.accountName ? true : undefined}
-              />
-              {errors.accountName ? (
-                <FieldError>{errors.accountName}</FieldError>
-              ) : (
-                <FieldDescription>Customers check this name before they send money, so match your bank exactly.</FieldDescription>
+            <div id="account-lookup" aria-live="polite">
+              {lookup.state === 'checking' && (
+                <p className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Checking with your bank…
+                </p>
               )}
-            </Field>
+              {lookup.state === 'found' && (
+                <div className="flex items-start gap-2.5 rounded-md border bg-muted/40 px-3 py-2.5">
+                  <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Account name</p>
+                    <p className="text-sm font-medium text-foreground">{lookup.accountName}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Customers see this name before they send money. If it isn’t yours, check the number.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {lookup.state === 'failed' && (
+                <div
+                  role="alert"
+                  className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+                >
+                  <span>{lookup.message}</span>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+                    <RotateCw className="size-3.5" />
+                    Try again
+                  </Button>
+                </div>
+              )}
+            </div>
 
             <div className="flex items-start justify-between gap-4 rounded-md border p-3">
               <div>
@@ -390,7 +464,7 @@ function BankAccountDialog({
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" size="sm" disabled={pending}>
+            <Button type="submit" size="sm" disabled={pending || lookup.state !== 'found'}>
               {pending && <Loader2 className="size-3.5 animate-spin" />}
               {editing ? 'Save changes' : 'Add bank account'}
             </Button>

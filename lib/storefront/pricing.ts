@@ -21,21 +21,21 @@ export const SHIPPING_METHODS: ShippingMethod[] = [
     label: 'Standard delivery',
     description: '2–4 working days',
     price: DEFAULT_SHIPPING,
-    etaDays: [2, 4],
+    eta: { minMinutes: 2880, maxMinutes: 5760, unit: 'DAYS' },
   },
   {
     id: 'express',
     label: 'Express delivery',
     description: 'Next working day (select cities)',
     price: 600_000,
-    etaDays: [1, 1],
+    eta: { minMinutes: 1440, maxMinutes: 1440, unit: 'DAYS' },
   },
   {
     id: 'pickup',
     label: 'Pickup point',
     description: 'Collect from a partner location, 2–3 days',
     price: 0,
-    etaDays: [2, 3],
+    eta: { minMinutes: 2880, maxMinutes: 4320, unit: 'DAYS' },
   },
 ];
 

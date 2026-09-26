@@ -32,9 +32,10 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import Link from 'next/link';
-import { History, Loader2 } from 'lucide-react';
+import { History, Loader2, Store } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { updateMemberRole, removeMember } from '@/features/members/actions';
+import { MemberStoresDialog, type StoreOption } from './member-stores-dialog';
 
 export type MemberRow = {
   id: string;
@@ -44,8 +45,14 @@ export type MemberRow = {
     email: string;
     image: string | null;
   };
-  role: { id: string; name: string };
+  role: { id: string; name: string; isSystem?: boolean };
   joinedAt: Date;
+  /**
+   * Stores this member may change stock in. EMPTY MEANS EVERY STORE
+   * (ROADMAP Phase 8.6), which is what the column shows.
+   */
+  storeIds: string[];
+  storeNames: string[];
 };
 
 type Role = { id: string; name: string };
@@ -53,6 +60,8 @@ type Role = { id: string; name: string };
 type MembersTableProps = {
   members: MemberRow[];
   roles: Role[];
+  /** Every store in the workspace, for the "which stores" dialog. */
+  stores: StoreOption[];
   currentUserId: string;
   canManage: boolean;
   /** `settings.view` — whether this viewer can open Settings → Activity. */
@@ -62,6 +71,7 @@ type MembersTableProps = {
 export function MembersTable({
   members,
   roles,
+  stores,
   currentUserId,
   canManage,
   canViewActivity = false,
@@ -72,6 +82,9 @@ export function MembersTable({
   /* Removing someone's access is irreversible for them — it goes through a
    * confirmation that says what will happen (AGENTS §4). */
   const [removing, setRemoving] = React.useState<MemberRow | null>(null);
+  /* Which stores someone may work in — a separate question from their role,
+     so it gets its own dialog rather than another column of selects. */
+  const [editingStores, setEditingStores] = React.useState<MemberRow | null>(null);
 
   function setError(id: string, msg: string) {
     setErrors((prev) => ({ ...prev, [id]: msg }));
@@ -113,7 +126,7 @@ export function MembersTable({
   }
 
   const showActions = canManage || canViewActivity;
-  const columnCount = showActions ? 5 : 4;
+  const columnCount = showActions ? 6 : 5;
 
   return (
     <>
@@ -124,6 +137,7 @@ export function MembersTable({
             <TableColumnHeader>Name</TableColumnHeader>
             <TableColumnHeader>Email</TableColumnHeader>
             <TableColumnHeader>Role</TableColumnHeader>
+            <TableColumnHeader>Stores</TableColumnHeader>
             <TableColumnHeader>Joined</TableColumnHeader>
             {showActions && <TableColumnHeader align="right">Actions</TableColumnHeader>}
           </TableRow>
@@ -173,6 +187,15 @@ export function MembersTable({
                       <Badge variant="secondary">{m.role.name}</Badge>
                     )}
                   </TableCell>
+                  <TableCell className="text-xs">
+                    {m.storeIds.length === 0 ? (
+                      <span className="text-muted-foreground">All stores</span>
+                    ) : (
+                      <span className="text-foreground" title={m.storeNames.join(', ')}>
+                        {m.storeNames.length <= 2 ? m.storeNames.join(', ') : `${m.storeNames.length} stores`}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell muted className="text-xs">
                     {formatDate(m.joinedAt)}
                   </TableCell>
@@ -185,6 +208,18 @@ export function MembersTable({
                               <History className="size-3.5" />
                               Activity
                             </Link>
+                          </Button>
+                        )}
+                        {canManage && (
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="text-muted-foreground"
+                            disabled={isPending}
+                            onClick={() => setEditingStores(m)}
+                          >
+                            <Store className="size-3.5" />
+                            Stores
                           </Button>
                         )}
                         {canManage && m.user.id !== currentUserId && (
@@ -234,6 +269,22 @@ export function MembersTable({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialogRoot>
+
+      <MemberStoresDialog
+        open={editingStores !== null}
+        onOpenChange={(next) => !next && setEditingStores(null)}
+        member={
+          editingStores
+            ? {
+                id: editingStores.id,
+                name: editingStores.user.name ?? editingStores.user.email,
+                storeIds: editingStores.storeIds,
+                isOwner: Boolean(editingStores.role.isSystem) && editingStores.role.name === 'Owner',
+              }
+            : null
+        }
+        stores={stores}
+      />
     </>
   );
 }

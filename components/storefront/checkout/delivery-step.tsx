@@ -182,7 +182,8 @@ export function DeliveryStep({
       {delivery.length > 0 && (
         <p className="mt-5 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
           <Truck className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          Delivery {zoneName ? `to ${zoneName} ` : ''}windows are working days from dispatch.
+          Delivery {zoneName ? `to ${zoneName} ` : ''}windows run from dispatch
+          {delivery.some((m) => m.eta.unit === 'DAYS') ? ', and windows in days are working days' : ''}.
         </p>
       )}
     </div>

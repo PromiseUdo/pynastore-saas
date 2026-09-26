@@ -11,7 +11,19 @@ const ctx = vi.hoisted(() => ({
 
 vi.mock('@/lib/organization', () => ({ getOrganizationContext: async () => ctx }));
 
-const { listBankAccounts, saveBankAccount, setBankAccountActive, deleteBankAccount } = await import(
+// The bank's answer, by account number. Anything else is "no such account".
+const lookup = vi.hoisted(() => ({
+  names: { '0123456789': 'BANK TEST LTD' } as Record<string, string>,
+  down: false,
+}));
+vi.mock('@/lib/payments/squad', () => ({
+  lookupAccountName: async (_bankCode: string, accountNumber: string) => {
+    if (lookup.down) throw new Error('network');
+    return lookup.names[accountNumber] ?? null;
+  },
+}));
+
+const { listBankAccounts, lookupBankAccountName, saveBankAccount, setBankAccountActive, deleteBankAccount } = await import(
   '@/features/settings/bank-accounts'
 );
 const { getStoreCheckoutConfig } = await import('@/lib/storefront/checkout/store-config');
@@ -44,29 +56,63 @@ afterAll(async () => {
 
 describe('bank accounts', () => {
   it('validates each field and says which one is wrong', async () => {
-    const result = await saveBankAccount(null, { bankName: '', accountName: 'A', accountNumber: '12345' });
+    const result = await saveBankAccount(null, { bankCode: '999999', accountNumber: '12345' });
     expect(result.success).toBe(false);
     expect(result.success === false && 'fieldErrors' in result && result.fieldErrors).toEqual({
-      bankName: 'Enter the bank’s name',
-      accountName: 'Enter the name on the account',
+      bankCode: 'Choose your bank',
       accountNumber: 'Account numbers are 10 digits',
     });
+  });
+
+  it('looks up the name on an account, and says when the bank doesn’t know it', async () => {
+    expect(await lookupBankAccountName({ bankCode: '000013', accountNumber: '012 345 6789' })).toEqual({
+      success: true,
+      data: { accountName: 'BANK TEST LTD' },
+    });
+    expect(await lookupBankAccountName({ bankCode: '000013', accountNumber: '9999999999' })).toMatchObject({
+      success: false,
+      fieldErrors: { accountNumber: expect.stringMatching(/couldn’t find/) },
+    });
+  });
+
+  it('says the bank is unreachable rather than that the account is wrong', async () => {
+    lookup.down = true;
+    try {
+      const result = await lookupBankAccountName({ bankCode: '000013', accountNumber: '0123456789' });
+      expect(result).toMatchObject({ success: false, error: expect.stringMatching(/couldn’t reach/) });
+      expect('fieldErrors' in result).toBe(false);
+    } finally {
+      lookup.down = false;
+    }
+  });
+
+  it('won’t save an account the bank doesn’t recognise', async () => {
+    expect(await saveBankAccount(null, { bankCode: '000013', accountNumber: '9999999999' })).toMatchObject({
+      success: false,
+    });
+    expect(await prisma.merchantBankAccount.count({ where: { organizationId: ctx.organization.id } })).toBe(0);
   });
 
   it('adds an account, which switches bank transfer on at checkout', async () => {
     const before = await getStoreCheckoutConfig({ organizationSlug: ctx.organization.slug });
     expect(before.paymentMethods.map((m) => m.id)).not.toContain('transfer');
 
+    // The name is the bank's, never the browser's.
     const saved = await saveBankAccount(null, {
-      bankName: ' GTBank ',
-      accountName: 'Bank Test Ltd',
+      bankCode: '000013',
       accountNumber: '012 345 6789',
-    });
+      accountName: 'Somebody Else',
+    } as never);
     expect(saved.success).toBe(true);
 
     const list = await listBankAccounts();
     expect(list.success && list.data).toEqual([
-      expect.objectContaining({ bankName: 'GTBank', accountNumber: '0123456789', isActive: true }),
+      expect.objectContaining({
+        bankName: 'GTBank',
+        accountName: 'BANK TEST LTD',
+        accountNumber: '0123456789',
+        isActive: true,
+      }),
     ]);
 
     const after = await getStoreCheckoutConfig({ organizationSlug: ctx.organization.slug });
@@ -87,7 +133,7 @@ describe('bank accounts', () => {
     expect(list.success && list.data.map((a) => a.accountNumber)).not.toContain('5555555555');
 
     expect(
-      await saveBankAccount(foreignAccountId, { bankName: 'Hijack', accountName: 'X', accountNumber: '1111111111' }),
+      await saveBankAccount(foreignAccountId, { bankCode: '000013', accountNumber: '0123456789' }),
     ).toMatchObject({ success: false });
     expect(await setBankAccountActive(foreignAccountId, false)).toMatchObject({ success: false });
     expect(await deleteBankAccount(foreignAccountId)).toMatchObject({ success: false });
@@ -101,7 +147,7 @@ describe('bank accounts', () => {
     try {
       expect((await listBankAccounts()).success).toBe(true);
       expect(
-        await saveBankAccount(null, { bankName: 'Access', accountName: 'Y', accountNumber: '2222222222' }),
+        await saveBankAccount(null, { bankCode: '000014', accountNumber: '0123456789' }),
       ).toMatchObject({ success: false, error: expect.stringMatching(/permission/i) });
     } finally {
       ctx.membership.role.permissions = [PERMISSIONS.SETTINGS_VIEW, PERMISSIONS.SETTINGS_EDIT];

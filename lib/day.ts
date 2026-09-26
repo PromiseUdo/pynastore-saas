@@ -19,3 +19,11 @@ export function startOfTodayInLagos(now: Date = new Date()): Date {
   shifted.setUTCHours(0, 0, 0, 0);
   return new Date(shifted.getTime() - LAGOS_OFFSET_MINUTES * 60_000);
 }
+
+/** Midnight on the first of the current month, in Lagos, as an instant. */
+export function startOfMonthInLagos(now: Date = new Date()): Date {
+  const shifted = new Date(now.getTime() + LAGOS_OFFSET_MINUTES * 60_000);
+  shifted.setUTCDate(1);
+  shifted.setUTCHours(0, 0, 0, 0);
+  return new Date(shifted.getTime() - LAGOS_OFFSET_MINUTES * 60_000);
+}

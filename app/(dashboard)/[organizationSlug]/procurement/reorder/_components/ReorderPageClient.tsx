@@ -1,18 +1,23 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
+import { PageHeader, PageBody } from '@/components/layout/page-header';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { generateReorderDrafts, type ReorderDraftGroup } from '@/features/procurement/actions';
 
 type ReorderPageClientProps = {
   groups: ReorderDraftGroup[];
+  /** Set when the list was narrowed to one store, so the page can say so. */
+  storeName: string | null;
   canGenerate: boolean;
 };
 
-export function ReorderPageClient({ groups, canGenerate }: ReorderPageClientProps) {
+export function ReorderPageClient({ groups, storeName, canGenerate }: ReorderPageClientProps) {
   const router = useRouter();
   const [pendingKey, setPendingKey] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -46,22 +51,34 @@ export function ReorderPageClient({ groups, canGenerate }: ReorderPageClientProp
 
   return (
     <>
-      <div className="border-b bg-background px-6 py-5">
-        <h1 className="text-lg font-semibold tracking-tight text-foreground">Reorder suggestions</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Items at or below their reorder point, grouped by store and preferred supplier.
-        </p>
-      </div>
+      <PageHeader
+        title="Reorder suggestions"
+        description={
+          storeName
+            ? `What ${storeName} needs, grouped by preferred supplier. A store's own reorder point is used where it has one.`
+            : 'Products at or below their reorder point, grouped by store and preferred supplier.'
+        }
+        actions={
+          storeName ? (
+            <Link href="/procurement/reorder" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              All stores
+            </Link>
+          ) : undefined
+        }
+      />
 
-      <div className="px-6 py-6">
+      <PageBody>
         {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
 
         {groups.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
             <Sparkles className="size-6 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">Nothing to reorder right now</p>
+            <p className="text-sm font-medium text-foreground">
+              {storeName ? `Nothing to reorder for ${storeName} right now` : 'Nothing to reorder right now'}
+            </p>
             <p className="max-w-sm text-xs text-muted-foreground">
-              Items need a preferred supplier (set on the Items page) and a reorder point before they show up here.
+              A product shows up here once it is at or below its reorder point AND has a preferred supplier — set that on the product, so we
+              know who to order from.
             </p>
           </div>
         ) : (
@@ -111,7 +128,7 @@ export function ReorderPageClient({ groups, canGenerate }: ReorderPageClientProp
             })}
           </div>
         )}
-      </div>
+      </PageBody>
     </>
   );
 }

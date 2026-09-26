@@ -18,6 +18,7 @@ import {
   TableCell,
 } from '@/components/ui/table';
 import { recordPicked, recordPacked, markShipped, cancelFulfillment, type FulfillmentDetail } from '@/features/sales/actions';
+import { enumLabel, formatDate } from '@/lib/format';
 
 type FulfillmentDetailClientProps = {
   fulfillment: FulfillmentDetail;
@@ -93,7 +94,7 @@ export function FulfillmentDetailClient({ fulfillment, canManage }: FulfillmentD
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold tracking-tight text-foreground">Fulfillment for {fulfillment.invoiceNumber}</h1>
-            <Badge variant={STATUS_VARIANT[fulfillment.status]}>{fulfillment.status.replace('_', ' ')}</Badge>
+            <Badge variant={STATUS_VARIANT[fulfillment.status]}>{enumLabel(fulfillment.status)}</Badge>
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {fulfillment.customerName} · {fulfillment.warehouseName} ·{' '}
@@ -204,7 +205,7 @@ export function FulfillmentDetailClient({ fulfillment, canManage }: FulfillmentD
               {fulfillment.trackingNumber ? ` · ${fulfillment.trackingNumber}` : ''}
             </p>
             {fulfillment.shippedAt && (
-              <p className="mt-1 text-xs text-muted-foreground">{new Date(fulfillment.shippedAt).toLocaleString()}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{formatDate(fulfillment.shippedAt)}</p>
             )}
           </div>
         )}

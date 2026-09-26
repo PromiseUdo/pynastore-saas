@@ -1,10 +1,10 @@
 'use client';
 
 /*
- * components/sales/search-picker.tsx
+ * components/ui/search-picker.tsx
  *
- * The "type a few letters, pick the one you meant" box used by the till and
- * the invoice form.
+ * The "type a few letters, pick the one you meant" box used by the till, the
+ * invoice form, the campaign form and the picker that adds products to a store.
  *
  * It replaced a `<Select>` holding the whole catalogue. A select can't be
  * searched, and a shop with a thousand products can't be scrolled — so this

@@ -7,6 +7,7 @@ import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { ItemStatus, MovementType } from '@/lib/generated/prisma/enums';
+import { requireStoreAccess } from '@/lib/store-access';
 import { type ActionResult, toActionError, computeMovingAverageCost, maybeSendLowStockAlert, getAvailableStock } from './shared';
 
 const StockMovementSchema = z.object({
@@ -69,6 +70,11 @@ export async function createStockMovement(
     ) {
       return { success: false, error: 'Resource not found' };
     }
+
+    /* Where, not just what: a member limited to certain stores may only move
+     * stock in those (ROADMAP Phase 8.6). On a transfer this is the store the
+     * goods LEAVE — sending stock away is the act being authorised. */
+    requireStoreAccess(ctx.membership, data.warehouseId, warehouse.name);
 
     const existingLevel = await prisma.inventoryLevel.findUnique({
       where: {
@@ -206,6 +212,7 @@ export async function createStockMovement(
         organizationSlug: ctx.organization.slug,
         itemName: item.name,
         itemSku: item.sku,
+        warehouseId: warehouse.id,
         warehouseName: warehouse.name,
         previousQty,
         newQty,

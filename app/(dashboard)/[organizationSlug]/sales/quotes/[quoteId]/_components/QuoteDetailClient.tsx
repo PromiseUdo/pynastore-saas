@@ -17,6 +17,7 @@ import {
 import { ConvertToInvoiceDialog } from './ConvertToInvoiceDialog';
 import { sendQuote, acceptQuote, rejectQuote, type QuoteDetail } from '@/features/sales/actions';
 import type { WarehouseRow } from '@/features/inventory/actions';
+import { enumLabel, formatMoney } from '@/lib/format';
 
 type QuoteDetailClientProps = {
   quote: QuoteDetail;
@@ -57,7 +58,7 @@ export function QuoteDetailClient({ quote, warehouses, can }: QuoteDetailClientP
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold tracking-tight text-foreground">{quote.quoteNumber}</h1>
-            <Badge variant={STATUS_VARIANT[quote.status]}>{quote.status}</Badge>
+            <Badge variant={STATUS_VARIANT[quote.status]}>{enumLabel(quote.status)}</Badge>
             {quote.isExpired && <Badge variant="destructive">Expired</Badge>}
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">{quote.customerName}</p>
@@ -106,9 +107,9 @@ export function QuoteDetailClient({ quote, warehouses, can }: QuoteDetailClientP
                   <TableCell className="font-medium text-foreground">{li.description}</TableCell>
                   <TableCell align="right">{li.quantity}</TableCell>
                   <TableCell align="right" muted>
-                    {li.unitPrice.toFixed(2)}
+                    {formatMoney(li.unitPrice, quote.currency)}
                   </TableCell>
-                  <TableCell align="right">{li.totalPrice.toFixed(2)}</TableCell>
+                  <TableCell align="right">{formatMoney(li.totalPrice, quote.currency)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -116,9 +117,9 @@ export function QuoteDetailClient({ quote, warehouses, can }: QuoteDetailClientP
         </TableWrapper>
 
         <div className="flex justify-end gap-8 text-sm">
-          <span className="text-muted-foreground">Subtotal: {quote.subtotal.toFixed(2)}</span>
-          <span className="text-muted-foreground">Tax: {quote.taxAmount.toFixed(2)}</span>
-          <span className="font-semibold text-foreground">Total: {quote.totalAmount.toFixed(2)}</span>
+          <span className="text-muted-foreground">Subtotal: {formatMoney(quote.subtotal, quote.currency)}</span>
+          <span className="text-muted-foreground">Tax: {formatMoney(quote.taxAmount, quote.currency)}</span>
+          <span className="font-semibold text-foreground">Total: {formatMoney(quote.totalAmount, quote.currency)}</span>
         </div>
 
         {quote.notes && (

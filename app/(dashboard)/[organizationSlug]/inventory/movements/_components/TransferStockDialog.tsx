@@ -34,8 +34,12 @@ type TransferStockDialogProps = {
 
 export function TransferStockDialog({ open, onOpenChange, items, warehouses }: TransferStockDialogProps) {
   const router = useRouter();
+  /* Only the stores this member may work in can send stock, so only those are
+     offered as the source; any store may receive it — the server re-checks anyway (Phase 8.6). */
+  const mine = React.useMemo(() => warehouses.filter((w) => w.canWorkHere), [warehouses]);
+
   const [itemId, setItemId] = React.useState<string | undefined>(items[0]?.id);
-  const [fromWarehouseId, setFromWarehouseId] = React.useState<string | undefined>(warehouses[0]?.id);
+  const [fromWarehouseId, setFromWarehouseId] = React.useState<string | undefined>(mine[0]?.id);
   const [toWarehouseId, setToWarehouseId] = React.useState<string | undefined>(warehouses[1]?.id);
   const [quantity, setQuantity] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
@@ -44,7 +48,7 @@ export function TransferStockDialog({ open, onOpenChange, items, warehouses }: T
   React.useEffect(() => {
     if (open) {
       setItemId(items[0]?.id);
-      setFromWarehouseId(warehouses[0]?.id);
+      setFromWarehouseId(mine[0]?.id);
       setToWarehouseId(warehouses[1]?.id ?? warehouses[0]?.id);
       setQuantity('');
       setError(null);
@@ -141,7 +145,7 @@ export function TransferStockDialog({ open, onOpenChange, items, warehouses }: T
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {warehouses.map((w) => (
+                  {mine.map((w) => (
                     <SelectItem key={w.id} value={w.id}>
                       {w.name}
                     </SelectItem>

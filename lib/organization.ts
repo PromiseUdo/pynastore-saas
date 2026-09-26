@@ -38,6 +38,11 @@ export type OrganizationContext = {
   membership: {
     id: string;
     role: MembershipRole;
+    /**
+     * Stores this member may change stock in. EMPTY MEANS EVERY STORE — see
+     * lib/store-access.ts, which is the only thing that should read this.
+     */
+    warehouseIds: string[];
   };
   userId: string;
 };
@@ -69,6 +74,7 @@ export const getOrganizationContext = cache(
       },
       select: {
         id: true,
+        warehouses: { select: { warehouseId: true } },
         organization: {
           select: {
             id: true,
@@ -111,6 +117,7 @@ export const getOrganizationContext = cache(
       organization: membership.organization,
       membership: {
         id: membership.id,
+        warehouseIds: membership.warehouses.map((w) => w.warehouseId),
         role: {
           id: membership.role.id,
           name: membership.role.name,

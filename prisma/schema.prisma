@@ -101,9 +101,9 @@ model VerificationToken {
 // ============================================================
 
 model Organization {
-  id      String             @id @default(cuid())
-  name    String
-  slug    String             @unique // subdomain label: {slug}.{ROOT_DOMAIN}
+  id   String @id @default(cuid())
+  name String
+  slug String @unique // subdomain label: {slug}.{ROOT_DOMAIN}
 
   /**
    * The business's own logo. `logoPublicId` is kept so the asset can be
@@ -112,8 +112,8 @@ model Organization {
    */
   logoUrl      String?
   logoPublicId String?
-  plan    OrganizationPlan   @default(FREE)
-  status  OrganizationStatus @default(ACTIVE)
+  plan         OrganizationPlan   @default(FREE)
+  status       OrganizationStatus @default(ACTIVE)
 
   /**
    * The currency this business trades in, as an ISO 4217 code. Every money
@@ -132,15 +132,16 @@ model Organization {
   supportPhone    String?
   businessAddress String?
 
-  /*
+  /**
    * ── The online store's own look and listing ─────────────────────────
-   *
    * Every field is the merchant's, and every one is optional: a shop that
    * fills in none of this gets the storefront's own defaults rather than
    * something written for it.
    */
 
-  /** #rrggbb, validated. The storefront's brand colour. */
+  /**
+   * #rrggbb, validated. The storefront's brand colour.
+   */
   storefrontAccent String?
 
   /**
@@ -149,7 +150,9 @@ model Organization {
    */
   storefrontTagline String?
 
-  /** The picture that appears when someone shares a link to the shop. */
+  /**
+   * The picture that appears when someone shares a link to the shop.
+   */
   storefrontSocialImageUrl      String?
   storefrontSocialImagePublicId String?
 
@@ -256,12 +259,38 @@ model Membership {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   role         Role         @relation(fields: [roleId], references: [id])
 
+  /**
+   * Which stores this member may change stock in. NO ROWS MEANS EVERY STORE —
+   * the only backfill that cannot change what an existing member can do. A
+   * role says what someone may do; these say where (see lib/store-access.ts).
+   */
+  warehouses MembershipWarehouse[]
+
   joinedAt  DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([userId, organizationId])
   @@index([organizationId])
   @@map("memberships")
+}
+
+/**
+ * One store a member is allowed to work in. Deliberately a join table rather
+ * than a column: most members have every store (no rows), and the ones who
+ * don't may have several.
+ */
+model MembershipWarehouse {
+  membershipId String
+  warehouseId  String
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  warehouse  Warehouse  @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([membershipId, warehouseId])
+  @@index([warehouseId])
+  @@map("membership_warehouses")
 }
 
 enum MembershipStatus {
@@ -547,7 +576,7 @@ model Warehouse {
 
   organization          Organization           @relation(fields: [organizationId], references: [id])
   stockMovements        StockMovement[]
-  counterSales    Order[]
+  counterSales          Order[]
   inventoryLevels       InventoryLevel[]
   purchaseOrders        PurchaseOrder[]
   cycleCounts           CycleCount[]
@@ -556,6 +585,7 @@ model Warehouse {
   invoices              Invoice[]
   fulfillments          Fulfillment[]
   orderStockAllocations OrderStockAllocation[]
+  memberAccess          MembershipWarehouse[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -636,6 +666,11 @@ model InventoryItem {
   isPublished      Boolean   @default(false)
   publishedAt      DateTime?
   imageId          String? // VARIANT: which of the parent's images shows for this option
+
+  // Payment terms. true = this item must be paid for before it is delivered,
+  // so pay-on-delivery is not offered for any order containing it. Set on the
+  // top-level product; variants inherit it.
+  requiresPrepayment Boolean @default(false)
 
   // Variants: a VARIANT item points to its STANDARD parent. The parent stores
   // the option schema (e.g. [{"name":"Color","kind":"color","values":[{"label":"Red","swatch":"#c00"}]}];
@@ -1129,8 +1164,8 @@ model Customer {
    * without it (Phase 5), and the date records WHEN they agreed, which is
    * the part that matters if anyone ever asks.
    */
-  marketingConsent  Boolean   @default(false)
-  consentUpdatedAt  DateTime?
+  marketingConsent Boolean   @default(false)
+  consentUpdatedAt DateTime?
 
   /**
    * Set when this record was merged into another — the same person, met
@@ -1347,7 +1382,7 @@ enum CustomerStatus {
  * at the boundary, exactly as it does for prices.
  */
 model Order {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   /**
    * Null on a counter sale where nobody took a name — an anonymous cash sale
    * is a real thing, and inventing a customer record for it would put a
@@ -1363,7 +1398,9 @@ model Order {
    */
   warehouseId String?
 
-  /** The member of staff who rang it up. Null for an online order. */
+  /**
+   * The member of staff who rang it up. Null for an online order.
+   */
   soldByUserId String?
 
   /**
@@ -1415,14 +1452,19 @@ model Order {
   shipPostalCode String?
 
   /**
-   * How it gets there. Null on a counter sale, for the same reason. Working
-   * days, as quoted at checkout.
+   * How it gets there. Null on a counter sale, for the same reason.
    */
-  deliveryMethodId    String?
-  deliveryMethodLabel String?
-  deliveryFee         Decimal? @db.Decimal(12, 2)
-  deliveryEtaMinDays  Int?
-  deliveryEtaMaxDays  Int?
+  deliveryMethodId      String?
+  deliveryMethodLabel   String?
+  deliveryFee           Decimal?         @db.Decimal(12, 2)
+  /**
+   * the window quoted at checkout, in minutes, with the unit it was quoted in
+   * so the order repeats the merchant's own words ("45 minutes", "3 working
+   * days") rather than rounding a rider's run down to nothing
+   */
+  deliveryEtaMinMinutes Int?
+  deliveryEtaMaxMinutes Int?
+  deliveryEtaUnit       DeliveryEtaUnit?
 
   currency    String  @default("NGN")
   subtotal    Decimal @db.Decimal(12, 2)
@@ -1504,7 +1546,6 @@ model Order {
 /**
  * Where a sale came from. ONLINE is the storefront checkout; WALK_IN is
  * someone at the counter; PHONE is an order taken by a person.
- *
  * All three are Orders on purpose (docs/ROADMAP.md Phase 2): stock
  * allocation, returns, customer history and every report then cover the whole
  * business rather than the web half of it.
@@ -1690,6 +1731,16 @@ model DeliveryZone {
   @@map("delivery_zones")
 }
 
+/**
+ * The unit a merchant measures delivery time in. Minutes and hours are for
+ * riders and same-day shops; days are working days.
+ */
+enum DeliveryEtaUnit {
+  MINUTES
+  HOURS
+  DAYS
+}
+
 enum DeliveryZoneKind {
   CITIES
   STATES
@@ -1700,25 +1751,27 @@ enum DeliveryZoneKind {
  * One way of delivering within a zone — "Standard", "Same day" — and its price.
  */
 model DeliveryRate {
-  id             String   @id @default(cuid())
+  id             String          @id @default(cuid())
   organizationId String
   zoneId         String
   name           String
   /**
    * major units, like every money column
    */
-  price          Decimal  @db.Decimal(12, 2)
+  price          Decimal         @db.Decimal(12, 2)
   /**
-   * working days from dispatch
+   * how long it takes from dispatch, in minutes, and the unit the merchant
+   * entered — see lib/storefront/delivery/eta.ts. 0 to 0 is same-day.
    */
-  minDays        Int
-  maxDays        Int
+  minMinutes     Int
+  maxMinutes     Int
+  etaUnit        DeliveryEtaUnit @default(DAYS)
   /**
    * delivery is free when the goods come to at least this much; null = never
    */
-  freeOver       Decimal? @db.Decimal(12, 2)
-  isActive       Boolean  @default(true)
-  sortOrder      Int      @default(0)
+  freeOver       Decimal?        @db.Decimal(12, 2)
+  isActive       Boolean         @default(true)
+  sortOrder      Int             @default(0)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   zone         DeliveryZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
@@ -1735,7 +1788,7 @@ model DeliveryRate {
  * A place customers can collect orders from, offered at checkout wherever they live.
  */
 model PickupLocation {
-  id             String  @id @default(cuid())
+  id             String          @id @default(cuid())
   organizationId String
   name           String
   address        String
@@ -1746,14 +1799,16 @@ model PickupLocation {
    */
   instructions   String?
   /**
-   * working days until an order is ready to collect
+   * how long until an order is ready to collect, in minutes, and the unit the
+   * merchant entered it in
    */
-  readyInDays    Int     @default(1)
+  readyMinutes   Int             @default(1440)
+  readyUnit      DeliveryEtaUnit @default(DAYS)
   /**
    * major units; usually free
    */
-  price          Decimal @default(0) @db.Decimal(12, 2)
-  isActive       Boolean @default(true)
+  price          Decimal         @default(0) @db.Decimal(12, 2)
+  isActive       Boolean         @default(true)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -2242,7 +2297,6 @@ model Invoice {
 
   /**
    * The customer's key to their own copy of this invoice.
-   *
    * The invoice number counts upwards and is therefore guessable, so it can
    * never be what opens the page — anyone who can count would otherwise read
    * the whole store's invoices by editing a URL. Same reasoning, and the same
@@ -2251,7 +2305,9 @@ model Invoice {
    */
   publicToken String? @unique
 
-  /** When the customer was first sent it, and last chased about it. */
+  /**
+   * When the customer was first sent it, and last chased about it.
+   */
   sentAt         DateTime?
   lastReminderAt DateTime?
 
@@ -2872,7 +2928,9 @@ model SocialPost {
   createdByUserId String?
   publishedAt     DateTime?
 
-  /** the campaign this post was promoting, if it was part of one */
+  /**
+   * the campaign this post was promoting, if it was part of one
+   */
   campaignId String?
 
   campaign      Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
@@ -2891,8 +2949,7 @@ model SocialPost {
   @@map("social_posts")
 }
 
-
-/*
+/**
  * ============================================================
  * STOREFRONT APPEARANCE
  * ============================================================
@@ -2904,7 +2961,9 @@ enum HeroAlign {
   RIGHT
 }
 
-/** Whether the words sit light-on-dark or dark-on-light over the picture. */
+/**
+ * Whether the words sit light-on-dark or dark-on-light over the picture.
+ */
 enum HeroTheme {
   LIGHT
   DARK
@@ -2912,11 +2971,9 @@ enum HeroTheme {
 
 /**
  * A slide at the top of the merchant's homepage.
- *
  * Until now every storefront opened the same way, because there was nowhere
  * for a merchant to say anything of their own — `getHomepageSections`
  * returned an empty hero because there was no table behind it.
- *
  * Everything here is written and uploaded by the merchant. A shop with no
  * slides shows none, and the homepage below is unchanged.
  */
@@ -2924,12 +2981,16 @@ model StorefrontHeroSlide {
   id             String @id @default(cuid())
   organizationId String
 
-  /** a small line above the headline — "New in", "Until Sunday" */
+  /**
+   * a small line above the headline — "New in", "Until Sunday"
+   */
   eyebrow  String?
   title    String
   subtitle String?
 
-  /** a link, only offered when it has both a label and somewhere to go */
+  /**
+   * a link, only offered when it has both a label and somewhere to go
+   */
   ctaLabel String?
   ctaHref  String?
 
@@ -2951,7 +3012,7 @@ model StorefrontHeroSlide {
   @@map("storefront_hero_slides")
 }
 
-/*
+/**
  * ============================================================
  * MARKETING CAMPAIGNS
  * ============================================================
@@ -2959,7 +3020,6 @@ model StorefrontHeroSlide {
 
 /**
  * Where a campaign is in its life.
- *
  * ACTIVE and ENDED are deliberately NOT stored: a campaign is live when the
  * clock is inside its window, and over when it isn't. Storing them would mean
  * something had to flip them on time — a cron, or a merchant remembering —
@@ -2968,18 +3028,23 @@ model StorefrontHeroSlide {
  * the rest.
  */
 enum CampaignStatus {
-  /** being written; nothing is priced yet */
+  /**
+   * being written; nothing is priced yet
+   */
   DRAFT
-  /** prices are fixed and it will run (or is running) in its window */
+  /**
+   * prices are fixed and it will run (or is running) in its window
+   */
   SCHEDULED
-  /** called off before or during its window */
+  /**
+   * called off before or during its window
+   */
   CANCELLED
 }
 
 /**
  * What the campaign does to a price. Both are expressible AS a price, which
  * is what lets them be resolved once and pinned (see CampaignPrice).
- *
  * "Buy one get one", bundles and free delivery are NOT here: they are cart
  * rules, not prices, and they belong with the checkout engine rather than
  * with a price list. See docs/ROADMAP.md.
@@ -2991,15 +3056,18 @@ enum CampaignMechanic {
 
 /**
  * How a campaign announces itself on the storefront.
- *
  * NONE is the default on purpose: a sale does not have to shout, and a
  * merchant who has nothing to say should not have something said for them.
  */
 enum CampaignAnnouncementStyle {
   NONE
-  /** a strip above the header, optionally scrolling */
+  /**
+   * a strip above the header, optionally scrolling
+   */
   BAR
-  /** shown once per visitor, for something that needs a sentence or two */
+  /**
+   * shown once per visitor, for something that needs a sentence or two
+   */
   MODAL
 }
 
@@ -3007,7 +3075,9 @@ enum CampaignTargetKind {
   PRODUCT
   COLLECTION
   CATEGORY
-  /** everything the store sells online */
+  /**
+   * everything the store sells online
+   */
   STORE
 }
 
@@ -3044,23 +3114,25 @@ model Campaign {
    */
   endedAt DateTime?
 
-  /*
+  /**
    * ── Telling customers about it ──────────────────────────────────────
-   *
    * Every word here is the merchant's. Nothing is generated and nothing has
    * a default sentence: a shop that writes nothing announces nothing, which
    * is why `announcementText` being empty turns the whole thing off however
    * the style is set (AGENTS: never invent a merchant's content).
-   *
    * It exists because the discount is rarely the whole message — "orders for
    * sale items ship from the 27th" is the sort of thing a merchant needs to
    * say alongside it, and had nowhere to say.
    */
-  announcementStyle CampaignAnnouncementStyle @default(NONE)
-  /** the one line a shopper reads first */
-  announcementText   String?
-  /** the rest of it — only a modal has room, so only a modal shows it */
-  announcementDetail String?
+  announcementStyle         CampaignAnnouncementStyle @default(NONE)
+  /**
+   * the one line a shopper reads first
+   */
+  announcementText          String?
+  /**
+   * the rest of it — only a modal has room, so only a modal shows it
+   */
+  announcementDetail        String?
   /**
    * A picture for the pop-up. `publicId` is kept so the asset can be checked
    * as this org's and the old one destroyed on replacement — the same
@@ -3068,21 +3140,24 @@ model Campaign {
    */
   announcementImageUrl      String?
   announcementImagePublicId String?
-  /** an optional link: what it says, and where it goes */
-  announcementCta    String?
-  announcementHref   String?
+  /**
+   * an optional link: what it says, and where it goes
+   */
+  announcementCta           String?
+  announcementHref          String?
   /**
    * #rrggbb, validated. A merchant's own colours, because a sale bar that
    * clashes with their storefront is worse than none.
    */
-  announcementBg String?
-  announcementFg String?
-  /** a bar long enough to need it can scroll instead of truncating */
-  announcementScroll Boolean @default(false)
+  announcementBg            String?
+  announcementFg            String?
+  /**
+   * a bar long enough to need it can scroll instead of truncating
+   */
+  announcementScroll        Boolean                   @default(false)
 
   /**
    * The collection made FROM this campaign, when the merchant asked for one.
-   *
    * It exists so the announcement has somewhere real to send people: a
    * campaign prices products, it does not make a page, and "/anniversary-
    * deals" typed by hand is a 404. Remembered here so the button becomes
@@ -3106,13 +3181,11 @@ model Campaign {
 
 /**
  * One product's price while a campaign runs.
- *
  * THIS IS THE WHOLE POINT. A sale is not a price edit: `sellingPrice` is what
  * the thing costs, and a campaign is a temporary override with an end date.
  * Editing `sellingPrice` instead would mean the real price is lost the moment
  * the sale starts, ending it correctly depends on remembering what it was,
  * and a shop that forgot would sell at the sale price forever.
- *
  * `originalPrice` is snapshotted when the campaign is scheduled, so the
  * strike-through the shopper sees is what the merchant was charging — and a
  * later edit to `sellingPrice` cannot silently move a live sale price.
@@ -3123,9 +3196,13 @@ model CampaignPrice {
   campaignId      String
   inventoryItemId String
 
-  /** what it was selling for when the campaign was scheduled */
+  /**
+   * what it was selling for when the campaign was scheduled
+   */
   originalPrice Decimal @db.Decimal(12, 2)
-  /** what it sells for while the campaign runs */
+  /**
+   * what it sells for while the campaign runs
+   */
   price         Decimal @db.Decimal(12, 2)
 
   organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)

@@ -6,6 +6,7 @@ import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { CycleCountStatus } from '@/lib/generated/prisma/enums';
+import { requireStoreAccess } from '@/lib/store-access';
 import { type ActionResult, toActionError, maybeSendLowStockAlert } from './shared';
 
 export type CycleCountListRow = {
@@ -50,11 +51,15 @@ export async function createCycleCount(
 
     const warehouse = await prisma.warehouse.findUnique({
       where: { id: data.warehouseId },
-      select: { organizationId: true },
+      select: { organizationId: true, name: true },
     });
     if (!warehouse || warehouse.organizationId !== ctx.organization.id) {
       return { success: false, error: 'Store not found' };
     }
+
+    // Counting a shelf changes what the system believes is on it, so it is a
+    // write in that store (ROADMAP Phase 8.6).
+    requireStoreAccess(ctx.membership, data.warehouseId, warehouse.name);
 
     const items = await prisma.inventoryItem.findMany({
       where: { id: { in: data.itemIds }, organizationId: ctx.organization.id },
@@ -200,7 +205,7 @@ export async function recordCounts(
 
     const count = await prisma.cycleCount.findUnique({
       where: { id: cycleCountId },
-      select: { organizationId: true, status: true, items: { select: { id: true } } },
+      select: { organizationId: true, status: true, warehouseId: true, items: { select: { id: true } } },
     });
     if (!count || count.organizationId !== ctx.organization.id) {
       return { success: false, error: 'Cycle count not found' };
@@ -208,6 +213,7 @@ export async function recordCounts(
     if (count.status !== CycleCountStatus.OPEN) {
       return { success: false, error: 'This cycle count is no longer open' };
     }
+    requireStoreAccess(ctx.membership, count.warehouseId);
     const itemIds = new Set(count.items.map((i) => i.id));
     if (data.counts.some((c) => !itemIds.has(c.cycleCountItemId))) {
       return { success: false, error: 'One or more items do not belong to this cycle count' };
@@ -235,7 +241,7 @@ export async function cancelCycleCount(cycleCountId: string): Promise<ActionResu
 
     const count = await prisma.cycleCount.findUnique({
       where: { id: cycleCountId },
-      select: { organizationId: true, status: true },
+      select: { organizationId: true, status: true, warehouseId: true },
     });
     if (!count || count.organizationId !== ctx.organization.id) {
       return { success: false, error: 'Cycle count not found' };
@@ -243,6 +249,7 @@ export async function cancelCycleCount(cycleCountId: string): Promise<ActionResu
     if (count.status !== CycleCountStatus.OPEN) {
       return { success: false, error: 'Only open cycle counts can be cancelled' };
     }
+    requireStoreAccess(ctx.membership, count.warehouseId);
 
     await prisma.cycleCount.update({
       where: { id: cycleCountId },
@@ -281,6 +288,7 @@ export async function completeCycleCount(cycleCountId: string): Promise<ActionRe
     if (count.status !== CycleCountStatus.OPEN) {
       return { success: false, error: 'This cycle count is no longer open' };
     }
+    requireStoreAccess(ctx.membership, count.warehouseId, count.warehouse.name);
     if (count.items.some((i) => i.countedQty === null)) {
       return { success: false, error: 'Enter a counted quantity for every item before completing' };
     }
@@ -361,6 +369,7 @@ export async function completeCycleCount(cycleCountId: string): Promise<ActionRe
         organizationSlug: ctx.organization.slug,
         itemName: alert.itemName,
         itemSku: alert.itemSku,
+        warehouseId: count.warehouseId,
         warehouseName: count.warehouse.name,
         previousQty: alert.previousQty,
         newQty: alert.newQty,

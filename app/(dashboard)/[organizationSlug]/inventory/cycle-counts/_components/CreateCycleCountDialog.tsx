@@ -43,7 +43,11 @@ export function CreateCycleCountDialog({
   organizationSlug,
 }: CreateCycleCountDialogProps) {
   const router = useRouter();
-  const [warehouseId, setWarehouseId] = React.useState<string | undefined>(warehouses[0]?.id);
+  /* Only the stores this member may work in can be written to, so those are
+     the only ones offered — the server re-checks anyway (Phase 8.6). */
+  const mine = React.useMemo(() => warehouses.filter((w) => w.canWorkHere), [warehouses]);
+
+  const [warehouseId, setWarehouseId] = React.useState<string | undefined>(mine[0]?.id);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [notes, setNotes] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
@@ -51,7 +55,7 @@ export function CreateCycleCountDialog({
 
   React.useEffect(() => {
     if (open) {
-      setWarehouseId(warehouses[0]?.id);
+      setWarehouseId(mine[0]?.id);
       setSelected(new Set());
       setNotes('');
       setError(null);
@@ -112,7 +116,7 @@ export function CreateCycleCountDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {warehouses.map((w) => (
+                {mine.map((w) => (
                   <SelectItem key={w.id} value={w.id}>
                     {w.name}
                   </SelectItem>

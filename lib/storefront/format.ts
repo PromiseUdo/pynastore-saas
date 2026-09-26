@@ -44,6 +44,11 @@ export function formatDate(iso: string, locale = 'en-NG'): string {
   return new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+/** "11:20" — for windows measured in minutes or hours, where a date says nothing. */
+export function formatTime(iso: string, locale = 'en-NG'): string {
+  return new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+}
+
 export function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const days = Math.floor(diff / 86400000);

@@ -26,12 +26,28 @@ export type ReorderDraftGroup = {
   items: ReorderDraftItem[];
 };
 
-export async function previewReorderDrafts(): Promise<ActionResult<ReorderDraftGroup[]>> {
+/**
+ * What to restock, grouped by store and preferred supplier.
+ *
+ * `warehouseId` narrows it to one store, which is how a store's own low-stock
+ * panel links here (ROADMAP Phase 8.3): the store that ran low is the store
+ * the merchant wants to order for. The store is re-checked against this
+ * workspace, so a foreign id narrows to nothing rather than widening.
+ */
+export async function previewReorderDrafts(warehouseId?: string): Promise<ActionResult<ReorderDraftGroup[]>> {
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.PROCUREMENT_VIEW);
 
-    const lowStock = await getLowStockLevels();
+    if (warehouseId) {
+      const store = await prisma.warehouse.findFirst({
+        where: { id: warehouseId, organizationId: ctx.organization.id },
+        select: { id: true },
+      });
+      if (!store) return { success: false, error: 'Store not found' };
+    }
+
+    const lowStock = await getLowStockLevels(warehouseId);
     if (!lowStock.success) return lowStock;
 
     const candidates = lowStock.data.filter((r) => r.preferredSupplierId);

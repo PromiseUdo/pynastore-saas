@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
+import { requireStoreAccess } from '@/lib/store-access';
 import { type ActionResult, toActionError } from './shared';
 
 export type PutawayRow = {
@@ -84,6 +85,8 @@ export async function setItemLocation(input: z.infer<typeof SetLocationSchema>):
     if (!warehouse || warehouse.organizationId !== ctx.organization.id) {
       return { success: false, error: 'Store not found' };
     }
+    // A shelf tag belongs to the store it is in (ROADMAP Phase 8.6).
+    requireStoreAccess(ctx.membership, data.warehouseId);
 
     const location = data.location?.trim() || null;
 

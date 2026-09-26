@@ -18,6 +18,7 @@ import {
 import { CreateQuoteDialog } from './CreateQuoteDialog';
 import type { QuoteListRow, CustomerRow } from '@/features/sales/actions';
 import type { ItemListRow } from '@/features/inventory/actions';
+import { enumLabel, formatDate, formatMoney } from '@/lib/format';
 
 type QuotesPageClientProps = {
   quotes: QuoteListRow[];
@@ -85,14 +86,14 @@ export function QuotesPageClient({ quotes, customers, items, canCreate }: Quotes
                       <TableCell muted>{q.customerName}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
-                          <Badge variant={STATUS_VARIANT[q.status]}>{q.status}</Badge>
+                          <Badge variant={STATUS_VARIANT[q.status]}>{enumLabel(q.status)}</Badge>
                           {q.isExpired && <Badge variant="destructive">Expired</Badge>}
                         </div>
                       </TableCell>
                       <TableCell align="right">
-                        {q.currency} {q.totalAmount.toFixed(2)}
+                        {formatMoney(q.totalAmount, q.currency)}
                       </TableCell>
-                      <TableCell muted>{q.validUntil ? new Date(q.validUntil).toLocaleDateString() : '—'}</TableCell>
+                      <TableCell muted>{formatDate(q.validUntil)}</TableCell>
                     </TableRow>
                   ))
                 )}

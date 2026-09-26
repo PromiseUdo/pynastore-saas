@@ -22,6 +22,9 @@ import {
 } from '@/components/ui/dialog';
 import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
 import { savePickupLocation, type PickupLocationRow } from '@/features/settings/delivery';
+import { ETA_UNITS, ETA_UNIT_LABELS, formatReady, fromMinutes, toMinutes, type DeliveryEtaUnit } from '@/lib/storefront/delivery/eta';
+
+const UNIT_NOUN: Record<DeliveryEtaUnit, string> = { MINUTES: 'minutes', HOURS: 'hours', DAYS: 'working days' };
 
 export function PickupDialog({
   open,
@@ -37,12 +40,16 @@ export function PickupDialog({
   const [address, setAddress] = React.useState(editing?.address ?? '');
   const [city, setCity] = React.useState(editing?.city ?? '');
   const [state, setState] = React.useState(editing?.state ?? '');
-  const [readyInDays, setReadyInDays] = React.useState(editing ? String(editing.readyInDays) : '1');
+  const [readyUnit, setReadyUnit] = React.useState<DeliveryEtaUnit>(editing?.readyUnit ?? 'DAYS');
+  const [readyTime, setReadyTime] = React.useState(editing ? String(fromMinutes(editing.readyMinutes, editing.readyUnit)) : '1');
   const [instructions, setInstructions] = React.useState(editing?.instructions ?? '');
   const [isActive, setIsActive] = React.useState(editing?.isActive ?? true);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [formError, setFormError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState(false);
+
+  const minutes = toMinutes(Number(readyTime) || 0, readyUnit);
+  const readyPreview = formatReady({ minMinutes: minutes, maxMinutes: minutes, unit: readyUnit });
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -54,7 +61,8 @@ export function PickupDialog({
       address,
       city,
       state: state as (typeof NIGERIAN_STATES)[number],
-      readyInDays: Number(readyInDays),
+      readyUnit,
+      readyTime: Number(readyTime),
       instructions,
       isActive,
     });
@@ -142,21 +150,38 @@ export function PickupDialog({
               </Field>
             </div>
 
-            <Field>
-              <Label htmlFor="pickup-ready">Ready to collect after (working days) *</Label>
-              <Input
-                id="pickup-ready"
-                inputMode="numeric"
-                value={readyInDays}
-                onChange={(e) => setReadyInDays(e.target.value)}
-                aria-invalid={errors.readyInDays ? true : undefined}
-              />
-              {errors.readyInDays ? (
-                <FieldError>{errors.readyInDays}</FieldError>
-              ) : (
-                <FieldDescription>Use 0 if orders can be collected the same day.</FieldDescription>
-              )}
-            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field>
+                <Label htmlFor="pickup-ready-unit">Ready after *</Label>
+                <SelectRoot value={readyUnit} onValueChange={(value) => setReadyUnit(value as DeliveryEtaUnit)}>
+                  <SelectTrigger id="pickup-ready-unit" aria-invalid={errors.readyUnit ? true : undefined}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ETA_UNITS.map((unit) => (
+                      <SelectItem key={unit} value={unit}>
+                        {ETA_UNIT_LABELS[unit]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </SelectRoot>
+                {errors.readyUnit && <FieldError>{errors.readyUnit}</FieldError>}
+              </Field>
+              <Field>
+                <Label htmlFor="pickup-ready">How many {UNIT_NOUN[readyUnit]} *</Label>
+                <Input
+                  id="pickup-ready"
+                  inputMode="numeric"
+                  value={readyTime}
+                  onChange={(e) => setReadyTime(e.target.value)}
+                  aria-invalid={errors.readyTime ? true : undefined}
+                />
+                {errors.readyTime && <FieldError>{errors.readyTime}</FieldError>}
+              </Field>
+            </div>
+            <FieldDescription className="-mt-2">
+              Use 0 if orders can be collected the same day. Customers see “{readyPreview}”.
+            </FieldDescription>
 
             <Field>
               <Label htmlFor="pickup-instructions">Instructions for customers</Label>

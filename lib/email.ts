@@ -197,7 +197,10 @@ type LowStockAlertEmailPayload = {
   warehouseName: string;
   quantity: number;
   reorderPoint: number;
-  inventoryUrl: string;
+  /** Whose reorder point fired: this store's own override, or the product's. */
+  thresholdSource: 'store' | 'product';
+  /** The store's own page, filtered to what is low there. */
+  storeUrl: string;
 };
 
 export async function sendLowStockAlertEmail(

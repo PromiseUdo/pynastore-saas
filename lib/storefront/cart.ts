@@ -114,6 +114,9 @@ export function sanitizeCartItems(value: unknown): CartItem[] {
       quantity: normalizeQuantity(raw.quantity, maxQuantity),
       maxQuantity,
       currency: raw.currency,
+      /* A bag stored before this rule existed has no flag; false is the safe
+       * reading, because the server re-checks the real terms either way. */
+      requiresPrepayment: raw.requiresPrepayment === true,
       addedAt: typeof raw.addedAt === 'number' && Number.isFinite(raw.addedAt) ? raw.addedAt : Date.now(),
     };
 
@@ -151,6 +154,7 @@ export function toCartLine(product: Product, variantId: string): CartLineInput |
     compareAtPrice: variant.compareAtPrice,
     maxQuantity: variant.stock,
     currency: product.currency,
+    requiresPrepayment: product.requiresPrepayment,
   };
 }
 

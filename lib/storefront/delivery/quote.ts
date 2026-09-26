@@ -16,10 +16,10 @@ import { prisma } from '@/lib/prisma';
 import { useFixtures } from '../data/current';
 import { SHIPPING_METHODS } from '../pricing';
 import type { DeliveryPromise, Money, ShippingMethod } from '../types';
+import { formatEtaSpan } from './eta';
 import {
   hasAnyDelivery,
   quoteFromSetup,
-  workingDays,
   type DeliveryAddress,
   type DeliveryQuote,
   type DeliverySetup,
@@ -42,8 +42,9 @@ const FIXTURE_SETUP: DeliverySetup = {
         id: m.id,
         name: m.label,
         price: m.price,
-        minDays: m.etaDays[0],
-        maxDays: m.etaDays[1],
+        minMinutes: m.eta.minMinutes,
+        maxMinutes: m.eta.maxMinutes,
+        etaUnit: m.eta.unit,
         freeOver: null,
         isActive: true,
       })),
@@ -70,7 +71,7 @@ export const loadDeliverySetup = cache(async (organizationSlug: string): Promise
           isActive: true,
           rates: {
             orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-            select: { id: true, name: true, price: true, minDays: true, maxDays: true, freeOver: true, isActive: true },
+            select: { id: true, name: true, price: true, minMinutes: true, maxMinutes: true, etaUnit: true, freeOver: true, isActive: true },
           },
         },
       },
@@ -83,7 +84,8 @@ export const loadDeliverySetup = cache(async (organizationSlug: string): Promise
           city: true,
           state: true,
           instructions: true,
-          readyInDays: true,
+          readyMinutes: true,
+          readyUnit: true,
           price: true,
           isActive: true,
         },
@@ -133,8 +135,10 @@ export async function deliveryOverview(organizationSlug: string): Promise<Delive
     const rates = zone.rates.filter((r) => r.isActive);
     if (!zone.isActive || rates.length === 0) continue;
     const cheapest = Math.min(...rates.map((r) => r.price));
-    const fastest = Math.min(...rates.map((r) => r.minDays));
-    const slowest = Math.max(...rates.map((r) => r.maxDays));
+    // The window spans every option here: the quickest start, the slowest
+    // finish. Each side keeps the unit of the rate it came from.
+    const fastest = rates.reduce((a, b) => (b.minMinutes < a.minMinutes ? b : a));
+    const slowest = rates.reduce((a, b) => (b.maxMinutes > a.maxMinutes ? b : a));
     const freeOver = rates
       .map((r) => r.freeOver)
       .filter((v): v is Money => v !== null)
@@ -144,7 +148,10 @@ export async function deliveryOverview(organizationSlug: string): Promise<Delive
       id: `zone_${zone.id}`,
       kind: 'delivery',
       label: zone.kind === 'NATIONWIDE' ? `Delivery across Nigeria` : `Delivery to ${zone.name}`,
-      detail: workingDays([fastest, slowest]),
+      detail: formatEtaSpan(
+        { minutes: fastest.minMinutes, unit: fastest.etaUnit },
+        { minutes: slowest.maxMinutes, unit: slowest.etaUnit },
+      ),
       price: cheapest,
       free: cheapest === 0,
       fromPrice: rates.length > 1,

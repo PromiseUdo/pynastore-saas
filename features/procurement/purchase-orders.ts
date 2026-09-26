@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
+import { requireStoreAccess } from '@/lib/store-access';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { computeMovingAverageCost } from '@/features/inventory/shared';
@@ -471,6 +472,11 @@ export async function receivePOLineItems(
     if (!po.warehouseId) {
       return { success: false, error: 'This purchase order has no destination store' };
     }
+    /* Receiving puts stock on a shelf, so it belongs to the destination store
+     * (ROADMAP Phase 8.6). RAISING a purchase order is not gated — ordering
+     * goods for another branch is ordinary procurement work; it is the arrival
+     * that touches someone else's stock. */
+    requireStoreAccess(ctx.membership, po.warehouseId);
     if (po.status !== PurchaseOrderStatus.ORDERED && po.status !== PurchaseOrderStatus.PARTIALLY_RECEIVED) {
       return { success: false, error: 'This purchase order is not ready to receive' };
     }

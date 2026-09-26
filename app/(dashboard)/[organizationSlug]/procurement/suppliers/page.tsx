@@ -1,6 +1,7 @@
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { requireFeature } from '@/lib/billing/entitlements';
+import { AccessDenied } from '@/components/layout/access-denied';
+import { requireFeature, getOrganizationEntitlements, hasFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { listSuppliers } from '@/features/procurement/actions';
 import { SuppliersPageClient } from './_components/SuppliersPageClient';
@@ -10,17 +11,10 @@ export default async function SuppliersPage() {
   const ctx = await getOrganizationContext();
 
   if (!hasPermission(ctx.membership.role.permissions, PERMISSIONS.SUPPLIER_VIEW)) {
-    return (
-      <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-        <h2 className="text-base font-semibold text-foreground">Access denied</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          You don&apos;t have permission to view suppliers.
-        </p>
-      </div>
-    );
+    return <AccessDenied what="suppliers" />;
   }
 
-  const result = await listSuppliers();
+  const [result, { plan }] = await Promise.all([listSuppliers(), getOrganizationEntitlements()]);
   if (!result.success) {
     throw new Error(result.error);
   }
@@ -29,6 +23,10 @@ export default async function SuppliersPage() {
     <SuppliersPageClient
       suppliers={result.data}
       canManage={hasPermission(ctx.membership.role.permissions, PERMISSIONS.SUPPLIER_EDIT)}
+      /* A supplier's only detail page is its performance report, which is a Pro
+         feature — so rows lead there only when they can, rather than bouncing
+         the merchant to /upgrade with no explanation (AGENTS §7). */
+      performanceEnabled={hasFeature(plan, FEATURES.REPORTS_ADVANCED)}
       organizationSlug={ctx.organization.slug}
     />
   );

@@ -41,9 +41,13 @@ const MOVEMENT_TYPES = [
 
 export function RecordMovementDialog({ open, onOpenChange, items, warehouses }: RecordMovementDialogProps) {
   const router = useRouter();
+  /* Only the stores this member may work in can be written to, so those are
+     the only ones offered — the server re-checks anyway (Phase 8.6). */
+  const mine = React.useMemo(() => warehouses.filter((w) => w.canWorkHere), [warehouses]);
+
   const [type, setType] = React.useState<'IN' | 'OUT' | 'ADJUSTMENT'>('IN');
   const [itemId, setItemId] = React.useState<string | undefined>(items[0]?.id);
-  const [warehouseId, setWarehouseId] = React.useState<string | undefined>(warehouses[0]?.id);
+  const [warehouseId, setWarehouseId] = React.useState<string | undefined>(mine[0]?.id);
   const [quantity, setQuantity] = React.useState('');
   const [unitCost, setUnitCost] = React.useState('');
   const [notes, setNotes] = React.useState('');
@@ -54,7 +58,7 @@ export function RecordMovementDialog({ open, onOpenChange, items, warehouses }: 
     if (open) {
       setType('IN');
       setItemId(items[0]?.id);
-      setWarehouseId(warehouses[0]?.id);
+      setWarehouseId(mine[0]?.id);
       setQuantity('');
       setUnitCost('');
       setNotes('');
@@ -144,7 +148,7 @@ export function RecordMovementDialog({ open, onOpenChange, items, warehouses }: 
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {warehouses.map((w) => (
+                {mine.map((w) => (
                   <SelectItem key={w.id} value={w.id}>
                     {w.name}
                   </SelectItem>

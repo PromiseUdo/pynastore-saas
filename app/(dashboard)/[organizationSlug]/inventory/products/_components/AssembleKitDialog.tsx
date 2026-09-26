@@ -34,15 +34,18 @@ type AssembleKitDialogProps = {
 };
 
 export function AssembleKitDialog({ open, onOpenChange, kit, warehouses }: AssembleKitDialogProps) {
+  /* Assembly consumes and creates stock, so only the stores this member may
+     work in are offered — the server re-checks anyway (Phase 8.6). */
+  const mine = React.useMemo(() => warehouses.filter((w) => w.canWorkHere), [warehouses]);
   const router = useRouter();
-  const [warehouseId, setWarehouseId] = React.useState<string | undefined>(warehouses[0]?.id);
+  const [warehouseId, setWarehouseId] = React.useState<string | undefined>(mine[0]?.id);
   const [quantity, setQuantity] = React.useState('1');
   const [error, setError] = React.useState<string | null>(null);
   const [isPending, setIsPending] = React.useState(false);
 
   React.useEffect(() => {
     if (open) {
-      setWarehouseId(warehouses[0]?.id);
+      setWarehouseId(mine[0]?.id);
       setQuantity('1');
       setError(null);
     }
@@ -90,7 +93,7 @@ export function AssembleKitDialog({ open, onOpenChange, kit, warehouses }: Assem
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {warehouses.map((w) => (
+                {mine.map((w) => (
                   <SelectItem key={w.id} value={w.id}>
                     {w.name}
                   </SelectItem>

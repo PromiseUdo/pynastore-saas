@@ -12,6 +12,7 @@
  * promise. Nothing is re-derived from the catalogue, so an order still reads
  * correctly years later.
  */
+import { formatEtaWindow } from '@/lib/storefront/delivery/eta';
 import type * as React from 'react';
 import { formatDate, formatMoney } from '@/lib/storefront/format';
 import { cancelledRefundSentence, paymentHint } from '@/lib/storefront/orders/labels';
@@ -194,8 +195,7 @@ export function OrderDetail({
           </h2>
           <p className="mt-3 text-sm font-medium">{order.delivery.label}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Estimated {formatDate(order.delivery.estimated.from, locale)} –{' '}
-            {formatDate(order.delivery.estimated.to, locale)}
+            {formatEtaWindow(order.delivery.eta, order.delivery.estimated, locale)}
           </p>
           {order.note && (
             <p className="mt-3 border-t pt-3 text-sm text-muted-foreground">

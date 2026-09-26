@@ -21,6 +21,7 @@ import { StatCard, StatGrid } from '@/components/dashboard/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { formatDate, formatMoney, formatNumber } from '@/lib/format';
+import { MOVEMENT_LABEL, MOVEMENT_VARIANT } from '@/lib/inventory-labels';
 
 export const metadata: Metadata = { title: 'Inventory' };
 
@@ -174,9 +175,7 @@ export default async function InventoryDashboardPage() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Badge variant={m.type === 'OUT' ? 'destructive' : m.type === 'IN' ? 'success' : 'info'}>
-                      {m.type === 'IN' ? 'Stock in' : m.type === 'OUT' ? 'Stock out' : m.type === 'TRANSFER' ? 'Transfer' : 'Adjustment'}
-                    </Badge>
+                    <Badge variant={MOVEMENT_VARIANT[m.type]}>{MOVEMENT_LABEL[m.type]}</Badge>
                     <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">{formatNumber(m.quantity)}</span>
                   </div>
                 </li>
