@@ -10,18 +10,17 @@
  * stopped calling us — the daily jobs (Vercel) watch the frequent ones
  * (cron-job.org), and the other way round.
  *
- * Staff alerts go to PLATFORM_ADMIN_EMAIL, at most every ALERT_EVERY_HOURS
+ * Staff alerts go through lib/ops/alerts.ts: to PLATFORM_ADMIN_EMAIL, at most every 6 hours
  * per job while it stays broken, and once more when it works again. Only
  * scheduled runs alert on failure: whoever pressed "Run now" is looking at
  * the answer already.
  */
 import { prisma } from '@/lib/prisma';
-import { sendPlatformNoticeEmail } from '@/lib/email';
-import { getMarketingUrl } from '@/lib/tenant/urls';
-import { PLATFORM_NAME } from '@/lib/brand';
 import { formatRelativeTime } from '@/lib/format';
+import { claimAlert, clearAlerts, sendStaffAlert } from '@/lib/ops/alerts';
+import { log } from '@/lib/ops/log';
 import { CRON_JOBS, type CronJob } from './jobs';
-import { ALERT_EVERY_HOURS, jobState } from './health';
+import { jobState } from './health';
 
 const KEEP_DAYS = 30;
 const MAX_RESULT_CHARS = 4000;
@@ -70,15 +69,16 @@ export async function runCronJob(
         error: outcome.ok ? null : outcome.error,
       },
     });
-    if (outcome.ok) await clearAlerts(key, job);
+    if (outcome.ok) await clearJobAlerts(key, job);
     else if (options.trigger === 'schedule') await alertFailed(key, job, outcome.error);
     await alertOverdue(jobs, key);
     await prisma.cronRun.deleteMany({ where: { startedAt: { lt: new Date(Date.now() - KEEP_DAYS * 86_400_000) } } });
   } catch (err) {
-    console.error(`[cron] ${key}: couldn't record the run:`, err);
+    log.error('cron.bookkeeping_failed', { job: key }, err);
   }
 
-  if (!outcome.ok) console.error(`[cron] ${key} failed:`, outcome.error);
+  if (outcome.ok) log.info('cron.run', { job: key, trigger: options.trigger, ok: true });
+  else log.error('cron.run', { job: key, trigger: options.trigger, ok: false, error: outcome.error });
   return outcome;
 }
 
@@ -96,43 +96,14 @@ function storable(result: unknown) {
 
 /* ─── Alerts ────────────────────────────────────────────────────────────── */
 
-function staffInbox(): string[] {
-  return (process.env.PLATFORM_ADMIN_EMAIL ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-/**
- * Claim the right to send this alert: the first time, or when the last one
- * went out more than ALERT_EVERY_HOURS ago. Two runs racing can't both win.
- */
-async function claimAlert(job: string, kind: 'failed' | 'overdue'): Promise<boolean> {
-  const created = await prisma.cronAlert.createMany({ data: [{ job, kind }], skipDuplicates: true });
-  if (created.count === 1) return true;
-  const renewed = await prisma.cronAlert.updateMany({
-    where: { job, kind, sentAt: { lt: new Date(Date.now() - ALERT_EVERY_HOURS * 3_600_000) } },
-    data: { sentAt: new Date() },
-  });
-  return renewed.count === 1;
-}
+const subjectFor = (key: string) => `cron:${key}`;
 
 async function send(subject: string, heading: string, paragraphs: string[]) {
-  const to = staffInbox();
-  if (to.length === 0) return;
-  await sendPlatformNoticeEmail({
-    to,
-    subject,
-    preview: heading,
-    heading,
-    paragraphs,
-    button: { label: 'Open scheduled jobs', url: getMarketingUrl('/platform/jobs') },
-    footer: `Sent by ${PLATFORM_NAME} to platform staff, at most every ${ALERT_EVERY_HOURS} hours while a job stays broken.`,
-  });
+  await sendStaffAlert({ subject, heading, paragraphs, button: { label: 'Open scheduled jobs', path: '/platform/jobs' } });
 }
 
 async function alertFailed(key: string, job: CronJob, error: string) {
-  if (!(await claimAlert(key, 'failed'))) return;
+  if (!(await claimAlert(subjectFor(key), 'failed'))) return;
   await send(`Scheduled job failed: ${job.title}`, `“${job.title}” failed`, [
     `It runs ${job.schedule.toLowerCase()}. ${job.description}`,
     `What it said: ${error}`,
@@ -140,18 +111,24 @@ async function alertFailed(key: string, job: CronJob, error: string) {
   ]);
 }
 
-async function clearAlerts(key: string, job: CronJob) {
-  const cleared = await prisma.cronAlert.deleteMany({ where: { job: key } });
-  if (cleared.count > 0) {
+async function clearJobAlerts(key: string, job: CronJob) {
+  if ((await clearAlerts(subjectFor(key))) > 0) {
     await send(`Working again: ${job.title}`, `“${job.title}” is working again`, [
       'Its latest run finished without a problem. No more alerts will be sent about it unless it breaks again.',
     ]);
   }
 }
 
+/** When runs of these jobs started being recorded — the reference for "late" on one that has never run. */
+export async function firstRecordedRun(keys: string[]): Promise<Date | null> {
+  const first = await prisma.cronRun.findFirst({ where: { job: { in: keys } }, orderBy: { startedAt: 'asc' }, select: { startedAt: true } });
+  return first?.startedAt ?? null;
+}
+
 /** Email about every other job that should have run by now and hasn't. */
 async function alertOverdue(jobs: Record<string, CronJob>, current: string) {
   const now = new Date();
+  const watchingSince = await firstRecordedRun(Object.keys(jobs));
   for (const [key, job] of Object.entries(jobs)) {
     if (key === current) continue;
     const last = await prisma.cronRun.findFirst({
@@ -159,9 +136,9 @@ async function alertOverdue(jobs: Record<string, CronJob>, current: string) {
       orderBy: { startedAt: 'desc' },
       select: { startedAt: true, finishedAt: true, ok: true },
     });
-    const state = jobState(job.everyMinutes, last, now);
-    if (state !== 'late' && state !== 'never') continue;
-    if (!(await claimAlert(key, 'overdue'))) continue;
+    const state = jobState(job.everyMinutes, last, now, watchingSince);
+    if (state !== 'late') continue;
+    if (!(await claimAlert(subjectFor(key), 'overdue'))) continue;
     await send(
       `Scheduled job isn’t running: ${job.title}`,
       `“${job.title}” hasn’t run when it should have`,

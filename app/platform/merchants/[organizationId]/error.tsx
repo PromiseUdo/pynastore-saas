@@ -2,6 +2,6 @@
 
 import { RouteError } from '@/components/layout/route-error';
 
-export default function MerchantError({ unstable_retry }: { error: Error; unstable_retry: () => void }) {
-  return <RouteError what="this merchant" retry={unstable_retry} />;
+export default function MerchantError({ error, unstable_retry }: { error: Error & { digest?: string }; unstable_retry: () => void }) {
+  return <RouteError what="this merchant" retry={unstable_retry} error={error} />;
 }

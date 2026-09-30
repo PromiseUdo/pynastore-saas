@@ -11,7 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { requirePlatformStaff } from '@/lib/platform-staff';
 import { CRON_JOBS, CRON_JOB_KEYS, isCronJobKey, type CronJobKey, type Counts } from '@/lib/cron/jobs';
 import { CUT_OFF_MINUTES, jobState, lateAfterMinutes, needsAttention, type JobState } from '@/lib/cron/health';
-import { runCronJob } from '@/lib/cron/run';
+import { firstRecordedRun, runCronJob } from '@/lib/cron/run';
 
 export type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
 
@@ -71,8 +71,8 @@ export async function jobsAttentionCount(): Promise<number> {
   try {
     await requirePlatformStaff();
     const now = new Date();
-    const rows = await latestRuns();
-    return rows.filter(({ key, last }) => needsAttention(jobState(CRON_JOBS[key].everyMinutes, last, now))).length;
+    const [rows, watchingSince] = await Promise.all([latestRuns(), firstRecordedRun(CRON_JOB_KEYS)]);
+    return rows.filter(({ key, last }) => needsAttention(jobState(CRON_JOBS[key].everyMinutes, last, now, watchingSince))).length;
   } catch {
     return 0;
   }
@@ -90,8 +90,9 @@ export async function getJobsPage(params: { job?: string }): Promise<ActionResul
     const now = new Date();
     const filter = params.job && isCronJobKey(params.job) ? params.job : undefined;
 
-    const [latest, runs] = await Promise.all([
+    const [latest, watchingSince, runs] = await Promise.all([
       latestRuns(),
+      firstRecordedRun(CRON_JOB_KEYS),
       prisma.cronRun.findMany({
         where: filter ? { job: filter } : {},
         orderBy: { startedAt: 'desc' },
@@ -108,7 +109,7 @@ export async function getJobsPage(params: { job?: string }): Promise<ActionResul
 
     const jobs: JobRow[] = latest.map(({ key, last, lastOk }) => {
       const job = CRON_JOBS[key];
-      const state = jobState(job.everyMinutes, last, now);
+      const state = jobState(job.everyMinutes, last, now, watchingSince);
       return {
         key,
         title: job.title,

@@ -7,6 +7,6 @@
  */
 import { DiscoveryError } from '@/components/storefront/catalog/discovery-error';
 
-export default function VisualSearchError({ reset }: { error: Error; reset: () => void }) {
-  return <DiscoveryError reset={reset} title="Something went wrong with that image search." />;
+export default function VisualSearchError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  return <DiscoveryError reset={reset} error={error} title="Something went wrong with that image search." />;
 }

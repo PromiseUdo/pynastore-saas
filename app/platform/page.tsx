@@ -20,17 +20,19 @@ import { getConsoleOverview } from '@/features/platform/overview';
 import { getPaymentCounts } from '@/features/platform/payments';
 import { waitingDomainCount } from '@/features/platform/domains';
 import { jobsAttentionCount } from '@/features/platform/jobs';
+import { errorsAttentionCount } from '@/features/platform/errors';
 
 export const metadata: Metadata = { title: 'Overview' };
 
 export default async function ConsoleOverviewPage() {
   // The layout's staff check runs alongside this page, not before it.
   if (!(await getPlatformStaff())) notFound();
-  const [{ verification, workspaces }, payments, domainsWaiting, jobsNeedingLook] = await Promise.all([
+  const [{ verification, workspaces }, payments, domainsWaiting, jobsNeedingLook, recentErrors] = await Promise.all([
     getConsoleOverview(),
     getPaymentCounts(),
     waitingDomainCount(),
     jobsAttentionCount(),
+    errorsAttentionCount(),
   ]);
   const p = payments.success ? payments.data : null;
   const plural = (n: number, one: string, many: string) => `${formatNumber(n)} ${n === 1 ? one : many}`;
@@ -40,6 +42,7 @@ export default async function ConsoleOverviewPage() {
     p?.mismatched ? { href: '/platform/payments?tab=mismatched', text: `${plural(p.mismatched, 'payment', 'payments')} came in for the wrong amount or account` } : null,
     p?.unmatched ? { href: '/platform/payments?tab=unmatched', text: `${plural(p.unmatched, 'Paystack payment matches', 'Paystack payments match')} nothing of ours` } : null,
     p?.payouts ? { href: '/platform/payments?tab=payouts', text: `${plural(p.payouts, 'business needs', 'businesses need')} its payout setup fixed` } : null,
+    recentErrors ? { href: '/platform/errors', text: `${plural(recentErrors, 'open error has', 'open errors have')} happened in the last 24 hours` } : null,
     jobsNeedingLook ? { href: '/platform/jobs', text: `${plural(jobsNeedingLook, 'scheduled job is', 'scheduled jobs are')} failing or not running` } : null,
     domainsWaiting ? { href: '/platform/domains', text: `${plural(domainsWaiting, 'domain is', 'domains are')} waiting to be set up or renewed` } : null,
   ].filter((x): x is { href: string; text: string } => x !== null);
@@ -92,7 +95,7 @@ export default async function ConsoleOverviewPage() {
             {verification.pending === 0 && others.length === 0 && (
               <p className="flex items-center gap-2 rounded-lg border bg-card p-4 text-sm text-muted-foreground">
                 <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-                Nothing waiting. Verification requests, payment problems, domain work and failing scheduled jobs will appear here.
+                Nothing waiting. Verification requests, payment problems, domain work, failing scheduled jobs and new errors will appear here.
               </p>
             )}
           </section>

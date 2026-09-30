@@ -12,9 +12,6 @@
 /** A run still unfinished after this long was cut off by the host (Vercel stops a function at its time limit). */
 export const CUT_OFF_MINUTES = 10;
 
-/** While a job stays broken, staff are emailed about it at most this often. */
-export const ALERT_EVERY_HOURS = 6;
-
 export type JobState = 'ok' | 'running' | 'failing' | 'late' | 'never';
 
 export interface LastRun {
@@ -32,15 +29,24 @@ export function lateAfterMinutes(everyMinutes: number): number {
   return everyMinutes < 60 ? everyMinutes * 3 : everyMinutes + 120;
 }
 
-export function jobState(everyMinutes: number, last: LastRun | null, now: Date): JobState {
-  if (!last) return 'never';
+/**
+ * `watchingSince` is when runs started being recorded at all — the first run
+ * of ANY job. A job that has never run is only late once that is further back
+ * than its own window: a daily job deployed this afternoon hasn't missed
+ * anything until tomorrow morning has come and gone.
+ */
+export function jobState(everyMinutes: number, last: LastRun | null, now: Date, watchingSince: Date | null = null): JobState {
+  if (!last) {
+    const watchedFor = watchingSince ? (now.getTime() - watchingSince.getTime()) / 60_000 : 0;
+    return watchedFor > lateAfterMinutes(everyMinutes) ? 'late' : 'never';
+  }
   const sinceStart = (now.getTime() - last.startedAt.getTime()) / 60_000;
   if (sinceStart > lateAfterMinutes(everyMinutes)) return 'late';
   if (!last.finishedAt) return sinceStart < CUT_OFF_MINUTES ? 'running' : 'failing';
   return last.ok ? 'ok' : 'failing';
 }
 
-/** The states that want someone to look. */
+/** The states that want someone to look. "Never" alone doesn't: it becomes "late" when a run is overdue. */
 export function needsAttention(state: JobState): boolean {
-  return state === 'failing' || state === 'late' || state === 'never';
+  return state === 'failing' || state === 'late';
 }

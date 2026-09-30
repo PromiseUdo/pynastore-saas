@@ -8,6 +8,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 The platform's working name is **Notely** (getnotely.io), set in `lib/brand.ts` (`PLATFORM_NAME`, `PLATFORM_DOMAIN`, `PLATFORM_OPERATOR`). Never type the name into UI, emails or legal text — read it from there, so a rename is one change. Internal identifiers that say "mansaas" (storage keys, token issuers, the Cloudinary folder, billing references, `com.mansaas.app`) are NOT renamed: changing them breaks live data.
 
+# Checks
+
+Tests run against a throwaway Docker Postgres, never Neon or live data:
+`npm run test:local` (see `docs/CI.md`). CI (`.github/workflows/ci.yml`)
+typechecks, applies every migration to an empty database, fails if
+`schema.prisma` changed without a migration, runs the whole suite and builds.
+A new setting the code needs at load time gets a placeholder in `.env.ci`.
+
 # Roadmap
 
 `docs/ROADMAP.md` holds the agreed build plan: the phases, what gap each one closes,

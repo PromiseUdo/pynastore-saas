@@ -56,7 +56,7 @@ beforeEach(() => {
 
 afterAll(async () => {
   await prisma.cronRun.deleteMany({ where: { job: { in: keys } } });
-  await prisma.cronAlert.deleteMany({ where: { job: { in: keys } } });
+  await prisma.opsAlert.deleteMany({ where: { subject: { in: keys.map((k) => `cron:${k}`) } } });
   process.env.PLATFORM_ADMIN_EMAIL = previousInbox;
 });
 
@@ -88,7 +88,7 @@ describe('failure alerts', () => {
   });
 
   it('emails again once the throttle has passed', async () => {
-    await prisma.cronAlert.updateMany({ where: { job: FLAKY, kind: 'failed' }, data: { sentAt: new Date(Date.now() - 7 * 3_600_000) } });
+    await prisma.opsAlert.updateMany({ where: { subject: `cron:${FLAKY}`, kind: 'failed' }, data: { sentAt: new Date(Date.now() - 7 * 3_600_000) } });
     await runCronJob(FLAKY, { trigger: 'schedule', jobs: JOBS });
     expect(mail.subjects).toContain('Scheduled job failed: Sometimes breaks');
   });
@@ -97,7 +97,7 @@ describe('failure alerts', () => {
     failNext = false;
     await runCronJob(FLAKY, { trigger: 'schedule', jobs: JOBS });
     expect(mail.subjects).toContain('Working again: Sometimes breaks');
-    expect(await prisma.cronAlert.count({ where: { job: FLAKY } })).toBe(0);
+    expect(await prisma.opsAlert.count({ where: { subject: `cron:${FLAKY}` } })).toBe(0);
   });
 
   it('doesn’t email about a failed “Run now” — the person who pressed it can see', async () => {
@@ -112,7 +112,16 @@ describe('failure alerts', () => {
 describe('a job nobody is calling', () => {
   const withQuiet = () => ({ ...JOBS, [QUIET]: job('Never called', async () => ({})) });
 
-  it('is noticed by the next run of another job, once', async () => {
+  it('isn’t reported just for being new', async () => {
+    await runCronJob(OK, { trigger: 'schedule', jobs: withQuiet() });
+    expect(mail.subjects.filter((s) => s.includes('isn’t running'))).toEqual([]);
+  });
+
+  it('is reported once when it has never run and its window has passed, then not again', async () => {
+    // Pretend runs have been recorded for two hours: a 15-minute job with none is overdue.
+    await prisma.cronRun.create({
+      data: { job: OK, trigger: 'schedule', ok: true, startedAt: new Date(Date.now() - 120 * 60_000), finishedAt: new Date(Date.now() - 120 * 60_000) },
+    });
     await runCronJob(OK, { trigger: 'schedule', jobs: withQuiet() });
     expect(mail.subjects).toContain('Scheduled job isn’t running: Never called');
     mail.subjects.length = 0;
@@ -121,7 +130,7 @@ describe('a job nobody is calling', () => {
   });
 
   it('is noticed when its last run is too long ago, and cleared when it runs', async () => {
-    await prisma.cronAlert.deleteMany({ where: { job: QUIET } });
+    await prisma.opsAlert.deleteMany({ where: { subject: `cron:${QUIET}` } });
     await prisma.cronRun.create({
       data: { job: QUIET, trigger: 'schedule', ok: true, startedAt: new Date(Date.now() - 90 * 60_000), finishedAt: new Date(Date.now() - 90 * 60_000) },
     });
@@ -130,7 +139,7 @@ describe('a job nobody is calling', () => {
 
     await runCronJob(QUIET, { trigger: 'schedule', jobs: withQuiet() });
     expect(mail.subjects).toContain('Working again: Never called');
-    expect(await prisma.cronAlert.count({ where: { job: QUIET } })).toBe(0);
+    expect(await prisma.opsAlert.count({ where: { subject: `cron:${QUIET}` } })).toBe(0);
   });
 });
 

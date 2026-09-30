@@ -53,11 +53,11 @@ const geminiReturns = (payload: unknown): Scripted => ({
   json: { candidates: [{ content: { parts: [{ text: JSON.stringify(payload) }] }, finishReason: 'STOP' }] },
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   seen.length = 0;
   script = [];
   fetchMock.mockClear();
-  resetModelCoolDown();
+  await resetModelCoolDown();
   vi.stubGlobal('fetch', fetchMock);
   vi.stubEnv('GEMINI_API_KEY', 'test-key-not-real');
   vi.stubEnv('GEMINI_MAX_RPM', '10000');

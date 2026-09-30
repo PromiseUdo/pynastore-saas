@@ -84,7 +84,7 @@ export async function startImageSearch(params: {
   const organization = slug ? await findStoreBySlug(slug) : null;
   if (!slug || !organization) return fail('no_store');
 
-  const allowed = checkImageSearchRequest(slug, params.who);
+  const allowed = await checkImageSearchRequest(slug, params.who);
   if (!allowed.ok) return fail('rate_limited', allowed.retryAfterSeconds);
 
   const checked = await checkUploadedImage(params.file);
@@ -102,14 +102,14 @@ export async function startImageSearch(params: {
     console.warn('[visual-search] no embedding credentials (GEMINI_API_KEY); image search is unavailable');
     return fail('unavailable');
   }
-  if (!reserveSearchEmbedding(slug)) return fail('busy');
+  if (!(await reserveSearchEmbedding(slug))) return fail('busy');
 
   let vector: number[];
   try {
     vector = await embedder.embedImage(checked.image);
   } catch (error) {
     if (isRateLimited(error)) {
-      noteEmbeddingRateLimited(error.retryAfterMs);
+      await noteEmbeddingRateLimited(error.retryAfterMs);
       return fail('busy');
     }
     console.warn('[visual-search] embedding failed', error instanceof Error ? error.message : error);

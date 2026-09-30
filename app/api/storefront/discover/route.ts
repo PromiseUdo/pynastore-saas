@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   if (!resolved.ok) {
     return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }
-  const allowed = checkDiscoveryRequest(resolved.slug, requestIdentity(request, resolved.slug));
+  const allowed = await checkDiscoveryRequest(resolved.slug, requestIdentity(request, resolved.slug));
   if (!allowed.ok) {
     return NextResponse.json(
       { error: 'You’re searching a little fast. Give it a moment and try again.' },

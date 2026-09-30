@@ -23,8 +23,38 @@ function withExplicitSslMode(connectionString: string): string {
   }
 }
 
+/*
+ * Connections per server instance (ROADMAP 13.6). On Vercel every function
+ * instance has its own pool, and there can be many instances at once — so
+ * each keeps few connections, and Neon's pooler (the "-pooler" host in
+ * DATABASE_URL) multiplexes them onto real ones. DATABASE_POOL_MAX overrides.
+ */
+function poolSize(): number {
+  const configured = Number(process.env.DATABASE_POOL_MAX)
+  if (Number.isFinite(configured) && configured > 0) return Math.floor(configured)
+  return process.env.VERCEL ? 5 : 10
+}
+
+/*
+ * Production must go through the pooler: a direct address gives every
+ * instance real connections and can exhaust the database's limit under load.
+ * Said once at boot rather than failing, since it still works.
+ */
+function warnIfUnpooled(connectionString: string) {
+  if (process.env.VERCEL_ENV !== 'production') return
+  try {
+    const host = new URL(connectionString).hostname
+    if (host.endsWith('.neon.tech') && !host.includes('-pooler')) {
+      console.warn('[prisma] DATABASE_URL is a direct Neon address in production — use the "-pooler" one (docs/DATABASE.md).')
+    }
+  } catch {
+    // not a URL we can read; nothing to say
+  }
+}
+
 function createBasePrismaClient() {
   const connectionString = withExplicitSslMode(process.env.DATABASE_URL!)
+  warnIfUnpooled(connectionString)
   /*
    * Neon's pooler closes idle server connections (and the compute suspends
    * altogether), so a pooled client can be dead by the time pg hands it out —
@@ -33,6 +63,7 @@ function createBasePrismaClient() {
    */
   const pool = new Pool({
     connectionString,
+    max: poolSize(),
     idleTimeoutMillis: 5_000,
     maxLifetimeSeconds: 60,
     connectionTimeoutMillis: 10_000,

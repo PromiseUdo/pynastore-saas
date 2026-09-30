@@ -84,7 +84,7 @@ export async function POST(request: Request) {
   }
   const store = { organizationSlug: resolved.slug };
 
-  const allowed = checkAssistantRequest(resolved.slug, requestIdentity(request, resolved.slug));
+  const allowed = await checkAssistantRequest(resolved.slug, requestIdentity(request, resolved.slug));
   if (!allowed.ok) {
     return NextResponse.json(
       { error: 'You’re sending messages a little fast. Give it a moment and try again.' },

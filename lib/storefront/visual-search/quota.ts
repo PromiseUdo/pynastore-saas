@@ -2,7 +2,7 @@
  * Who may spend the image-embedding quota, and how much.
  *
  * Same two-layer shape as the assistant (lib/ai/assistant/quota.ts), on the
- * same limiter (lib/rate-limit.ts — in-memory, per instance):
+ * same limiter (lib/rate-limit.ts — shared by every instance):
  *
  *  1. REQUEST limits — per shopper (session, else IP) and per store, checked
  *     before a photo is even read. Exceeding one tells the shopper to wait.
@@ -14,10 +14,10 @@
  *     shoppers. A 429 from Gemini pauses every embedding call for as long as
  *     Google asks.
  *
- * On several server instances each keeps its own counters — divide the
- * global numbers by the instance count, or move the limiter to a shared store.
+ * The counters and the pause are shared by every server instance (13.2), so
+ * the global numbers are the platform's, not one instance's.
  */
-import { checkRateLimit } from '@/lib/rate-limit';
+import { clearRateLimit, coolDown, requestLimitRetryAfter, takeRateLimits } from '@/lib/rate-limit';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -57,7 +57,7 @@ export interface SearcherIdentity {
 }
 
 /** Every key is namespaced by store, so one store's traffic never counts against another's. */
-export function checkImageSearchRequest(storeSlug: string, who: SearcherIdentity): SearchCheck {
+export async function checkImageSearchRequest(storeSlug: string, who: SearcherIdentity): Promise<SearchCheck> {
   const L = SEARCH_LIMITS;
   type Check = readonly [string, { readonly limit: number; readonly windowMs: number }];
   const checks: Check[] = [
@@ -71,52 +71,51 @@ export function checkImageSearchRequest(storeSlug: string, who: SearcherIdentity
     [`vsearch:ip:hour:${storeSlug}:${who.ip}`, L.ipPerHour],
     [`vsearch:store:min:${storeSlug}`, L.storePerMinute],
   ];
-  for (const [key, { limit, windowMs }] of checks) {
-    if (!checkRateLimit(key, limit, windowMs)) {
-      return { ok: false, retryAfterSeconds: Math.min(windowMs / 1000, 15 * 60) };
-    }
-  }
-  return { ok: true };
+  const retryAfterSeconds = await requestLimitRetryAfter(checks.map(([key, l]) => ({ key, ...l })));
+  return retryAfterSeconds === null ? { ok: true } : { ok: false, retryAfterSeconds };
 }
 
 /* ─────────────────────────── embedding budget ────────────────────────── */
 
-let coolDownUntil = 0;
-
-export function embeddingCoolingDown(): boolean {
-  return Date.now() < coolDownUntil;
-}
+/** While this runs (after a Gemini 429), no embedding call is made, on any instance. */
+const COOL_DOWN_KEY = 'cooldown:gemini-embed';
 
 /** One embedding call for a shopper search in this store, or false when the budget is spent. */
-export function reserveSearchEmbedding(storeKey: string): boolean {
-  if (embeddingCoolingDown()) return false;
+export async function reserveSearchEmbedding(storeKey: string): Promise<boolean> {
   const l = embeddingLimits();
-  return (
-    checkRateLimit(`gemini-embed:store:min:${storeKey}`, l.storeSearchPerMinute, MINUTE) &&
-    checkRateLimit(`gemini-embed:store:day:${storeKey}`, l.storeSearchPerDay, DAY) &&
-    checkRateLimit('gemini-embed:global:min', l.globalPerMinute, MINUTE) &&
-    checkRateLimit('gemini-embed:global:day', l.globalPerDay, DAY)
+  const taken = await takeRateLimits(
+    [
+      { key: `gemini-embed:store:min:${storeKey}`, limit: l.storeSearchPerMinute, windowMs: MINUTE },
+      { key: `gemini-embed:store:day:${storeKey}`, limit: l.storeSearchPerDay, windowMs: DAY },
+      { key: 'gemini-embed:global:min', limit: l.globalPerMinute, windowMs: MINUTE },
+      { key: 'gemini-embed:global:day', limit: l.globalPerDay, windowMs: DAY },
+    ],
+    { blockedBy: COOL_DOWN_KEY, onError: 'deny' },
   );
+  return taken.ok;
 }
 
 /** One embedding call for indexing a product image, or false — the job resumes later. */
-export function reserveIndexingEmbedding(): boolean {
-  if (embeddingCoolingDown()) return false;
+export async function reserveIndexingEmbedding(): Promise<boolean> {
   const l = embeddingLimits();
-  return (
-    checkRateLimit('gemini-embed:index:min', l.indexingPerMinute, MINUTE) &&
-    checkRateLimit('gemini-embed:global:min', l.globalPerMinute, MINUTE) &&
-    checkRateLimit('gemini-embed:global:day', l.globalPerDay, DAY)
+  const taken = await takeRateLimits(
+    [
+      { key: 'gemini-embed:index:min', limit: l.indexingPerMinute, windowMs: MINUTE },
+      { key: 'gemini-embed:global:min', limit: l.globalPerMinute, windowMs: MINUTE },
+      { key: 'gemini-embed:global:day', limit: l.globalPerDay, windowMs: DAY },
+    ],
+    { blockedBy: COOL_DOWN_KEY, onError: 'deny' },
   );
+  return taken.ok;
 }
 
 /** Gemini said 429: stop embedding for as long as it asked (capped). */
-export function noteEmbeddingRateLimited(retryAfterMs: number | undefined): void {
+export async function noteEmbeddingRateLimited(retryAfterMs: number | undefined): Promise<void> {
   const wait = Math.min(Math.max(retryAfterMs ?? MINUTE, 5_000), 10 * MINUTE);
-  coolDownUntil = Math.max(coolDownUntil, Date.now() + wait);
+  await coolDown(COOL_DOWN_KEY, wait);
 }
 
 /** Test seam. */
-export function resetEmbeddingCoolDown(): void {
-  coolDownUntil = 0;
+export async function resetEmbeddingCoolDown(): Promise<void> {
+  await clearRateLimit(COOL_DOWN_KEY);
 }

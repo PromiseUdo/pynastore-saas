@@ -24,7 +24,7 @@
  */
 import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import type { NextFetchEvent, NextRequest } from 'next/server';
 import { authConfig } from '@/auth.config';
 import { getMobileApp, resolveMobileRoute } from '@/lib/mobile/app-config';
 import { prisma } from '@/lib/prisma';
@@ -32,6 +32,7 @@ import { resolveHostname, isLocalHostname } from '@/lib/tenant/resolveHostname';
 import { resolveTenant, resolveTenantBySlug } from '@/lib/tenant/resolveTenant';
 import { getOrgRouting } from '@/lib/tenant/org-status';
 import { getAdminUrl, getMarketingUrl } from '@/lib/tenant/urls';
+import { buildCsp, cspMode, makeNonce } from '@/lib/security/csp';
 
 const { auth } = NextAuth(authConfig);
 
@@ -82,7 +83,7 @@ function currentUrl(req: NextRequest, hostname: string): string {
   return `${protocol}://${hostname}${req.nextUrl.pathname}${req.nextUrl.search}`;
 }
 
-export default auth(async function proxy(req: NextRequest & { auth: any }) {
+const routeRequest = auth(async function proxy(req: NextRequest & { auth: any }) {
   const { pathname } = req.nextUrl;
   const session = req.auth;
   const hostHeader = req.headers.get('host');
@@ -130,13 +131,13 @@ export default auth(async function proxy(req: NextRequest & { auth: any }) {
       return NextResponse.redirect(orgSlug ? getAdminUrl(orgSlug, '/dashboard') : getMarketingUrl('/onboarding'));
     }
 
-    return NextResponse.next();
+    return NextResponse.next({ request: { headers: new Headers(req.headers) } });
   }
 
   // ── 1b. Public prefixes — fully accessible without a session ─────────────
   //        /invite/[token] is public: the page itself handles the auth split.
   if (isMarketing && PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
-    return NextResponse.next();
+    return NextResponse.next({ request: { headers: new Headers(req.headers) } });
   }
 
   // ── 1c. Mobile origin — the Capacitor app's single server host ──────────
@@ -172,15 +173,15 @@ export default auth(async function proxy(req: NextRequest & { auth: any }) {
 
     const route = resolveMobileRoute(pathname, getMobileApp());
 
-    if (route.kind === 'mpath') return NextResponse.next();
-    if (route.kind === 'picker') return NextResponse.rewrite(new URL('/m', requestUrl));
+    if (route.kind === 'mpath') return NextResponse.next({ request: { headers: new Headers(req.headers) } });
+    if (route.kind === 'picker') return NextResponse.rewrite(new URL('/m', requestUrl), { request: { headers: new Headers(req.headers) } });
     if (route.kind === 'home') return NextResponse.redirect(mobileHome);
 
     const tenant = await resolveTenantBySlug(route.slug);
     if (!tenant) {
       // Unknown slug. In a branded build redirecting home would loop, so
       // fall back to the picker as an error surface.
-      return NextResponse.rewrite(new URL('/m', requestUrl));
+      return NextResponse.rewrite(new URL('/m', requestUrl), { request: { headers: new Headers(req.headers) } });
     }
 
     // A suspended shop opens only its "unavailable" page (ROADMAP 11.4).
@@ -216,12 +217,12 @@ export default auth(async function proxy(req: NextRequest & { auth: any }) {
 
   // ── 3b. Auth-only routes (no tenant required) — marketing domain only ───
   if (isMarketing && AUTH_ONLY_PREFIXES.some((p) => pathname.startsWith(p))) {
-    return NextResponse.next();
+    return NextResponse.next({ request: { headers: new Headers(req.headers) } });
   }
 
   // ── 4. Marketing domain has no tenant-scoped content beyond the above ───
   if (isMarketing) {
-    if (pathname === '/') return NextResponse.next();
+    if (pathname === '/') return NextResponse.next({ request: { headers: new Headers(req.headers) } });
     return NextResponse.redirect(getMarketingUrl('/'));
   }
 
@@ -299,6 +300,35 @@ export default auth(async function proxy(req: NextRequest & { auth: any }) {
 
   return NextResponse.rewrite(rewriteUrl, { request: { headers: requestHeaders } });
 });
+
+/*
+ * Every page gets a Content Security Policy with a fresh nonce (ROADMAP
+ * 13.4, lib/security/csp.ts). The nonce rides on the REQUEST headers so
+ * Next.js can stamp its own scripts with it while rendering — which is why
+ * every pass-through above forwards `req.headers` rather than calling a bare
+ * NextResponse.next() — and the policy goes on the response. Redirects carry
+ * it too; it does nothing there, and there's no reason to special-case them.
+ */
+export default async function proxy(req: NextRequest, event: NextFetchEvent) {
+  const mode = cspMode();
+  if (mode === 'off') return routeRequest(req, event as never);
+
+  const hostInfo = resolveHostname(req.headers.get('host'));
+  const nonce = makeNonce();
+  const policy = buildCsp({
+    nonce,
+    storefront: hostInfo.siteType === 'storefront' || hostInfo.siteType === 'mobile' || hostInfo.isCustomDomain,
+    dev: process.env.NODE_ENV === 'development',
+    https: req.headers.get('x-forwarded-proto') === 'https' || req.nextUrl.protocol === 'https:',
+  });
+  req.headers.set('x-nonce', nonce);
+  req.headers.set('content-security-policy', policy);
+
+  const response = (await routeRequest(req, event as never)) as Response | undefined;
+  const res = response ?? NextResponse.next({ request: { headers: new Headers(req.headers) } });
+  res.headers.set(mode === 'report' ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy', policy);
+  return res;
+}
 
 export const config = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.svg$).*)'],

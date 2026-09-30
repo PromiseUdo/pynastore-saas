@@ -10,8 +10,13 @@ const run = (startedMinutesAgo: number, ok: boolean | null, finished = true) => 
 });
 
 describe('jobState', () => {
-  it('is "never" before the first run', () => {
+  it('is "never" before the first run, until its window has passed since runs began being recorded', () => {
     expect(jobState(15, null, now)).toBe('never');
+    // A daily job deployed 3 hours ago hasn't missed anything yet…
+    expect(jobState(1440, null, now, ago(3 * 60))).toBe('never');
+    // …but one watched for 27 hours with no run is late.
+    expect(jobState(1440, null, now, ago(27 * 60))).toBe('late');
+    expect(jobState(15, null, now, ago(60))).toBe('late');
   });
 
   it('is late after three missed beats for a frequent job, and two hours past a day for a daily one', () => {
@@ -37,7 +42,7 @@ describe('jobState', () => {
     expect(jobState(15, run(5, false), now)).toBe('failing');
   });
 
-  it('asks for attention when failing, late or never run', () => {
-    expect(['ok', 'running', 'failing', 'late', 'never'].filter((s) => needsAttention(s as never))).toEqual(['failing', 'late', 'never']);
+  it('asks for attention when failing or late — "never" alone is just new', () => {
+    expect(['ok', 'running', 'failing', 'late', 'never'].filter((s) => needsAttention(s as never))).toEqual(['failing', 'late']);
   });
 });

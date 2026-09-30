@@ -3,7 +3,7 @@
  *
  * Same two-layer shape as the Shopping Assistant (lib/ai/assistant/quota.ts)
  * and Visual Search (lib/storefront/visual-search/quota.ts), on the same
- * limiter (lib/rate-limit.ts — in-memory, per instance):
+ * limiter (lib/rate-limit.ts — shared by every instance):
  *
  *  1. REQUEST limits — per member and per store, checked before the model is
  *     called. Exceeding one tells the merchant to wait a moment.
@@ -23,7 +23,7 @@
  * These limits are deliberately tight. Caption writing is a button a person
  * presses a few times per post, not a background job.
  */
-import { checkRateLimit } from '@/lib/rate-limit';
+import { clearRateLimit, coolDown, requestLimitRetryAfter, takeRateLimits } from '@/lib/rate-limit';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -66,7 +66,7 @@ export type CopyRequestCheck = { ok: true } | { ok: false; retryAfterSeconds: nu
  * quotas): this endpoint is only reachable by an authenticated member, so
  * the member IS the identity.
  */
-export function checkCopyRequest(organizationId: string, userId: string): CopyRequestCheck {
+export async function checkCopyRequest(organizationId: string, userId: string): Promise<CopyRequestCheck> {
   const L = COPY_REQUEST_LIMITS;
   const checks = [
     [`social-copy:member:min:${organizationId}:${userId}`, L.memberPerMinute],
@@ -75,46 +75,41 @@ export function checkCopyRequest(organizationId: string, userId: string): CopyRe
     [`social-copy:store:day:${organizationId}`, L.storePerDay],
   ] as const;
 
-  for (const [key, { limit, windowMs }] of checks) {
-    if (!checkRateLimit(key, limit, windowMs)) {
-      return { ok: false, retryAfterSeconds: Math.min(windowMs / 1000, 15 * 60) };
-    }
-  }
-  return { ok: true };
+  const retryAfterSeconds = await requestLimitRetryAfter(checks.map(([key, l]) => ({ key, ...l })));
+  return retryAfterSeconds === null ? { ok: true } : { ok: false, retryAfterSeconds };
 }
 
 /* ───────────────────────────── model budget ─────────────────────────── */
 
-let coolDownUntil = 0;
-
-export function copyCoolingDown(): boolean {
-  return Date.now() < coolDownUntil;
-}
+/** While this runs (after a Gemini 429), no social-copy call is made, on any instance. */
+const COOL_DOWN_KEY = 'cooldown:gemini-social';
 
 /**
  * Take one Gemini call from the social-copy budget, or learn there isn't
  * one. Store buckets are checked first so a store that has used its share is
- * refused without eating into everyone else's.
+ * refused without eating into everyone else's. No shared store, no call.
  */
-export function reserveCopyCall(organizationId: string): boolean {
-  if (copyCoolingDown()) return false;
-
+export async function reserveCopyCall(organizationId: string): Promise<boolean> {
   const l = copyModelLimits();
-  return (
-    checkRateLimit(`gemini-social:store:min:${organizationId}`, l.storePerMinute, MINUTE) &&
-    checkRateLimit(`gemini-social:store:day:${organizationId}`, l.storePerDay, DAY) &&
-    checkRateLimit('gemini-social:global:min', l.globalPerMinute, MINUTE) &&
-    checkRateLimit('gemini-social:global:day', l.globalPerDay, DAY)
+  const taken = await takeRateLimits(
+    [
+      { key: `gemini-social:store:min:${organizationId}`, limit: l.storePerMinute, windowMs: MINUTE },
+      { key: `gemini-social:store:day:${organizationId}`, limit: l.storePerDay, windowMs: DAY },
+      { key: 'gemini-social:global:min', limit: l.globalPerMinute, windowMs: MINUTE },
+      { key: 'gemini-social:global:day', limit: l.globalPerDay, windowMs: DAY },
+    ],
+    { blockedBy: COOL_DOWN_KEY, onError: 'deny' },
   );
+  return taken.ok;
 }
 
 /** Gemini said 429: stop calling it for as long as it asked (capped). */
-export function noteCopyRateLimited(retryAfterMs: number | undefined): void {
+export async function noteCopyRateLimited(retryAfterMs: number | undefined): Promise<void> {
   const wait = Math.min(Math.max(retryAfterMs ?? MINUTE, 5_000), 10 * MINUTE);
-  coolDownUntil = Math.max(coolDownUntil, Date.now() + wait);
+  await coolDown(COOL_DOWN_KEY, wait);
 }
 
 /** Test seam. */
-export function resetCopyCoolDown(): void {
-  coolDownUntil = 0;
+export async function resetCopyCoolDown(): Promise<void> {
+  await clearRateLimit(COOL_DOWN_KEY);
 }

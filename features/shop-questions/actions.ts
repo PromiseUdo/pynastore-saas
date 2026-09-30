@@ -40,7 +40,7 @@ export async function askQuestionAction(
 
   /* Someone deciding on a purchase asks once or twice. A burst is a script,
    * and each of these lands in a merchant's inbox. */
-  if (!checkRateLimit(`question:${shopper.id}`, 10, 60 * 60 * 1000)) {
+  if (!(await checkRateLimit(`question:${shopper.id}`, 10, 60 * 60 * 1000))) {
     return { error: 'That’s a lot of questions at once. Please try again a little later.', values };
   }
 

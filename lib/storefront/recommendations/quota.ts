@@ -3,7 +3,7 @@
  *
  * Same shape as the assistant's (lib/ai/assistant/quota.ts) and visual
  * search's (lib/storefront/visual-search/quota.ts), on the same limiter
- * (lib/rate-limit.ts — in-memory, per instance): per shopper (signed-in
+ * (lib/rate-limit.ts — shared by every instance): per shopper (signed-in
  * session, hashed) and per IP, plus a per-store ceiling, every key namespaced
  * by store so one store's traffic never counts against another's.
  *
@@ -15,7 +15,7 @@
  * nothing visible: the block keeps its server-rendered, non-personalised
  * version (use-recommendations.ts falls back to `initial` on any error).
  */
-import { checkRateLimit } from '@/lib/rate-limit';
+import { requestLimitRetryAfter } from '@/lib/rate-limit';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -37,10 +37,10 @@ export interface RecommendationRequester {
   ip: string;
 }
 
-export function checkRecommendationRequest(
+export async function checkRecommendationRequest(
   storeSlug: string,
   who: RecommendationRequester,
-): RecommendationRequestCheck {
+): Promise<RecommendationRequestCheck> {
   const L = RECOMMENDATION_LIMITS;
   type Check = readonly [string, { readonly limit: number; readonly windowMs: number }];
   const checks: Check[] = [
@@ -54,10 +54,6 @@ export function checkRecommendationRequest(
     [`recs:ip:hour:${storeSlug}:${who.ip}`, L.ipPerHour],
     [`recs:store:min:${storeSlug}`, L.storePerMinute],
   ];
-  for (const [key, { limit, windowMs }] of checks) {
-    if (!checkRateLimit(key, limit, windowMs)) {
-      return { ok: false, retryAfterSeconds: Math.min(windowMs / 1000, 15 * 60) };
-    }
-  }
-  return { ok: true };
+  const retryAfterSeconds = await requestLimitRetryAfter(checks.map(([key, l]) => ({ key, ...l })));
+  return retryAfterSeconds === null ? { ok: true } : { ok: false, retryAfterSeconds };
 }

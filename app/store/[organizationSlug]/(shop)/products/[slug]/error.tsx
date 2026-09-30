@@ -7,8 +7,10 @@
  */
 import Link from 'next/link';
 import { RefreshCw } from 'lucide-react';
+import { useReportError } from '@/lib/ops/use-report-error';
 
-export default function ProductError({ reset }: { error: Error; reset: () => void }) {
+export default function ProductError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useReportError(error);
   return (
     <div className="sf-container py-20">
       <div className="mx-auto max-w-md text-center">

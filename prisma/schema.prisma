@@ -1608,7 +1608,14 @@ model Order {
   transferDetails Json?
 
   organization    Organization           @relation(fields: [organizationId], references: [id])
-  customer        Customer?              @relation(fields: [customerId], references: [id])
+  /**
+   * RESTRICT, stated rather than left to Prisma's default (SET NULL for an
+   * optional relation): a customer who has orders can't be deleted out from
+   * under their order history. This is what the database has always had —
+   * the difference between the two was the long-running "orders.customerId
+   * drift" (ROADMAP 13.6). Deleting a shopper's data is 13.8's decision.
+   */
+  customer        Customer?              @relation(fields: [customerId], references: [id], onDelete: Restrict)
   warehouse       Warehouse?             @relation(fields: [warehouseId], references: [id])
   soldBy          User?                  @relation(fields: [soldByUserId], references: [id])
   discountCodeRef DiscountCode?          @relation(fields: [discountCodeId], references: [id], onDelete: SetNull)
@@ -3290,18 +3297,82 @@ model CronRun {
 }
 
 /**
- * An alert already sent to staff about a job (ROADMAP 13.1), so a job that
- * fails every 15 minutes emails once, not 96 times a day. Deleted when the
- * job works again, which is also when the "working again" email goes.
+ * An alert already sent to staff (ROADMAP 13.1, 13.3) — about a scheduled
+ * job, a webhook, or an error — so something broken every 15 minutes emails
+ * once, not 96 times a day. `subject` says what it is about ("cron:<job>",
+ * "webhook:<name>", "error:<group id>"). Deleted when the thing works again,
+ * which is also when the "working again" email goes.
  */
-model CronAlert {
-  id     String   @id @default(cuid())
-  job    String
-  kind   String // "failed" | "overdue"
-  sentAt DateTime @default(now())
+model OpsAlert {
+  id      String   @id @default(cuid())
+  subject String
+  kind    String // "failed" | "overdue" | "spike"
+  sentAt  DateTime @default(now())
 
-  @@unique([job, kind])
-  @@map("cron_alerts")
+  @@unique([subject, kind])
+  @@map("ops_alerts")
+}
+
+/**
+ * Errors, grouped (ROADMAP 13.3): every server error Next.js reports
+ * (instrumentation.ts), browser errors the pages report, and webhook
+ * failures. One row per kind of error — same source, same place, same
+ * message once ids and numbers are blanked — with a count and the latest
+ * details. Staff mark a group resolved; if it happens again it reopens.
+ */
+model ErrorGroup {
+  id           String    @id @default(cuid())
+  fingerprint  String    @unique
+  source       String // "server" | "client" | "webhook"
+  where        String // route file, page path (ids blanked) or webhook name
+  kind         String? // "render" | "route" | "action" | "proxy" | "browser" | "signature" | "processing" …
+  message      String
+  count        Int       @default(1)
+  firstSeenAt  DateTime  @default(now())
+  lastSeenAt   DateTime  @default(now())
+  lastStack    String?
+  lastPath     String?
+  lastDigest   String?
+  resolvedAt   DateTime?
+  resolvedById String?
+
+  events ErrorEvent[]
+
+  @@index([resolvedAt, lastSeenAt])
+  @@index([lastSeenAt])
+  @@map("error_groups")
+}
+
+/** One occurrence of an ErrorGroup, kept 14 days — for "how often lately" and spikes. */
+model ErrorEvent {
+  id         String   @id @default(cuid())
+  groupId    String
+  occurredAt DateTime @default(now())
+  path       String?
+  host       String?
+  digest     String?
+
+  group ErrorGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, occurredAt])
+  @@index([occurredAt])
+  @@map("error_events")
+}
+
+/**
+ * Shared rate-limit and budget counters (ROADMAP 13.2) — one row per bucket,
+ * fixed window. Written only through the rate_limit_take() SQL function from
+ * lib/rate-limit.ts, so every server instance counts against the same
+ * numbers. A cool-down ("stop calling Gemini until…") is a row whose resetAt
+ * is the end of the pause.
+ */
+model RateLimitBucket {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+
+  @@index([resetAt])
+  @@map("rate_limit_buckets")
 }
 
 /**

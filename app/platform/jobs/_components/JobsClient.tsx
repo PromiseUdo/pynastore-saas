@@ -12,14 +12,14 @@ import { Table, TableBody, TableCell, TableColumnHeader, TableHead, TableRow, Ta
 import { formatDate, formatRelativeTime } from '@/lib/format';
 import { runJobNow, type JobRow, type JobsPage, type RunRow } from '@/features/platform/jobs';
 
-type BadgeVariant = 'success' | 'processing' | 'destructive' | 'warning';
+type BadgeVariant = 'success' | 'processing' | 'destructive' | 'warning' | 'info';
 
 const STATE: Record<JobRow['state'], { label: string; variant: BadgeVariant }> = {
   ok: { label: 'Working', variant: 'success' },
   running: { label: 'Running', variant: 'processing' },
   failing: { label: 'Failing', variant: 'destructive' },
   late: { label: 'Not running', variant: 'warning' },
-  never: { label: 'Hasn’t run yet', variant: 'warning' },
+  never: { label: 'Hasn’t run yet', variant: 'info' },
 };
 
 const OUTCOME: Record<RunRow['outcome'], { label: string; variant: BadgeVariant }> = {
@@ -193,12 +193,14 @@ function JobItem({ job }: { job: JobRow }) {
         </p>
         {job.state === 'late' && (
           <p className="text-xs text-amber-700 dark:text-amber-400">
-            Nothing has called it since. Check its scheduler and that CRON_SECRET matches on both sides.
+            {job.lastRunAt ? 'Nothing has called it since.' : 'Nothing has called it yet, though it’s past due.'} Check its
+            scheduler and that CRON_SECRET matches on both sides.
           </p>
         )}
         {job.state === 'never' && (
-          <p className="text-xs text-amber-700 dark:text-amber-400">
-            No scheduler has called it on this server yet.
+          <p className="text-xs text-muted-foreground">
+            Its first run is due at its next scheduled time. If that passes with no run, it will show as not running
+            and staff will be emailed.
           </p>
         )}
         {job.lastError && (

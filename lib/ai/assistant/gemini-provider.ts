@@ -105,13 +105,13 @@ async function callModel<T>(storeSlug: string, step: () => Promise<T | null>): P
     warnOnce('GEMINI_API_KEY is not set; the assistant is answering without the model.');
     return null;
   }
-  if (!reserveModelCall(storeSlug)) return null;
+  if (!(await reserveModelCall(storeSlug))) return null;
 
   try {
     return await step();
   } catch (error) {
     if (error instanceof GeminiError) {
-      if (error.kind === 'rate_limited') noteModelRateLimited(error.retryAfterMs);
+      if (error.kind === 'rate_limited') await noteModelRateLimited(error.retryAfterMs);
       console.warn(`[ai] gemini ${error.kind}: ${error.message}`);
     } else {
       console.warn('[ai] gemini step failed', error instanceof Error ? error.message : error);

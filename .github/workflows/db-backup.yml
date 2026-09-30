@@ -1,0 +1,60 @@
+# Nightly database backup, with the restore rehearsed every time (ROADMAP 13.6).
+#
+# 1. Dump the database and count every table's rows (scripts/db/backup.sh).
+# 2. Encrypt it with BACKUP_PASSPHRASE.
+# 3. Restore it into a scratch Postgres with pgvector and check every table's
+#    row count against the counts taken at dump time (scripts/db/restore.sh).
+# 4. Keep the encrypted backup as an artifact for 30 days.
+#
+# Secrets (repository → Settings → Secrets and variables → Actions):
+#   BACKUP_DATABASE_URL  the production database's DIRECT address (no "-pooler")
+#   BACKUP_PASSPHRASE    a long random passphrase — also kept in a password
+#                        manager, since a backup without it can't be opened
+# docs/DATABASE.md has the details and how to restore by hand.
+name: Database backup
+
+on:
+  schedule:
+    - cron: '30 1 * * *' # 01:30 UTC, 02:30 in Lagos — the quietest hour
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: pgvector/pgvector:pg17
+    services:
+      scratch:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: scratch
+          POSTGRES_DB: rehearsal
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools
+        run: apt-get update -qq && apt-get install -y -qq gnupg >/dev/null
+
+      - name: Back up
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: scripts/db/backup.sh
+
+      - name: Rehearse the restore
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: scripts/db/restore.sh backup/*.tar.gpg postgresql://postgres:scratch@scratch:5432/rehearsal
+
+      - name: Keep it
+        uses: actions/upload-artifact@v4
+        with:
+          name: notely-db-backup
+          path: backup/*.tar.gpg
+          retention-days: 30
+          if-no-files-found: error

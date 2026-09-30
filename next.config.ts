@@ -31,16 +31,49 @@ const nextConfig: NextConfig = {
   // LAN IPs are added automatically for on-device testing (see above).
   allowedDevOrigins: ['app.localhost', '*.app.localhost', '**.app.localhost', ...lanAddresses],
 
-  // Storefront dummy-data imagery. Swap/remove these when the catalog is
-  // wired to real product images. See lib/storefront/mock/images.ts.
   images: {
     remotePatterns: [
-      { protocol: 'https', hostname: 'picsum.photos' },
-      { protocol: 'https', hostname: 'fastly.picsum.photos' },
-      { protocol: 'https', hostname: 'i.pravatar.cc' },
       // Merchant uploads (product/category/brand images) — lib/cloudinary.
       { protocol: 'https', hostname: 'res.cloudinary.com', pathname: `/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/**` },
+      // The demo catalogue's stock photos (lib/storefront/mock/images.ts) are
+      // only ever shown by a local dev server with STOREFRONT_FIXTURES=1 —
+      // never proxied by a production build (ROADMAP 13.4).
+      ...(process.env.NODE_ENV === 'development'
+        ? [
+            { protocol: 'https' as const, hostname: 'picsum.photos' },
+            { protocol: 'https' as const, hostname: 'fastly.picsum.photos' },
+            { protocol: 'https' as const, hostname: 'i.pravatar.cc' },
+          ]
+        : []),
     ],
+  },
+
+  /*
+   * Security headers on every response (ROADMAP 13.4). The Content Security
+   * Policy isn't here: it needs a fresh nonce per request, so proxy.ts sets
+   * it (lib/security/csp.ts).
+   */
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          // HTTPS only, for two years, on every subdomain (each shop is one).
+          // Not "preload": that's a promise to browsers that is slow to take back.
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+          // Never inside someone else's frame (clickjacking); CSP frame-ancestors says the same to newer browsers.
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          // Other sites learn only which site sent a visitor, never the page — paths can hold tokens.
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // Features no page uses stay off, for us and for any script. The photo search's camera
+          // is the browser's own file picker (capture=), which this doesn't affect.
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()' },
+          // Our pages don't share a window with pages from other sites; sign-in and payment are redirects, not popups.
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+        ],
+      },
+    ];
   },
 };
 

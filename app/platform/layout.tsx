@@ -19,6 +19,7 @@ import { pendingVerificationCount } from '@/features/platform/overview';
 import { waitingDomainCount } from '@/features/platform/domains';
 import { paymentAttentionCount } from '@/features/platform/payments';
 import { jobsAttentionCount } from '@/features/platform/jobs';
+import { errorsAttentionCount } from '@/features/platform/errors';
 
 export const metadata: Metadata = {
   title: { default: 'Platform console', template: `%s · Platform console · ${PLATFORM_NAME}` },
@@ -29,18 +30,19 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   const staff = await getPlatformStaff();
   if (!staff) notFound();
 
-  const [pending, domains, payments, jobs] = await Promise.all([
+  const [pending, domains, payments, jobs, errors] = await Promise.all([
     pendingVerificationCount(),
     waitingDomainCount(),
     paymentAttentionCount(),
     jobsAttentionCount(),
+    errorsAttentionCount(),
   ]);
 
   return (
     <>
       <ConsoleShell
         staff={{ name: staff.name, email: staff.email }}
-        counts={{ '/platform/verification': pending, '/platform/domains': domains, '/platform/payments': payments, '/platform/jobs': jobs }}
+        counts={{ '/platform/verification': pending, '/platform/domains': domains, '/platform/payments': payments, '/platform/jobs': jobs, '/platform/errors': errors }}
         platformName={PLATFORM_NAME}
       >
         {children}

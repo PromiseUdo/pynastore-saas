@@ -27,6 +27,7 @@
  * is sent to their own subdomain to choose. The access tokens Meta returned
  * never touch the redirect URL, the cookie, or anything the browser can read.
  */
+import { webhookFailed, webhookSucceeded } from '@/lib/ops/webhooks';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
@@ -91,7 +92,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // The merchant pressed Cancel on Meta's dialog, or Meta refused.
   if (metaError) {
     const denied = metaError === 'access_denied';
-    console.warn('[social] Meta returned an error:', metaError);
+    if (!denied) await webhookFailed('meta-callback', { kind: 'meta-error', message: `Meta sent the merchant back with “${metaError.slice(0, 80)}”` });
     return backToDashboard(returnTo, { social_error: denied ? 'denied' : 'meta' });
   }
 
@@ -123,6 +124,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     /* The SAME URL the authorization request used — Meta compares them. */
     const result = await metaProvider.exchangeCode(code, metaRedirectUri());
 
+    // Meta answered properly; the merchant simply has no Page to connect.
+    await webhookSucceeded('meta-callback');
     if (result.accounts.length === 0) {
       return backToDashboard(returnTo, { social_error: 'no_pages' });
     }
@@ -138,12 +141,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return backToDashboard(target.toString(), {});
   } catch (error) {
     if (error instanceof SocialProviderError) {
-      console.error('[social] exchange failed:', error.kind, error.message);
+      // A merchant unticking permissions on Meta's dialog is their choice, not a failure.
+      if (error.kind !== 'permission_missing') {
+        await webhookFailed('meta-callback', { kind: error.kind, message: `Connecting to Meta failed: ${error.message}`, error });
+      }
       return backToDashboard(returnTo, {
         social_error: error.kind === 'permission_missing' ? 'permissions' : 'meta',
       });
     }
-    console.error('[social] callback failed:', error);
+    await webhookFailed('meta-callback', {
+      kind: 'unexpected',
+      message: `The connection callback failed: ${error instanceof Error ? error.message : String(error)}`,
+      error,
+    });
     return backToDashboard(returnTo, { social_error: 'meta' });
   }
 }

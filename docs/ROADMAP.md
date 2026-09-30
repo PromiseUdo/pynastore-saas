@@ -1328,11 +1328,24 @@ at `/platform/plans` and `/platform/settings`.
 **12.4, nothing half-there on screen, is done (2026-09-30).** Phase 12 is
 complete except what's noted in its sections.
 
-**13.1, scheduled jobs, is done (2026-10-01)** — cron-job.org calls the
+**13.1, scheduled jobs, is done (2026-09-30)** — cron-job.org calls the
 15-minute jobs while on Vercel Hobby (docs/SCHEDULED-JOBS.md).
 
-**START HERE: Phase 13 — production hardening (next 13.2)** before the first
-live merchant.
+**13.2, shared rate limits (in Postgres), is done (2026-09-30).**
+
+**13.3, seeing failures (built-in error log, /api/health, webhook alerts), is
+done (2026-09-30).**
+
+**13.4, security headers (nonce CSP, HSTS and friends), is done (2026-09-30).**
+
+**13.6, the database (drift fixed, direct/pooled addresses, deploy-time
+migrations, nightly verified backups), is done (2026-09-30)** — the owner
+still separates development from production (docs/DATABASE.md).
+
+**13.7, CI (whole suite on its own database, every push), is done (2026-10-01).**
+
+**START HERE: Phase 13 — production hardening (next 13.8; 13.5 is after
+launch)** before the first live merchant.
 
 **In order:**
 
@@ -3971,7 +3984,7 @@ The gap: things a new merchant would hit in their first hour.
 The gap: what a live, multi-instance deployment needs that local development
 never showed.
 
-- **13.1 Scheduled jobs — DONE (2026-10-01).** Decided 2026-10-01: the
+- **13.1 Scheduled jobs — DONE (2026-09-30).** Decided 2026-09-30: the
   project is on **Vercel Hobby**, which only allows daily cron jobs (and fails a
   deploy asking for more), so the two 15-minute jobs are called by
   **cron-job.org** until the move to Pro, when they go into `vercel.json`
@@ -3990,7 +4003,10 @@ never showed.
     - a failed manual run doesn't email;
     - a job nobody is calling fails nothing, so after every run the OTHER jobs
       are checked, and one that is late (three missed beats; a day plus two
-      hours for daily jobs) or has never run gets a "hasn't run" email. The
+      hours for daily jobs) gets a "hasn't run" email. A job that has never
+      run counts as late only once its window has passed since the first
+      recorded run of any job, so a newly deployed daily job isn't reported
+      before its first morning. The
       Vercel jobs watch the cron-job.org ones, and the other way round. The
       rules are in `lib/cron/health.ts`.
   - **Console → Scheduled jobs** (`/platform/jobs`): each job's state (Working
@@ -3998,23 +4014,113 @@ never showed.
     last worked, its last error, and Run now (refused while a copy is still
     running). Recent runs can be filtered by job in the URL. It warns when
     `CRON_SECRET` or `PLATFORM_ADMIN_EMAIL` is unset. The overview and the
-    sidebar count jobs that need a look.
+    sidebar count jobs that are failing or late.
   - Tests: `lib/cron/health.test.ts`, and `tests/cron-runs.test.ts` (a fake
     registry: recording, throttled alerts, recovery, overdue detection).
     `tests/cron-runs.test.ts` also checks that registry, routes and
     `vercel.json` agree, and that `vercel.json` stays daily-only while on
     Hobby.
-- **13.2 Shared rate limits.** `lib/rate-limit.ts` is in-memory and says so, and
-  the Gemini, discovery and social publish quotas are counted per instance. On
-  serverless or with multiple instances none of them hold. Move them to a shared
-  store (e.g. Redis), keeping the current call signatures.
-- **13.3 Seeing failures.** Error tracking on server and client, structured logs,
-  an `/api/health` route and an uptime check on it, plus the webhook routes
-  (Squad, Paystack, Meta callback) alerting on repeated failures.
-- **13.4 Security headers.** A CSP (allowing only the analytics and pixel scripts a
-  merchant configured, per Phase 6), HSTS, frame and referrer policies in
-  `next.config.ts`. Remove the demo image hosts (`picsum.photos`,
-  `i.pravatar.cc`) from `images.remotePatterns`.
+- **13.2 Shared rate limits — DONE (2026-09-30).** The shared store is
+  **Postgres**, not Redis: no new service, account or bill, and one round
+  trip per check. As shipped:
+  - **Table and function.** `rate_limit_buckets` (fixed windows) plus the SQL
+    function `rate_limit_take(keys, limits, windows, blocked_by)`. It takes a
+    whole chain of buckets in one round trip, stopping at the first full one:
+    earlier buckets stay counted, later ones are untouched, exactly like the
+    old `a && b && c` chains. Each bucket is one atomic upsert, so concurrent
+    requests can't both take the last unit (tested: 12 racing for 5 get 5).
+  - **`lib/rate-limit.ts`:** `checkRateLimit` keeps its arguments but is now
+    `async`. `takeRateLimits` (chains, optionally `blockedBy` a cool-down),
+    `requestLimitRetryAfter`, `coolDown` and `clearRateLimit` are added.
+    Expired rows are swept now and then.
+  - **Gemini cool-downs are shared too.** After a 429, the assistant, social
+    copy and image-embedding pauses were module variables, so each instance
+    kept knocking. They are now rows the budgets are `blockedBy`.
+  - **If the database can't be reached:** request limits let the request
+    through (it would fail on its next query anyway), and model budgets
+    refuse, so the caller gives its no-AI answer.
+  - **Every call site now awaits** (sign-in, password reset, checkout,
+    discount codes, order lookup, aftercare, questions, reviews, bank
+    lookups, and the social, assistant, discovery, recommendation and
+    visual-search quotas). Keys and limits are unchanged.
+  - **Tests:** under vitest the counters stay in memory unless
+    `RATE_LIMIT_STORE=database`, so unit tests need no database.
+    `tests/rate-limit.test.ts` runs the SQL function itself: windows, the
+    race, chains, cool-downs, and failing open or closed.
+- **13.3 Seeing failures — DONE (2026-09-30).** Decided 2026-09-30: a
+  **built-in** error log rather than Sentry, so there is no new account or
+  cost; the trade-off is less precise browser stack traces (minified). As
+  shipped (details in `docs/MONITORING.md`):
+  - **The error log** (`ErrorGroup` / `ErrorEvent`, `lib/ops/errors.ts`):
+    - server errors come from `instrumentation.ts` → `onRequestError`, skipping
+      `notFound`/`redirect`;
+    - browser errors come from `instrumentation-client.ts` (uncaught errors and
+      rejections), and from all 68 `error.tsx` boundaries via `RouteError` /
+      `useReportError`, through `POST /api/client-errors` (capped, noise
+      dropped, rate limited);
+    - webhook failures come from `lib/ops/webhooks.ts`.
+    - Grouped by source + place + message with ids blanked. Paths are scrubbed
+      of query strings and tokens. Events are kept 14 days. Only the live site
+      records (`VERCEL_ENV=production`, or `ERROR_LOG=on`).
+  - **Alerts** (`lib/ops/alerts.ts`, which the scheduled jobs use too;
+    `cron_alerts` became `ops_alerts`), to `PLATFORM_ADMIN_EMAIL`:
+    - a new server or webhook error (at most 10 an hour);
+    - a resolved error that comes back;
+    - a spike;
+    - a webhook failing 3 times in 30 minutes, and working again after.
+  - **Webhooks.** The Paystack webhook reports bad signatures, unreadable
+    bodies and processing failures; it still answers 200 on a processing
+    failure, deliberately (see the docs). The Meta callback reports refused
+    exchanges and unexpected failures, but not a merchant cancelling or
+    unticking permissions. Squad is retired.
+  - **`GET /api/health`:** 200/503 on database reachability, `no-store`.
+    Uptime is monitored from cron-job.org every 15 minutes, not more often,
+    so the Neon database isn't kept awake around the clock.
+  - **Structured logs:** `lib/ops/log.ts` (JSON lines), used by the error
+    log, cron and webhooks. Older `console.*` calls were left as they are.
+  - **Console → Errors** (`/platform/errors`): Open / Resolved / All,
+    source filter, search, pagination. The detail page shows the counts, the
+    latest stack, the digest and recent occurrences, with Mark resolved /
+    Reopen. The overview and sidebar count open errors seen in the last 24
+    hours.
+  - **Tests:** `lib/ops/error-shape.test.ts` and `tests/error-log.test.ts`.
+- **13.4 Security headers — DONE (2026-09-30).** As shipped:
+  - **Content Security Policy with a per-request nonce**
+    (`lib/security/csp.ts`, set by `proxy.ts`). Every page already rendered
+    per request, so nonces cost nothing extra. `script-src 'self' 'nonce-…'
+    'strict-dynamic'`: Next stamps its own scripts, and an injected
+    `<script>` or inline event handler doesn't run (checked in Chrome by
+    injecting both into a real page).
+    - `style-src` keeps `'unsafe-inline'`, because components set `style=""`
+      attributes.
+    - Images come from self, data/blob and Cloudinary; connections from self
+      and Cloudinary uploads.
+    - `form-action` covers Google sign-in, Facebook and Paystack.
+    - `frame-src` and `object-src` are `'none'`; `frame-ancestors 'none'`.
+    - `upgrade-insecure-requests` is sent on https only.
+  - **Merchant analytics.** Only the storefront (shop hosts, custom domains,
+    the mobile origin) also allows Google Analytics and the Meta Pixel, the
+    two tags a merchant can switch on by pasting an id (Phase 6). Their
+    `<Script>`s now carry the nonce. No other third-party script can run.
+  - **Every pass-through in the proxy forwards the request headers**, so the
+    nonce reaches rendering. Any new return in `proxy.ts` must do the same:
+    a bare `NextResponse.next()` would leave that page's scripts without a
+    nonce and blocked.
+  - **Violation reports** go to `POST /api/csp-report`, into the error log as
+    browser errors of kind "csp" (extensions dropped, rate limited).
+    `CSP_MODE=report` is the switch if a live page breaks; `off` removes the
+    policy.
+  - **Other headers** (`next.config.ts`): HSTS for two years with
+    subdomains (not preload), `X-Frame-Options: DENY`, `nosniff`,
+    `Referrer-Policy: strict-origin-when-cross-origin`, a Permissions-Policy
+    turning off camera, mic, geolocation, USB, payment and topics (photo
+    search uses the file picker, which it doesn't affect), and
+    `Cross-Origin-Opener-Policy: same-origin-allow-popups`.
+  - **Demo image hosts** (`picsum.photos`, `i.pravatar.cc`) are only in
+    `images.remotePatterns` for `next dev`, where the opt-in fixture
+    catalogue can use them; a production build never proxies them.
+  - **Tests:** `lib/security/csp.test.ts`, and the report endpoint in
+    `tests/error-log.test.ts`.
 - **13.5 Custom domains, automated — AFTER LAUNCH (moved 2026-09-29).** Launch
   is manual (12.6 / 11.5). Afterwards, "staff approve, the app does the
   clicking", through Namecheap's API — the commands below are to be verified
@@ -4034,13 +4140,76 @@ never showed.
   low-balance alert. Also: DNS checking and certificate issuance through the
   hosting provider's domains API for domains merchants connect themselves.
   11.5's manual queue remains the fallback.
-- **13.6 Database.** Fix the `orders.customerId` foreign-key drift so `migrate dev`
-  / `migrate deploy` work again instead of hand-applied SQL. Set up automated
-  backups with a restore rehearsed at least once, and connection pooling
-  settings for production.
-- **13.7 CI.** Typecheck, `next build`, unit tests on every push, and the database
-  suites with `--no-file-parallelism` (the known Neon flakiness) before a
-  release.
+- **13.6 Database — DONE (2026-09-30).** The owner has since pointed local
+  development at its own Neon branch (2026-10-01); Vercel Preview,
+  `DIRECT_URL` on Production and the backup secrets are theirs to confirm
+  (`docs/DATABASE.md`). As shipped:
+  - **The drift, found and fixed.** There were two causes, not one:
+    - **A renamed migration.** `20260916191000_order_confirmation_token` was
+      applied, then renamed to `…192000…` and applied again. Its old name
+      stayed in `_prisma_migrations`, which is what made `migrate dev`
+      demand a reset. The stale row was deleted (the database already had
+      everything the folder creates).
+    - **`orders.customerId`.** The database and the history said RESTRICT;
+      the schema said nothing, so Prisma assumed SET NULL. The schema now
+      states `onDelete: Restrict`: nothing deletes customers, and it's the
+      safer rule. 13.8 decides shopper deletion.
+    - **Now all three agree.** `migrate diff` of live database vs schema:
+      no difference. A replay of the whole history into an empty Postgres 17
+      + pgvector: an empty migration. `migrate dev --create-only`: an empty
+      migration, no reset.
+  - **Two addresses** (`prisma.config.ts`): the app keeps the pooled
+    `DATABASE_URL`, and the CLI uses `DIRECT_URL` (plus
+    `SHADOW_DATABASE_URL` for `migrate dev`). Migrations through the pooler
+    left an advisory lock stuck on a pooled connection since 19:35; it was
+    found in `pg_locks` and ended.
+  - **Deploy-time migrations:** `npm run vercel-build` →
+    `scripts/db/migrate-on-deploy.mjs` runs `prisma migrate deploy` on
+    production deploys only, and only when `DIRECT_URL` is set.
+  - **Pooling:** `lib/prisma.ts` keeps 5 connections per instance on Vercel
+    (10 elsewhere, `DATABASE_POOL_MAX` overrides) through Neon's pooler, and
+    warns in production if `DATABASE_URL` isn't the pooled address.
+  - **Backups**, in two layers:
+    - Neon's own point-in-time history (restore to a branch at a past time);
+    - `.github/workflows/db-backup.yml`: every night it dumps the database
+      and counts every table's rows **in the same snapshot**
+      (`pg_export_snapshot`), encrypts the result (AES-256,
+      `BACKUP_PASSPHRASE`), restores it into a scratch Postgres and checks
+      every count, and keeps the artifact 30 days.
+    - Scripts: `scripts/db/{backup,restore}.sh`.
+  - **Restore rehearsed on 2026-09-30** against the live database: 96
+    tables and 1,816 rows identical, with vectors and SQL functions intact;
+    the wrong passphrase fails. The first rehearsal caught a real flaw:
+    counts taken after the dump raced a scheduled-job write. That's why the
+    counts now share the dump's snapshot.
+  - **Owner to do:** create the Neon `development` branch and `shadow`
+    database, and point the local `.env` and Vercel Preview at them; add
+    `DIRECT_URL` to Vercel Production; add the two backup secrets to GitHub
+    and run the workflow once.
+- **13.7 CI — DONE (2026-10-01).** As shipped (`docs/CI.md`):
+  - **`.github/workflows/ci.yml`, on every push and pull request:**
+    - `npm ci`;
+    - `tsc --noEmit`;
+    - `prisma migrate deploy` into an empty database;
+    - a drift check (`migrate diff … --exit-code`, which fails when
+      `schema.prisma` changed without a migration; tested);
+    - the **whole** test suite;
+    - `next build`.
+  - **CI's own database.** A throwaway Postgres 17 + pgvector service built
+    from the migrations, never Neon. On it the full suite (150 files, 1,802
+    tests) takes about a minute, so the database suites run on every push
+    rather than "before a release" as planned; that plan existed only
+    because of Neon's latency.
+  - **`.env.ci`:** committed placeholders for every setting the code reads
+    at load time. Tests mock all outside services. `.gitignore` lets
+    `.env.example` and `.env.ci` through.
+  - **Run it locally:** `npm run test:local` (`scripts/test-local.sh`,
+    Docker) runs the same way. `npm run typecheck` and `npm run db:drift`
+    are added too.
+  - **Checked by running every workflow step** on a fresh database with only
+    `.env.ci`, the local `.env` set aside: all green.
+  - **Not done:** CI doesn't block a Vercel deploy. Require the check on
+    `master` if the GitHub plan allows.
 - **13.8 Data rights (NDPA).** A shopper can delete their account and download
   their data. A merchant can close their workspace, with a stated retention period
   for orders and invoices they are legally required to keep. What `DELETED` means

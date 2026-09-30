@@ -2,11 +2,16 @@
 
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useReportError } from '@/lib/ops/use-report-error';
 
 /** Body for an admin `error.tsx` boundary. `retry` should be Next's
  *  `unstable_retry`, which re-fetches the segment's server data — plain
- *  `reset` only re-renders and would hit the same failed load. */
-export function RouteError({ what, retry }: { what: string; retry: () => void }) {
+ *  `reset` only re-renders and would hit the same failed load. `error` is
+ *  the boundary's error, reported to the error log (a server error, with a
+ *  digest, was filed by the server already and is skipped). */
+export function RouteError({ what, retry, error }: { what: string; retry: () => void; error?: Error & { digest?: string } }) {
+  useReportError(error);
+
   return (
     <div role="alert" className="flex flex-col items-center justify-center px-6 py-20 text-center">
       <AlertTriangle className="size-6 text-amber-600 dark:text-amber-400" />

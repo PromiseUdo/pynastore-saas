@@ -172,7 +172,7 @@ async function callModel<T>(
   if (!geminiConfigured()) {
     throw new CopywriterError('not_configured', 'GEMINI_API_KEY is not set');
   }
-  if (!reserveCopyCall(organizationId)) {
+  if (!(await reserveCopyCall(organizationId))) {
     throw new CopywriterError('budget_exhausted', 'social copy budget exhausted');
   }
 
@@ -181,7 +181,7 @@ async function callModel<T>(
   } catch (error) {
     if (error instanceof GeminiError) {
       if (error.kind === 'rate_limited') {
-        noteCopyRateLimited(error.retryAfterMs);
+        await noteCopyRateLimited(error.retryAfterMs);
         throw new CopywriterError('rate_limited', error.message);
       }
       if (error.kind === 'not_configured') throw new CopywriterError('not_configured', error.message);

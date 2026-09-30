@@ -99,7 +99,7 @@ export async function placeOrderAction(
 
   /* Generous: a real shopper places one order at a time, and a false
    * positive here blocks a sale. This is about a script, not a person. */
-  if (!checkRateLimit(`place-order:${slug}:${await clientIp()}`, 12, 10 * 60 * 1000)) {
+  if (!(await checkRateLimit(`place-order:${slug}:${await clientIp()}`, 12, 10 * 60 * 1000))) {
     return { ok: false, message: 'Too many attempts. Please wait a moment and try again.' };
   }
 
@@ -175,7 +175,7 @@ async function payFor(
   const store = slug ? await findStoreBySlug(slug) : null;
   if (!slug || !store) return { ok: false, message: 'We couldn’t reach the store. Please try again.' };
 
-  if (!checkRateLimit(`pay-order:${store.id}:${await clientIp()}`, 10, 10 * 60 * 1000)) {
+  if (!(await checkRateLimit(`pay-order:${store.id}:${await clientIp()}`, 10, 10 * 60 * 1000))) {
     return { ok: false, message: 'Too many attempts. Please wait a moment and try again.' };
   }
 
@@ -385,7 +385,7 @@ export async function applyDiscountCodeAction(input: {
 
   /* Tight on purpose: typing codes until one lands is the whole attack, and
    * a shopper with a code in their hand types it once. */
-  if (!checkRateLimit(`discount-code:${slug}:${await clientIp()}`, 10, 10 * 60 * 1000)) {
+  if (!(await checkRateLimit(`discount-code:${slug}:${await clientIp()}`, 10, 10 * 60 * 1000))) {
     return { ok: false, message: 'Too many tries. Please wait a moment and try again.' };
   }
 
@@ -419,7 +419,7 @@ export async function findOrderAction(input: {
   const store = slug ? await findStoreBySlug(slug) : null;
   if (!store) return null;
 
-  if (!checkRateLimit(`find-order:${store.id}:${await clientIp()}`, 15, 10 * 60 * 1000)) {
+  if (!(await checkRateLimit(`find-order:${store.id}:${await clientIp()}`, 15, 10 * 60 * 1000))) {
     return null;
   }
 

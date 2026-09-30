@@ -77,5 +77,8 @@ frequent fails.
   hours for a daily one) gets a "hasn't run when it should have" email. The
   daily Vercel jobs therefore watch the cron-job.org ones, and the other way
   round.
-- The console's overview and sidebar count jobs that are failing, late or
-  have never run.
+- A job that has never run isn't reported just for being new. It counts as
+  late only once its window has passed since runs were first recorded, so a
+  daily job deployed in the afternoon isn't reported until the next morning
+  has come and gone.
+- The console's overview and sidebar count jobs that are failing or late.

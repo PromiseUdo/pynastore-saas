@@ -17,12 +17,11 @@
  * A 429 from Gemini itself opens a short cool-down (noteModelRateLimited) so
  * we stop knocking on a closed door until Google says to try again.
  *
- * Built on lib/rate-limit.ts, the project's limiter — in-memory and
- * per-instance. On several instances each keeps its own counters, so the
- * global numbers below should be divided by the instance count (or the
- * limiter moved to a shared store, as that file notes).
+ * Built on lib/rate-limit.ts, the project's limiter, whose counters and
+ * cool-downs every server instance shares (ROADMAP 13.2) — so the global
+ * numbers below are the platform's, not one instance's.
  */
-import { checkRateLimit } from '@/lib/rate-limit';
+import { clearRateLimit, coolDown, requestLimitRetryAfter, takeRateLimits } from '@/lib/rate-limit';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -71,7 +70,7 @@ export interface RequestIdentity {
 }
 
 /** Every key is namespaced by store, so one store's traffic never counts against another's. */
-export function checkAssistantRequest(storeSlug: string, who: RequestIdentity): RequestCheck {
+export async function checkAssistantRequest(storeSlug: string, who: RequestIdentity): Promise<RequestCheck> {
   const L = REQUEST_LIMITS;
   type Check = readonly [string, { readonly limit: number; readonly windowMs: number }];
   const checks: Check[] = [
@@ -85,43 +84,44 @@ export function checkAssistantRequest(storeSlug: string, who: RequestIdentity): 
     [`assistant:ip:hour:${storeSlug}:${who.ip}`, L.ipPerHour],
     [`assistant:store:min:${storeSlug}`, L.storePerMinute],
   ];
-  for (const [key, { limit, windowMs }] of checks) {
-    if (!checkRateLimit(key, limit, windowMs)) {
-      return { ok: false, retryAfterSeconds: Math.min(windowMs / 1000, 15 * 60) };
-    }
-  }
-  return { ok: true };
+  const retryAfterSeconds = await requestLimitRetryAfter(checks.map(([key, l]) => ({ key, ...l })));
+  return retryAfterSeconds === null ? { ok: true } : { ok: false, retryAfterSeconds };
 }
 
 /* ───────────────────────────── model budget ─────────────────────────── */
 
-let coolDownUntil = 0;
+/** While this runs (after a Gemini 429), no assistant call is made, on any instance. */
+const COOL_DOWN_KEY = 'cooldown:gemini-assistant';
 
 /**
  * Take one Gemini call from the budget, or learn there isn't one.
  *
  * Store buckets are checked before the global ones so a store that has used
- * its share is refused without eating into everyone else's.
+ * its share is refused without eating into everyone else's. If the shared
+ * store can't be reached, the answer is no — the deterministic engine
+ * answers instead.
  */
-export function reserveModelCall(storeSlug: string): boolean {
-  if (Date.now() < coolDownUntil) return false;
-
+export async function reserveModelCall(storeSlug: string): Promise<boolean> {
   const limits = modelLimits();
-  return (
-    checkRateLimit(`gemini:store:min:${storeSlug}`, limits.storePerMinute, MINUTE) &&
-    checkRateLimit(`gemini:store:day:${storeSlug}`, limits.storePerDay, DAY) &&
-    checkRateLimit('gemini:global:min', limits.globalPerMinute, MINUTE) &&
-    checkRateLimit('gemini:global:day', limits.globalPerDay, DAY)
+  const taken = await takeRateLimits(
+    [
+      { key: `gemini:store:min:${storeSlug}`, limit: limits.storePerMinute, windowMs: MINUTE },
+      { key: `gemini:store:day:${storeSlug}`, limit: limits.storePerDay, windowMs: DAY },
+      { key: 'gemini:global:min', limit: limits.globalPerMinute, windowMs: MINUTE },
+      { key: 'gemini:global:day', limit: limits.globalPerDay, windowMs: DAY },
+    ],
+    { blockedBy: COOL_DOWN_KEY, onError: 'deny' },
   );
+  return taken.ok;
 }
 
 /** Gemini said 429: stop calling it for as long as it asked (capped). */
-export function noteModelRateLimited(retryAfterMs: number | undefined): void {
+export async function noteModelRateLimited(retryAfterMs: number | undefined): Promise<void> {
   const wait = Math.min(Math.max(retryAfterMs ?? MINUTE, 5_000), 10 * MINUTE);
-  coolDownUntil = Math.max(coolDownUntil, Date.now() + wait);
+  await coolDown(COOL_DOWN_KEY, wait);
 }
 
 /** Test seam. */
-export function resetModelCoolDown(): void {
-  coolDownUntil = 0;
+export async function resetModelCoolDown(): Promise<void> {
+  await clearRateLimit(COOL_DOWN_KEY);
 }

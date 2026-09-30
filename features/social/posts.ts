@@ -228,7 +228,7 @@ async function copyContext(productId: string, platform: string): Promise<CopyCon
     return { ok: false, error: 'Unknown platform' };
   }
 
-  const limit = checkCopyRequest(ctx.organization.id, ctx.userId);
+  const limit = await checkCopyRequest(ctx.organization.id, ctx.userId);
   if (!limit.ok) {
     return { ok: false, error: 'You’re writing faster than we can keep up. Try again in a minute.' };
   }
@@ -372,7 +372,7 @@ export async function retrySocialPost(postId: string): Promise<ActionResult<Soci
     /* A retry is a real write to Meta, so it is limited like every other
      * outward call here. Checked before anything is claimed, so a refusal
      * costs neither a Graph call nor a status change. */
-    const limit = checkRetryRequest(ctx.organization.id, ctx.userId);
+    const limit = await checkRetryRequest(ctx.organization.id, ctx.userId);
     if (!limit.ok) {
       return { success: false, error: 'You’re retrying very quickly. Give it a minute and try again.' };
     }

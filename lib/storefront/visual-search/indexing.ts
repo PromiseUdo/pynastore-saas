@@ -174,7 +174,7 @@ export async function indexPendingImages(
         continue;
       }
 
-      if (!reserveIndexingEmbedding()) {
+      if (!(await reserveIndexingEmbedding())) {
         await release(row.id);
         result.deferred++;
         break; // budget spent for now — the rest wait for the next run
@@ -185,7 +185,7 @@ export async function indexPendingImages(
       result.indexed++;
     } catch (error) {
       if (isRateLimited(error)) {
-        noteEmbeddingRateLimited(error.retryAfterMs);
+        await noteEmbeddingRateLimited(error.retryAfterMs);
         await release(row.id);
         result.deferred++;
         break;

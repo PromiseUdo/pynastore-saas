@@ -10,14 +10,19 @@
  */
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
+import { useReportError } from '@/lib/ops/use-report-error';
 
 export function DiscoveryError({
   reset,
+  error,
   title = 'Something went wrong while loading products.',
 }: {
   reset: () => void;
+  /** the boundary's error, reported to the platform's error log */
+  error?: Error & { digest?: string };
   title?: string;
 }) {
+  useReportError(error);
   return (
     <div className="sf-container">
       <div className="mx-auto max-w-md py-16 text-center sm:py-24">

@@ -72,8 +72,8 @@ async function clientIp(): Promise<string> {
 /** Generous by design: a false positive here locks out a real shopper. */
 async function withinSignInLimit(store: StoreRecord, email: string): Promise<boolean> {
   const ip = await clientIp();
-  const byIp = checkRateLimit(`sf-auth:ip:${store.id}:${ip}`, 20, 15 * 60 * 1000);
-  const byEmail = checkRateLimit(`sf-auth:email:${store.id}:${email.toLowerCase()}`, 8, 15 * 60 * 1000);
+  const byIp = await checkRateLimit(`sf-auth:ip:${store.id}:${ip}`, 20, 15 * 60 * 1000);
+  const byEmail = await checkRateLimit(`sf-auth:email:${store.id}:${email.toLowerCase()}`, 8, 15 * 60 * 1000);
   return byIp && byEmail;
 }
 
@@ -202,8 +202,8 @@ export async function forgotPasswordAction(
 
   const ip = await clientIp();
   const allowed =
-    checkRateLimit(`sf-reset:ip:${store.id}:${ip}`, 10, 15 * 60 * 1000) &&
-    checkRateLimit(`sf-reset:email:${store.id}:${parsed.data.toLowerCase()}`, 5, 15 * 60 * 1000);
+    await checkRateLimit(`sf-reset:ip:${store.id}:${ip}`, 10, 15 * 60 * 1000) &&
+    await checkRateLimit(`sf-reset:email:${store.id}:${parsed.data.toLowerCase()}`, 5, 15 * 60 * 1000);
 
   if (!allowed) return { message: RESET_SENT_MESSAGE };
 

@@ -134,11 +134,11 @@ beforeAll(async () => {
   await indexedImage(storeB.id, ids.bTwin, `btwin-${suffix}`, 1); // identical to store A's dress
 }, 120_000); // many round trips to a remote database
 
-beforeEach(() => {
+beforeEach(async () => {
   setImageEmbedder(fakeEmbedder);
   embedImage.mockClear();
   fetchMock.mockClear();
-  resetEmbeddingCoolDown();
+  await resetEmbeddingCoolDown();
   vi.stubGlobal('fetch', fetchMock);
   vi.stubEnv('GEMINI_EMBED_MAX_RPM', '10000');
   vi.stubEnv('GEMINI_EMBED_MAX_RPD', '10000');

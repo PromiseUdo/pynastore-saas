@@ -32,6 +32,8 @@
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { log } from '@/lib/ops/log';
+import { webhookFailed, webhookSucceeded } from '@/lib/ops/webhooks';
 import { verifyPaystackSignature } from './paystack';
 import { recordDispute } from './disputes';
 import { isSubscriptionCharge, recordUnmatched } from './unmatched';
@@ -88,7 +90,7 @@ export async function handlePaystackWebhook(req: Request): Promise<NextResponse>
   const rawBody = await req.text();
 
   if (!verifyPaystackSignature(rawBody, req.headers.get('x-paystack-signature'))) {
-    console.warn('[paystack webhook] Rejected a request with a missing or invalid signature.');
+    await webhookFailed('paystack', { kind: 'signature', message: 'A request arrived with a missing or invalid signature' });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
@@ -96,6 +98,7 @@ export async function handlePaystackWebhook(req: Request): Promise<NextResponse>
   try {
     payload = JSON.parse(rawBody);
   } catch {
+    await webhookFailed('paystack', { kind: 'body', message: 'A signed request’s body wasn’t valid JSON' });
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
   }
 
@@ -103,8 +106,19 @@ export async function handlePaystackWebhook(req: Request): Promise<NextResponse>
   const data = payload.data && typeof payload.data === 'object' ? (payload.data as Record<string, unknown>) : {};
   try {
     await routePaystackEvent(event, data);
+    await webhookSucceeded('paystack');
   } catch (error) {
-    console.error(`[paystack webhook] Failed to process "${event}":`, error);
+    /* Still answered 200: Paystack would otherwise retry for up to 72 hours
+     * an event we may have half-applied. The failure is recorded and staff
+     * alerted instead; a stuck payment can be re-checked from the console
+     * (Payments → Stuck → "Check with Paystack"). */
+    const reference = typeof data.reference === 'string' ? data.reference : undefined;
+    log.error('paystack.webhook.failed', { event, reference }, error);
+    await webhookFailed('paystack', {
+      kind: 'processing',
+      message: `Couldn’t process “${event || 'an event with no name'}”: ${error instanceof Error ? error.message : String(error)}`,
+      error,
+    });
   }
   return NextResponse.json({ received: true });
 }

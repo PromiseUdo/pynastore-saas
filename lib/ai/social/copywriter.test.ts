@@ -72,12 +72,12 @@ const FACTS: ProductFacts = {
 let org = '';
 let orgCounter = 0;
 
-beforeEach(() => {
+beforeEach(async () => {
   process.env.GEMINI_API_KEY = 'test-key';
   gemini.calls = [];
   gemini.throws = null;
   gemini.reply = {};
-  resetCopyCoolDown();
+  await resetCopyCoolDown();
   org = `org_${++orgCounter}_${Date.now()}`;
 });
 
@@ -250,31 +250,31 @@ describe('when Gemini fails', () => {
 });
 
 describe('rate limiting', () => {
-  it('lets a person work and stops a script', () => {
+  it('lets a person work and stops a script', async () => {
     const user = 'user_1';
     const limited = `${org}_limits`;
 
     // The documented per-member allowance.
     for (let i = 0; i < 12; i += 1) {
-      expect(checkCopyRequest(limited, user).ok).toBe(true);
+      expect((await checkCopyRequest(limited, user)).ok).toBe(true);
     }
-    const blocked = checkCopyRequest(limited, user);
+    const blocked = await checkCopyRequest(limited, user);
     expect(blocked.ok).toBe(false);
     if (!blocked.ok) expect(blocked.retryAfterSeconds).toBeGreaterThan(0);
   });
 
-  it('one member’s limit doesn’t block a colleague', () => {
+  it('one member’s limit doesn’t block a colleague', async () => {
     const shared = `${org}_colleagues`;
-    for (let i = 0; i < 12; i += 1) checkCopyRequest(shared, 'user_busy');
+    for (let i = 0; i < 12; i += 1) await checkCopyRequest(shared, 'user_busy');
 
-    expect(checkCopyRequest(shared, 'user_busy').ok).toBe(false);
-    expect(checkCopyRequest(shared, 'user_other').ok).toBe(true);
+    expect((await checkCopyRequest(shared, 'user_busy')).ok).toBe(false);
+    expect((await checkCopyRequest(shared, 'user_other')).ok).toBe(true);
   });
 
-  it('one store’s traffic doesn’t count against another’s', () => {
-    for (let i = 0; i < 12; i += 1) checkCopyRequest(`${org}_x`, 'user_1');
+  it('one store’s traffic doesn’t count against another’s', async () => {
+    for (let i = 0; i < 12; i += 1) await checkCopyRequest(`${org}_x`, 'user_1');
 
-    expect(checkCopyRequest(`${org}_x`, 'user_1').ok).toBe(false);
-    expect(checkCopyRequest(`${org}_y`, 'user_1').ok).toBe(true);
+    expect((await checkCopyRequest(`${org}_x`, 'user_1')).ok).toBe(false);
+    expect((await checkCopyRequest(`${org}_y`, 'user_1')).ok).toBe(true);
   });
 });

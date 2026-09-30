@@ -201,7 +201,7 @@ async function resolveSettlement(
   if (!bank) {
     return { success: false, error: 'Check the highlighted fields', fieldErrors: { settlementBankCode: 'Choose your bank' } };
   }
-  if (!checkRateLimit(`paystack-resolve:${organizationId}`, LOOKUP_LIMIT, LOOKUP_WINDOW_MS)) {
+  if (!(await checkRateLimit(`paystack-resolve:${organizationId}`, LOOKUP_LIMIT, LOOKUP_WINDOW_MS))) {
     return { success: false, error: 'Too many account checks. Wait a few minutes and try again.' };
   }
   try {

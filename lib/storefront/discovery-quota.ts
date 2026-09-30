@@ -5,7 +5,7 @@
  *
  * Same shape as the assistant's (lib/ai/assistant/quota.ts), visual search's
  * and recommendations' (lib/storefront/recommendations/quota.ts), on the same
- * limiter (lib/rate-limit.ts — in-memory, per instance): per shopper (signed-in
+ * limiter (lib/rate-limit.ts — shared by every instance): per shopper (signed-in
  * session, hashed) and per IP, plus a per-store ceiling, every key namespaced
  * by store so one merchant's traffic never consumes another's.
  *
@@ -14,7 +14,7 @@
  * the database. A person submits the bar or taps a tile a few times a minute;
  * these limits sit well above that and well below a loop.
  */
-import { checkRateLimit } from '@/lib/rate-limit';
+import { requestLimitRetryAfter } from '@/lib/rate-limit';
 import type { RequestIdentity } from './request-identity';
 
 const MINUTE = 60_000;
@@ -31,7 +31,7 @@ export const DISCOVERY_LIMITS = {
 
 export type DiscoveryRequestCheck = { ok: true } | { ok: false; retryAfterSeconds: number };
 
-export function checkDiscoveryRequest(storeSlug: string, who: RequestIdentity): DiscoveryRequestCheck {
+export async function checkDiscoveryRequest(storeSlug: string, who: RequestIdentity): Promise<DiscoveryRequestCheck> {
   const L = DISCOVERY_LIMITS;
   type Check = readonly [string, { readonly limit: number; readonly windowMs: number }];
   const checks: Check[] = [
@@ -45,10 +45,6 @@ export function checkDiscoveryRequest(storeSlug: string, who: RequestIdentity): 
     [`discover:ip:hour:${storeSlug}:${who.ip}`, L.ipPerHour],
     [`discover:store:min:${storeSlug}`, L.storePerMinute],
   ];
-  for (const [key, { limit, windowMs }] of checks) {
-    if (!checkRateLimit(key, limit, windowMs)) {
-      return { ok: false, retryAfterSeconds: Math.min(windowMs / 1000, 15 * 60) };
-    }
-  }
-  return { ok: true };
+  const retryAfterSeconds = await requestLimitRetryAfter(checks.map(([key, l]) => ({ key, ...l })));
+  return retryAfterSeconds === null ? { ok: true } : { ok: false, retryAfterSeconds };
 }

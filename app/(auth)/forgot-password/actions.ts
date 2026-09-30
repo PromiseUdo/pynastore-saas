@@ -55,12 +55,12 @@ export async function forgotPasswordAction(
   // deliberately generous since a false positive here just delays a
   // legitimate reset; the DB-backed per-user cooldown below is what
   // actually stops inbox spam.
-  const ipAllowed = checkRateLimit(
+  const ipAllowed = await checkRateLimit(
     `forgot-password:ip:${ip}`,
     10,
     15 * 60 * 1000,
   );
-  const emailAllowed = checkRateLimit(
+  const emailAllowed = await checkRateLimit(
     `forgot-password:email:${emailKey}`,
     5,
     15 * 60 * 1000,
@@ -76,9 +76,9 @@ export async function forgotPasswordAction(
   });
 
   if (user) {
-    // DB-backed cooldown: don't issue a new token (and email) if one was
-    // already sent very recently — protects against re-send abuse even
-    // across processes/instances, unlike the in-memory limiter above.
+    // Per-user cooldown: don't issue a new token (and email) if one was
+    // already sent in the last minute, whatever the IP and email limits
+    // above allowed.
     const recentToken = await prisma.passwordResetToken.findFirst({
       where: {
         userId: user.id,

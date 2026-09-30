@@ -31,7 +31,7 @@ const TOO_MANY: AftercareResult = { ok: false, message: 'Too many attempts. Plea
 export async function cancelMyOrderAction(input: { reference: string; note?: string }): Promise<AftercareResult> {
   const shopper = await getShopper();
   if (!shopper) return SIGNED_OUT;
-  if (!checkRateLimit(`cancel-order:${shopper.id}`, 10, 10 * 60 * 1000)) return TOO_MANY;
+  if (!(await checkRateLimit(`cancel-order:${shopper.id}`, 10, 10 * 60 * 1000))) return TOO_MANY;
 
   try {
     const result = await cancelOrderForCustomer({
@@ -55,7 +55,7 @@ export async function requestReturnAction(input: {
 }): Promise<AftercareResult> {
   const shopper = await getShopper();
   if (!shopper) return SIGNED_OUT;
-  if (!checkRateLimit(`request-return:${shopper.id}`, 10, 60 * 60 * 1000)) return TOO_MANY;
+  if (!(await checkRateLimit(`request-return:${shopper.id}`, 10, 60 * 60 * 1000))) return TOO_MANY;
 
   try {
     const result = await requestReturn({
@@ -81,7 +81,7 @@ export async function requestReturnAction(input: {
 export async function withdrawReturnAction(input: { returnId: string }): Promise<AftercareResult> {
   const shopper = await getShopper();
   if (!shopper) return SIGNED_OUT;
-  if (!checkRateLimit(`withdraw-return:${shopper.id}`, 20, 10 * 60 * 1000)) return TOO_MANY;
+  if (!(await checkRateLimit(`withdraw-return:${shopper.id}`, 20, 10 * 60 * 1000))) return TOO_MANY;
 
   try {
     const result = await withdrawReturn({

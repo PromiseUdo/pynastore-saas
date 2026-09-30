@@ -1,0 +1,70 @@
+# Every push and pull request (ROADMAP 13.7): typecheck, the WHOLE test suite
+# (database suites included), a check that the schema and the migrations
+# agree, and a production build.
+#
+# The database is a throwaway Postgres 17 + pgvector (what Neon runs), built
+# from prisma/migrations on every run — never Neon, never production data. On
+# a local database the suites need no --file-parallelism workarounds for
+# Neon's latency; --no-file-parallelism stays because suites share one
+# database. Settings are the placeholders in .env.ci: nothing real is reached.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: notely
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Load CI settings
+        run: |
+          node -e '
+            const fs = require("fs");
+            const vars = require("dotenv").parse(fs.readFileSync(".env.ci"));
+            for (const [k, v] of Object.entries(vars)) fs.appendFileSync(process.env.GITHUB_ENV, `${k}=${v}\n`);
+          '
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build the database from the migrations
+        run: npx prisma migrate deploy
+
+      - name: Schema and migrations agree
+        # Fails when schema.prisma was changed without a migration to match.
+        run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+
+      - name: Tests
+        run: npx vitest run --no-file-parallelism
+
+      - name: Build
+        run: npx next build

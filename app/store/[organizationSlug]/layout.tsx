@@ -149,7 +149,10 @@ export default async function StorefrontRootLayout({
     );
   }
 
-  const isMobileRuntime = (await headers()).get('x-runtime') === 'mobile';
+  const requestHeaders = await headers();
+  const isMobileRuntime = requestHeaders.get('x-runtime') === 'mobile';
+  // The request's CSP nonce (proxy.ts), for the merchant's measurement tags.
+  const nonce = requestHeaders.get('x-nonce') ?? undefined;
 
   /* Resolved here, once, for every storefront surface — including checkout,
    * which sits outside the (shop) group. Null when nobody is signed in;
@@ -195,7 +198,7 @@ export default async function StorefrontRootLayout({
       }
       className={`${display.variable} min-h-screen bg-background text-foreground`}
     >
-      <StorefrontAnalytics gaId={look.analytics.gaId} metaPixelId={look.analytics.metaPixelId} />
+      <StorefrontAnalytics gaId={look.analytics.gaId} metaPixelId={look.analytics.metaPixelId} nonce={nonce} />
       <StorefrontProviders
         org={{ slug: organization.slug, name: organization.name, logoUrl: organization.logoUrl }}
         isMobileRuntime={isMobileRuntime}

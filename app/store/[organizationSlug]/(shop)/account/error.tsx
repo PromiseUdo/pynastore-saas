@@ -8,8 +8,10 @@
  * password. One sentence, one button that retries.
  */
 import { RotateCcw } from 'lucide-react';
+import { useReportError } from '@/lib/ops/use-report-error';
 
-export default function AccountError({ reset }: { error: Error; reset: () => void }) {
+export default function AccountError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  useReportError(error);
   return (
     <div className="sf-container py-16">
       <div className="mx-auto max-w-[27rem] rounded-3xl border border-border bg-card p-8 text-center">

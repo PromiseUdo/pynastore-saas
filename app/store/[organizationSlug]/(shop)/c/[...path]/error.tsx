@@ -2,6 +2,6 @@
 
 import { DiscoveryError } from '@/components/storefront/catalog/discovery-error';
 
-export default function CategoryError({ reset }: { error: Error; reset: () => void }) {
-  return <DiscoveryError reset={reset} />;
+export default function CategoryError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  return <DiscoveryError reset={reset} error={error} />;
 }

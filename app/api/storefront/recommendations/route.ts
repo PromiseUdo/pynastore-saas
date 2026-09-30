@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const allowed = checkRecommendationRequest(resolved.slug, requestIdentity(request, resolved.slug));
+  const allowed = await checkRecommendationRequest(resolved.slug, requestIdentity(request, resolved.slug));
   if (!allowed.ok) {
     return NextResponse.json(
       { error: 'Too many requests. Please try again shortly.' },

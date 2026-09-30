@@ -46,7 +46,7 @@ export async function submitReviewAction(
 
   /* One person writing about what they bought does this once or twice. A
    * burst is a script, and each one of these is a public piece of writing. */
-  if (!checkRateLimit(`review:${shopper.id}`, 10, 60 * 60 * 1000)) {
+  if (!(await checkRateLimit(`review:${shopper.id}`, 10, 60 * 60 * 1000))) {
     return { error: 'That’s a lot of reviews at once. Please try again a little later.', values };
   }
 
@@ -98,7 +98,7 @@ export async function markHelpfulAction(reviewId: string): Promise<HelpfulResult
   const shopper = await getShopper();
   if (!shopper) return { ok: false, message: 'Sign in to say a review helped you.' };
 
-  if (!checkRateLimit(`review-helpful:${shopper.id}`, 60, 60 * 60 * 1000)) {
+  if (!(await checkRateLimit(`review-helpful:${shopper.id}`, 60, 60 * 60 * 1000))) {
     return { ok: false, message: 'Please slow down a moment.' };
   }
 
