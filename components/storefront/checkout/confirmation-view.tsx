@@ -12,7 +12,7 @@
  * number.
  *
  * HONESTY. The heading only says "confirmed" once the order is PAID — and
- * PAID is only ever set by a server-side check with Squad. An unpaid order
+ * PAID is only ever set by a server-side check with Paystack. An unpaid order
  * says it is waiting for payment and offers "Pay now"; the payment line is
  * the order's real state with the one sentence that says what happens next.
  */
@@ -228,7 +228,23 @@ export function ConfirmationView({
           >
             Delivery
           </h2>
-          <p className="mt-2 text-sm font-medium">{order.delivery.label}</p>
+          {order.delivery.parcels.length > 1 ? (
+            /* Several stores, several parcels (ROADMAP Phase 9.5) — each named,
+             * so a second knock at the door isn't a surprise. */
+            <>
+              <p className="mt-2 text-sm font-medium">In {order.delivery.parcels.length} parcels</p>
+              <ul className="mt-1.5 space-y-1 text-sm text-muted-foreground">
+                {order.delivery.parcels.map((parcel, index) => (
+                  <li key={index}>
+                    {parcel.storeName ? `From ${parcel.storeName}: ` : ''}
+                    {parcel.label} · {parcel.fee === 0 ? 'Free' : formatMoney(parcel.fee, order.currency)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="mt-2 text-sm font-medium">{order.delivery.label}</p>
+          )}
           <p className="mt-1.5 text-sm text-muted-foreground">
             {formatEtaWindow(order.delivery.eta, order.delivery.estimated, config.locale)}
           </p>

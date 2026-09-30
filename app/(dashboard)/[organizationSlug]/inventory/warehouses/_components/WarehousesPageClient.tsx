@@ -13,6 +13,18 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { StoreDialog } from './StoreDialog';
 import { setWarehouseSellsOnline, type WarehouseRow } from '@/features/inventory/actions';
+import { formatStorePlace, hasStorePlace } from '@/features/inventory/store-place';
+
+/** The line under "Sells online": what the switch does, or why it can't. */
+function onlineHint(w: WarehouseRow): string {
+  if (w.status !== 'ACTIVE') return 'Reactivate the store to sell online.';
+  if (!hasStorePlace(w)) {
+    return w.sellsOnline
+      ? 'Add the city and state this store is in — delivery will be priced from here.'
+      : 'Add the city and state this store is in to sell online.';
+  }
+  return w.sellsOnline ? 'Website customers can buy this stock.' : 'Stock here isn’t offered online.';
+}
 
 type WarehousesPageClientProps = {
   warehouses: WarehouseRow[];
@@ -136,7 +148,11 @@ export function WarehousesPageClient({
                         {w.name}
                       </Link>
                     </CardTitle>
-                    {w.location && <p className="mt-0.5 text-xs text-muted-foreground">{w.location}</p>}
+                    {(formatStorePlace(w) || w.location) && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {[formatStorePlace(w), w.location].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
                     <p className="mt-2 text-xs text-muted-foreground">{w.itemCount} product{w.itemCount === 1 ? "" : "s"} stocked here</p>
                   </div>
                   <div className="relative z-10 flex shrink-0 items-center gap-1">
@@ -146,6 +162,8 @@ export function WarehousesPageClient({
                     {/* Said, not silently hidden: this member may look at this
                         store but not change it (ROADMAP Phase 8.6). */}
                     {!w.canWorkHere && <Badge variant="muted">View only</Badge>}
+                    {/* Sold online before stores had a place (Phase 9.1): kept on, but asked for. */}
+                    {w.sellsOnline && !hasStorePlace(w) && <Badge variant="warning">Needs a location</Badge>}
                     {canEdit && w.canWorkHere && (
                       <Button variant="ghost" size="icon-sm" aria-label={`Edit ${w.name}`} onClick={() => openDialog(w)}>
                         <Pencil className="size-3.5" />
@@ -156,13 +174,25 @@ export function WarehousesPageClient({
                 <label className="relative z-10 flex items-center justify-between gap-3 border-t px-4 py-3">
                   <span>
                     <span className="block text-sm font-medium text-foreground">Sells online</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {w.status !== 'ACTIVE' ? 'Reactivate the store to sell online.' : w.sellsOnline ? 'Website customers can buy this stock.' : 'Stock here isn’t offered online.'}
-                    </span>
+                    <span className="block text-xs text-muted-foreground">{onlineHint(w)}</span>
+                    {canEdit && w.canWorkHere && w.status === 'ACTIVE' && !hasStorePlace(w) && (
+                      <button
+                        type="button"
+                        onClick={() => openDialog(w)}
+                        className="mt-1 rounded-sm text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Add location
+                      </button>
+                    )}
                   </span>
                   <SwitchRoot
                     checked={w.sellsOnline}
-                    disabled={!canEdit || !w.canWorkHere || busyId === w.id || (w.status !== 'ACTIVE' && !w.sellsOnline)}
+                    disabled={
+                      !canEdit ||
+                      !w.canWorkHere ||
+                      busyId === w.id ||
+                      (!w.sellsOnline && (w.status !== 'ACTIVE' || !hasStorePlace(w)))
+                    }
                     onCheckedChange={(v) => toggleOnline(w, v)}
                     aria-label={`${w.name} sells online`}
                   />

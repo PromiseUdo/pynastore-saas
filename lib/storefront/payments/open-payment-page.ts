@@ -1,19 +1,19 @@
 'use client';
 
 /*
- * Sending the shopper to Squad's payment page — on the web, and in the app.
+ * Sending the shopper to Paystack's payment page — on the web, and in the app.
  *
- * WEB: an ordinary full-page navigation. Squad sends the browser back through
- * /api/payments/squad/callback to the order's confirmation page.
+ * WEB: an ordinary full-page navigation. Paystack sends the browser back through
+ * /api/payments/paystack/callback to the order's confirmation page.
  *
  * APP: the app is a WebView pinned to one origin (MOBILE.md), so navigating
- * it to Squad would throw the shopper out into the phone's browser and never
- * bring them back. Instead Squad opens in an in-app browser
+ * it to Paystack would throw the shopper out into the phone's browser and never
+ * bring them back. Instead Paystack opens in an in-app browser
  * (@capacitor/browser — SFSafariViewController / Chrome Custom Tabs, which
- * also handle bank 3-D Secure pages properly) on top of the app. When Squad
+ * also handle bank 3-D Secure pages properly) on top of the app. When Paystack
  * returns, the callback hands off to the app by deep link; when the shopper
  * closes the sheet themselves, we treat that the same way. Either way the app
- * then shows the confirmation page, which re-checks the payment with Squad —
+ * then shows the confirmation page, which re-checks the payment with Paystack —
  * so it never matters which of the two happened, or whether the payment went
  * through.
  */

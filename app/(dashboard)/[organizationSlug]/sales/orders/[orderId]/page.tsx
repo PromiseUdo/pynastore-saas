@@ -39,9 +39,11 @@ import {
   nextStepHint,
 } from '@/lib/sales/order-labels';
 import { UNPAID_ORDER_HOLD_MINUTES } from '@/lib/storefront/orders/lifecycle';
-import { TRANSFER_HOLD_HOURS } from '@/lib/storefront/mock/checkout';
+import { TRANSFER_HOLD_HOURS } from '@/lib/storefront/orders/holds';
 import { OrderActions } from './_components/OrderActions';
 import { OrderReturnsPanel } from './_components/OrderReturnsPanel';
+import { DISPUTE_STATUS_VARIANT, disputeLabel, disputeOutcome } from '@/lib/sales/dispute-labels';
+import { ParcelsPanel } from './_components/ParcelsPanel';
 import { RecordOrderRefundButton } from './_components/RefundDialog';
 
 export default async function StoreOrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
@@ -85,7 +87,19 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
     done: reached >= 0 ? index <= reached : Boolean(stageAt[index]),
   }));
 
-  const hint = nextStepHint({
+  /* Several parcels, some sent and some not (ROADMAP Phase 9.6): say whose
+   * turn it is, rather than the order-wide hint. */
+  const stillToSend = order.parcels.filter((p) => p.status === 'PENDING');
+  const partialHint = order.partiallySent
+    ? `${order.parcels.length - stillToSend.length} of ${order.parcels.length} parcels sent — still to send from ${stillToSend
+        .map((p) => p.storeName ?? 'a store')
+        .join(', ')}. The customer is emailed once they’ve all left.`
+    : null;
+  const canSendParcels =
+    ['CONFIRMED', 'PROCESSING'].includes(order.status) &&
+    (order.paymentStatus === 'PAID' || order.paymentStatus === 'DUE_ON_DELIVERY');
+
+  const hint = partialHint ?? nextStepHint({
     status: order.status,
     paymentStatus: order.paymentStatus,
     channel: order.channel,
@@ -136,6 +150,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
                 reference={order.reference}
                 totalAmount={order.totalAmount}
                 currency={order.currency}
+                parcelCount={order.parcels.filter((p) => p.status !== 'CANCELLED').length}
               />
             )}
           </div>
@@ -154,8 +169,31 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
             {ORDER_CHANNEL_LABEL[order.channel] ?? order.channel}
           </Badge>
           {order.isGuest && !isCounterSale && <Badge variant="draft">Guest checkout</Badge>}
+          {order.partiallySent && <Badge variant="processing">Partially sent</Badge>}
         </div>
         {hint && <p className="mt-2 text-sm text-muted-foreground">{hint}</p>}
+
+        {order.disputes.map((dispute) => {
+          const open = dispute.status !== 'resolved';
+          return (
+            <section
+              key={dispute.id}
+              aria-label="Chargeback"
+              className={`mt-4 rounded-lg border p-4 ${open ? 'border-destructive/40 bg-destructive/5' : 'bg-card'}`}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-semibold">Chargeback</h2>
+                <Badge variant={DISPUTE_STATUS_VARIANT[dispute.status] ?? 'processing'}>{disputeLabel(dispute.status)}</Badge>
+              </div>
+              <p className="mt-1 text-sm text-foreground">
+                The customer’s bank disputed {formatMoney(dispute.amount, order.currency)} on {formatDate(dispute.createdAt)}.{' '}
+                {open
+                  ? `${dispute.dueAt ? `A response is due by ${formatDate(dispute.dueAt)}. ` : ''}Keep whatever shows the order was delivered — our team will contact you about sending it to Paystack.`
+                  : disputeOutcome(dispute.resolution)}
+              </p>
+            </section>
+          );
+        })}
 
         {!isCounterSale && (
         <section className="mt-4 rounded-lg border bg-card p-4">
@@ -265,6 +303,18 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
                   {order.paidAt ? ` · paid ${formatDate(order.paidAt)}` : ''}
                 </dd>
               </div>
+              {order.onlinePayment && order.onlinePayment.merchantAmount !== null && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Paystack’s split</dt>
+                  <dd className="tabular-nums">
+                    {formatMoney(order.onlinePayment.merchantAmount, order.currency)} to your bank
+                    <span className="block text-xs text-muted-foreground">
+                      Paystack’s fee {formatMoney(order.onlinePayment.feeAmount ?? 0, order.currency)}
+                      {order.onlinePayment.providerReference ? ` · ref ${order.onlinePayment.providerReference}` : ''}
+                    </span>
+                  </dd>
+                </div>
+              )}
               {!isCounterSale && (
                 <div>
                   <dt className="text-xs text-muted-foreground">Fulfilled from</dt>
@@ -321,6 +371,18 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
             )}
           </section>
         </div>
+
+        {!isCounterSale && order.parcels.length > 0 && (
+          <ParcelsPanel
+            orderId={order.id}
+            parcels={order.parcels}
+            currency={order.currency}
+            canManage={canManage}
+            canSend={canSendParcels}
+            payOnDelivery={order.paymentStatus === 'DUE_ON_DELIVERY'}
+            totalAmount={order.totalAmount}
+          />
+        )}
 
         <div className="mt-4 rounded-lg border bg-card">
           <h2 className="border-b px-4 py-3 text-sm font-semibold">Items</h2>

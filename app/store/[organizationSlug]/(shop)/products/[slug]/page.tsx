@@ -21,6 +21,7 @@ import { Breadcrumbs, BreadcrumbJsonLd } from '@/components/storefront/common/br
 import { HighlightRail } from '@/components/storefront/catalog/highlight-rail';
 import { ProductPurchase } from '@/components/storefront/product/product-purchase';
 import { ProductDelivery } from '@/components/storefront/product/product-delivery';
+import { deliverySummary } from '@/lib/storefront/store-claims';
 import { ProductDetails } from '@/components/storefront/product/product-details';
 import { ProductReviews } from '@/components/storefront/product/product-reviews';
 import { ProductQuestions } from '@/components/storefront/product/product-questions';
@@ -35,11 +36,11 @@ import { loadProductPage } from '@/lib/storefront/product-detail';
 import { getProductBySlug, getStorePages } from '@/lib/storefront/catalog';
 import { hasSizeOption, pageOfKind } from '@/lib/storefront/pages/rules';
 import { categoryHref } from '@/lib/storefront/navigation';
-import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { findSimilarHref } from '@/lib/storefront/visual-search/query';
 import { Recommendations } from '@/components/storefront/recommendations/recommendations';
 import { recommendProducts } from '@/lib/storefront/recommendations/service';
 import { BOUGHT_TOGETHER_TITLE } from '@/lib/storefront/recommendations/complements';
+import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
 type Props = {
   params: Promise<{ organizationSlug: string; slug: string }>;
@@ -53,7 +54,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Absolute and tenant-specific: each merchant's storefront is its own
   // origin, so a canonical built from a single hardcoded domain would point
   // every store at one of them.
-  const url = getStorefrontUrl(organizationSlug, `/products/${product.slug}`);
+  const url = (await storefrontUrlFor(organizationSlug, `/products/${product.slug}`));
 
   return {
     title: `${product.name} — ${product.brandName}`,
@@ -132,6 +133,7 @@ export default async function ProductDetailPage({ params }: Props) {
       <ProductPurchase
         product={product}
         deliveryPanel={<ProductDelivery delivery={delivery} requiresPrepayment={product.requiresPrepayment} />}
+        deliverySummary={deliverySummary(delivery.options)}
         sizeGuideHref={sizeGuide?.href ?? null}
       />
 
@@ -225,10 +227,10 @@ export default async function ProductDetailPage({ params }: Props) {
 
       <RecentlyViewed excludeProductId={product.id} />
 
-      <BreadcrumbJsonLd items={crumbs} baseUrl={getStorefrontUrl(organizationSlug).replace(/\/$/, '')} />
+      <BreadcrumbJsonLd items={crumbs} baseUrl={(await storefrontUrlFor(organizationSlug)).replace(/\/$/, '')} />
       <ProductJsonLd
         product={product}
-        url={getStorefrontUrl(organizationSlug, `/products/${product.slug}`)}
+        url={(await storefrontUrlFor(organizationSlug, `/products/${product.slug}`))}
         reviews={reviews.items}
       />
     </div>

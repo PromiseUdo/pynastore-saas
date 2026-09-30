@@ -1,16 +1,18 @@
 /*
  * app/(legal)/privacy/page.tsx
  *
- * Notely's public Privacy Policy. Reachable at https://getnotely.io/privacy
+ * The platform's public Privacy Policy. Reachable at https://{PLATFORM_DOMAIN}/privacy
  * (and on the platform host) with no session — see PUBLIC_PATHS in proxy.ts.
  *
  * EVERYTHING HERE DESCRIBES CODE THAT EXISTS. When the app changes, this
  * page changes with it: the third-party list mirrors lib/email.ts (Resend),
- * lib/cloudinary/, lib/payments/squad.ts, lib/billing/paystack.ts,
+ * lib/cloudinary/, lib/payments/paystack.ts, lib/billing/paystack.ts,
  * lib/social/providers/meta.ts, lib/ai/ (Gemini) and auth.ts (Google).
- * Do not add a claim here that no code backs.
+ * Do not add a claim here that no code backs. The platform's name, domain
+ * and operator come from lib/brand.ts (ROADMAP 12.2).
  */
 import type { Metadata } from 'next';
+import { PLATFORM_DOMAIN, PLATFORM_NAME, PLATFORM_OPERATOR, PLATFORM_OPERATOR_REGISTRATION } from '@/lib/brand';
 import Link from 'next/link';
 import {
   LegalContact,
@@ -22,10 +24,9 @@ import {
 } from '../_components/legal';
 
 export const metadata: Metadata = {
-  title: { absolute: 'Privacy Policy | Notely' },
-  description:
-    'Notely’s Privacy Policy explains how we collect, use, protect, and process information when you use the Notely platform.',
-  alternates: { canonical: 'https://getnotely.io/privacy' },
+  title: { absolute: `Privacy Policy | ${PLATFORM_NAME}` },
+  description: `${PLATFORM_NAME}’s Privacy Policy explains how we collect, use, protect, and process information when you use the ${PLATFORM_NAME} platform.`,
+  alternates: { canonical: `https://${PLATFORM_DOMAIN}/privacy` },
 };
 
 const UPDATED = '20 September 2026';
@@ -37,21 +38,21 @@ export default function PrivacyPolicyPage() {
       updated={UPDATED}
       intro={
         <p>
-          This policy explains what information Notely handles, why, and who else sees it. It applies to the
-          Notely platform at getnotely.io, the merchant dashboards and online stores we host on our
-          subdomains and on merchants’ own connected domains, and the Notely mobile app.
+          This policy explains what information {PLATFORM_NAME} handles, why, and who else sees it. It applies to the
+          {PLATFORM_NAME} platform at {PLATFORM_DOMAIN}, the merchant dashboards and online stores we host on our
+          subdomains and on merchants’ own connected domains, and the {PLATFORM_NAME} mobile app.
         </p>
       }
     >
       <LegalSection id="introduction" number={1} heading="Introduction">
         <p>
-          Notely is a multi-tenant platform for running a retail business: inventory, purchasing, sales,
-          customers, and an online store. Notely is operated by Pynacode, a business name registered in
-          Nigeria (CAC business name registration number 9663547). In this policy, “Notely”, “we” and “us”
-          mean Pynacode acting as the operator of Notely.
+          {PLATFORM_NAME} is a multi-tenant platform for running a retail business: inventory, purchasing, sales,
+          customers, and an online store. {PLATFORM_NAME} is operated by {PLATFORM_OPERATOR}, a business name registered in
+          Nigeria ({PLATFORM_OPERATOR_REGISTRATION}). In this policy, “{PLATFORM_NAME}”, “we” and “us”
+          mean {PLATFORM_OPERATOR} acting as the operator of {PLATFORM_NAME}.
         </p>
         <p>
-          “Merchant” means a business that has a Notely account, together with the staff members it invites.
+          “Merchant” means a business that has a {PLATFORM_NAME} account, together with the staff members it invites.
           “Shopper” means a customer who buys from a merchant’s online store. Both are covered here, but not
           in the same way — see the next section.
         </p>
@@ -63,16 +64,16 @@ export default function PrivacyPolicyPage() {
 
       <LegalSection id="roles" number={2} heading="Merchants, shoppers, and who is responsible for what">
         <p>
-          Notely holds two different kinds of information, and it matters which one is being discussed.
+          {PLATFORM_NAME} holds two different kinds of information, and it matters which one is being discussed.
         </p>
         <LegalList>
           <li>
             <strong className="font-medium text-foreground">Information about merchants.</strong> The account
-            and organization details of the businesses and staff who use Notely. We decide how this is used,
+            and organization details of the businesses and staff who use {PLATFORM_NAME}. We decide how this is used,
             within this policy.
           </li>
           <li>
-            <strong className="font-medium text-foreground">Information merchants put into Notely.</strong>{' '}
+            <strong className="font-medium text-foreground">Information merchants put into {PLATFORM_NAME}.</strong>{' '}
             Their products, suppliers, customer records, orders, and the shopper accounts created on their
             online stores. This is the merchant’s business data. We process it to run the platform for them
             and on their instructions — we do not use it for our own purposes.
@@ -155,7 +156,7 @@ export default function PrivacyPolicyPage() {
         <p>
           Only when a merchant connects one — see section 5 for the detail. In short: the Facebook Page or
           Instagram professional account’s identifier, name, username and profile picture, the permissions
-          Meta granted, an encrypted access token, and a record of the posts published through Notely.
+          Meta granted, an encrypted access token, and a record of the posts published through {PLATFORM_NAME}.
         </p>
 
         <LegalSubheading>Technical information</LegalSubheading>
@@ -180,8 +181,8 @@ export default function PrivacyPolicyPage() {
         </p>
 
         <LegalNote>
-          Notely never receives or stores full card numbers. Card payments happen on the payment provider’s
-          own hosted page; what comes back to Notely is a reference, an amount, a status and the payment
+          {PLATFORM_NAME} never receives or stores full card numbers. Card payments happen on the payment provider’s
+          own hosted page; what comes back to {PLATFORM_NAME} is a reference, an amount, a status and the payment
           channel.
         </LegalNote>
       </LegalSection>
@@ -191,7 +192,7 @@ export default function PrivacyPolicyPage() {
           <li>To provide the platform: creating accounts and organizations, and running the dashboard, the online store and the mobile app.</li>
           <li>To authenticate you, keep you signed in, and let you reset a forgotten password.</li>
           <li>To run a merchant’s business records — products, stock, purchasing, customers, orders, deliveries, returns and reporting.</li>
-          <li>To take payments: subscription charges for Notely, and shopper payments on a merchant’s store.</li>
+          <li>To take payments: subscription charges for {PLATFORM_NAME}, and shopper payments on a merchant’s store.</li>
           <li>To provide the integrations a merchant switches on, including publishing to a connected Facebook Page or Instagram account exactly when the merchant asks.</li>
           <li>To provide search and shopping assistance, including visual search and the grounded shopping assistant, which answer only from the merchant’s own catalogue.</li>
           <li>To send service messages: invitations, password resets, email-change confirmations, order updates, and low-stock alerts.</li>
@@ -208,14 +209,14 @@ export default function PrivacyPolicyPage() {
       <LegalSection id="social-integrations" number={5} heading="Social media integrations (Facebook and Instagram)">
         <p>
           A merchant may connect a Facebook Page and the Instagram professional account linked to it, so that
-          products in Notely can be published as posts. The integration is optional and off until a merchant
+          products in {PLATFORM_NAME} can be published as posts. The integration is optional and off until a merchant
           turns it on.
         </p>
         <LegalList>
           <li>
             <strong className="font-medium text-foreground">The merchant starts it.</strong> A merchant with
-            permission clicks Connect in the Notely dashboard and is taken to Meta’s own authorization
-            screen, where they choose what to grant. Notely never asks for, sees or stores a merchant’s
+            permission clicks Connect in the {PLATFORM_NAME} dashboard and is taken to Meta’s own authorization
+            screen, where they choose what to grant. {PLATFORM_NAME} never asks for, sees or stores a merchant’s
             Facebook password.
           </li>
           <li>
@@ -247,17 +248,17 @@ export default function PrivacyPolicyPage() {
             an account at any time from Social → Connections in the dashboard. On disconnect we erase the
             stored token immediately, mark the connection disconnected, remove any Instagram account that
             published through that Page, and ask Meta to revoke the permission. A merchant can also remove
-            Notely from their Facebook account settings.
+            {PLATFORM_NAME} from their Facebook account settings.
           </li>
         </LegalList>
         <p>
-          Notely is a separate service from Meta and is not endorsed by it. What Meta does with the
+          {PLATFORM_NAME} is a separate service from Meta and is not endorsed by it. What Meta does with the
           information it holds about you is governed by Meta’s own policies.
         </p>
       </LegalSection>
 
       <LegalSection id="third-parties" number={6} heading="Third-party services we use">
-        <p>These are the services that process information on Notely’s behalf, and what each one receives.</p>
+        <p>These are the services that process information on {PLATFORM_NAME}’s behalf, and what each one receives.</p>
         <LegalList>
           <li>
             <strong className="font-medium text-foreground">Neon (PostgreSQL hosting).</strong> Hosts the
@@ -291,36 +292,36 @@ export default function PrivacyPolicyPage() {
             Receives the recipient’s email address and the message.
           </li>
           <li>
-            <strong className="font-medium text-foreground">Squad (squadco.com).</strong> Takes shopper
-            payments on merchant storefronts. Card details are entered on Squad’s hosted page and never reach
-            Notely; we receive the transaction reference, amount, status and channel.
-          </li>
-          <li>
-            <strong className="font-medium text-foreground">Paystack.</strong> Takes payment for Notely
-            subscriptions. Card details are entered on Paystack’s hosted page; we receive the reference,
-            amount and status.
+            {/* ROADMAP 10.9 made this list factual again (Squad no longer processes anything).
+              * The full payments wording — merchant settlement, verification data — is 10.10's,
+              * for legal review. */}
+            <strong className="font-medium text-foreground">Paystack (paystack.com).</strong> Takes payment for
+            {PLATFORM_NAME} subscriptions and shopper payments on merchant storefronts. Card details are entered on
+            Paystack’s hosted page and never reach {PLATFORM_NAME}; we receive the transaction reference, amount, status,
+            channel and fees. For a merchant who sets up online payments, Paystack receives the business name,
+            the settlement bank account and a payments contact, so it can pay them out.
           </li>
           <li>
             <strong className="font-medium text-foreground">Namecheap.</strong> Used when a merchant orders a
-            custom domain through Notely. Receives the domain details needed to check availability and
+            custom domain through {PLATFORM_NAME}. Receives the domain details needed to check availability and
             register or connect it.
           </li>
         </LegalList>
         <p>
-          Notely does not use third-party advertising networks, and does not run analytics or tracking
+          {PLATFORM_NAME} does not use third-party advertising networks, and does not run analytics or tracking
           scripts from other companies on its pages.
         </p>
       </LegalSection>
 
       <LegalSection id="cookies" number={7} heading="Cookies and browser storage">
         <p>
-          Notely uses only what it needs to keep you signed in and to remember choices you have made. There
+          {PLATFORM_NAME} uses only what it needs to keep you signed in and to remember choices you have made. There
           are no advertising or cross-site tracking cookies.
         </p>
         <LegalList>
           <li>
             <strong className="font-medium text-foreground">Staff session cookie.</strong> Set when you sign
-            in to Notely. It is scoped to our root domain so one sign-in covers your dashboard across your
+            in to {PLATFORM_NAME}. It is scoped to our root domain so one sign-in covers your dashboard across your
             store’s subdomain, and it carries a signed token rather than your details.
           </li>
           <li>
@@ -376,7 +377,7 @@ export default function PrivacyPolicyPage() {
           <li>Passwords stored only as bcrypt hashes.</li>
           <li>Social access tokens encrypted at rest with AES-256-GCM, decryptable only on our servers.</li>
           <li>Signed, expiring session tokens, with a version counter that invalidates every existing session on a password reset.</li>
-          <li>Encrypted connections (HTTPS) between your browser and Notely, and between Notely and the services in section 6.</li>
+          <li>Encrypted connections (HTTPS) between your browser and {PLATFORM_NAME}, and between {PLATFORM_NAME} and the services in section 6.</li>
           <li>Strict separation between merchants: every query is scoped to one organization, and that separation is covered by automated tests.</li>
           <li>Role-based permissions, so staff only reach what their role allows.</li>
           <li>Secrets such as API keys and app secrets held server-side and never sent to a browser.</li>
@@ -413,7 +414,7 @@ export default function PrivacyPolicyPage() {
             fraud or abuse, or to establish or defend legal claims.
           </li>
           <li>
-            <strong className="font-medium text-foreground">In a business transfer</strong>, if Notely or its
+            <strong className="font-medium text-foreground">In a business transfer</strong>, if {PLATFORM_NAME} or its
             assets are ever acquired, in which case this policy continues to apply to the information
             transferred until it is replaced by a notice to you.
           </li>
@@ -435,8 +436,8 @@ export default function PrivacyPolicyPage() {
             the stored token and asks Meta to revoke access.
           </li>
           <li>
-            <strong className="font-medium text-foreground">Deletion.</strong> Notely does not yet offer a
-            self-service button to delete a Notely account, an organization or a shopper account. To ask for
+            <strong className="font-medium text-foreground">Deletion.</strong> {PLATFORM_NAME} does not yet offer a
+            self-service button to delete a {PLATFORM_NAME} account, an organization or a shopper account. To ask for
             deletion, email <LegalContact /> from the address on the account, saying what you want deleted.
             We will verify that you own the account, act on the request, and confirm when it is done. Where a
             merchant asks us to delete their organization, that removes the store’s records with it.
@@ -453,13 +454,13 @@ export default function PrivacyPolicyPage() {
         </LegalList>
         <p>
           Service emails such as password resets and order updates are part of running the account and are
-          not marketing; we do not send marketing email from Notely to merchants’ shoppers.
+          not marketing; we do not send marketing email from {PLATFORM_NAME} to merchants’ shoppers.
         </p>
       </LegalSection>
 
       <LegalSection id="children" number={12} heading="Children’s privacy">
         <p>
-          Notely is a tool for running a business and is not directed at children. Notely accounts are for
+          {PLATFORM_NAME} is a tool for running a business and is not directed at children. {PLATFORM_NAME} accounts are for
           people aged 18 or over. Storefront accounts are not intended for anyone under 13, and we do not
           knowingly collect information from a child under 13. If you believe a child has given us
           information, email <LegalContact /> and we will remove it.
@@ -468,10 +469,10 @@ export default function PrivacyPolicyPage() {
 
       <LegalSection id="international" number={13} heading="International transfers">
         <p>
-          Notely is operated from Nigeria, and the services in section 6 are operated by companies outside
+          {PLATFORM_NAME} is operated from Nigeria, and the services in section 6 are operated by companies outside
           Nigeria. Our database is currently hosted in the European Union (Neon, Frankfurt region), and
           providers such as Google, Meta, Cloudinary and Resend process data in the countries where they
-          operate. Using Notely therefore involves your information being transferred to and stored in
+          operate. Using {PLATFORM_NAME} therefore involves your information being transferred to and stored in
           countries other than your own.
         </p>
       </LegalSection>
@@ -481,14 +482,14 @@ export default function PrivacyPolicyPage() {
           We may update this policy as the product changes. The current version is always published at this
           address, with the “last updated” date at the top. If a change materially affects how we handle your
           information, we will take reasonable steps to tell you — for example by email or a notice in the
-          dashboard. Continuing to use Notely after a change means you accept the updated policy.
+          dashboard. Continuing to use {PLATFORM_NAME} after a change means you accept the updated policy.
         </p>
       </LegalSection>
 
       <LegalSection id="contact" number={15} heading="Contact us">
         <p>
           For any question about this policy, or to make a request about your information, email{' '}
-          <LegalContact />. Notely is operated by Pynacode (CAC business name registration number 9663547),
+          <LegalContact />. {PLATFORM_NAME} is operated by {PLATFORM_OPERATOR} ({PLATFORM_OPERATOR_REGISTRATION}),
           Nigeria.
         </p>
         <p>

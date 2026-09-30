@@ -30,7 +30,6 @@ export type OrganizationContext = {
     name: string;
     slug: string;
     logoUrl: string | null;
-    plan: string;
     status: string;
     /** ISO 4217. Every amount in this org is in this currency (AGENTS §4/§6). */
     currency: string;
@@ -81,7 +80,6 @@ export const getOrganizationContext = cache(
             name: true,
             slug: true,
             logoUrl: true,
-            plan: true,
             status: true,
             currency: true,
           },

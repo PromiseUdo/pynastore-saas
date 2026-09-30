@@ -56,9 +56,8 @@ export function StoreOrderAlertEmail(props: StoreOrderAlertEmailProps) {
                 </Text>
                 {props.wasPaid && (
                   <Text style={paragraph}>
-                    <strong>They had already paid.</strong> Send the money back — from your Squad dashboard for an
-                    online payment, or your bank for a transfer — then record the refund on the order so they can see
-                    it.
+                    <strong>They had already paid.</strong> Send the money back from your own bank account — online
+                    payments were paid into it — then record the refund on the order so they can see it.
                   </Text>
                 )}
               </>

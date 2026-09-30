@@ -1,13 +1,17 @@
 /*
- * Delivery and returns.
+ * Delivery and returns — what holds for this item wherever the shopper is:
+ * where it can be collected, the return window, whether it must be paid
+ * before delivery, and the merchant's own delivery and returns page.
  *
- * Every figure here comes from `getDeliveryPromise()`, which reads the
- * merchant's own delivery zones, pickup points and return window — so this
- * panel cannot promise something checkout or the returns form then
- * contradicts. The exact price depends on the address, confirmed at checkout.
- * A store that hasn't set a return window says nothing about returns.
+ * What delivery COSTS isn't listed here. That depends on which store the item
+ * leaves from and where it's going (ROADMAP Phase 9), and a table of every
+ * store's zones put prices that don't apply beside the one that does —
+ * "Within Port Harcourt · Free" above an item that ships from Lagos. The
+ * "Deliver to" box above answers it for this shopper (deliver-to-estimate.tsx).
  *
- * Server component.
+ * Every figure comes from `getDeliveryPromise()`, the merchant's own pickup
+ * points and return window. A store that hasn't set a return window says
+ * nothing about returns. Server component.
  */
 import Link from 'next/link';
 import { ArrowRight, CreditCard, RotateCcw, Store, Truck } from 'lucide-react';
@@ -23,11 +27,14 @@ export function ProductDelivery({
   requiresPrepayment?: boolean;
 }) {
   const { options, returnWindowDays, currency, policyPage } = delivery;
-  const shipping = options.filter((o) => o.kind !== 'pickup');
   const pickups = options.filter((o) => o.kind === 'pickup');
+  const nothingSetUp = options.length === 0;
 
   const price = (option: DeliveryPromise['options'][number]) =>
     option.free ? 'Free' : `${option.fromPrice ? 'From ' : ''}${formatMoney(option.price, currency)}`;
+
+  // Nothing that holds wherever the shopper is: the "Deliver to" box says it all.
+  if (!nothingSetUp && pickups.length === 0 && !returnWindowDays && !requiresPrepayment && !policyPage) return null;
 
   return (
     <section aria-labelledby="delivery-heading" className="mt-8 rounded-2xl border bg-card p-5">
@@ -36,31 +43,14 @@ export function ProductDelivery({
         Delivery &amp; returns
       </h2>
 
-      {shipping.length > 0 ? (
-        <dl className="mt-4 space-y-3 text-sm">
-          {shipping.map((option) => (
-            <div key={option.id} className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <dt className="font-medium">{option.label}</dt>
-                <dd className="text-xs text-muted-foreground">
-                  {option.detail}
-                  {option.freeOver ? ` · free over ${formatMoney(option.freeOver, currency)}` : ''}
-                </dd>
-              </div>
-              <span className="shrink-0 text-sm font-semibold tabular-nums">{price(option)}</span>
-            </div>
-          ))}
-        </dl>
-      ) : (
-        pickups.length === 0 && (
-          <p className="mt-4 text-sm text-muted-foreground">
-            This store hasn’t set up delivery yet, so orders can’t be placed right now.
-          </p>
-        )
+      {nothingSetUp && (
+        <p className="mt-4 text-sm text-muted-foreground">
+          This store hasn’t set up delivery yet, so orders can’t be placed right now.
+        </p>
       )}
 
       {(pickups.length > 0 || Boolean(returnWindowDays)) && (
-        <ul className="mt-4 space-y-2.5 border-t pt-4 text-sm text-muted-foreground">
+        <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">
           {pickups.map((pickup) => (
             <li key={pickup.id} className="flex items-start gap-2.5">
               <Store aria-hidden className="mt-0.5 size-4 shrink-0 text-teal" />
@@ -85,13 +75,6 @@ export function ProductDelivery({
           <span>
             This item is paid for before delivery — pay on delivery isn’t available for an order containing it.
           </span>
-        </p>
-      )}
-
-      {shipping.length > 0 && (
-        <p className="mt-4 text-xs text-muted-foreground">
-          Delivery times run from dispatch. Your exact options and price depend on your address and are confirmed at
-          checkout.
         </p>
       )}
 

@@ -8,10 +8,10 @@
 import type { Metadata } from 'next';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { listStorePages } from '@/features/settings/store-pages';
 import { StorePagesClient } from './_components/StorePagesClient';
+import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
 export const metadata: Metadata = { title: 'Store pages' };
 
@@ -27,7 +27,7 @@ export default async function StorePagesPage() {
     <StorePagesClient
       pages={result.data}
       canManage={hasPermission(perms, PERMISSIONS.SETTINGS_EDIT)}
-      storeUrl={getStorefrontUrl(ctx.organization.slug, '').replace(/\/$/, '')}
+      storeUrl={(await storefrontUrlFor(ctx.organization.slug, '')).replace(/\/$/, '')}
     />
   );
 }

@@ -98,6 +98,10 @@ const ORDER_SELECT = {
   deliveryEtaMinMinutes: true,
   deliveryEtaMaxMinutes: true,
   deliveryEtaUnit: true,
+  shipments: {
+    orderBy: { sortOrder: 'asc' },
+    select: { deliveryMethodLabel: true, fee: true, kind: true, status: true, warehouse: { select: { name: true } } },
+  },
   currency: true,
   subtotal: true,
   discount: true,
@@ -272,6 +276,13 @@ function toStorefrontOrder(row: OrderRow, now = new Date()): StorefrontOrder {
       fee: toMinor(row.deliveryFee ?? 0),
       eta: deliveryEta,
       estimated: estimateWindow(row.placedAt, deliveryEta),
+      parcels: row.shipments.map((shipment) => ({
+        storeName: shipment.warehouse?.name ?? null,
+        label: shipment.deliveryMethodLabel,
+        fee: toMinor(shipment.fee),
+        kind: shipment.kind === 'PICKUP' ? ('pickup' as const) : ('delivery' as const),
+        status: shipment.status.toLowerCase() as 'pending' | 'dispatched' | 'delivered' | 'cancelled',
+      })),
     },
 
     currency: row.currency,

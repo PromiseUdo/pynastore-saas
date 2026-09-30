@@ -147,10 +147,10 @@ const setWindow = (days: number | null) =>
 
 beforeAll(async () => {
   store.id = (await prisma.organization.create({ data: { name: 'Returns Store', slug: store.slug } })).id;
-  deliveryMethodId = await giveStoreDelivery(store.id);
   warehouseId = (
     await prisma.warehouse.create({ data: { organizationId: store.id, name: 'Main', sellsOnline: true, status: 'ACTIVE' } })
   ).id;
+  deliveryMethodId = await giveStoreDelivery(store.id);
   /* An Owner to be told — the one role that hears about everything, whatever
    * its stored permissions say. */
   ownerId = (await prisma.user.create({ data: { email: `owner-${suffix}@example.com` } })).id;

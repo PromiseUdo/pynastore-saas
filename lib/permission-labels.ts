@@ -1,4 +1,4 @@
-import { PERMISSIONS, type PermissionKey } from './permissions';
+import { PERMISSIONS, isBuiltPermission, type PermissionKey } from './permissions';
 
 const LABELS: Record<PermissionKey, string> = {
   // Inventory
@@ -93,9 +93,10 @@ export function getModuleLabel(module: string): string {
   return MODULE_LABELS[module] ?? module.charAt(0).toUpperCase() + module.slice(1);
 }
 
+/** Only permissions for features that exist (ROADMAP 12.4) — see isBuiltPermission. */
 export function getPermissionsByModule(): Record<string, PermissionKey[]> {
   const result: Record<string, PermissionKey[]> = {};
-  for (const key of Object.values(PERMISSIONS)) {
+  for (const key of Object.values(PERMISSIONS).filter(isBuiltPermission)) {
     const mod = key.split('.')[0];
     if (!result[mod]) result[mod] = [];
     result[mod].push(key);
@@ -104,5 +105,5 @@ export function getPermissionsByModule(): Record<string, PermissionKey[]> {
 }
 
 export function getModules(): string[] {
-  return [...new Set(Object.values(PERMISSIONS).map((k) => k.split('.')[0]))];
+  return [...new Set(Object.values(PERMISSIONS).filter(isBuiltPermission).map((k) => k.split('.')[0]))];
 }

@@ -339,6 +339,8 @@ export interface DeliveryPromise {
     fromPrice?: boolean;
     /** free delivery once the goods reach this */
     freeOver?: Money | null;
+    /** a "rest of Nigeria" zone — the store delivers anywhere in the country from somewhere */
+    nationwide?: boolean;
   }[];
   /** the merchant's own window (Settings → Delivery & returns); null = no returns offered */
   returnWindowDays: number | null;
@@ -567,6 +569,13 @@ export interface ShippingMethod {
   freeOver?: Money | null;
   /** pickup options: where to collect from */
   pickup?: { name: string; address: string; city: string; state: string; instructions: string | null };
+  /**
+   * A choice per parcel (ROADMAP Phase 9.5): how each store's part travels.
+   * Absent when the order comes in one parcel.
+   */
+  parcels?: { storeName: string; label: string; price: Money; eta: DeliveryEta; itemIds: string[] }[];
+  /** brought together at one store first (ROADMAP Phase 9.7): the stores items come from */
+  consolidatedFrom?: string[];
 }
 
 export interface OrderTotals {

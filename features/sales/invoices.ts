@@ -8,10 +8,10 @@ import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { sendInvoiceEmail } from '@/lib/email';
 import { formatDate, formatMoney } from '@/lib/format';
-import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { InvoiceStatus, PaymentMethod, PurchaseOrderStatus } from '@/lib/generated/prisma/enums';
 import { generatePoNumber } from '@/features/procurement/shared';
 import { type ActionResult, toActionError, generateDocumentNumber } from './shared';
+import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
 const LineItemInputSchema = z.object({
   inventoryItemId: z.string().cuid().optional(),
@@ -189,13 +189,26 @@ export async function createInvoice(
   }
 }
 
-export async function listInvoices(filters?: { status?: InvoiceStatus }): Promise<ActionResult<InvoiceListRow[]>> {
+/**
+ * `overdue` is the same rule as `isOverdue` above and the Sales overview's
+ * count: sent or part-paid, with a due date already past.
+ */
+export async function listInvoices(filters?: {
+  status?: InvoiceStatus;
+  overdue?: boolean;
+}): Promise<ActionResult<InvoiceListRow[]>> {
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_VIEW);
 
     const invoices = await prisma.invoice.findMany({
-      where: { organizationId: ctx.organization.id, status: filters?.status },
+      where: filters?.overdue
+        ? {
+            organizationId: ctx.organization.id,
+            status: { in: [InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID] },
+            dueDate: { not: null, lt: new Date() },
+          }
+        : { organizationId: ctx.organization.id, status: filters?.status },
       select: {
         id: true,
         invoiceNumber: true,
@@ -280,7 +293,7 @@ export async function getInvoice(invoiceId: string): Promise<ActionResult<Invoic
         sentAt: invoice.sentAt,
         lastReminderAt: invoice.lastReminderAt,
         publicUrl: invoice.publicToken
-          ? getStorefrontUrl(ctx.organization.slug, `/invoice/${invoice.publicToken}`)
+          ? (await storefrontUrlFor(ctx.organization.slug, `/invoice/${invoice.publicToken}`))
           : null,
         lineItems: invoice.lineItems.map((li) => ({
           id: li.id,
@@ -694,7 +707,7 @@ async function deliverInvoice(
     businessLogoUrl: invoice.organization.logoUrl,
     customerName: invoice.customer.name,
     invoiceNumber: invoice.invoiceNumber,
-    invoiceUrl: getStorefrontUrl(invoice.organization.slug, `/invoice/${token}`),
+    invoiceUrl: (await storefrontUrlFor(invoice.organization.slug, `/invoice/${token}`)),
     total: money(Number(invoice.totalAmount)),
     outstanding: money(outstanding),
     dueDate: invoice.dueDate ? formatDate(invoice.dueDate) : null,

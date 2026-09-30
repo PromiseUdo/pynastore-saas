@@ -1,94 +1,54 @@
-'use client';
-
-import { useActionState, useState } from 'react';
-import { createOrganizationAction, type OnboardingState } from './actions';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+/*
+ * /onboarding — "Create your shop" (ROADMAP 12.5), on the platform host.
+ *
+ * Waits for a confirmed email first; then one short form. Says up front
+ * whether the new shop comes with a free trial, and of what.
+ */
+import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
+import { auth } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import { PLATFORM_NAME } from '@/lib/brand';
+import { Wordmark } from '@/components/marketing/wordmark';
+import { getBillingSettings } from '@/lib/settings';
+import { planByKey } from '@/lib/billing/catalogue';
+import { CreateShopForm } from './CreateShopForm';
+import { VerifyEmailGate } from './VerifyEmailGate';
 
-function toSlugPreview(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .slice(0, 48);
-}
+export const metadata: Metadata = { title: `Create your shop · ${PLATFORM_NAME}` };
 
-export default function OnboardingPage() {
-  const [state, action, pending] = useActionState<OnboardingState, FormData>(
-    createOrganizationAction,
-    null,
-  );
-  const [name, setName] = useState('');
-  const slugPreview = toSlugPreview(name);
-  const isSubmitDisabled = pending || !name.trim();
+export default async function OnboardingPage() {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) redirect('/login?callbackUrl=/onboarding');
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true, emailVerified: true } });
+  if (!user) redirect('/login');
+
+  // Same rule as lib/billing/trial.ts: one trial per owner.
+  const [settings, hadTrial, hasWorkspace] = await Promise.all([
+    getBillingSettings(),
+    prisma.subscription.findFirst({
+      where: {
+        trialStartedAt: { not: null },
+        organization: { memberships: { some: { userId, role: { isSystem: true, name: 'Owner' } } } },
+      },
+      select: { id: true },
+    }),
+    prisma.membership.count({ where: { userId, status: 'ACTIVE', organization: { status: { in: ['ACTIVE', 'SUSPENDED'] } } } }),
+  ]);
+  const trialPlan = !hadTrial && settings.trialDays > 0 ? await planByKey(settings.trialPlanKey) : null;
+  const trial = trialPlan ? { days: settings.trialDays, planName: trialPlan.name } : null;
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 px-4 py-12">
-      {/* Logo */}
-      <div className="mb-8 flex items-center gap-2.5">
-        <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-          S
-        </div>
-        <span className="text-base font-semibold text-foreground">
-          {PLATFORM_NAME}
-        </span>
-      </div>
+    <div className="flex min-h-screen flex-col items-center bg-muted/40 px-4 py-10 sm:py-14">
+      <Wordmark className="mb-8" />
 
-      {/* Card */}
-      <div className="w-full max-w-md rounded-xl border bg-card p-8 shadow-sm">
-        <div className="mb-6">
-          <h1 className="text-xl font-semibold tracking-tight">
-            Create your organization
-          </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            This is your company&apos;s workspace. You can invite teammates
-            after setup.
-          </p>
-        </div>
-
-        <form action={action} className="space-y-5">
-          <div className="space-y-1.5">
-            <Label htmlFor="name">Organization name</Label>
-            <Input
-              id="name"
-              name="name"
-              type="text"
-              placeholder="Acme Manufacturing Ltd"
-              autoComplete="organization"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-            {slugPreview && (
-              <p className="text-[11px] text-muted-foreground">
-                Your URL:{' '}
-                <span className="font-mono text-foreground">
-                  app.safebase.com/{slugPreview}
-                </span>
-              </p>
-            )}
-          </div>
-
-          {state?.error && (
-            <p role="alert" className="text-xs font-medium text-destructive">
-              {state.error}
-            </p>
-          )}
-
-          <Button
-            type="submit"
-            className="w-full"
-            size="sm"
-            disabled={isSubmitDisabled}
-          >
-            {pending ? 'Creating workspace…' : 'Create workspace'}
-          </Button>
-        </form>
-      </div>
+      {user.emailVerified ? (
+        <CreateShopForm trial={trial} isAnotherShop={hasWorkspace > 0} />
+      ) : (
+        <VerifyEmailGate email={user.email} />
+      )}
     </div>
   );
 }

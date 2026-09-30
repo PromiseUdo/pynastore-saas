@@ -1,70 +1,40 @@
 /*
  * lib/billing/entitlements.ts
  *
- * Resolves what the current organization is entitled to under its plan.
- * Mirrors lib/organization.ts / lib/permissions.ts conventions: cached
- * per-request, never resolve plan/feature access ad-hoc.
+ * What the current workspace is entitled to: its plan (features and limits,
+ * from the catalogue in the database) and its access state — trial, active,
+ * grace or lapsed (ROADMAP 12.1). Cached per request; never resolve plan or
+ * feature access ad hoc.
+ *
+ * The call sites didn't change when plans moved into the database:
+ * `hasFeature(plan, …)`, `requireFeature(…)` and `getPlanLimit(plan, …)` read
+ * the loaded plan instead of constants.
+ *
+ * By organisation id, without a request context (the storefront, order
+ * placement): ./workspace-access.ts, re-exported here.
  */
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
-import { PLANS, planHasFeature, getPlanLimit, type FeatureKey, type PlanLimits } from '@/lib/billing/plans';
-import type { OrganizationPlan } from '@/lib/generated/prisma/enums';
+import { planHasFeature, getPlanLimit, type EffectivePlan, type FeatureKey, type PlanLimits } from './plans';
+import { entitlementsFor, type OrganizationEntitlements } from './workspace-access';
 
-export type OrganizationEntitlements = {
-  plan: OrganizationPlan;
-  planConfig: (typeof PLANS)[OrganizationPlan];
-  subscription: {
-    status: string;
-    billingCycle: string;
-    cancelAtPeriodEnd: boolean;
-    currentPeriodEnd: Date | null;
-  } | null;
-};
+export {
+  entitlementsFor,
+  accessFor,
+  storefrontIsOpen,
+  type OrganizationEntitlements,
+  type WorkspaceAccess,
+} from './workspace-access';
 
-export const getOrganizationEntitlements = cache(
-  async (): Promise<OrganizationEntitlements> => {
-    const ctx = await getOrganizationContext();
+/** The current workspace's entitlements, once per request. */
+export const getOrganizationEntitlements = cache(async (): Promise<OrganizationEntitlements> => {
+  const ctx = await getOrganizationContext();
+  return entitlementsFor(ctx.organization.id);
+});
 
-    const subscription = await prisma.subscription.findUnique({
-      where: { organizationId: ctx.organization.id },
-      select: {
-        status: true,
-        billingCycle: true,
-        cancelAtPeriodEnd: true,
-        currentPeriodEnd: true,
-        plan: true,
-      },
-    });
-
-    // No background worker in this app — lazily treat a canceled
-    // subscription past its period end as expired back to Free.
-    const expired =
-      subscription?.cancelAtPeriodEnd &&
-      subscription.currentPeriodEnd !== null &&
-      subscription.currentPeriodEnd < new Date();
-
-    const plan: OrganizationPlan = expired
-      ? 'FREE'
-      : (ctx.organization.plan as OrganizationPlan);
-
-    return {
-      plan,
-      planConfig: PLANS[plan],
-      subscription: subscription
-        ? {
-            status: expired ? 'CANCELED' : subscription.status,
-            billingCycle: subscription.billingCycle,
-            cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-            currentPeriodEnd: subscription.currentPeriodEnd,
-          }
-        : null,
-    };
-  },
-);
-
-export function hasFeature(plan: OrganizationPlan, feature: FeatureKey): boolean {
+export function hasFeature(plan: EffectivePlan, feature: FeatureKey): boolean {
   return planHasFeature(plan, feature);
 }
 

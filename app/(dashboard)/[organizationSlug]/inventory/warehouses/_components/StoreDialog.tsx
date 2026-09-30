@@ -19,7 +19,9 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { createWarehouse, updateWarehouse, type WarehouseRow } from '@/features/inventory/actions';
+import { hasStorePlace, storePlaceProblem, type StorePlaceProblem } from '@/features/inventory/store-place';
 import type { WarehouseStatus } from '@/lib/generated/prisma/enums';
+import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
 
 type StoreDialogProps = {
   open: boolean;
@@ -27,6 +29,9 @@ type StoreDialogProps = {
   /** the store being edited; null = create */
   editing: WarehouseRow | null;
 };
+
+/** Radix Select can't hold an empty value as an item, so "no state" is this. */
+const NO_STATE = '__none';
 
 const STATUS_HELP: Record<WarehouseStatus, string> = {
   ACTIVE: 'In use: stock can move in and out.',
@@ -37,32 +42,47 @@ export function StoreDialog({ open, onOpenChange, editing }: StoreDialogProps) {
   const router = useRouter();
   const [name, setName] = React.useState('');
   const [location, setLocation] = React.useState('');
+  const [state, setState] = React.useState('');
+  const [city, setCity] = React.useState('');
   const [status, setStatus] = React.useState<WarehouseStatus>('ACTIVE');
   const [error, setError] = React.useState<string | null>(null);
   const [nameError, setNameError] = React.useState<string | null>(null);
+  const [placeError, setPlaceError] = React.useState<StorePlaceProblem | null>(null);
   const [isPending, setIsPending] = React.useState(false);
+
+  /* The same rule the server applies: a store selling online keeps its place.
+   * One that sold online before places existed isn't forced to add one just
+   * to be renamed — the list and header ask for it instead. */
+  const placeRequired = Boolean(editing?.sellsOnline && hasStorePlace(editing));
 
   React.useEffect(() => {
     if (!open) return;
     setName(editing?.name ?? '');
     setLocation(editing?.location ?? '');
+    setState(editing?.state ?? '');
+    setCity(editing?.city ?? '');
     setStatus(editing?.status ?? 'ACTIVE');
     setError(null);
     setNameError(null);
+    setPlaceError(null);
   }, [open, editing]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed) {
-      setNameError('Give the store a name.');
-      return;
-    }
-    setNameError(null);
+    const problem = storePlaceProblem({ state, city }, placeRequired);
+    setNameError(trimmed ? null : 'Give the store a name.');
+    setPlaceError(problem);
+    if (!trimmed || problem) return;
     setIsPending(true);
     setError(null);
 
-    const input = { name: trimmed, location: location.trim() || undefined };
+    const input = {
+      name: trimmed,
+      location: location.trim() || undefined,
+      state: state || null,
+      city: city.trim() || null,
+    };
     const result = editing ? await updateWarehouse(editing.id, { ...input, status }) : await createWarehouse(input);
 
     setIsPending(false);
@@ -106,15 +126,53 @@ export function StoreDialog({ open, onOpenChange, editing }: StoreDialogProps) {
               {nameError && <FieldError>{nameError}</FieldError>}
             </Field>
 
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field>
+                  <Label htmlFor="store-city">City or town{placeRequired && ' *'}</Label>
+                  <Input
+                    id="store-city"
+                    placeholder="e.g. Port Harcourt"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    aria-invalid={placeError?.field === 'city' ? true : undefined}
+                  />
+                  {placeError?.field === 'city' && <FieldError>{placeError.message}</FieldError>}
+                </Field>
+                <Field>
+                  <Label htmlFor="store-state">State{placeRequired && ' *'}</Label>
+                  <SelectRoot value={state} onValueChange={(v) => setState(v === NO_STATE ? '' : v)}>
+                    <SelectTrigger id="store-state" aria-invalid={placeError?.field === 'state' ? true : undefined}>
+                      <SelectValue placeholder="Choose" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!placeRequired && <SelectItem value={NO_STATE}>Not set</SelectItem>}
+                      {NIGERIAN_STATES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </SelectRoot>
+                  {placeError?.field === 'state' && <FieldError>{placeError.message}</FieldError>}
+                </Field>
+              </div>
+              <FieldDescription>
+                {placeRequired
+                  ? 'Delivery is priced from where orders leave, so a store that sells online needs this.'
+                  : 'Needed before this store can sell online — delivery is priced from where orders leave.'}
+              </FieldDescription>
+            </div>
+
             <Field>
-              <Label htmlFor="store-location">Address or area</Label>
+              <Label htmlFor="store-location">Street address</Label>
               <Input
                 id="store-location"
                 placeholder="e.g. 14 Awolowo Road, Ikoyi"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
               />
-              <FieldDescription>Optional — helps your team tell stores apart.</FieldDescription>
+              <FieldDescription>Optional — helps your team and riders find it.</FieldDescription>
             </Field>
 
             {editing && (

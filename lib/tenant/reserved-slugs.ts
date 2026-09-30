@@ -33,6 +33,11 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   'mail',
   'static',
   'assets',
+  // app/platform — the platform console (ROADMAP 11). A static route beats
+  // [organizationSlug], so a shop called this would open the console instead.
+  'platform',
+  // app/unavailable — the page a suspended workspace's admin shows (11.4).
+  'unavailable',
 ]);
 
 /** Slug prefixes that would collide with a storefront hostname. */

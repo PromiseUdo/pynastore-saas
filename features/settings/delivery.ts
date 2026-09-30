@@ -7,11 +7,18 @@
  * each zone (what it costs and how long it takes), and pickup locations.
  * Checkout quotes from exactly this (lib/storefront/delivery/).
  *
+ * PER STORE (ROADMAP Phase 9.2). Every zone and pickup belongs to the store
+ * a parcel leaves from, because the same address costs a different amount
+ * from Lagos than from Port Harcourt. The store id always arrives from the
+ * form and is only ever used together with the organization's id, so another
+ * business's store is a miss, not a leak.
+ *
  * Nigeria only for now. A zone covers named cities in one state, whole
  * states, or the rest of Nigeria; the most specific zone covering an address
- * wins. Saving refuses overlaps that would make that ambiguous — the same
- * state in two state zones, the same city in two city zones, or a second
- * "rest of Nigeria" zone — and says which zone already has it.
+ * wins. Saving refuses overlaps that would make that ambiguous — within one
+ * store: the same state in two state zones, the same city in two city zones,
+ * or a second "rest of Nigeria" zone — and says which zone already has it.
+ * Two stores covering the same place is the point, not an overlap.
  *
  * It also holds the return window — how long after delivery a customer can
  * ask to send items back (lib/storefront/orders/policy.ts). It lives with
@@ -28,7 +35,9 @@ import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { NIGERIAN_STATES, normalizePlace, parsePlaceList } from '@/lib/geo/nigeria';
-import { quoteFromSetup, type DeliverySetup } from '@/lib/storefront/delivery/match';
+import { quoteEachStore, type StoreDeliverySetup } from '@/lib/storefront/delivery/match';
+import { planWithAnyStock } from '@/lib/storefront/delivery/plan';
+import { HAS_LIVE_DELIVERY_WHERE, ONLINE_SUPPLY_WHERE } from '@/lib/storefront/delivery/supply';
 import { ETA_UNITS, toMinutes, type DeliveryEtaUnit } from '@/lib/storefront/delivery/eta';
 import { MAX_RETURN_WINDOW_DAYS } from '@/lib/storefront/orders/policy';
 
@@ -50,6 +59,8 @@ export interface DeliveryRateRow {
 
 export interface DeliveryZoneRow {
   id: string;
+  /** the store orders leave from; null only for one the migration couldn't place */
+  warehouseId: string | null;
   name: string;
   kind: 'CITIES' | 'STATES' | 'NATIONWIDE';
   state: string | null;
@@ -61,6 +72,8 @@ export interface DeliveryZoneRow {
 
 export interface PickupLocationRow {
   id: string;
+  /** the store whose stock is collected here; null only for one the migration couldn't place */
+  warehouseId: string | null;
   name: string;
   address: string;
   city: string;
@@ -72,11 +85,31 @@ export interface PickupLocationRow {
   isActive: boolean;
 }
 
+/** A store, as the delivery page needs it: who it is, and whether it can send online orders. */
+export interface DeliveryStoreRow {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  open: boolean;
+  sellsOnline: boolean;
+  /** has a switched-on zone with a switched-on option, or a switched-on pickup */
+  hasLiveDelivery: boolean;
+  /** its stock is offered online right now (lib/storefront/delivery/supply.ts) */
+  suppliesOnline: boolean;
+  /** prices were copied from another store's and nobody has confirmed them */
+  needsReview: boolean;
+}
+
 export interface DeliverySettings {
+  /** every store in the business, oldest first */
+  stores: DeliveryStoreRow[];
   zones: DeliveryZoneRow[];
   pickups: PickupLocationRow[];
   /** null: the store doesn't take returns through the website */
   returnWindowDays: number | null;
+  /** a bag no single store holds: bring it to one store first? (ROADMAP Phase 9.7) */
+  consolidation: { enabled: boolean; fee: number; leadMinutes: number; leadUnit: DeliveryEtaUnit };
 }
 
 const num = (value: Prisma.Decimal | null) => (value === null ? null : Number(value));
@@ -98,20 +131,58 @@ async function context(permission: 'view' | 'edit') {
   return ctx;
 }
 
+/** The store a zone or pickup names, if it's this business's. */
+async function ownStore(organizationId: string, warehouseId: string) {
+  return prisma.warehouse.findFirst({ where: { id: warehouseId, organizationId }, select: { id: true, name: true } });
+}
+
+const NO_STORE = { success: false as const, error: 'That store no longer exists', fieldErrors: { warehouseId: 'Choose a store' } };
+
 async function loadSettings(organizationId: string): Promise<DeliverySettings> {
-  const [zones, pickups, organization] = await Promise.all([
+  const [stores, live, supplying, zones, pickups, organization] = await Promise.all([
+    prisma.warehouse.findMany({
+      where: { organizationId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, name: true, city: true, state: true, status: true, sellsOnline: true, deliveryNeedsReview: true },
+    }),
+    prisma.warehouse.findMany({ where: { organizationId, ...HAS_LIVE_DELIVERY_WHERE }, select: { id: true } }),
+    prisma.warehouse.findMany({ where: { organizationId, ...ONLINE_SUPPLY_WHERE }, select: { id: true } }),
     prisma.deliveryZone.findMany({
       where: { organizationId },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       include: { rates: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] } },
     }),
     prisma.pickupLocation.findMany({ where: { organizationId }, orderBy: { createdAt: 'asc' } }),
-    prisma.organization.findUnique({ where: { id: organizationId }, select: { returnWindowDays: true } }),
+    prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: {
+        returnWindowDays: true,
+        consolidateOrders: true,
+        consolidationFee: true,
+        consolidationLeadMinutes: true,
+        consolidationLeadUnit: true,
+      },
+    }),
   ]);
 
+  const liveIds = new Set(live.map((w) => w.id));
+  const supplyingIds = new Set(supplying.map((w) => w.id));
+
   return {
+    stores: stores.map((store) => ({
+      id: store.id,
+      name: store.name,
+      city: store.city,
+      state: store.state,
+      open: store.status === 'ACTIVE',
+      sellsOnline: store.sellsOnline,
+      hasLiveDelivery: liveIds.has(store.id),
+      suppliesOnline: supplyingIds.has(store.id),
+      needsReview: store.deliveryNeedsReview,
+    })),
     zones: zones.map((zone) => ({
       id: zone.id,
+      warehouseId: zone.warehouseId,
       name: zone.name,
       kind: zone.kind,
       state: zone.state,
@@ -131,6 +202,7 @@ async function loadSettings(organizationId: string): Promise<DeliverySettings> {
     })),
     pickups: pickups.map((p) => ({
       id: p.id,
+      warehouseId: p.warehouseId,
       name: p.name,
       address: p.address,
       city: p.city,
@@ -142,6 +214,12 @@ async function loadSettings(organizationId: string): Promise<DeliverySettings> {
       isActive: p.isActive,
     })),
     returnWindowDays: organization?.returnWindowDays ?? null,
+    consolidation: {
+      enabled: organization?.consolidateOrders ?? false,
+      fee: Number(organization?.consolidationFee ?? 0),
+      leadMinutes: organization?.consolidationLeadMinutes ?? 1440,
+      leadUnit: organization?.consolidationLeadUnit ?? 'DAYS',
+    },
   };
 }
 
@@ -183,6 +261,57 @@ export async function saveReturnPolicy(input: { enabled: boolean; days: number }
   }
 }
 
+/**
+ * A bag no single store holds (ROADMAP Phase 9.7): send each store's part as
+ * its own parcel (the default), or bring it to one store first — for `fee`
+ * (naira) per store items come from, and `leadTime` more in `leadUnit`.
+ * Takes effect for the next quote; orders already placed keep their plan.
+ */
+export async function saveConsolidationPolicy(input: {
+  enabled: boolean;
+  fee: number | string;
+  leadTime: number | string;
+  leadUnit: DeliveryEtaUnit;
+}): Promise<Result<void>> {
+  try {
+    const ctx = await context('edit');
+    const parsed = z
+      .object({
+        enabled: z.boolean(),
+        fee: money('a fee'),
+        leadUnit: etaUnitEnum,
+        leadTime: etaAmount,
+      })
+      .superRefine((v, c) => checkEtaAmount(c, v.leadUnit, v.leadTime, 'leadTime'))
+      .safeParse(input);
+    if (!parsed.success) {
+      return { success: false, error: 'Check the highlighted fields', fieldErrors: fieldErrors(parsed.error) };
+    }
+    const { enabled, fee, leadTime, leadUnit } = parsed.data;
+
+    await prisma.organization.update({
+      where: { id: ctx.organization.id },
+      data: {
+        consolidateOrders: enabled,
+        consolidationFee: fee,
+        consolidationLeadMinutes: toMinutes(leadTime, leadUnit),
+        consolidationLeadUnit: leadUnit,
+      },
+    });
+    await createAuditLog({
+      organizationId: ctx.organization.id,
+      userId: ctx.userId,
+      action: 'settings.delivery.consolidation_updated',
+      entityType: 'Organization',
+      entityId: ctx.organization.id,
+      metadata: { enabled, fee, leadTime, leadUnit },
+    });
+    return { success: true, data: undefined };
+  } catch (error) {
+    return failure(error, 'We couldn’t save how split orders are sent');
+  }
+}
+
 export async function getDeliverySettings(): Promise<Result<DeliverySettings>> {
   try {
     const ctx = await context('view');
@@ -201,6 +330,7 @@ const ZoneSchema = z
     // Length is checked in superRefine below, so every problem is reported in
     // one go — zod skips refinements when a plain field check fails first.
     name: z.string().trim(),
+    warehouseId: z.string({ error: 'Choose the store orders leave from' }).trim().min(1, 'Choose the store orders leave from'),
     kind: z.enum(['CITIES', 'STATES', 'NATIONWIDE']),
     state: stateEnum.nullish(),
     states: z.array(stateEnum).default([]),
@@ -240,10 +370,16 @@ function fieldErrors(error: z.ZodError): Record<string, string> {
 async function overlap(
   organizationId: string,
   zoneId: string | null,
-  zone: { kind: string; state?: string | null; states: string[]; cities: string[] },
+  zone: { warehouseId: string; kind: string; state?: string | null; states: string[]; cities: string[] },
 ): Promise<{ field: string; message: string } | null> {
+  // Within one store only: two stores both covering Rivers is the point.
   const others = await prisma.deliveryZone.findMany({
-    where: { organizationId, kind: zone.kind as 'CITIES' | 'STATES' | 'NATIONWIDE', ...(zoneId ? { NOT: { id: zoneId } } : {}) },
+    where: {
+      organizationId,
+      warehouseId: zone.warehouseId,
+      kind: zone.kind as 'CITIES' | 'STATES' | 'NATIONWIDE',
+      ...(zoneId ? { NOT: { id: zoneId } } : {}),
+    },
     select: { name: true, state: true, states: true, cities: true },
   });
 
@@ -278,7 +414,10 @@ export async function saveDeliveryZone(zoneId: string | null, input: DeliveryZon
       return { success: false, error: 'Check the highlighted fields', fieldErrors: fieldErrors(parsed.error) };
     }
     const zone = parsed.data;
+    const store = await ownStore(ctx.organization.id, zone.warehouseId);
+    if (!store) return NO_STORE;
     const data = {
+      warehouseId: store.id,
       name: zone.name,
       kind: zone.kind,
       state: zone.kind === 'CITIES' ? zone.state ?? null : null,
@@ -296,7 +435,7 @@ export async function saveDeliveryZone(zoneId: string | null, input: DeliveryZon
       if (!updated.count) return { success: false, error: 'That zone no longer exists' };
       id = zoneId;
     } else {
-      const count = await prisma.deliveryZone.count({ where: { organizationId: ctx.organization.id } });
+      const count = await prisma.deliveryZone.count({ where: { organizationId: ctx.organization.id, warehouseId: store.id } });
       id = (await prisma.deliveryZone.create({ data: { ...data, organizationId: ctx.organization.id, sortOrder: count }, select: { id: true } })).id;
     }
 
@@ -306,7 +445,7 @@ export async function saveDeliveryZone(zoneId: string | null, input: DeliveryZon
       action: zoneId ? 'settings.delivery_zone.update' : 'settings.delivery_zone.create',
       entityType: 'DeliveryZone',
       entityId: id,
-      metadata: { name: data.name, kind: data.kind },
+      metadata: { name: data.name, kind: data.kind, warehouseId: store.id, store: store.name },
     });
     return { success: true, data: { id } };
   } catch (error) {
@@ -447,6 +586,7 @@ export async function deleteDeliveryRate(rateId: string): Promise<Result> {
 const PickupSchema = z
   .object({
   name: z.string().trim().min(2, 'Name this location, e.g. Main shop').max(60, 'Keep the name under 60 characters'),
+  warehouseId: z.string({ error: 'Choose the store whose stock is collected here' }).trim().min(1, 'Choose the store whose stock is collected here'),
   address: z.string().trim().min(5, 'Enter the street address').max(200, 'Keep the address under 200 characters'),
   city: z.string().trim().min(2, 'Enter the city or town').max(80),
   state: stateEnum,
@@ -473,8 +613,11 @@ export async function savePickupLocation(pickupId: string | null, input: PickupL
       return { success: false, error: 'Check the highlighted fields', fieldErrors: fieldErrors(parsed.error) };
     }
     const { readyTime, readyUnit, ...rest } = parsed.data;
+    const store = await ownStore(ctx.organization.id, rest.warehouseId);
+    if (!store) return NO_STORE;
     const data = {
       ...rest,
+      warehouseId: store.id,
       instructions: parsed.data.instructions ?? null,
       readyUnit,
       readyMinutes: toMinutes(readyTime, readyUnit),
@@ -495,7 +638,7 @@ export async function savePickupLocation(pickupId: string | null, input: PickupL
       action: pickupId ? 'settings.pickup_location.update' : 'settings.pickup_location.create',
       entityType: 'PickupLocation',
       entityId: id,
-      metadata: { name: data.name, city: data.city },
+      metadata: { name: data.name, city: data.city, warehouseId: store.id, store: store.name },
     });
     return { success: true, data: { id } };
   } catch (error) {
@@ -526,17 +669,20 @@ export async function deletePickupLocation(pickupId: string): Promise<Result> {
 /**
  * A starting point for a store with nothing set up: one "rest of Nigeria"
  * zone with Standard and Express. Every figure is the merchant's to edit —
- * the page says so — and it refuses to run once any zone exists.
+ * the page says so — and it refuses to run once that store has any zone.
  */
-export async function createSuggestedDelivery(): Promise<Result> {
+export async function createSuggestedDelivery(warehouseId: string): Promise<Result> {
   try {
     const ctx = await context('edit');
-    const existing = await prisma.deliveryZone.count({ where: { organizationId: ctx.organization.id } });
-    if (existing) return { success: false, error: 'You already have delivery zones. Edit them instead.' };
+    const store = await ownStore(ctx.organization.id, String(warehouseId ?? ''));
+    if (!store) return NO_STORE;
+    const existing = await prisma.deliveryZone.count({ where: { organizationId: ctx.organization.id, warehouseId: store.id } });
+    if (existing) return { success: false, error: `${store.name} already has delivery zones. Edit them instead.` };
 
     await prisma.deliveryZone.create({
       data: {
         organizationId: ctx.organization.id,
+        warehouseId: store.id,
         name: 'Nigeria',
         kind: 'NATIONWIDE',
         rates: {
@@ -552,8 +698,9 @@ export async function createSuggestedDelivery(): Promise<Result> {
       organizationId: ctx.organization.id,
       userId: ctx.userId,
       action: 'settings.delivery_zone.suggested',
-      entityType: 'DeliveryZone',
-      entityId: ctx.organization.id,
+      entityType: 'Warehouse',
+      entityId: store.id,
+      metadata: { store: store.name },
     });
     return { success: true, data: undefined };
   } catch (error) {
@@ -562,31 +709,89 @@ export async function createSuggestedDelivery(): Promise<Result> {
 }
 
 /**
+ * "These prices are right." Clears the review flag the Phase 9.2 migration
+ * put on a store whose delivery was copied from another store's. Nothing
+ * about checkout changes — the copied prices were already in use.
+ */
+export async function confirmStoreDelivery(warehouseId: string): Promise<Result> {
+  try {
+    const ctx = await context('edit');
+    const updated = await prisma.warehouse.updateMany({
+      where: { id: String(warehouseId ?? ''), organizationId: ctx.organization.id },
+      data: { deliveryNeedsReview: false },
+    });
+    if (!updated.count) return { success: false, error: 'That store no longer exists' };
+    await createAuditLog({
+      organizationId: ctx.organization.id,
+      userId: ctx.userId,
+      action: 'settings.delivery.reviewed',
+      entityType: 'Warehouse',
+      entityId: warehouseId,
+    });
+    return { success: true, data: undefined };
+  } catch (error) {
+    return failure(error, 'We couldn’t save that');
+  }
+}
+
+export interface DeliveryPreviewOption {
+  label: string;
+  detail: string;
+  price: number;
+}
+
+export interface DeliveryPreview {
+  /** what each store that sells online would offer this address */
+  stores: { storeId: string; storeName: string; zoneName: string | null; options: DeliveryPreviewOption[] }[];
+  /** what checkout offers when every store has the items — the cheapest store to send from (lib/storefront/delivery/plan.ts) */
+  checkout: { storeName: string | null; zoneName: string | null; options: DeliveryPreviewOption[] };
+}
+
+/**
  * What a customer at this address would be offered — the same matcher
  * checkout uses, run over the merchant's current settings (including zones
  * and options that are switched off, which are skipped exactly as checkout
- * skips them). `subtotal` is in naira.
+ * skips them), store by store, and then what checkout charges. Only stores
+ * whose stock is sold online count, as at checkout. `subtotal` is in naira.
  */
-export async function previewDelivery(input: { state: string; city: string; subtotal?: number }): Promise<
-  Result<{ zoneName: string | null; options: { label: string; detail: string; price: number }[] }>
-> {
+export async function previewDelivery(input: { state: string; city: string; subtotal?: number }): Promise<Result<DeliveryPreview>> {
   try {
     const ctx = await context('view');
     const settings = await loadSettings(ctx.organization.id);
     const kobo = (naira: number) => Math.round(naira * 100);
-    const setup: DeliverySetup = {
-      zones: settings.zones.map((z) => ({
-        ...z,
-        rates: z.rates.map((r) => ({ ...r, price: kobo(r.price), freeOver: r.freeOver === null ? null : kobo(r.freeOver) })),
-      })),
-      pickups: settings.pickups.map((p) => ({ ...p, price: kobo(p.price) })),
-    };
-    const quote = quoteFromSetup(setup, { state: input.state, city: input.city }, kobo(input.subtotal ?? 0));
+    const setups: StoreDeliverySetup[] = settings.stores
+      .filter((store) => store.suppliesOnline)
+      .map((store) => ({
+        warehouseId: store.id,
+        name: store.name,
+        state: store.state,
+        zones: settings.zones
+          .filter((z) => z.warehouseId === store.id)
+          .map((z) => ({
+            ...z,
+            rates: z.rates.map((r) => ({ ...r, price: kobo(r.price), freeOver: r.freeOver === null ? null : kobo(r.freeOver) })),
+          })),
+        pickups: settings.pickups.filter((p) => p.warehouseId === store.id).map((p) => ({ ...p, price: kobo(p.price) })),
+      }));
+
+    const address = { state: input.state, city: input.city };
+    const subtotal = kobo(input.subtotal ?? 0);
+    const naira = (options: { label: string; description: string; price: number }[]) =>
+      options.map((o) => ({ label: o.label, detail: o.description, price: o.price / 100 }));
+    const checkout = planWithAnyStock(setups, address, subtotal);
+    const firstDelivery = checkout.options.find((o) => o.kind === 'delivery');
+    const checkoutStore = firstDelivery ? checkout.plans[firstDelivery.id].shipments[0].store.name : null;
+
     return {
       success: true,
       data: {
-        zoneName: quote.zone?.name ?? null,
-        options: quote.options.map((o) => ({ label: o.label, detail: o.description, price: o.price / 100 })),
+        stores: quoteEachStore(setups, address, subtotal).map((q) => ({
+          storeId: q.store.id,
+          storeName: q.store.name,
+          zoneName: q.zone?.name ?? null,
+          options: naira(q.options),
+        })),
+        checkout: { storeName: checkoutStore, zoneName: checkout.zone?.name ?? null, options: naira(checkout.options) },
       },
     };
   } catch (error) {

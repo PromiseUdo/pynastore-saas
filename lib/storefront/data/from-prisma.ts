@@ -44,6 +44,7 @@ import { listPublishedReviews, ratingSummaries } from '../reviews/read';
 import { listAnsweredQuestions } from '../questions/read';
 import { buildCatalogue, emptyCatalogue, type Catalogue, type CompanionRule } from './catalogue';
 import { boughtTogetherFromDb } from './bought-together';
+import { ONLINE_SUPPLY_WHERE } from '../delivery/supply';
 
 const CURRENCY = 'NGN';
 const VALID_TAGS = new Set<string>(PRODUCT_TAGS.map((t) => t.value));
@@ -59,16 +60,17 @@ export function optionValueId(optionName: string, label: string): string {
   return `ov_${urlKey(optionName)}_${urlKey(label)}`;
 }
 
+/* Only stores that supply the online store count: selling online AND able
+ * to deliver (../delivery/supply.ts) — the same filter the stock hold uses,
+ * so a shopper is never shown stock checkout can't take. */
 const LEVEL_SELECT = {
-  select: { quantity: true, reservedQty: true, warehouse: { select: { sellsOnline: true, status: true } } },
+  where: { warehouse: ONLINE_SUPPLY_WHERE },
+  select: { quantity: true, reservedQty: true },
 } as const;
 
 /** What a shopper could actually buy right now. */
-function onlineStock(levels: { quantity: Prisma.Decimal; reservedQty: Prisma.Decimal; warehouse: { sellsOnline: boolean; status: string } }[]): number {
-  return levels.reduce((sum, level) => {
-    if (!level.warehouse.sellsOnline || level.warehouse.status !== 'ACTIVE') return sum;
-    return sum + Math.max(0, Number(level.quantity) - Number(level.reservedQty));
-  }, 0);
+function onlineStock(levels: { quantity: Prisma.Decimal; reservedQty: Prisma.Decimal }[]): number {
+  return levels.reduce((sum, level) => sum + Math.max(0, Number(level.quantity) - Number(level.reservedQty)), 0);
 }
 
 const SORT_BY_ENUM: Record<string, SortKey> = {

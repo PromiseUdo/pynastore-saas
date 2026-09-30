@@ -10,6 +10,7 @@
  * fully from the HTML response.
  */
 import type { ReactNode } from 'react';
+import { PLATFORM_CONTACT_EMAIL } from '@/lib/brand';
 
 export function LegalDocument({
   title,
@@ -75,10 +76,10 @@ export function LegalNote({ children }: { children: ReactNode }) {
 export function LegalContact() {
   return (
     <a
-      href="mailto:pynacode@gmail.com"
+      href={`mailto:${PLATFORM_CONTACT_EMAIL}`}
       className="font-medium text-foreground underline underline-offset-4"
     >
-      pynacode@gmail.com
+      {PLATFORM_CONTACT_EMAIL}
     </a>
   );
 }

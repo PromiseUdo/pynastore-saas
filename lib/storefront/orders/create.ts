@@ -10,6 +10,13 @@
  * checks in ../checkout/checkout-service.ts catch a shopper's mistakes
  * early; these are the ones that count.
  *
+ * DELIVERY AND STOCK FOLLOW ONE PLAN (ROADMAP Phase 9.3). The bag is
+ * planned here — which store sends which part (../delivery/plan.ts) — and the
+ * option the shopper chose carries its plan. The fee charged is that plan's,
+ * and the stock is held exactly where it says; if a planned store sold out
+ * meanwhile, the order is refused and the shopper re-quoted, never sent from
+ * a store whose trip they didn't pay for.
+ *
  * STOCK IS HELD with the order, in the same transaction (./stock.ts): the
  * order and its hold commit together or not at all, and the hold is a
  * conditional update, so two shoppers can't both buy the last one. Unpaid
@@ -35,15 +42,18 @@ import { calculateCheckoutTotals } from '../checkout/totals';
 import { addressFromContact, countryName } from '../checkout/address';
 import { findPaymentMethod } from '../checkout/config';
 import { isPaymentMethodAllowed, PREPAYMENT_REQUIRED_MESSAGE } from '../checkout/payment-terms';
-import { quoteDelivery } from '../delivery/quote';
+import { loadStockFor, quoteDelivery } from '../delivery/quote';
+import { resolveDeliveryChoice } from '../delivery/plan';
 import { resolveDiscount } from '../discounts/resolve';
 import { cartSubtotal } from '../pricing';
 import { toCartLine } from '../cart';
 import { MAX_LINE_QUANTITY } from '../cart';
-import { OutOfStockError, reserveOrderStock } from './stock';
+import { OutOfStockError, plannedStockOf, reserveOrderStock } from './stock';
+import { writeShipments } from './shipments';
 import { expireUnpaidOrders } from './lifecycle';
 import type { AppliedCoupon, CartItem } from '../types';
 import type { CheckoutAddress, CheckoutConfig, CheckoutContact } from '../checkout/types';
+import { storefrontIsOpen } from '@/lib/billing/workspace-access';
 
 /** What the browser may say about one line. */
 export interface OrderLineRequest {
@@ -74,6 +84,8 @@ export type PlaceOrderFailure =
   | 'product-unavailable'
   | 'invalid-discount'
   | 'store-unavailable'
+  | 'store-closed'
+  | 'store-not-open'
   | 'order-failed';
 
 export type PlaceOrderResult =
@@ -90,6 +102,8 @@ const MESSAGES: Record<PlaceOrderFailure, string> = {
   'invalid-discount':
     'Your discount code can’t be used on this order any more. Go back to your bag to remove it or try another.',
   'store-unavailable': 'This store isn’t taking orders right now.',
+  'store-closed': 'This shop is closed for now, so it can’t take orders. Nothing has been charged.',
+  'store-not-open': 'This shop isn’t open yet, so it can’t take orders. Nothing has been charged.',
   'order-failed': 'We couldn’t place your order. Nothing has been charged — please try again.',
 };
 
@@ -147,9 +161,9 @@ async function nextReference(organizationId: string, now: Date, skip: number): P
  * Returns null if anything asked for is no longer sellable — a product that
  * was delisted, a variant that vanished, a line with no stock left. The
  * shopper is sent back to their bag rather than being sold something the
- * merchant can't ship.
+ * merchant can't ship. Also prices the bag for checkout's delivery quote.
  */
-async function resolveLines(
+export async function resolveLines(
   organizationSlug: string,
   requested: OrderLineRequest[],
 ): Promise<CartItem[] | null> {
@@ -177,6 +191,16 @@ async function resolveLines(
   }
 
   return items.length > 0 ? items : null;
+}
+
+/** Whether the stores that supply the online store still hold every line, between them — read fresh, not from the catalogue. */
+async function stillInStock(organizationSlug: string, items: CartItem[]): Promise<boolean> {
+  const stock = await loadStockFor(organizationSlug, items.map((item) => item.variantId));
+  const need = new Map<string, number>();
+  for (const item of items) need.set(item.variantId, (need.get(item.variantId) ?? 0) + item.quantity);
+  return [...need].every(
+    ([itemId, quantity]) => Object.values(stock).reduce((sum, store) => sum + (store[itemId] ?? 0), 0) >= quantity,
+  );
 }
 
 /** The customer this order belongs to: the signed-in one, or one found/made by email. */
@@ -237,9 +261,16 @@ function initialPaymentStatus(methodId: string) {
 export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
   const organization = await prisma.organization.findFirst({
     where: { slug: input.organizationSlug, status: 'ACTIVE' },
-    select: { id: true },
+    select: { id: true, storefrontOpen: true },
   });
   if (!organization) return fail('store-unavailable');
+
+  // Not open yet (12.5): even the merchant's own preview can't place an order.
+  if (!organization.storefrontOpen) return fail('store-not-open');
+
+  // A shop whose plan ended and whose grace ran out takes no new orders
+  // (ROADMAP 12.1) — the storefront says so too; this is the check that counts.
+  if (!(await storefrontIsOpen(organization.id))) return fail('store-closed');
 
   if (!input.lines.length) return fail('empty-cart');
 
@@ -271,17 +302,20 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     return fail('invalid-payment-method', PREPAYMENT_REQUIRED_MESSAGE);
   }
 
-  /* Delivery is quoted HERE, from the merchant's zones, for this address and
-   * this re-priced bag — whatever the checkout screen showed was a preview.
-   * An option that isn't offered for this address (the shopper changed it,
-   * or the merchant changed their rates mid-checkout) is refused. */
+  /* Delivery is planned and quoted HERE, from the merchant's zones and each
+   * store's stock, for this address and this re-priced bag — whatever the
+   * checkout screen showed was a preview. An option that isn't offered any
+   * more (the shopper changed the address, the merchant changed their rates,
+   * or stock moved and the bag now goes from elsewhere) is refused. */
   const quote = await quoteDelivery(
     input.organizationSlug,
     { state: input.address.state, city: input.address.city },
-    cartSubtotal(items),
+    items.map((item) => ({ itemId: item.variantId, quantity: item.quantity, unitPrice: item.unitPrice })),
   );
-  const deliveryMethod = quote.options.find((option) => option.id === input.deliveryMethodId) ?? null;
-  if (!deliveryMethod) return fail('invalid-delivery-method');
+  // One option or pickup, or a choice per parcel (Phase 9.5) — resolved against THIS quote.
+  const chosen = resolveDeliveryChoice(quote, input.deliveryMethodId);
+  if (!chosen) return fail('invalid-delivery-method');
+  const { method: deliveryMethod, plan } = chosen;
 
   const address = addressFromContact(input.address, input.contact);
   const customer = await resolveCustomer({
@@ -422,6 +456,12 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         if (!claimed.count) throw new DiscountUnavailableError();
       }
 
+      // The plan's parcels, then the stock for each held against its parcel (Phase 9.4).
+      const shipmentIds = await writeShipments(tx, {
+        organizationId: organization.id,
+        orderId: order.id,
+        shipments: plan.shipments,
+      });
       await reserveOrderStock(tx, {
         organizationId: organization.id,
         orderId: order.id,
@@ -430,6 +470,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           inventoryItemId: line.variantId!,
           quantity: line.quantity,
         })),
+        planned: plannedStockOf(plan.shipments, shipmentIds),
       });
 
       return order;
@@ -441,8 +482,19 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
       return { ok: true, orderId: created.id, organizationId: organization.id, reference, confirmationToken };
     } catch (error) {
-      // Sold out between the catalogue read and the hold: the order rolled back.
-      if (error instanceof OutOfStockError) return fail('product-unavailable');
+      /* The hold failed and the order rolled back. Either the goods are gone
+       * (someone bought the last one) — say so — or a planned store ran short
+       * while others still have enough, in which case re-quoting may send it
+       * from elsewhere at that store's price, so the shopper chooses again
+       * rather than being charged the old one. */
+      if (error instanceof OutOfStockError) {
+        return (await stillInStock(input.organizationSlug, items))
+          ? fail(
+              'invalid-delivery-method',
+              'Stock moved while you were checking out, so how your order is sent has changed. Go back to Delivery to see the options now — nothing has been charged.',
+            )
+          : fail('product-unavailable');
+      }
       // Someone else took the last use of the code in the meantime.
       if (error instanceof DiscountUnavailableError) {
         return fail(

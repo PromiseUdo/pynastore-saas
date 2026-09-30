@@ -22,7 +22,7 @@ import { PERMISSIONS, SYSTEM_ROLES } from '@/lib/permissions';
 import { getAdminUrl } from '@/lib/tenant/urls';
 import { storeUrl } from '../account/return-url';
 import { formatMoney } from '../format';
-import { TRANSFER_HOLD_HOURS } from '../mock/checkout';
+import { TRANSFER_HOLD_HOURS } from './holds';
 import { readTransferDetails } from './read';
 import { RETURN_REASONS, isReturnReason } from './policy';
 
@@ -90,6 +90,10 @@ export async function notifyShopper(
         shipCountry: true,
         organization: { select: { name: true, slug: true, customStoreDomain: true } },
         lineItems: { select: { name: true, variantName: true, quantity: true, totalPrice: true } },
+        shipments: {
+          orderBy: { sortOrder: 'asc' },
+          select: { deliveryMethodLabel: true, warehouse: { select: { name: true } } },
+        },
       },
     });
     if (!order) return;
@@ -125,6 +129,7 @@ export async function notifyShopper(
       storeNote: returned?.merchantNote ?? undefined,
       refundAmount: detail.refundAmount !== undefined ? money(detail.refundAmount) : undefined,
       deliveryLabel: order.deliveryMethodLabel ?? '',
+      parcels: order.shipments.map((s) => (s.warehouse ? `from ${s.warehouse.name}: ${s.deliveryMethodLabel}` : s.deliveryMethodLabel)),
       address: [
         order.shipFullName,
         order.shipLine1,

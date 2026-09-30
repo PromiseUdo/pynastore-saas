@@ -42,6 +42,7 @@ import type {
   SortKey,
   StoreScope,
 } from '@/lib/storefront/types';
+import { deliverySummary } from '@/lib/storefront/store-claims';
 
 /* ───────────────────────────── arguments ─────────────────────────────── */
 
@@ -133,6 +134,8 @@ export interface StorePoliciesResult {
   returnWindowDays: number | null;
   pickupAvailable: boolean | null;
   delivery: { label: string; detail: string; price: number; free: boolean }[];
+  /** the cheapest delivery anywhere — the honest answer to "how much is delivery?" without an item and an address */
+  deliveryFrom: number | null;
   currency: string;
 }
 
@@ -385,6 +388,7 @@ export function createShoppingTools(store: StoreScope): ShoppingTools {
           price: o.price,
           free: o.free,
         })),
+        deliveryFrom: deliverySummary(promise.options)?.from ?? null,
         currency: promise.currency,
       };
     },
@@ -536,7 +540,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: 'get_store_policies',
     description:
-      "This store's delivery options, return window and pickup availability. Fields that are null are not configured — do not answer them.",
+      "This store's delivery options, return window and pickup availability. Fields that are null are not configured — do not answer them. Each delivery line is from ONE of the store's locations (\"… from Lagos Store\"); what a shopper actually pays depends on which location holds the item and on their address, so quote prices as \"from\" (deliveryFrom) and say the exact price is shown on the product page for their location and confirmed at checkout — never promise one zone's price for a particular item.",
     parameters: { type: 'object', properties: {} },
   },
 ] as const;

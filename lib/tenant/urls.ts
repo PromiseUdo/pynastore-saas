@@ -27,8 +27,15 @@ export function getAdminUrl(orgSlug: string, path = '/'): string {
   return `${getProtocol()}://${orgSlug}.${getRootDomain()}${suffix}`;
 }
 
-export function getStorefrontUrl(orgSlug: string, path = '/'): string {
+/**
+ * The shop's address. Pass the shop's live custom domain (its canonical www
+ * host, `Organization.customStoreDomain`) when you have it — every link we
+ * generate should use it once it's live (ROADMAP 12.6). Server code without
+ * it to hand can use `storefrontUrlFor` in lib/domains/storefront-url.ts.
+ */
+export function getStorefrontUrl(orgSlug: string, path = '/', customDomain?: string | null): string {
   const suffix = path.startsWith('/') ? path : `/${path}`;
+  if (customDomain) return `https://${customDomain}${suffix}`;
   // [0] is the canonical storefront host; see storefrontHostsFor().
   const host = storefrontHostsFor(orgSlug)[0];
   return `${protocolFor(host)}://${host}${suffix}`;

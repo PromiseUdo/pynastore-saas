@@ -19,6 +19,11 @@
  *
  * Every active pickup location is offered too, wherever the shopper lives.
  *
+ * PER STORE (ROADMAP Phase 9.2). Zones and pickups belong to the store a
+ * parcel leaves from, so all of the above runs over ONE store's setup
+ * (`quoteFromSetup`). `quoteEachStore` asks every store; which store sends
+ * an order, and so which store's prices it pays, is ./plan.ts.
+ *
  * Money is minor units (kobo) here, like the rest of the storefront.
  */
 import { normalizePlace } from '@/lib/geo/nigeria';
@@ -63,10 +68,19 @@ export interface PickupSetup {
   isActive: boolean;
 }
 
+/** One store's delivery: where it sends to, at what price, and where it can be collected. */
 export interface DeliverySetup {
   /** in the merchant's sort order */
   zones: ZoneSetup[];
   pickups: PickupSetup[];
+}
+
+/** A store that supplies the online store, with its own delivery setup. */
+export interface StoreDeliverySetup extends DeliverySetup {
+  warehouseId: string;
+  name: string;
+  /** where the store is (Phase 9.1) — the planner prefers a store in the shopper's state */
+  state?: string | null;
 }
 
 export interface DeliveryAddress {
@@ -176,10 +190,22 @@ export function quoteFromSetup(
   };
 }
 
-/** Whether the store can take any order at all: some active rate somewhere, or a pickup. */
+/** Whether a store can take any order at all: some active rate somewhere, or a pickup. */
 export function hasAnyDelivery(setup: DeliverySetup): boolean {
   return (
     setup.pickups.some((p) => p.isActive) ||
     setup.zones.some((z) => z.isActive && z.rates.some((r) => r.isActive))
   );
+}
+
+export interface StoreQuote extends DeliveryQuote {
+  store: { id: string; name: string };
+}
+
+/** What each store would offer this address — the admin's "check an address" shows all of them. */
+export function quoteEachStore(stores: StoreDeliverySetup[], address: DeliveryAddress, subtotal: Money): StoreQuote[] {
+  return stores.map((store) => ({
+    store: { id: store.warehouseId, name: store.name },
+    ...quoteFromSetup(store, address, subtotal),
+  }));
 }

@@ -31,6 +31,7 @@ import {
   type SocialConnectionStatus,
   type SocialPlatform,
 } from './types';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 /** A draft is a handoff, not storage: long enough to choose, short enough to be safe. */
 const DRAFT_TTL_MS = 15 * 60 * 1000;
@@ -44,10 +45,10 @@ function problemFor(status: SocialConnectionStatus, code: string | null): string
     case 'DISCONNECTED':
       return null;
     case 'EXPIRED':
-      return 'The permission MansaaS was given has run out. Reconnect this account to keep posting.';
+      return `The permission ${PLATFORM_NAME} was given has run out. Reconnect this account to keep posting.`;
     case 'REVOKED':
       return code === '190/458'
-        ? 'This account removed MansaaS from its Facebook settings. Reconnect to restore access.'
+        ? `This account removed ${PLATFORM_NAME} from its Facebook settings. Reconnect to restore access.`
         : 'Facebook is no longer accepting our access to this account. Reconnect to restore it.';
   }
 }

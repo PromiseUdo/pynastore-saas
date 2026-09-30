@@ -112,6 +112,7 @@ export function returnNextStep(status: string): string | null {
 
 /** How the customer chose to pay, as the merchant would say it. */
 export const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  paystack: 'Online (Paystack)',
   squad: 'Online (Squad)',
   pod: 'Pay on delivery',
   transfer: 'Bank transfer to you',
@@ -157,7 +158,7 @@ export function nextStepHint(input: {
       return `Cancelled automatically: no transfer was confirmed within ${input.transferHoldHours} hours, so the stock went back on sale. If the money has since arrived, you can still confirm it.`;
     }
     if (paymentStatus === 'PAID' || paymentStatus === 'PARTIALLY_REFUNDED') {
-      return `${byCustomer ? 'The customer cancelled this after paying' : 'Cancelled after the customer paid'} — refund them (from your Squad dashboard for online payments, or your bank for transfers), then record the refund here so they can see it.`;
+      return `${byCustomer ? 'The customer cancelled this after paying' : 'Cancelled after the customer paid'} — send the money back from your own bank account (online payments were paid into it), then record the refund here so they can see it.`;
     }
     if (paymentStatus === 'REFUNDED') return 'Cancelled and refunded — nothing left to do.';
     if (cancelReason === 'payment-timeout') {

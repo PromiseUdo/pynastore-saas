@@ -10,6 +10,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { PERMISSIONS } from '@/lib/permissions';
+import { dropBilling, givePlan } from './helpers/plans';
 
 const ctx = vi.hoisted(() => ({
   organization: {
@@ -17,7 +18,6 @@ const ctx = vi.hoisted(() => ({
     name: 'Activity Test',
     slug: '',
     logoUrl: null,
-    plan: 'PRO',
     status: 'ACTIVE',
     currency: 'NGN',
   },
@@ -55,6 +55,7 @@ beforeAll(async () => {
   });
   ctx.organization.id = org.id;
   ctx.organization.slug = org.slug;
+  await givePlan(org.id, 'pro');
 
   otherOrgId = (
     await prisma.organization.create({ data: { name: 'Other', slug: `__test-activity-other-${suffix}` } })
@@ -72,13 +73,13 @@ beforeAll(async () => {
 afterAll(async () => {
   for (const organizationId of [ctx.organization.id, otherOrgId]) {
     await prisma.auditLog.deleteMany({ where: { organizationId } });
+    await dropBilling(organizationId);
     await prisma.organization.delete({ where: { id: organizationId } });
   }
 });
 
 beforeEach(() => {
   ctx.membership.role.permissions = [PERMISSIONS.SETTINGS_VIEW];
-  ctx.organization.plan = 'PRO';
 });
 
 function unwrap<T>(result: { success: true; data: T } | { success: false; error: string }): T {
@@ -142,10 +143,15 @@ describe('exportActivity', () => {
   });
 
   it('is refused without the plan that sells it', async () => {
-    ctx.organization.plan = 'FREE';
-    const result = await exportActivity();
-    expect(result.success).toBe(false);
-    if (!result.success) expect(result.error).toMatch(/Pro plan/);
+    // Starter doesn't include the export (the seeded catalogue).
+    await givePlan(ctx.organization.id, 'starter');
+    try {
+      const result = await exportActivity();
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error).toMatch(/isn’t included in your plan/);
+    } finally {
+      await givePlan(ctx.organization.id, 'pro');
+    }
   });
 
   it('is refused without settings.view, whatever the plan', async () => {

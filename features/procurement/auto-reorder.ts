@@ -104,7 +104,7 @@ export async function generateReorderDrafts(
 
     const { plan } = await getOrganizationEntitlements();
     if (!hasFeature(plan, FEATURES.PROCUREMENT_AUTO_REORDER)) {
-      return { success: false, error: 'Automatic reorder drafts require the Pro plan or higher' };
+      return { success: false, error: 'Automatic reorder drafts aren’t included in your plan. See Plans to upgrade.' };
     }
 
     const itemIds = groups.flatMap((g) => g.items.map((i) => i.inventoryItemId));

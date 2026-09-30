@@ -128,7 +128,29 @@ export function ReviewStep({
         </ReviewBlock>
 
         <ReviewBlock title="Delivery method" step="delivery" onEdit={onEdit}>
-          {deliveryMethod ? (
+          {deliveryMethod?.parcels ? (
+            /* A bag in several parcels (ROADMAP Phase 9.5): each one, from its
+             * store, as it will be charged — they add up to the delivery line. */
+            <ul className="space-y-2">
+              {deliveryMethod.parcels.map((parcel, index) => (
+                <li key={parcel.storeName + index}>
+                  <p>
+                    Parcel {index + 1} from {parcel.storeName}: {parcel.label}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {deliveryEstimate({ ...deliveryMethod, eta: parcel.eta })} ·{' '}
+                    {parcel.price === 0 ? 'Free' : formatMoney(parcel.price, totals.currency)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {parcel.itemIds
+                      .map((id) => items.find((item) => item.variantId === id)?.name)
+                      .filter(Boolean)
+                      .join(', ')}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : deliveryMethod ? (
             <>
               <p>{deliveryMethod.label}</p>
               <p className="text-muted-foreground">

@@ -43,6 +43,7 @@ import { loadStorePage, loadStorePageLinks, type PublishedStorePage } from './da
 import { isValidPageSlug, type StorePageLink } from './pages/rules';
 import type { Catalogue } from './data/catalogue';
 import { deliveryOverview } from './delivery/quote';
+import { onlinePaymentsReady } from './checkout/store-config';
 import { loadLiveAnnouncements } from './data/announcements';
 import { loadStorefrontLook, type StorefrontLook } from './data/appearance';
 import type { Announcement } from '@/lib/marketing/announcement';
@@ -753,12 +754,19 @@ async function serviceFeatures(
   organizationSlug: string,
   returnWindowDays: number | null,
 ): Promise<HomepageSections['serviceFeatures']> {
-  const options = await deliveryOverview(organizationSlug);
+  const [options, payOnline] = await Promise.all([
+    deliveryOverview(organizationSlug),
+    onlinePaymentsReady(organizationSlug),
+  ]);
   const delivery = options.filter((o) => o.kind !== 'pickup');
-  const nationwide = delivery.some((o) => o.label === 'Delivery across Nigeria');
+  // By the zone's kind, not its label — with several delivering stores it reads "… from Lagos Store".
+  const nationwide = delivery.some((o) => o.nationwide);
 
   const features = [
-    { icon: 'shield-check', title: 'Pay your way', description: 'Card or bank transfer through Squad, or pay on delivery' },
+    // Online payment only where checkout will actually offer it (ROADMAP 10.8).
+    payOnline
+      ? { icon: 'shield-check', title: 'Pay your way', description: 'Card, bank transfer or USSD through Paystack, or pay on delivery' }
+      : { icon: 'shield-check', title: 'Pay on delivery', description: 'Pay the courier when your order arrives' },
   ];
   if (delivery.length) {
     features.push({

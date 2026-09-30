@@ -187,6 +187,16 @@ export function OrderReturnsPanel({ order, canManage }: { order: StoreOrderDetai
           max={order.refundable}
           currency={order.currency}
           paymentMethod={order.paymentMethod}
+          deliveryFees={order.parcels
+            .filter((parcel) => parcel.fee > 0)
+            .map((parcel) => ({
+              id: parcel.id,
+              label:
+                order.parcels.length > 1
+                  ? `Parcel from ${parcel.storeName ?? 'a store'} (${parcel.label})`
+                  : parcel.label,
+              amount: parcel.fee,
+            }))}
         />
       )}
     </>

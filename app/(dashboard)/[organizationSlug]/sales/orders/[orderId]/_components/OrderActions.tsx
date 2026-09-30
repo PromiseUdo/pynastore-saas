@@ -58,6 +58,7 @@ export function OrderActions({
   reference,
   totalAmount,
   currency,
+  parcelCount = 1,
 }: {
   orderId: string;
   status: string;
@@ -69,7 +70,11 @@ export function OrderActions({
   /** major units */
   totalAmount: number;
   currency: string;
+  /** parcels still in play (ROADMAP Phase 9.6): with several, these buttons move them all */
+  parcelCount?: number;
 }) {
+  const several = parcelCount > 1;
+  const shipLabel = several ? 'Send all parcels' : 'Mark as shipped';
   const router = useRouter();
   const [pending, setPending] = React.useState<StoreOrderAction | null>(null);
   const [deliverOpen, setDeliverOpen] = React.useState(false);
@@ -170,7 +175,7 @@ export function OrderActions({
         <>
           <Button variant="outline" size="sm" onClick={() => void run('ship')} disabled={pending !== null}>
             {spinner('ship')}
-            Mark as shipped
+            {shipLabel}
           </Button>
           <Button size="sm" onClick={() => void run('pack')} disabled={pending !== null}>
             {spinner('pack')}
@@ -182,7 +187,7 @@ export function OrderActions({
       {status === 'PROCESSING' && (
         <Button size="sm" onClick={() => void run('ship')} disabled={pending !== null}>
           {spinner('ship')}
-          Mark as shipped
+          {several ? 'Send the rest' : shipLabel}
         </Button>
       )}
 
@@ -194,7 +199,7 @@ export function OrderActions({
             disabled={pending !== null}
           >
             {spinner('deliver')}
-            Mark as delivered
+            {several ? 'Mark all delivered' : 'Mark as delivered'}
           </Button>
 
           <DialogRoot open={deliverOpen} onOpenChange={setDeliverOpen}>

@@ -32,8 +32,12 @@ import {
   markOrderDelivered,
   markOrderShipped,
   recordDeliveryPayment,
+  deliverShipment,
+  sendShipment,
   type TransitionResult,
 } from '@/lib/storefront/orders/lifecycle';
+import { canUseStore, requireStoreAccess } from '@/lib/store-access';
+import { collectionSplit } from '@/lib/sales/parcel-collection';
 import { readTransferDetails } from '@/lib/storefront/orders/read';
 import { RETURN_REASONS, isReturnReason, refundableAmount, suggestedReturnRefund } from '@/lib/storefront/orders/policy';
 import type { ActionResult } from './shared';
@@ -61,6 +65,8 @@ export interface StoreOrderRow {
   returnsAwaiting: number;
   /** cancelled after it was paid, and not all of it sent back yet */
   refundOwed: boolean;
+  /** several parcels, some sent and some not (ROADMAP Phase 9.6) */
+  partiallySent: boolean;
   /**
    * Which of the merchant's stores this order's stock came off, with the
    * units each one gave. A counter sale has exactly one; an online order has
@@ -90,6 +96,31 @@ export interface StoreOrderDetail extends StoreOrderRow {
   cancelNote: string | null;
   /** what the merchant has recorded sending back, newest last */
   refunds: { id: string; amount: number; note: string | null; createdAt: string; returnId: string | null }[];
+  /**
+   * The verified online payment, split as Paystack reported it (ROADMAP 10.6):
+   * the fee the merchant bears and what settles to their bank. Null for an
+   * order not paid online. Fee and net are null on a Squad-era payment.
+   */
+  onlinePayment: {
+    provider: string;
+    amount: number;
+    feeAmount: number | null;
+    merchantAmount: number | null;
+    providerReference: string | null;
+  } | null;
+  /**
+   * Chargebacks the customer's bank raised against the online payment, as
+   * Paystack reported them (ROADMAP 10.5), newest first.
+   */
+  disputes: {
+    id: string;
+    status: string;
+    resolution: string | null;
+    amount: number;
+    dueAt: string | null;
+    resolvedAt: string | null;
+    createdAt: string;
+  }[];
   refundedTotal: number;
   /** what could still be refunded: paid money not yet sent back */
   refundable: number;
@@ -133,6 +164,39 @@ export interface StoreOrderDetail extends StoreOrderRow {
   }[];
   /** True once the hold was given back (a cancelled or expired order). */
   stockReleased: boolean;
+  /**
+   * The parcels it travels in (ROADMAP Phase 9.4/9.6), biggest first. Empty
+   * for a counter sale. Each store sends its own.
+   */
+  parcels: StoreOrderParcel[];
+  /** some parcels have left and some haven't — "Partially sent" */
+  partiallySent: boolean;
+}
+
+export interface StoreOrderParcel {
+  id: string;
+  warehouseId: string | null;
+  storeName: string | null;
+  kind: 'DELIVERY' | 'PICKUP';
+  label: string;
+  fee: number;
+  freeOverApplied: boolean;
+  eta: { minMinutes: number; maxMinutes: number; unit: 'MINUTES' | 'HOURS' | 'DAYS' } | null;
+  status: 'PENDING' | 'DISPATCHED' | 'DELIVERED' | 'CANCELLED';
+  trackingNote: string | null;
+  dispatchedAt: string | null;
+  deliveredAt: string | null;
+  /** what's in it, from the stock held for it */
+  items: { name: string; variantName: string | null; quantity: number; unitPrice: number }[];
+  /** pay on delivery: what this parcel's courier collects (lib/sales/parcel-collection.ts); null otherwise */
+  toCollect: number | null;
+  /** the signed-in member may send it — it's one of their stores (Phase 8.6) */
+  canWorkHere: boolean;
+  /**
+   * Brought together (Phase 9.7): items coming from other stores first, and
+   * where each transfer is. It can't be sent while any is still on its way.
+   */
+  broughtFrom: { storeName: string; itemName: string; quantity: number; status: 'REQUESTED' | 'DISPATCHED' | 'RECEIVED' | 'CANCELLED' }[];
 }
 
 export interface StoreOrderReturn {
@@ -344,6 +408,7 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
             select: { status: true, warehouseId: true, quantity: true, warehouse: { select: { name: true } } },
           },
           _count: { select: { returns: { where: { status: 'REQUESTED' } } } },
+          shipments: { select: { status: true } },
         },
       }),
       prisma.order.count({ where }),
@@ -371,6 +436,10 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
           city: order.shipCity,
           state: order.shipState,
           returnsAwaiting: order._count.returns,
+          partiallySent: (() => {
+            const sent = order.shipments.filter((sh) => sh.status === 'DISPATCHED' || sh.status === 'DELIVERED').length;
+            return sent > 0 && sent < order.shipments.filter((sh) => sh.status !== 'CANCELLED').length;
+          })(),
           fulfilledFrom: storeShares(order),
           unitsFromStore: filters.warehouseId
             ? order.allocations
@@ -416,14 +485,66 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
           },
         },
         refunds: { orderBy: { createdAt: 'asc' } },
+        disputes: { orderBy: { createdAt: 'desc' } },
+        payments: {
+          where: { status: 'SUCCESS' },
+          select: { provider: true, amount: true, feeAmount: true, merchantAmount: true, gatewayRef: true },
+          orderBy: { verifiedAt: 'desc' },
+          take: 1,
+        },
         returns: {
           orderBy: { requestedAt: 'desc' },
           include: { lines: { include: { lineItem: { select: { name: true, variantName: true, unitPrice: true } } } } },
+        },
+        shipments: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            warehouse: { select: { name: true } },
+            allocations: { select: { orderLineItemId: true, quantity: true, status: true } },
+            transfers: {
+              orderBy: { createdAt: 'asc' },
+              select: {
+                status: true,
+                quantity: true,
+                fromWarehouse: { select: { name: true } },
+                inventoryItem: { select: { name: true } },
+              },
+            },
+          },
         },
       },
     });
 
     if (!order) return { success: false, error: 'Order not found' };
+
+    /* Each parcel's goods, from the stock held for it at the prices on the
+     * order; for pay on delivery, what each courier collects comes from them. */
+    const lineById = new Map(order.lineItems.map((line) => [line.id, line]));
+    /* One parcel carries the whole order — including anything still being
+     * brought to its store (Phase 9.7), whose hold moves as it travels — so
+     * its items are the order's lines. Several parcels: each from its holds. */
+    const liveParcels = order.shipments.filter((sh) => sh.status !== 'CANCELLED').length;
+    const parcelItems = order.shipments.map((shipment) => {
+      if (liveParcels <= 1) return order.lineItems.map((line) => ({ line, quantity: line.quantity }));
+      const byLine = new Map<string, number>();
+      for (const a of shipment.allocations) {
+        if (a.status === 'RELEASED') continue;
+        byLine.set(a.orderLineItemId, (byLine.get(a.orderLineItemId) ?? 0) + Number(a.quantity));
+      }
+      return [...byLine].map(([lineId, quantity]) => ({ line: lineById.get(lineId), quantity }));
+    });
+    const collecting = order.paymentStatus === 'DUE_ON_DELIVERY' && order.shipments.length > 0;
+    const toCollect = collecting
+      ? collectionSplit(
+          Number(order.totalAmount),
+          order.shipments.map((shipment, i) => ({
+            goods: parcelItems[i].reduce((sum, item) => sum + Number(item.line?.unitPrice ?? 0) * item.quantity, 0),
+            fee: Number(shipment.fee),
+          })),
+        )
+      : null;
+    const sentCount = order.shipments.filter((sh) => sh.status === 'DISPATCHED' || sh.status === 'DELIVERED').length;
+    const liveCount = order.shipments.filter((sh) => sh.status !== 'CANCELLED').length;
 
     const refundedTotal = order.refunds.reduce((sum, r) => sum + Number(r.amount), 0);
     const dispatchedLines = new Set(
@@ -442,6 +563,24 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
         paidAt: order.paidAt?.toISOString() ?? null,
         cancelReason: order.cancelReason,
         cancelNote: order.cancelNote,
+        onlinePayment: order.payments[0]
+          ? {
+              provider: order.payments[0].provider,
+              amount: Number(order.payments[0].amount),
+              feeAmount: order.payments[0].feeAmount === null ? null : Number(order.payments[0].feeAmount),
+              merchantAmount: order.payments[0].merchantAmount === null ? null : Number(order.payments[0].merchantAmount),
+              providerReference: order.payments[0].gatewayRef,
+            }
+          : null,
+        disputes: order.disputes.map((d) => ({
+          id: d.id,
+          status: d.status,
+          resolution: d.resolution,
+          amount: Number(d.amount),
+          dueAt: d.dueAt?.toISOString() ?? null,
+          resolvedAt: d.resolvedAt?.toISOString() ?? null,
+          createdAt: d.createdAt.toISOString(),
+        })),
         refunds: order.refunds.map((r) => ({
           id: r.id,
           amount: Number(r.amount),
@@ -531,7 +670,10 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
          * share list with allocations in the table means released, not
          * never-held — and the page can say which. */
         stockReleased:
-          order.allocations.length > 0 && order.allocations.every((a) => a.status === 'RELEASED'),
+          order.allocations.length > 0 &&
+          order.allocations.every((a) => a.status === 'RELEASED') &&
+          // A hold also goes RELEASED when it travels on to the gathering store (Phase 9.7) — that isn't "given back".
+          !order.shipments.some((sh) => sh.transfers.some((t) => t.status === 'DISPATCHED' || t.status === 'RECEIVED')),
         lines: order.lineItems.map((line) => ({
           id: line.id,
           name: line.name,
@@ -542,6 +684,40 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
           productId: line.productId,
           fromStores: lineShares(order, line.id),
         })),
+        parcels: order.shipments.map((shipment, i) => ({
+          id: shipment.id,
+          warehouseId: shipment.warehouseId,
+          storeName: shipment.warehouse?.name ?? null,
+          kind: shipment.kind,
+          label: shipment.deliveryMethodLabel,
+          fee: Number(shipment.fee),
+          freeOverApplied: shipment.freeOverApplied,
+          eta:
+            shipment.etaMinMinutes !== null && shipment.etaMaxMinutes !== null && shipment.etaUnit
+              ? { minMinutes: shipment.etaMinMinutes, maxMinutes: shipment.etaMaxMinutes, unit: shipment.etaUnit }
+              : null,
+          status: shipment.status,
+          trackingNote: shipment.trackingNote,
+          dispatchedAt: shipment.dispatchedAt?.toISOString() ?? null,
+          deliveredAt: shipment.deliveredAt?.toISOString() ?? null,
+          items: parcelItems[i]
+            .filter((item) => item.line)
+            .map((item) => ({
+              name: item.line!.name,
+              variantName: item.line!.variantName,
+              quantity: item.quantity,
+              unitPrice: Number(item.line!.unitPrice),
+            })),
+          toCollect: toCollect ? toCollect[i] : null,
+          canWorkHere: shipment.warehouseId ? canUseStore(ctx.membership, shipment.warehouseId) : true,
+          broughtFrom: shipment.transfers.map((t) => ({
+            storeName: t.fromWarehouse.name,
+            itemName: t.inventoryItem.name,
+            quantity: Number(t.quantity),
+            status: t.status,
+          })),
+        })),
+        partiallySent: sentCount > 0 && sentCount < liveCount,
       },
     };
   } catch (error) {
@@ -588,6 +764,14 @@ export async function updateStoreOrder(
         result = await startPacking(scope);
         break;
       case 'ship':
+        /* Sending everything takes stock from every store still holding a
+         * parcel, so the member must be able to work in each (Phase 8.6/9.6). */
+        for (const parcel of await prisma.orderShipment.findMany({
+          where: { orderId, organizationId: ctx.organization.id, status: 'PENDING', warehouseId: { not: null } },
+          select: { warehouseId: true, warehouse: { select: { name: true } } },
+        })) {
+          requireStoreAccess(ctx.membership, parcel.warehouseId!, parcel.warehouse?.name);
+        }
         result = await markOrderShipped({
           ...scope,
           organizationSlug: ctx.organization.slug,
@@ -623,7 +807,69 @@ export async function updateStoreOrder(
     if (error instanceof Error && error.name === 'PermissionDeniedError') {
       return { success: false, error: 'You don’t have permission to update orders' };
     }
+    if (error instanceof Error && error.name === 'StoreAccessDeniedError') {
+      return { success: false, error: error.message };
+    }
     console.error(`[orders] Could not ${action} order ${orderId}:`, error);
     return { success: false, error: 'We couldn’t update this order. Please try again.' };
+  }
+}
+
+export type StoreShipmentAction = 'send' | 'deliver';
+
+/**
+ * Send, or mark as arrived, ONE parcel (ROADMAP Phase 9.6). A member limited
+ * to some stores may only move their own stores' parcels — the store is
+ * checked on the server, whatever the page offered.
+ */
+export async function updateStoreShipment(
+  orderId: string,
+  shipmentId: string,
+  action: StoreShipmentAction,
+  options: { trackingNote?: string | null; paymentCollected?: boolean } = {},
+): Promise<ActionResult<{ warning: string | null }>> {
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_FULFILLMENT_MANAGE);
+
+    const parcel = await prisma.orderShipment.findFirst({
+      where: { id: String(shipmentId), orderId: String(orderId), organizationId: ctx.organization.id },
+      select: { warehouseId: true, warehouse: { select: { name: true } } },
+    });
+    if (!parcel) return { success: false, error: 'Parcel not found' };
+    if (parcel.warehouseId) requireStoreAccess(ctx.membership, parcel.warehouseId, parcel.warehouse?.name);
+
+    const scope = { organizationId: ctx.organization.id, orderId, shipmentId };
+    const result: TransitionResult =
+      action === 'send'
+        ? await sendShipment({
+            ...scope,
+            organizationSlug: ctx.organization.slug,
+            performedById: ctx.userId,
+            trackingNote: options.trackingNote ?? null,
+          })
+        : action === 'deliver'
+          ? await deliverShipment({ ...scope, paymentCollected: options.paymentCollected })
+          : { ok: false, error: 'Unknown action' };
+    if (!result.ok) return { success: false, error: result.error };
+
+    await createAuditLog({
+      organizationId: ctx.organization.id,
+      userId: ctx.userId,
+      action: `sales.order.parcel_${action}`,
+      entityType: 'Order',
+      entityId: orderId,
+      metadata: { shipmentId, store: parcel.warehouse?.name ?? null, ...(options.paymentCollected ? { paymentCollected: true } : {}) },
+    });
+    return { success: true, data: { warning: result.warning ?? null } };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'PermissionDeniedError') {
+      return { success: false, error: 'You don’t have permission to update orders' };
+    }
+    if (error instanceof Error && error.name === 'StoreAccessDeniedError') {
+      return { success: false, error: error.message };
+    }
+    console.error(`[orders] Could not ${action} parcel ${shipmentId} of order ${orderId}:`, error);
+    return { success: false, error: 'We couldn’t update this parcel. Please try again.' };
   }
 }

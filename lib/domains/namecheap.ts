@@ -1,10 +1,11 @@
 /*
  * lib/domains/namecheap.ts
  *
- * Thin client for the Namecheap XML API — search/pricing ONLY. Registration
- * and DNS setup are performed manually by platform admins (see DomainOrder
- * in prisma/schema.prisma), so this file never calls Namecheap's
- * domains.create or dns.* endpoints.
+ * Thin client for the Namecheap XML API — search, pricing and the account
+ * balance: READ-ONLY. Registration and DNS setup are performed manually by
+ * platform staff (the queue in the console, ROADMAP 11.5), so this file never
+ * calls Namecheap's domains.create or dns.* endpoints — automating those is
+ * ROADMAP 13.5.
  *
  * Response shapes below were captured from a live call to the sandbox API
  * (namecheap.domains.check, namecheap.users.getPricing), not guessed.
@@ -138,72 +139,125 @@ export function isValidDomainFormat(domain: string): boolean {
   return /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(domain);
 }
 
-async function checkAvailability(
-  domain: string,
-): Promise<{ available: boolean; isPremium: boolean; premiumPriceUsd?: number }> {
-  const commandResponse = await namecheapRequest('namecheap.domains.check', { DomainList: domain });
+type Availability = { domain: string; available: boolean; isPremium: boolean; premiumPriceUsd?: number; premiumRenewUsd?: number };
+
+/** Up to 50 names in one call (Namecheap's DomainList). */
+async function checkAvailabilityMany(domains: string[]): Promise<Availability[]> {
+  if (domains.length === 0) return [];
+  const commandResponse = await namecheapRequest('namecheap.domains.check', { DomainList: domains.slice(0, 50).join(',') });
   const results = toArray(commandResponse.DomainCheckResult);
-  const result = results.find((r: any) => r.Domain?.toLowerCase() === domain) ?? results[0];
-
-  if (!result) {
-    throw new Error(`Namecheap returned no availability result for ${domain}.`);
-  }
-
-  const available = result.Available === 'true';
-  const isPremium = result.IsPremiumName === 'true';
-  const premiumPriceUsd = isPremium ? parseFloat(result.PremiumRegistrationPrice) : undefined;
-
-  return { available, isPremium, premiumPriceUsd };
+  return domains.map((domain) => {
+    const r = results.find((x: any) => x.Domain?.toLowerCase() === domain);
+    if (!r) return { domain, available: false, isPremium: false };
+    const isPremium = r.IsPremiumName === 'true';
+    return {
+      domain,
+      available: r.Available === 'true',
+      isPremium,
+      premiumPriceUsd: isPremium ? parseFloat(r.PremiumRegistrationPrice) : undefined,
+      premiumRenewUsd: isPremium ? parseFloat(r.PremiumRenewalPrice) : undefined,
+    };
+  });
 }
 
-const TLD_PRICE_CACHE_TTL_MS = 60 * 60 * 1000; // 1h — TLD registration pricing rarely changes
+const TLD_PRICE_CACHE_TTL_MS = 60 * 60 * 1000; // 1h — TLD pricing rarely changes
 const tldPriceCache = new Map<string, { priceUsd: number; expiresAt: number }>();
 
-async function getTldRegistrationPriceUsd(tld: string): Promise<number> {
-  const cached = tldPriceCache.get(tld);
+/** One year's price for a TLD — to register, or to renew (12.6 shows both). */
+export async function getTldPriceUsd(tld: string, category: 'register' | 'renew'): Promise<number> {
+  const key = `${category}:${tld}`;
+  const cached = tldPriceCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.priceUsd;
 
   const commandResponse = await namecheapRequest('namecheap.users.getPricing', {
     ProductType: 'DOMAIN',
-    ProductCategory: 'REGISTER',
+    ProductCategory: category.toUpperCase(),
     ProductName: tld,
   });
 
   // Namecheap's sandbox ignores the ProductCategory filter and returns every
   // category (register/renew/transfer/reactivate) regardless — filter client-side.
   const categories = toArray(commandResponse?.UserGetPricingResult?.ProductType?.ProductCategory);
-  const registerCategory = categories.find((c: any) => c.Name?.toLowerCase() === 'register');
-  const products = toArray(registerCategory?.Product);
+  const wanted = categories.find((c: any) => c.Name?.toLowerCase() === category);
+  const products = toArray(wanted?.Product);
   const product = products.find((p: any) => p.Name?.toLowerCase() === tld.toLowerCase());
   const prices = toArray(product?.Price);
   const oneYear = prices.find((p: any) => p.Duration === '1' && p.DurationType === 'YEAR');
 
   if (!oneYear) {
-    throw new Error(`No 1-year registration price found for the .${tld} TLD.`);
+    throw new Error(`No 1-year ${category} price found for the .${tld} TLD.`);
   }
 
   const priceUsd = parseFloat(oneYear.YourPrice ?? oneYear.Price);
-  tldPriceCache.set(tld, { priceUsd, expiresAt: Date.now() + TLD_PRICE_CACHE_TTL_MS });
+  tldPriceCache.set(key, { priceUsd, expiresAt: Date.now() + TLD_PRICE_CACHE_TTL_MS });
   return priceUsd;
 }
 
 export type DomainSearchResult =
   | { domain: string; available: false }
-  | { domain: string; available: true; priceUsd: number };
+  | { domain: string; available: true; priceUsd: number; renewUsd: number };
 
+/** Whether one name is free, and what it costs to register and to renew. */
 export async function searchDomain(rawDomain: string): Promise<DomainSearchResult> {
   const domain = normalizeDomain(rawDomain);
-  const { available, isPremium, premiumPriceUsd } = await checkAvailability(domain);
+  return (await searchDomains([domain]))[0];
+}
 
-  if (!available) return { domain, available: false };
-
-  if (isPremium && premiumPriceUsd) {
-    return { domain, available: true, priceUsd: premiumPriceUsd };
+/** Several names at once — the one asked for and its alternatives. */
+export async function searchDomains(domains: string[]): Promise<DomainSearchResult[]> {
+  const checked = await checkAvailabilityMany(domains.map((d) => normalizeDomain(d)));
+  const out: DomainSearchResult[] = [];
+  for (const a of checked) {
+    if (!a.available) {
+      out.push({ domain: a.domain, available: false });
+      continue;
+    }
+    // First label is the name, the rest is the TLD ("acme" + "com", or "acme" + "co.uk").
+    const tld = a.domain.split('.').slice(1).join('.');
+    const [register, renew] = await Promise.all([getTldPriceUsd(tld, 'register'), getTldPriceUsd(tld, 'renew')]);
+    out.push({
+      domain: a.domain,
+      available: true,
+      priceUsd: a.isPremium && a.premiumPriceUsd ? a.premiumPriceUsd : register,
+      renewUsd: a.isPremium && a.premiumRenewUsd ? a.premiumRenewUsd : renew,
+    });
   }
+  return out;
+}
 
-  // First label is the domain name, the rest is the TLD (e.g. "acme" + "com",
-  // or "acme" + "co.uk"). getTldRegistrationPriceUsd looks it up as one string.
-  const tld = domain.split('.').slice(1).join('.');
-  const priceUsd = await getTldRegistrationPriceUsd(tld);
-  return { domain, available: true, priceUsd };
+export interface NamecheapBalance {
+  /** what can be spent now on registrations and renewals */
+  availableUsd: number;
+  /** the total, including amounts held for pending orders */
+  accountUsd: number;
+  currency: string;
+  fetchedAt: Date;
+}
+
+const BALANCE_CACHE_TTL_MS = 60 * 1000;
+let cachedBalance: NamecheapBalance | null = null;
+
+/**
+ * The platform's Namecheap account balance (namecheap.users.getBalances) —
+ * what pays for the domains staff register and renew (ROADMAP 11.5). Read
+ * only; kept for a minute so reloading the queue doesn't call it each time.
+ */
+export async function getAccountBalance(options: { fresh?: boolean } = {}): Promise<NamecheapBalance> {
+  if (!options.fresh && cachedBalance && Date.now() - cachedBalance.fetchedAt.getTime() < BALANCE_CACHE_TTL_MS) {
+    return cachedBalance;
+  }
+  const commandResponse = await namecheapRequest('namecheap.users.getBalances', {});
+  const result = commandResponse?.UserGetBalancesResult;
+  const available = parseFloat(result?.AvailableBalance);
+  const account = parseFloat(result?.AccountBalance);
+  if (!Number.isFinite(available)) {
+    throw new Error('Namecheap returned no balance.');
+  }
+  cachedBalance = {
+    availableUsd: available,
+    accountUsd: Number.isFinite(account) ? account : available,
+    currency: String(result?.Currency ?? 'USD'),
+    fetchedAt: new Date(),
+  };
+  return cachedBalance;
 }

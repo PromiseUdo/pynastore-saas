@@ -30,6 +30,7 @@ import { getMobileApp, resolveMobileRoute } from '@/lib/mobile/app-config';
 import { prisma } from '@/lib/prisma';
 import { resolveHostname, isLocalHostname } from '@/lib/tenant/resolveHostname';
 import { resolveTenant, resolveTenantBySlug } from '@/lib/tenant/resolveTenant';
+import { getOrgRouting } from '@/lib/tenant/org-status';
 import { getAdminUrl, getMarketingUrl } from '@/lib/tenant/urls';
 
 const { auth } = NextAuth(authConfig);
@@ -51,13 +52,17 @@ const PUBLIC_PATHS = new Set([
   '/reset-password',
   '/privacy',
   '/terms',
+  // The public site's pricing (ROADMAP 12.3). `/` above is the landing page.
+  '/pricing',
 ]);
 
 /* Route prefixes that are fully public (no auth required to load). */
-const PUBLIC_PREFIXES = ['/invite'];
+const PUBLIC_PREFIXES = ['/invite', '/verify-email'];
 
-/* Routes that need a session but no tenant. */
-const AUTH_ONLY_PREFIXES = ['/onboarding'];
+/* Routes that need a session but no tenant. `/platform` is the platform
+ * console (ROADMAP 11): the session is checked here, and whether the user is
+ * platform staff is checked by the console itself (lib/platform-staff.ts). */
+const AUTH_ONLY_PREFIXES = ['/onboarding', '/platform'];
 
 /*
  * next-auth's auth() wrapper rewrites req.url/req.nextUrl's ORIGIN to
@@ -113,12 +118,14 @@ export default auth(async function proxy(req: NextRequest & { auth: any }) {
     if (req.method === 'GET' && pathname === '/' && session?.user?.id) {
       let orgSlug: string | undefined = session.currentOrgSlug;
       if (!orgSlug) {
-        const membership = await prisma.membership.findFirst({
-          where: { userId: session.user.id, status: 'ACTIVE', organization: { status: 'ACTIVE' } },
-          select: { organization: { select: { slug: true } } },
+        // An active workspace first; failing that a suspended one, which
+        // explains itself — never onboarding, which would start a new shop.
+        const memberships = await prisma.membership.findMany({
+          where: { userId: session.user.id, status: 'ACTIVE', organization: { status: { in: ['ACTIVE', 'SUSPENDED'] } } },
+          select: { organization: { select: { slug: true, status: true } } },
           orderBy: { joinedAt: 'asc' },
         });
-        orgSlug = membership?.organization.slug;
+        orgSlug = (memberships.find((m) => m.organization.status === 'ACTIVE') ?? memberships[0])?.organization.slug;
       }
       return NextResponse.redirect(orgSlug ? getAdminUrl(orgSlug, '/dashboard') : getMarketingUrl('/onboarding'));
     }
@@ -176,10 +183,9 @@ export default auth(async function proxy(req: NextRequest & { auth: any }) {
       return NextResponse.rewrite(new URL('/m', requestUrl));
     }
 
-    const rewriteUrl = new URL(
-      `/store/${tenant.orgSlug}${route.rest}${req.nextUrl.search}`,
-      requestUrl,
-    );
+    // A suspended shop opens only its "unavailable" page (ROADMAP 11.4).
+    const rest = tenant.status === 'SUSPENDED' ? '' : route.rest;
+    const rewriteUrl = new URL(`/store/${tenant.orgSlug}${rest}${tenant.status === 'SUSPENDED' ? '' : req.nextUrl.search}`, requestUrl);
     return NextResponse.rewrite(rewriteUrl, { request: { headers: stampStorefront(tenant.orgSlug) } });
   }
 
@@ -229,6 +235,51 @@ export default auth(async function proxy(req: NextRequest & { auth: any }) {
   requestHeaders.set('x-site-type', tenant.siteType);
 
   const internalPrefix = tenant.siteType === 'storefront' ? `/store/${tenant.orgSlug}` : `/${tenant.orgSlug}`;
+
+  // ── 5a. Suspension (ROADMAP 11.4) — enforced here, for every page, action
+  //        and data request, rather than page by page. A suspended admin
+  //        opens only the page saying so; a suspended storefront renders
+  //        only its root, where the layout says it's unavailable. Every
+  //        other request — a server action included — lands on that page
+  //        instead, so nothing else runs. A deleted workspace is gone.
+  // ── 5b. The shop's own domain (ROADMAP 12.6). The bare domain goes to its
+  //        www (canonical), and the platform's shop-{slug} address goes to
+  //        the live custom domain — permanently, so saved links keep working
+  //        and search engines see one shop. The mobile origin never leaves
+  //        its single host, so it isn't redirected.
+  if (tenant.redirectHost) {
+    return NextResponse.redirect(`https://${tenant.redirectHost}${pathname}${req.nextUrl.search}`, 308);
+  }
+  const routing = tenant.status ? null : await getOrgRouting(tenant.orgSlug);
+  if (tenant.siteType === 'storefront' && !hostInfo.isCustomDomain && routing?.customStoreDomain) {
+    const publicPath = pathname === internalPrefix || pathname.startsWith(`${internalPrefix}/`) ? pathname.slice(internalPrefix.length) || '/' : pathname;
+    return NextResponse.redirect(`https://${routing.customStoreDomain}${publicPath}${req.nextUrl.search}`, 308);
+  }
+
+  const status = tenant.status ?? routing?.status ?? null;
+  if (status === 'DELETED') {
+    return NextResponse.redirect(getMarketingUrl('/'));
+  }
+  if (status === 'SUSPENDED') {
+    if (tenant.siteType === 'admin') {
+      if (pathname === '/unavailable/workspace') return NextResponse.next({ request: { headers: requestHeaders } });
+      return NextResponse.rewrite(new URL('/unavailable/workspace', requestUrl), { request: { headers: requestHeaders } });
+    }
+    if (pathname === internalPrefix) return NextResponse.next({ request: { headers: requestHeaders } });
+    return NextResponse.rewrite(new URL(internalPrefix, requestUrl), { request: { headers: requestHeaders } });
+  }
+
+  /* The admin page being opened, as the merchant sees it (/settings/billing),
+   * for the dashboard layout: a lapsed workspace opens only billing and the
+   * orders already placed (ROADMAP 12.1). Set by the proxy, never trusted from
+   * the browser — an incoming header of the same name is overwritten. */
+  if (tenant.siteType === 'admin') {
+    const adminPath =
+      pathname === internalPrefix || pathname.startsWith(`${internalPrefix}/`)
+        ? pathname.slice(internalPrefix.length) || '/'
+        : pathname;
+    requestHeaders.set('x-admin-path', adminPath);
+  }
 
   // A rewritten request is re-run through Proxy (the rewritten path still
   // matches config.matcher below), so without this check the internal

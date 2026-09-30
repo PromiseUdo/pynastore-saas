@@ -20,11 +20,14 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { getStoreCheckoutConfig } from '@/lib/storefront/checkout/store-config';
 import { findStoreBySlug } from '@/lib/storefront/account/shopper';
 import { currentStoreSlug, getShopper } from '@/lib/storefront/account/session';
-import { placeOrder, type OrderLineRequest, type PlaceOrderFailure } from '@/lib/storefront/orders/create';
+import { placeOrder, resolveLines, type OrderLineRequest, type PlaceOrderFailure } from '@/lib/storefront/orders/create';
 import { findOrderByReferenceAndEmail } from '@/lib/storefront/orders/read';
 import { startOrderPayment } from '@/lib/storefront/checkout/payment-service';
 import { prisma } from '@/lib/prisma';
 import { quoteDelivery } from '@/lib/storefront/delivery/quote';
+import type { ParcelOffer } from '@/lib/storefront/delivery/plan';
+import { cleanDeliverTo, estimateDelivery, type EstimateResult } from '@/lib/storefront/delivery/estimate';
+import { getDefaultAddress } from '@/lib/storefront/account/addresses';
 import { resolveDiscount } from '@/lib/storefront/discounts/resolve';
 import { normalizeCode } from '@/lib/storefront/discounts/rules';
 import type { AppliedCoupon, ShippingMethod } from '@/lib/storefront/types';
@@ -52,7 +55,7 @@ export type PlaceOrderActionResult =
       ok: true;
       reference: string;
       confirmationToken: string;
-      /** Squad's payment page; null for pay on delivery, or when payment
+      /** Paystack's payment page; null for pay on delivery, or when payment
        *  couldn't be started (the confirmation page then offers "Pay now") */
       paymentUrl: string | null;
       /** the confirmation page as this shopper's browser addresses it */
@@ -126,9 +129,9 @@ export async function placeOrderAction(
 
   let paymentUrl: string | null = null;
 
-  if (method?.provider === 'squad') {
-    /* The order exists whatever happens next. If Squad can't be reached, the
-     * shopper still lands on their confirmation, which offers "Pay now". */
+  if (method?.provider === 'paystack') {
+    /* The order exists whatever happens next. If Paystack can't be reached,
+     * the shopper still lands on their confirmation, which offers "Pay now". */
     const started = await startOrderPayment({
       organizationId: result.organizationId,
       orderId: result.orderId,
@@ -241,34 +244,116 @@ export async function payForMyOrderAction(
 }
 
 export type QuoteDeliveryResult =
-  | { ok: true; options: ShippingMethod[]; zoneName: string | null }
+  | {
+      ok: true;
+      options: ShippingMethod[];
+      /** a bag split across stores: choose how each parcel travels (Phase 9.5); [] or one parcel otherwise */
+      parcels: ParcelOffer[];
+      zoneName: string | null;
+      /** said when there's no delivery option because of what's in the bag, not where it's going */
+      notice: string | null;
+    }
   | { ok: false; message: string };
 
+/** How many bag lines a quote will look at — a bag is capped far below this. */
+const MAX_QUOTE_LINES = 100;
+
 /**
- * The delivery options for an address, for checkout's delivery step.
+ * The delivery options for an address and this bag, for checkout's delivery
+ * step.
  *
- * A preview: `subtotal` comes from the browser and only decides whether a
- * free-delivery threshold shows as met. Placing the order quotes again on the
- * server from the re-priced bag, and that quote is the one charged.
+ * Which store sends what depends on where the stock is (Phase 9.3), so the
+ * bag's lines are sent — ids and quantities only; they're re-priced from the
+ * catalogue here. Placing the order plans and quotes again from the same
+ * re-priced bag, and that quote is the one charged.
  */
 export async function quoteDeliveryAction(input: {
   state: string;
   city: string;
-  subtotal: number;
+  lines: OrderLineRequest[];
 }): Promise<QuoteDeliveryResult> {
   const slug = await currentStoreSlug();
   if (!slug) return { ok: false, message: 'We couldn’t reach the store. Please try again.' };
 
   try {
+    const requested = (Array.isArray(input.lines) ? input.lines : []).slice(0, MAX_QUOTE_LINES).map((line) => ({
+      productId: String(line?.productId ?? ''),
+      variantId: String(line?.variantId ?? ''),
+      quantity: Number(line?.quantity),
+    }));
+    const items = requested.length ? await resolveLines(slug, requested) : null;
+    if (!items) {
+      return { ok: false, message: 'Something in your bag has changed. Go back to your bag to check it, then try again.' };
+    }
+
     const quote = await quoteDelivery(
       slug,
       { state: String(input.state ?? '').slice(0, 80), city: String(input.city ?? '').slice(0, 120) },
-      Math.max(0, Math.floor(Number(input.subtotal) || 0)),
+      items.map((item) => ({ itemId: item.variantId, quantity: item.quantity, unitPrice: item.unitPrice })),
     );
-    return { ok: true, options: quote.options, zoneName: quote.zone?.name ?? null };
+    return {
+      ok: true,
+      options: quote.options,
+      // Only what the shopper needs: no store ids leave the server.
+      parcels: quote.parcels.map(({ storeName, lines, options }) => ({ storeName, lines, options })),
+      zoneName: quote.zone?.name ?? null,
+      notice:
+        quote.reason === 'not-in-stock-here'
+          ? 'We can deliver to this address, but not everything in your bag is held where we can send it from. Try removing an item, or choose another address.'
+          : null,
+    };
   } catch (error) {
     console.error('[checkout] Could not quote delivery:', error);
     return { ok: false, message: 'We couldn’t load delivery options just now. Please try again.' };
+  }
+}
+
+export type EstimateDeliveryResult =
+  | {
+      ok: true;
+      /** the place it was estimated for, and whether it came from the shopper's default address */
+      deliverTo: { state: string; city: string; fromAccount: boolean } | null;
+      result: EstimateResult | null;
+    }
+  | { ok: false; message: string };
+
+/**
+ * "Ships from Lagos Store · ₦4,500 to Port Harcourt" for the product page
+ * (ROADMAP Phase 9.8). The place is the one this browser chose; with none, a
+ * signed-in shopper's default address; with neither, no estimate — the page
+ * then asks where to deliver. Checkout's own planner answers
+ * (lib/storefront/delivery/estimate.ts).
+ */
+export async function estimateDeliveryAction(input: {
+  productId: string;
+  variantId: string;
+  deliverTo?: { state: string; city: string } | null;
+}): Promise<EstimateDeliveryResult> {
+  const slug = await currentStoreSlug();
+  if (!slug) return { ok: false, message: 'We couldn’t reach the store. Please try again.' };
+
+  try {
+    let deliverTo = cleanDeliverTo(input.deliverTo);
+    let fromAccount = false;
+    if (!deliverTo) {
+      const shopper = await getShopper();
+      const saved = shopper
+        ? await getDefaultAddress({ organizationId: shopper.organizationId, customerId: shopper.id })
+        : null;
+      deliverTo = cleanDeliverTo(saved);
+      fromAccount = Boolean(deliverTo);
+    }
+    if (!deliverTo) return { ok: true, deliverTo: null, result: null };
+
+    const result = await estimateDelivery(
+      slug,
+      { productId: String(input.productId ?? ''), variantId: String(input.variantId ?? '') },
+      deliverTo,
+    );
+    return { ok: true, deliverTo: { ...deliverTo, fromAccount }, result };
+  } catch (error) {
+    console.error('[storefront] Could not estimate delivery:', error);
+    return { ok: false, message: 'We couldn’t work out delivery just now.' };
   }
 }
 

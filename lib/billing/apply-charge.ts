@@ -8,19 +8,10 @@
  */
 import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
-import { ensurePaystackPlan, createSubscription, type PaystackChargeData } from '@/lib/billing/paystack';
+import { ensurePaystackPlan, createSubscription, disableSubscription, type PaystackChargeData } from '@/lib/billing/paystack';
 import { notifyPendingDomainOrder } from '@/lib/domains/notify';
-import type { OrganizationPlan, BillingCycle } from '@/lib/generated/prisma/enums';
-
-function periodEnd(billingCycle: BillingCycle, from: Date): Date {
-  const end = new Date(from);
-  if (billingCycle === 'YEARLY') {
-    end.setFullYear(end.getFullYear() + 1);
-  } else {
-    end.setMonth(end.getMonth() + 1);
-  }
-  return end;
-}
+import { claimShopDomain } from '@/lib/domains/shop-domain';
+import { periodEnd, type BillingCycleKey } from '@/lib/billing/plans';
 
 export async function applySuccessfulCharge(data: PaystackChargeData): Promise<void> {
   const existing = await prisma.billingTransaction.findUnique({
@@ -33,45 +24,51 @@ export async function applySuccessfulCharge(data: PaystackChargeData): Promise<v
   if (data.status !== 'success') return;
 
   const organizationId = existing.organizationId;
-  const plan = existing.plan as OrganizationPlan;
-  const billingCycle = existing.billingCycle as BillingCycle;
+  const planId = existing.planId;
+  const billingCycle = existing.billingCycle as BillingCycleKey;
   const now = new Date();
+  // What the plan itself costs per cycle: the charge less any one-time domain
+  // fee bundled into it. Fixed on the subscription from now on (ROADMAP 12.1).
+  const planAmount = Number(existing.amount) - Number(existing.domainOrder?.ngnPrice ?? 0);
 
-  if (existing.isPlanChange) {
+  if (existing.isPlanChange && planId) {
+    // Buying a plan ends any trial and any lapse — a closed shop reopens now.
+    const paid = {
+      planId,
+      billingCycle,
+      amount: planAmount,
+      status: 'ACTIVE' as const,
+      currentPeriodStart: now,
+      currentPeriodEnd: periodEnd(billingCycle, now),
+      cancelAtPeriodEnd: false,
+      lapsedAt: null,
+      graceEndsAt: null,
+      paystackCustomerCode: data.customer.customer_code,
+      paystackAuthorizationCode: data.authorization?.authorization_code,
+      // The old recurring subscription (cancelled below) is forgotten here, so
+      // Paystack's "disabled" event for it finds nothing to cancel; the
+      // `subscription.create` webhook links the new one.
+      paystackSubscriptionCode: null,
+      paystackEmailToken: null,
+    };
+    // The Paystack recurring subscription this workspace had before, if any —
+    // cancelled below once the new one exists, so a plan change never leaves
+    // two renewals charging the same merchant.
+    const previous = await prisma.subscription.findUnique({
+      where: { organizationId },
+      select: { paystackSubscriptionCode: true, paystackEmailToken: true },
+    });
+
     await prisma.$transaction(async (tx) => {
       const subscription = await tx.subscription.upsert({
         where: { organizationId },
-        create: {
-          organizationId,
-          plan,
-          billingCycle,
-          status: 'ACTIVE',
-          currentPeriodStart: now,
-          currentPeriodEnd: periodEnd(billingCycle, now),
-          cancelAtPeriodEnd: false,
-          paystackCustomerCode: data.customer.customer_code,
-          paystackAuthorizationCode: data.authorization?.authorization_code,
-        },
-        update: {
-          plan,
-          billingCycle,
-          status: 'ACTIVE',
-          currentPeriodStart: now,
-          currentPeriodEnd: periodEnd(billingCycle, now),
-          cancelAtPeriodEnd: false,
-          paystackCustomerCode: data.customer.customer_code,
-          paystackAuthorizationCode: data.authorization?.authorization_code,
-        },
+        create: { organizationId, ...paid },
+        update: paid,
       });
 
       await tx.billingTransaction.update({
         where: { reference: data.reference },
         data: { status: 'SUCCESS', subscriptionId: subscription.id, rawPayload: data as any },
-      });
-
-      await tx.organization.update({
-        where: { id: organizationId },
-        data: { plan },
       });
     });
 
@@ -81,7 +78,7 @@ export async function applySuccessfulCharge(data: PaystackChargeData): Promise<v
       action: 'billing.subscription.activated',
       entityType: 'Subscription',
       entityId: organizationId,
-      metadata: { plan, billingCycle, reference: data.reference, amount: data.amount },
+      metadata: { planId, planName: existing.planName, billingCycle, reference: data.reference, amount: data.amount },
     });
 
     // Recurring billing is deliberately set up as its own step, decoupled
@@ -91,12 +88,22 @@ export async function applySuccessfulCharge(data: PaystackChargeData): Promise<v
     // correctly recorded) subscription state, so it's logged, not thrown.
     if (data.authorization?.authorization_code) {
       try {
-        const paystackPlanCode = await ensurePaystackPlan(plan, billingCycle);
+        const paystackPlanCode = await ensurePaystackPlan({
+          planId,
+          planName: existing.planName ?? '',
+          billingCycle,
+          amount: planAmount,
+        });
         await createSubscription({
           customerEmail: data.customer.email,
           paystackPlanCode,
           authorizationCode: data.authorization.authorization_code,
         });
+        if (previous?.paystackSubscriptionCode && previous.paystackEmailToken) {
+          await disableSubscription(previous.paystackSubscriptionCode, previous.paystackEmailToken).catch((err) =>
+            console.error('[applySuccessfulCharge] Failed to cancel the previous Paystack subscription:', err),
+          );
+        }
       } catch (err) {
         console.error('[applySuccessfulCharge] Failed to set up recurring billing:', err);
       }
@@ -110,12 +117,16 @@ export async function applySuccessfulCharge(data: PaystackChargeData): Promise<v
     });
   }
 
-  // Only EXISTING/REGISTER need manual fulfillment — FREE is created
-  // pre-ACTIVE (nothing to do) and never reaches this branch.
-  if (existing.domainOrder?.status === 'PENDING_FULFILLMENT') {
-    await notifyPendingDomainOrder(organizationId, {
-      type: existing.domainOrder.type as 'EXISTING' | 'REGISTER',
-      domain: existing.domainOrder.domain,
+  // A paid domain order joins the staff queue now (11.5): the 24-hour promise
+  // runs from here. A new registration becomes the shop's (pending) domain.
+  const domainOrder = existing.domainOrder;
+  if (domainOrder?.status === 'PENDING_FULFILLMENT' && (domainOrder.type === 'REGISTER' || domainOrder.type === 'RENEW')) {
+    await prisma.$transaction(async (tx) => {
+      await tx.domainOrder.update({ where: { id: domainOrder.id }, data: { readyAt: new Date() } });
+      if (domainOrder.type === 'REGISTER' && domainOrder.domain) {
+        await claimShopDomain(tx, { organizationId, domain: domainOrder.domain, source: 'REGISTERED' });
+      }
     });
+    await notifyPendingDomainOrder(organizationId, { type: domainOrder.type, domain: domainOrder.domain });
   }
 }

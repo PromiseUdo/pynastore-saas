@@ -8,7 +8,7 @@
  * status a shopper can't act on is just a label. The admin has its own
  * equivalent in lib/format.ts; this one is written for the customer.
  */
-import { TRANSFER_HOLD_HOURS } from '../mock/checkout';
+import { TRANSFER_HOLD_HOURS } from './holds';
 import { formatDate, formatMoney } from '../format';
 import type {
   OrderPaymentStatus,

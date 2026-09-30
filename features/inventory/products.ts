@@ -22,6 +22,7 @@ import {
   syncProductImageEmbeddings,
   type ProductImageSearchStatus,
 } from '@/lib/storefront/visual-search/indexing';
+import { ONLINE_SUPPLY_WHERE } from '@/lib/storefront/delivery/supply';
 import { SLUG_PATTERN, buildCategoryTree, descendantIds, flattenCategoryTree, slugify, uniqueSlug } from './category-tree';
 import {
   MAX_VARIANTS,
@@ -229,7 +230,7 @@ async function validateProduct(
       where: { organizationId },
       select: { id: true, name: true, slug: true, parentId: true, sortOrder: true, isVisible: true },
     }),
-    prisma.warehouse.count({ where: { organizationId, sellsOnline: true, status: 'ACTIVE' } }),
+    prisma.warehouse.count({ where: { organizationId, ...ONLINE_SUPPLY_WHERE } }),
   ]);
   if (data.categoryId && !category) return { error: 'That category no longer exists.' };
   if (data.brandId && !brand) return { error: 'That brand no longer exists.' };
@@ -344,15 +345,25 @@ function p2002(err: unknown): boolean {
 
 /* ─── Stock helpers ─────────────────────────────────────────────────────── */
 
-type LevelLike = { quantity: Prisma.Decimal; reservedQty: Prisma.Decimal; warehouse: { sellsOnline: boolean; status: string } };
+type LevelLike = { quantity: Prisma.Decimal; reservedQty: Prisma.Decimal; warehouseId: string };
 
-function sumLevels(levels: LevelLike[]) {
+/**
+ * The stores whose stock the website can sell: selling online and able to
+ * deliver (lib/storefront/delivery/supply.ts). Asked of the database with the
+ * storefront's own filter, so "available online" here is what shoppers see.
+ */
+async function onlineSupplyStoreIds(organizationId: string): Promise<Set<string>> {
+  const rows = await prisma.warehouse.findMany({ where: { organizationId, ...ONLINE_SUPPLY_WHERE }, select: { id: true } });
+  return new Set(rows.map((r) => r.id));
+}
+
+function sumLevels(levels: LevelLike[], supplying: Set<string>) {
   let available = 0;
   let onlineAvailable = 0;
   for (const l of levels) {
     const a = Number(l.quantity) - Number(l.reservedQty);
     available += a;
-    if (l.warehouse.sellsOnline && l.warehouse.status === 'ACTIVE') onlineAvailable += Math.max(0, a);
+    if (supplying.has(l.warehouseId)) onlineAvailable += Math.max(0, a);
   }
   return { available, onlineAvailable };
 }
@@ -396,9 +407,9 @@ export async function listProducts(params: ProductListParams = {}): Promise<Acti
         : {}),
     };
 
-    const levelSelect = { select: { quantity: true, reservedQty: true, warehouse: { select: { sellsOnline: true, status: true } } } };
+    const levelSelect = { select: { quantity: true, reservedQty: true, warehouseId: true } };
 
-    const [items, catalogSize, categories] = await Promise.all([
+    const [items, catalogSize, categories, supplying] = await Promise.all([
       prisma.inventoryItem.findMany({
         where,
         select: {
@@ -428,14 +439,15 @@ export async function listProducts(params: ProductListParams = {}): Promise<Acti
         where: { organizationId },
         select: { id: true, name: true, slug: true, parentId: true, sortOrder: true },
       }),
+      onlineSupplyStoreIds(organizationId),
     ]);
 
     const paths = new Map(flattenCategoryTree(buildCategoryTree(categories)).map((c) => [c.id, c.namePath]));
 
     let rows: (ProductListRow & { createdAt: Date })[] = items.map((item) => {
       const units = item.variants.length
-        ? item.variants.map((v) => ({ price: num(v.sellingPrice) ?? num(item.sellingPrice), reorderPoint: num(v.reorderPoint), ...sumLevels(v.inventoryLevels) }))
-        : [{ price: num(item.sellingPrice), reorderPoint: num(item.reorderPoint), ...sumLevels(item.inventoryLevels) }];
+        ? item.variants.map((v) => ({ price: num(v.sellingPrice) ?? num(item.sellingPrice), reorderPoint: num(v.reorderPoint), ...sumLevels(v.inventoryLevels, supplying) }))
+        : [{ price: num(item.sellingPrice), reorderPoint: num(item.reorderPoint), ...sumLevels(item.inventoryLevels, supplying) }];
       const prices = units.map((u) => u.price).filter((p): p is number => p !== null);
       const available = units.reduce((s, u) => s + u.available, 0);
       const stockState: StockState =
@@ -506,7 +518,8 @@ export async function getProduct(productId: string): Promise<ActionResult<Produc
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.INVENTORY_VIEW);
 
-    const levelInclude = { include: { warehouse: { select: { id: true, name: true, sellsOnline: true, status: true } } } };
+    const levelInclude = { include: { warehouse: { select: { id: true, name: true } } } };
+    const supplying = await onlineSupplyStoreIds(ctx.organization.id);
     const item = await prisma.inventoryItem.findFirst({
       where: { id: productId, organizationId: ctx.organization.id, parentItemId: null },
       include: {
@@ -531,7 +544,7 @@ export async function getProduct(productId: string): Promise<ActionResult<Produc
       const row = stores.get(l.warehouseId) ?? {
         warehouseId: l.warehouseId,
         warehouseName: l.warehouse.name,
-        sellsOnline: l.warehouse.sellsOnline && l.warehouse.status === 'ACTIVE',
+        sellsOnline: supplying.has(l.warehouseId),
         onHand: 0,
         reserved: 0,
         available: 0,
@@ -585,7 +598,7 @@ export async function getProduct(productId: string): Promise<ActionResult<Produc
           compareAtPrice: num(v.compareAtPrice),
           imageUrl: v.image?.url ?? null,
           status: v.status,
-          ...sumLevels(v.inventoryLevels),
+          ...sumLevels(v.inventoryLevels, supplying),
         })),
         stockByStore: [...stores.values()].sort((a, b) => a.warehouseName.localeCompare(b.warehouseName)),
         kitComponents: item.kitComponents.map((k) => ({

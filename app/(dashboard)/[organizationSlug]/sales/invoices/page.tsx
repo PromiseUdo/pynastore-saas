@@ -6,7 +6,13 @@ import { AccessDenied } from '@/components/layout/access-denied';
 import { listInvoices } from '@/features/sales/actions';
 import { InvoicesPageClient } from './_components/InvoicesPageClient';
 
-export default async function InvoicesPage() {
+export default async function InvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const { view: rawView } = await searchParams;
+  const view = rawView === 'overdue' ? 'overdue' : 'all';
   await requireFeature(FEATURES.SALES_MODULE);
   const ctx = await getOrganizationContext();
 
@@ -17,7 +23,7 @@ export default async function InvoicesPage() {
   /* Just the invoices. The customers, stores and catalogue this page used to
    * load existed only to fill a dialog's dropdowns; the create form is its
    * own page now and searches as you type. */
-  const invoicesResult = await listInvoices();
+  const invoicesResult = await listInvoices({ overdue: view === 'overdue' });
   if (!invoicesResult.success) {
     throw new Error(invoicesResult.error);
   }
@@ -25,6 +31,7 @@ export default async function InvoicesPage() {
   return (
     <InvoicesPageClient
       invoices={invoicesResult.data}
+      view={view}
       canCreate={hasPermission(ctx.membership.role.permissions, PERMISSIONS.SALES_INVOICE_CREATE)}
     />
   );

@@ -15,7 +15,7 @@
 import { useState } from 'react';
 import { Check, Copy, Landmark } from 'lucide-react';
 import { formatMoney } from '@/lib/storefront/format';
-import { TRANSFER_HOLD_HOURS } from '@/lib/storefront/mock/checkout';
+import { TRANSFER_HOLD_HOURS } from '@/lib/storefront/orders/holds';
 import type { TransferAccount } from '@/lib/storefront/checkout/types';
 
 function CopyButton({ value, label }: { value: string; label: string }) {

@@ -119,7 +119,7 @@ export function ActivityClient({ result }: { result: ActivityResult }) {
           <Button asChild variant="outline" size="sm">
             <Link href="/upgrade">
               <Lock className="size-3.5" />
-              Download on Pro
+              Download (upgrade)
             </Link>
           </Button>
         )

@@ -15,6 +15,7 @@
  * real form.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ONLINE_PAYMENT_METHOD } from '../mock/checkout';
 import { getCheckoutConfig, deliveryEstimate, findDeliveryMethod, findPaymentMethod } from './config';
 import { calculateCheckoutTotals, checkoutItemCount } from './totals';
 import { checkoutSchema, contactSchema, phoneDigits } from './schema';
@@ -117,13 +118,16 @@ describe('checkout configuration', () => {
     expect(config.paymentMethods.length).toBeGreaterThan(0);
   });
 
-  it('offers Squad online payment, with no card fields of its own, and pay on delivery', () => {
-    expect(config.paymentMethods.map((m) => [m.id, m.provider])).toEqual([
-      ['squad', 'squad'],
-      ['pod', 'manual'],
-    ]);
-    expect(config.paymentMethods[0].handoffNote).toMatch(/no card details are entered on this site/i);
-    expect(config.paymentMethods[1].handoffNote).toMatch(/nothing is charged now/i);
+  it('offers only pay on delivery until a store is known to take online payments', () => {
+    // "Pay online" is added per store, and only for a shop that passes the
+    // readiness rule (store-config.ts, ROADMAP 10.8) — never by default.
+    expect(config.paymentMethods.map((m) => [m.id, m.provider])).toEqual([['pod', 'manual']]);
+    expect(config.paymentMethods[0].handoffNote).toMatch(/nothing is charged now/i);
+  });
+
+  it('pays online through Paystack, with no card fields of its own', () => {
+    expect(ONLINE_PAYMENT_METHOD).toMatchObject({ id: 'paystack', provider: 'paystack', settlesOnDelivery: false });
+    expect(ONLINE_PAYMENT_METHOD.handoffNote).toMatch(/no card details are entered on this site/i);
   });
 
   it('reads a delivery window off the method rather than storing prose', () => {
@@ -431,7 +435,7 @@ describe('checkout validation', () => {
  */
 describe('items that must be paid for before delivery', () => {
   const pod = config.paymentMethods.find((m) => m.settlesOnDelivery)!;
-  const online = config.paymentMethods.find((m) => !m.settlesOnDelivery)!;
+  const online = ONLINE_PAYMENT_METHOD;
   const strict = (item: CartItem): CartItem => ({ ...item, requiresPrepayment: true });
 
   it('offers pay on delivery for an ordinary bag', () => {

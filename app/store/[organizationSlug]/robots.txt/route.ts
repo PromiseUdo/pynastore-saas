@@ -12,8 +12,8 @@
  * invoice link — is not, because those pages are private, useless in an
  * index, or both.
  */
-import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { prisma } from '@/lib/prisma';
+import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
 const PRIVATE = ['/account', '/cart', '/checkout', '/wishlist', '/track-order', '/invoice/'];
 
@@ -23,10 +23,11 @@ export async function GET(
 ) {
   const { organizationSlug } = await params;
 
-  /* A slug that isn't a live shop gets a closed robots.txt rather than a
-   * sitemap pointing at nothing. */
+  /* A slug that isn't a live, open shop gets a closed robots.txt rather than
+   * a sitemap pointing at nothing. */
   const store = await prisma.organization.findFirst({
-    where: { slug: organizationSlug, status: 'ACTIVE' },
+    // A shop that isn't open yet (12.5) is kept out of search engines too.
+    where: { slug: organizationSlug, status: 'ACTIVE', storefrontOpen: true },
     select: { id: true },
   });
 
@@ -36,7 +37,7 @@ export async function GET(
         'Allow: /',
         ...PRIVATE.map((path) => `Disallow: ${path}`),
         '',
-        `Sitemap: ${getStorefrontUrl(organizationSlug, '/sitemap.xml')}`,
+        `Sitemap: ${(await storefrontUrlFor(organizationSlug, '/sitemap.xml'))}`,
         '',
       ].join('\n')
     : ['User-agent: *', 'Disallow: /', ''].join('\n');

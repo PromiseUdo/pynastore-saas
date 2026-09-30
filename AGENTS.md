@@ -4,6 +4,10 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+# The platform's name
+
+The platform's working name is **Notely** (getnotely.io), set in `lib/brand.ts` (`PLATFORM_NAME`, `PLATFORM_DOMAIN`, `PLATFORM_OPERATOR`). Never type the name into UI, emails or legal text — read it from there, so a rename is one change. Internal identifiers that say "mansaas" (storage keys, token issuers, the Cloudinary folder, billing references, `com.mansaas.app`) are NOT renamed: changing them breaks live data.
+
 # Roadmap
 
 `docs/ROADMAP.md` holds the agreed build plan: the phases, what gap each one closes,
@@ -86,13 +90,13 @@ Shared pieces that already exist — use them:
 A report states, in one line under the toolbar, what it measures and how it's worked out, and leads with the few figures that matter (`StatCard`) before the table. Say what a number cannot tell you rather than hiding it — the profit report names its sale-date and cost basis. Never present a ratio as a percentage without multiplying it: a field is either named `…Ratio` (0–1) or `…Pct`, and the type says which.
 
 ## 11. One catalogue
-Inventory products ARE the online store's products. Online-store fields (web address, images, tags, publish state) live on `InventoryItem`; only stores with `Warehouse.sellsOnline` supply online stock. Don't create a separate storefront product model.
+Inventory products ARE the online store's products. Online-store fields (web address, images, tags, publish state) live on `InventoryItem`; only stores that sell online AND can deliver supply online stock — one definition, `ONLINE_SUPPLY_WHERE` in `lib/storefront/delivery/supply.ts`, used by the catalogue, the stock hold and the admin alike. Don't create a separate storefront product model.
 
 Merchandising lives under Inventory: categories (what a product is), collections (why products are grouped — hand-picked or rule-based), brands (who makes it). All three are managed with `inventory.category.manage`. A **web address is never regenerated on rename** — links customers saved must keep working; only a new record gets one generated, and only an explicit edit changes it.
 
 # Social Commerce rules
 
-One Meta app belongs to the PLATFORM (`META_APP_ID`/`META_APP_SECRET`, server-side only). Merchants never supply credentials, never see a token, and never enter an app key: they authorise the one MansaaS app against their own Facebook account, and what we keep is a per-store connection.
+One Meta app belongs to the PLATFORM (`META_APP_ID`/`META_APP_SECRET`, server-side only). Merchants never supply credentials, never see a token, and never enter an app key: they authorise the one platform app against their own Facebook account, and what we keep is a per-store connection.
 
 **Three pages, one nav** (`components/social/social-nav.tsx`): Connected accounts (`/social`), Create post (`/social/compose`), Post history (`/social/posts`, detail at `/social/posts/[postId]`).
 
@@ -104,7 +108,7 @@ One Meta app belongs to the PLATFORM (`META_APP_ID`/`META_APP_SECRET`, server-si
 
 **Post statuses** are `DRAFT → PUBLISHING → PUBLISHED`, or `FAILED` (retryable back into `PUBLISHING`). Nothing reports `PUBLISHED` without an id from the platform. `PUBLISHING` is claimed with a conditional update and `(organizationId, idempotencyKey)` is unique, so a double-click posts once. A row stuck in `PUBLISHING` is released to `FAILED` after five minutes, opportunistically, when someone loads the history — no cron.
 
-**Failed posts stay.** They keep caption, images and destination so "Try again" is a real retry of that record (`retryPost`), rate-limited by `lib/social/publish-quota.ts`. Only a `DRAFT` or `FAILED` post can be removed, and removing it forgets OUR record — MansaaS never deletes anything from Facebook or Instagram.
+**Failed posts stay.** They keep caption, images and destination so "Try again" is a real retry of that record (`retryPost`), rate-limited by `lib/social/publish-quota.ts`. Only a `DRAFT` or `FAILED` post can be removed, and removing it forgets OUR record — the platform never deletes anything from Facebook or Instagram.
 
 **History is queried in the database.** Status, platform, search, date range, product and page live in the URL and become Prisma `where` clauses. Never load a store's history into the browser to filter it there.
 
@@ -122,5 +126,6 @@ The customer storefront reads the merchant's real records. These rules keep that
 - **Never invent a merchant's content.** No fabricated reviews, ratings, testimonials, Q&A, press, social posts, urgency countdowns or campaign copy. If there's no source for it yet, show nothing and let the page's empty state do the talking. Claims about delivery, returns or payment must restate what the app actually enforces.
 - **Reviews are earned, not collected.** A review can only be written by a signed-in shopper with a DELIVERED order containing that product, one per shopper per product, and that gate is re-checked server-side on every write (`lib/storefront/reviews/`). Ratings on products come from published reviews only. A merchant can hide a review (`sales.review.moderate`) — never write, edit or delete one. Don't add a review form anywhere the server hasn't already confirmed the purchase.
 - **Questions are answered, not generated.** A signed-in shopper asks from the product page; the question waits in the merchant's inbox (Sales → Questions, `sales.question.answer`) and reaches the storefront only when a human answers it — answering is publishing. A merchant never writes the question, never edits a shopper's words, and may hide a pair rather than delete it. `lib/storefront/questions/` is the seam; the catalogue exposes only the answered ones.
-- **What a shopper may see** is decided once, in `lib/storefront/data/from-prisma.ts`: published + active products, active variants, stock only from stores with `sellsOnline`, visible categories, visible collections. Don't re-implement those rules elsewhere.
+- **What a shopper may see** is decided once, in `lib/storefront/data/from-prisma.ts`: published + active products, active variants, stock only from stores that supply online (`ONLINE_SUPPLY_WHERE`: sells online and has its own live delivery, unless no store delivers yet), visible categories, visible collections. Don't re-implement those rules elsewhere.
 - Prices are minor units (kobo) on the storefront and major units in the admin; the mapper is the only place that converts.
+- **Delivery belongs to the store a parcel leaves from.** Every `DeliveryZone` and `PickupLocation` names its `warehouseId`; one with none is never offered. Checkout quotes only through `quoteDelivery` in `lib/storefront/delivery/quote.ts` — never from an organization-wide list of zones. Which store sends which part of a bag is decided once, by `planOrder` in `lib/storefront/delivery/plan.ts`; the quote, order placement and the stock hold all use its plan, and an online order's stock is held exactly where that plan says (`reserveOrderStock({ planned })`) — never topped up from another store. Any delivery figure shown before checkout for a specific product ("Ships from Lagos Store · ₦4,500") comes from `estimateDelivery` in `lib/storefront/delivery/estimate.ts`, which is the same planner for a bag of one — never a separate calculation. Read ROADMAP Phase 9 before changing it.

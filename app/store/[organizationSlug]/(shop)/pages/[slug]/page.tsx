@@ -17,7 +17,7 @@ import { PageBlocks } from '@/components/content/page-blocks';
 import { getStorePage } from '@/lib/storefront/catalog';
 import { pageExcerpt, pageOutline, parsePageBody } from '@/lib/storefront/pages/format';
 import { formatDate } from '@/lib/storefront/format';
-import { getStorefrontUrl } from '@/lib/tenant/urls';
+import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
 type Props = { params: Promise<{ organizationSlug: string; slug: string }> };
 
@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: page.title,
     description: pageExcerpt(page.body) || undefined,
-    alternates: { canonical: getStorefrontUrl(organizationSlug, page.href) },
+    alternates: { canonical: (await storefrontUrlFor(organizationSlug, page.href)) },
   };
 }
 

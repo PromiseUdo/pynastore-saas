@@ -135,6 +135,7 @@ export {
   dispatchTransfer,
   receiveTransfer,
   cancelTransfer,
+  sendOrderTransfer,
   listTransfers,
   type TransferRow,
 } from './transfers';

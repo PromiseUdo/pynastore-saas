@@ -10,9 +10,9 @@ import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { getStorefrontAppearance } from '@/features/settings/storefront';
-import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { prisma } from '@/lib/prisma';
 import { StorefrontSettingsClient } from './_components/StorefrontSettingsClient';
+import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
 export const metadata: Metadata = { title: 'Storefront' };
 
@@ -66,7 +66,7 @@ export default async function StorefrontSettingsPage() {
       appearance={result.data.appearance}
       slides={result.data.slides}
       destinations={destinations}
-      storeUrl={getStorefrontUrl(ctx.organization.slug)}
+      storeUrl={(await storefrontUrlFor(ctx.organization.slug))}
       canManage={hasPermission(perms, PERMISSIONS.SETTINGS_EDIT)}
     />
   );

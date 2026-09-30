@@ -9,11 +9,11 @@
  *   - an online order nobody pays for gives its stock back after the hold
  *     window, and a payment arriving after that revives it only if the stock
  *     can still be held;
- *   - pay on delivery never touches Squad, and is paid when the merchant says
+ *   - pay on delivery never touches Paystack, and is paid when the merchant says
  *     the courier collected;
  *   - every one of those moves emails the shopper, once.
  *
- * Squad is stubbed at `fetch` and email at lib/email.
+ * Paystack is stubbed at `fetch` and email at lib/email.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from '@react-email/components';
@@ -27,13 +27,13 @@ vi.mock('@/lib/email', () => ({
 }));
 
 import { prisma } from '@/lib/prisma';
-import { giveStoreDelivery } from './helpers/delivery';
+import { giveStoreDelivery, quotedDeliveryId } from './helpers/delivery';
 import { getCheckoutConfig } from '@/lib/storefront/checkout/config';
 import { getProductsByIds } from '@/lib/storefront/catalog';
 import { placeOrder } from '@/lib/storefront/orders/create';
 import { reconcilePayment, startOrderPayment } from '@/lib/storefront/checkout/payment-service';
 import { getStoreCheckoutConfig } from '@/lib/storefront/checkout/store-config';
-import { TRANSFER_HOLD_HOURS } from '@/lib/storefront/mock/checkout';
+import { TRANSFER_HOLD_HOURS } from '@/lib/storefront/orders/holds';
 import {
   UNPAID_ORDER_HOLD_MINUTES,
   cancelOrder,
@@ -50,7 +50,7 @@ import { notifyShopper } from '@/lib/storefront/orders/notifications';
 import { StorefrontOrderUpdateEmail, type OrderEmailKind } from '@/emails/storefront-order-update';
 import type { CheckoutAddress, CheckoutContact } from '@/lib/storefront/checkout/types';
 
-process.env.SQUADCO_SECRET_KEY = 'sandbox_sk_test_secret_for_vitest';
+process.env.PAYSTACK_SECRET_KEY = 'sk_test_secret_for_vitest';
 const fixturesWere = process.env.STOREFRONT_FIXTURES;
 process.env.STOREFRONT_FIXTURES = '0';
 
@@ -79,33 +79,38 @@ const ADDRESS: CheckoutAddress = {
   postalCode: '',
 };
 
-/* ---------------- a fake Squad ---------------- */
+/* ---------------- a fake Paystack ---------------- */
 
-const squadVerify = new Map<string, string>();
+const SUBACCOUNT = `ACCT_lifecycle_${suffix}`;
+const payVerify = new Map<string, string>();
 
 const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input);
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-  if (url.endsWith('/transaction/initiate')) {
+  if (url.startsWith('https://api.paystack.co/transaction/initialize')) {
     const body = JSON.parse(String(init?.body));
-    return json(200, { success: true, data: { checkout_url: `https://pay.test/${body.transaction_ref}` } });
+    return json(200, { status: true, data: { authorization_url: `https://pay.test/${body.reference}` } });
   }
-  const verify = url.match(/\/transaction\/verify\/(.+)$/);
+  const verify = url.match(/^https:\/\/api\.paystack\.co\/transaction\/verify\/(.+)$/);
   if (verify) {
     const ref = decodeURIComponent(verify[1]);
-    const status = squadVerify.get(ref);
-    if (!status) return json(400, { success: false, message: 'Invalid', data: null });
+    const status = payVerify.get(ref);
+    if (!status) return json(400, { status: false, message: 'Transaction reference not found.' });
     const attempt = await prisma.orderPayment.findUniqueOrThrow({ where: { reference: ref } });
+    const amount = Number(attempt.amount) * 100;
     return json(200, {
-      success: true,
+      status: true,
       data: {
-        transaction_ref: ref,
-        transaction_status: status,
-        transaction_amount: Number(attempt.amount) * 100,
-        transaction_currency_id: 'NGN',
-        transaction_type: 'Card',
+        id: 1,
+        reference: ref,
+        status,
+        amount,
+        currency: 'NGN',
+        channel: 'card',
+        subaccount: { subaccount_code: SUBACCOUNT },
+        fees_split: { paystack: 100, integration: 0, subaccount: amount - 100 },
       },
     });
   }
@@ -135,22 +140,43 @@ async function product(name: string, stock: Partial<Record<keyof typeof warehous
   return item.id;
 }
 
-async function order(productId: string, quantity: number, paymentMethodId: 'squad' | 'pod' | 'transfer' = 'pod') {
+async function order(productId: string, quantity: number, paymentMethodId: 'paystack' | 'pod' | 'transfer' = 'pod') {
   const storeConfig = await getStoreCheckoutConfig({ organizationSlug: store.slug });
-  return placeOrder({
-    organizationSlug: store.slug,
-    customerId: null,
-    lines: [{ productId, variantId: productId, quantity }],
-    contact: CONTACT,
-    address: ADDRESS,
-    deliveryMethodId,
-    paymentMethodId,
-    note: '',
-    config: storeConfig,
-  });
+  const lines = [{ productId, variantId: productId, quantity }];
+  const place = (chosen: string) =>
+    placeOrder({
+      organizationSlug: store.slug,
+      customerId: null,
+      lines,
+      contact: CONTACT,
+      address: ADDRESS,
+      deliveryMethodId: chosen,
+      paymentMethodId,
+      note: '',
+      config: storeConfig,
+    });
+  /* Most bags come from one store, where the store's option is the choice.
+   * A bag split across stores is chosen per parcel (Phase 9.5): if the plain
+   * option is refused for that reason, ask for the quote a browser would
+   * have, and place it with that. */
+  const first = await place(deliveryMethodId);
+  if (first.ok || first.code !== 'invalid-delivery-method') return first;
+  const quoted = await quotedDeliveryId(store.slug, ADDRESS, lines).catch(() => null);
+  return quoted && quoted !== deliveryMethodId ? place(quoted) : first;
 }
 
-async function placed(productId: string, quantity: number, paymentMethodId: 'squad' | 'pod' | 'transfer' = 'pod') {
+/** An order's parcels (ROADMAP Phase 9.4), biggest first: [store key, status]. */
+async function parcels(orderId: string) {
+  const byId = Object.fromEntries(Object.entries(warehouses).map(([key, id]) => [id, key]));
+  const rows = await prisma.orderShipment.findMany({
+    where: { orderId },
+    orderBy: { sortOrder: 'asc' },
+    select: { id: true, warehouseId: true, status: true, allocations: { select: { id: true } } },
+  });
+  return rows.map((r) => ({ store: r.warehouseId ? byId[r.warehouseId] : null, status: r.status, holds: r.allocations.length }));
+}
+
+async function placed(productId: string, quantity: number, paymentMethodId: 'paystack' | 'pod' | 'transfer' = 'pod') {
   const result = await order(productId, quantity, paymentMethodId);
   if (!result.ok) throw new Error(result.message);
   return result;
@@ -191,17 +217,27 @@ let deliveryMethodId = '';
 
 beforeAll(async () => {
   store.id = (await prisma.organization.create({ data: { name: 'Lifecycle Store', slug: store.slug } })).id;
-  deliveryMethodId = await giveStoreDelivery(store.id);
   const make = (name: string, sellsOnline: boolean) =>
     prisma.warehouse.create({ data: { organizationId: store.id, name, sellsOnline, status: 'ACTIVE' } });
   warehouses.main = (await make('Main', true)).id;
   warehouses.annex = (await make('Annex', true)).id;
   warehouses.shopFloor = (await make('Shop floor', false)).id;
+  deliveryMethodId = await giveStoreDelivery(store.id);
+  // A shop that may take online payments (ROADMAP 10.8): "Pay online" is offered.
+  await prisma.merchantPaymentAccount.create({
+    data: {
+      organizationId: store.id,
+      businessName: 'Lifecycle Store',
+      verificationStatus: 'VERIFIED',
+      setupStatus: 'ACTIVE',
+      paystackSubaccountCode: SUBACCOUNT,
+    },
+  });
 });
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
-  squadVerify.clear();
+  payVerify.clear();
   sentEmails.length = 0;
 });
 
@@ -220,6 +256,7 @@ afterAll(async () => {
   await prisma.inventoryItem.deleteMany({ where: { organizationId: store.id } });
   await prisma.warehouse.deleteMany({ where: { organizationId: store.id } });
   await prisma.customer.deleteMany({ where: { organizationId: store.id } });
+  await prisma.merchantPaymentAccount.deleteMany({ where: { organizationId: store.id } });
   await prisma.organization.delete({ where: { id: store.id } });
 });
 
@@ -236,7 +273,9 @@ describe('placing an order holds its stock', () => {
     expect(await onlineStock(id)).toBe(2);
   });
 
-  it('draws from the fullest online store first and spills into the next — never a store that doesn’t sell online', async () => {
+  /* No single store has 4, so the line is split (ROADMAP 9.3's last resort),
+   * fullest first — and never from a store that doesn't sell online. */
+  it('splits a line only when no one store has enough, fullest first — never a store that doesn’t sell online', async () => {
     const id = await product('Split', { main: 2, annex: 3, shopFloor: 50 });
     const result = await placed(id, 4);
 
@@ -247,6 +286,11 @@ describe('placing an order holds its stock', () => {
     });
     const allocations = await prisma.orderStockAllocation.findMany({ where: { orderId: result.orderId } });
     expect(allocations.map((a) => Number(a.quantity)).sort()).toEqual([1, 3]);
+    // Two stores, two parcels — the bigger (Annex's 3) first — each holding its own units.
+    expect(await parcels(result.orderId)).toEqual([
+      { store: 'annex', status: 'PENDING', holds: 1 },
+      { store: 'main', status: 'PENDING', holds: 1 },
+    ]);
   });
 
   it('never lets two shoppers both have the last unit', async () => {
@@ -279,6 +323,7 @@ describe('a pay-on-delivery order', () => {
   it('goes from new to delivered and paid, taking the stock out when it ships', async () => {
     const id = await product('Pod', { main: 10 });
     const result = await placed(id, 2, 'pod');
+    expect(await parcels(result.orderId)).toEqual([{ store: 'main', status: 'PENDING', holds: 1 }]);
 
     let row = await orderRow(result.orderId);
     expect(row).toMatchObject({ status: 'PENDING', paymentStatus: 'DUE_ON_DELIVERY' });
@@ -289,6 +334,7 @@ describe('a pay-on-delivery order', () => {
 
     expect(await confirmOrder(scope(result.orderId))).toEqual({ ok: true });
     expect(await markOrderShipped({ ...scope(result.orderId), organizationSlug: store.slug, performedById: null })).toEqual({ ok: true });
+    expect((await parcels(result.orderId))[0].status).toBe('DISPATCHED');
 
     expect((await levels(id)).main).toEqual({ quantity: 8, reserved: 0 });
     const out = await prisma.stockMovement.findFirst({
@@ -302,6 +348,7 @@ describe('a pay-on-delivery order', () => {
     expect((await levels(id)).main).toEqual({ quantity: 8, reserved: 0 });
 
     expect(await markOrderDelivered({ ...scope(result.orderId), paymentCollected: true })).toEqual({ ok: true });
+    expect((await parcels(result.orderId))[0].status).toBe('DELIVERED');
     row = await orderRow(result.orderId);
     expect(row).toMatchObject({ status: 'DELIVERED', paymentStatus: 'PAID' });
     expect(row.paidAt).not.toBeNull();
@@ -386,7 +433,8 @@ describe('the progress track', () => {
     expect((await levels(id)).main).toEqual({ quantity: 4, reserved: 0 });
     // No email for packing; one each for shipping, delivery and the other order's cancellation.
     expect(emailsFor(result.reference)).toEqual(['shipped', 'delivered']);
-  });
+    // Two orders, one taken through every stage: ~160 round trips to a remote database.
+  }, 45_000);
 
   it('dates each step the order reached, and leaves a skipped step undated', () => {
     const steps = orderTimeline('SHIPPED', '2026-09-17T08:00:00.000Z', {
@@ -407,7 +455,7 @@ describe('the progress track', () => {
 
   it('stamps the confirmation time when an online payment confirms the order', async () => {
     const id = await product('StampOnline', { main: 2 });
-    const result = await placed(id, 1, 'squad');
+    const result = await placed(id, 1, 'paystack');
     await startOrderPayment({
       organizationId: store.id,
       orderId: result.orderId,
@@ -415,7 +463,7 @@ describe('the progress track', () => {
       returnPath: '/checkout/confirmation?t=x',
     });
     const attempt = await prisma.orderPayment.findFirstOrThrow({ where: { orderId: result.orderId } });
-    squadVerify.set(attempt.reference, 'success');
+    payVerify.set(attempt.reference, 'success');
     await reconcilePayment(attempt.reference);
     expect((await stamps(result.orderId)).confirmedAt).not.toBeNull();
   });
@@ -425,7 +473,7 @@ describe('the progress track', () => {
 
 describe('an order paid online', () => {
   async function withPayment(productId: string, quantity: number) {
-    const result = await placed(productId, quantity, 'squad');
+    const result = await placed(productId, quantity, 'paystack');
     await startOrderPayment({
       organizationId: store.id,
       orderId: result.orderId,
@@ -442,7 +490,7 @@ describe('an order paid online', () => {
 
     expect(await confirmOrder(scope(result.orderId))).toMatchObject({ ok: false });
 
-    squadVerify.set(result.attemptRef, 'success');
+    payVerify.set(result.attemptRef, 'success');
     expect(await reconcilePayment(result.attemptRef)).toBe('paid');
     expect(await orderRow(result.orderId)).toMatchObject({ status: 'CONFIRMED', paymentStatus: 'PAID' });
     expect(await markOrderShipped({ ...scope(result.orderId), organizationSlug: store.slug, performedById: null })).toEqual({ ok: true });
@@ -473,7 +521,7 @@ describe('an order paid online', () => {
     const id = await product('Unheard', { main: 3 });
     const result = await withPayment(id, 1);
     await backdate(result.orderId);
-    squadVerify.set(result.attemptRef, 'success');
+    payVerify.set(result.attemptRef, 'success');
 
     expect((await expireUnpaidOrders({ organizationId: store.id })).expired).toBe(0);
     expect(await orderRow(result.orderId)).toMatchObject({ status: 'CONFIRMED', paymentStatus: 'PAID' });
@@ -486,12 +534,15 @@ describe('an order paid online', () => {
     await backdate(result.orderId);
     await expireUnpaidOrders({ organizationId: store.id });
     expect((await levels(id)).main).toEqual({ quantity: 3, reserved: 0 });
+    expect(await parcels(result.orderId)).toEqual([{ store: 'main', status: 'CANCELLED', holds: 1 }]);
 
-    squadVerify.set(result.attemptRef, 'success');
+    payVerify.set(result.attemptRef, 'success');
     expect(await reconcilePayment(result.attemptRef)).toBe('paid');
 
     expect(await orderRow(result.orderId)).toMatchObject({ status: 'CONFIRMED', paymentStatus: 'PAID', cancelReason: null });
     expect((await levels(id)).main).toEqual({ quantity: 3, reserved: 2 });
+    // Re-planned: a fresh parcel, holding the new hold. The released one is history on the allocation.
+    expect(await parcels(result.orderId)).toEqual([{ store: 'main', status: 'PENDING', holds: 1 }]);
     expect(emailsFor(result.reference)).toEqual(['payment-timeout', 'payment-received']);
   });
 
@@ -503,7 +554,7 @@ describe('an order paid online', () => {
 
     await placed(id, 2, 'pod'); // someone else buys it
 
-    squadVerify.set(result.attemptRef, 'success');
+    payVerify.set(result.attemptRef, 'success');
     expect(await reconcilePayment(result.attemptRef)).toBe('paid');
 
     expect(await orderRow(result.orderId)).toMatchObject({ status: 'CANCELLED', paymentStatus: 'PAID' });
@@ -519,7 +570,7 @@ describe('a bank-transfer order', () => {
 
   it('is only offered while the store has an active bank account, and listed last', async () => {
     expect((await getStoreCheckoutConfig({ organizationSlug: store.slug })).paymentMethods.map((m) => m.id)).toEqual([
-      'squad',
+      'paystack',
       'pod',
     ]);
     const id = await product('NoAccount', { main: 3 });
@@ -535,7 +586,7 @@ describe('a bank-transfer order', () => {
 
     await prisma.merchantBankAccount.create({ data: { organizationId: store.id, ...ACCOUNT } });
     const config = await getStoreCheckoutConfig({ organizationSlug: store.slug });
-    expect(config.paymentMethods.map((m) => m.id)).toEqual(['squad', 'pod', 'transfer']);
+    expect(config.paymentMethods.map((m) => m.id)).toEqual(['paystack', 'pod', 'transfer']);
     expect(config.transferAccounts).toEqual([ACCOUNT]);
   });
 

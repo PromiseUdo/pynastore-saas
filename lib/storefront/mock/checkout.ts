@@ -13,6 +13,7 @@
  */
 import type { CheckoutCountry, PaymentMethodOption } from '../checkout/types';
 import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
+import { TRANSFER_HOLD_HOURS } from '../orders/holds';
 
 /*
  * Delivery is Nigeria-only for now: merchants set their delivery zones and
@@ -36,10 +37,13 @@ export const CHECKOUT_COUNTRIES: CheckoutCountry[] = [
 /*
  * Payment methods.
  *
- * 'squad' — Squad's hosted payment page, which offers the shopper card and
- * bank transfer (and whatever else the Squad account has switched on). The
- * shopper pays on Squad's page, not ours — no card field exists anywhere in
- * the storefront, and none should.
+ * 'paystack' — "Pay online" (ONLINE_PAYMENT_METHOD below): Paystack's hosted
+ * page, which offers the shopper card, bank transfer and whatever else the
+ * platform's Paystack account has switched on. The shopper pays on Paystack's
+ * page, not ours — no card field exists anywhere in the storefront, and none
+ * should. Only offered to a shop that may take online payments (verified by
+ * us, subaccount active — ROADMAP 10.8), so it is added per store by
+ * checkout/store-config.ts rather than listed here.
  *
  * 'pod' — pay on delivery. Nothing is charged online; the order holds its
  * stock without a time limit and the merchant records the money when the
@@ -54,16 +58,6 @@ export const CHECKOUT_COUNTRIES: CheckoutCountry[] = [
  */
 export const CHECKOUT_PAYMENT_METHODS: PaymentMethodOption[] = [
   {
-    id: 'squad',
-    label: 'Pay online',
-    description: 'Card or bank transfer, through Squad',
-    handoffNote:
-      'After you place this order you’ll go to Squad’s secure payment page to pay by card or bank transfer. No card details are entered on this site.',
-    provider: 'squad',
-    settlesOnDelivery: false,
-    enabled: true,
-  },
-  {
     id: 'pod',
     label: 'Pay on delivery',
     description: 'Pay the courier when your order arrives',
@@ -75,8 +69,22 @@ export const CHECKOUT_PAYMENT_METHODS: PaymentMethodOption[] = [
   },
 ];
 
-/** How long a bank-transfer order holds its stock before it is cancelled unpaid. */
-export const TRANSFER_HOLD_HOURS = 48;
+/**
+ * Offered first, and only to a shop that may take online payments. The money
+ * settles to the shop's own bank account through Paystack; nothing is held by
+ * the platform.
+ */
+export const ONLINE_PAYMENT_METHOD: PaymentMethodOption = {
+  id: 'paystack',
+  label: 'Pay online',
+  description: 'Card, bank transfer or USSD, through Paystack',
+  handoffNote:
+    'After you place this order you’ll go to Paystack’s secure payment page to pay by card, bank transfer or USSD. No card details are entered on this site.',
+  provider: 'paystack',
+  settlesOnDelivery: false,
+  enabled: true,
+};
+
 
 /** Offered last, and only to stores with at least one active bank account. */
 export const BANK_TRANSFER_METHOD: PaymentMethodOption = {

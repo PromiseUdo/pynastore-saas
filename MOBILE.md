@@ -1,4 +1,8 @@
-# MansaaS Mobile App (Capacitor)
+# Notely Mobile App (Capacitor)
+
+> The platform's working name is **Notely** (`lib/brand.ts`, ROADMAP 12.2). The app's
+> display name follows it; its id stays `com.mansaas.app`, because changing an app id makes a
+> different app in the stores.
 
 The customer **storefront** ships as a native iOS + Android app via Capacitor.
 The **admin dashboard is never reachable or visible** inside the app.
@@ -65,7 +69,7 @@ rewrite/redirect.
 **Deliberately not built yet:** the per-merchant build/publish pipeline —
 per-tenant `appId`, app icon, splash, signing, cert/provisioning management,
 automated App Store / Play submission. `capacitor.config.ts` stays
-`com.mansaas.app` / "MansaaS"; a branded build overrides those at generation
+`com.mansaas.app` / "Notely"; a branded build overrides those at generation
 time later. Priority now is the mall experience.
 
 ### Native polish
@@ -89,14 +93,14 @@ time later. Priority now is the mall experience.
 
 ### Payments inside the app
 
-The app is pinned to one origin, so Squad's payment page must not load in the
+The app is pinned to one origin, so Paystack's payment page must not load in the
 main WebView (it would be thrown out to the phone's browser and never return).
 `lib/storefront/payments/open-payment-page.ts` opens it with **`@capacitor/browser`**
 (SFSafariViewController / Chrome Custom Tabs) on top of the app instead. When
-Squad finishes, `/api/payments/squad/callback` sees the attempt was started in
+Paystack finishes, `/api/payments/paystack/callback` sees the attempt was started in
 the app (`OrderPayment.nativeApp`) and answers with a small page that deep-links
 to **`com.mansaas.app://payment-return`**; the app closes the sheet and opens the
-order's confirmation page, which re-checks the payment with Squad. Closing the
+order's confirmation page, which re-checks the payment with Paystack. Closing the
 sheet by hand does the same.
 
 The scheme is registered in `ios/App/App/Info.plist` (`CFBundleURLTypes`) and

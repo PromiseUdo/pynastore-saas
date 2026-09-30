@@ -72,10 +72,7 @@ export default async function SalesDashboardPage() {
               icon={Receipt}
             />
           </Link>
-          {/* The invoices list has no overdue filter yet, and it already leads
-              with an overdue callout — so this links there plainly rather than
-              carrying a query parameter nothing reads (AGENTS §7). */}
-          <Link href="/sales/invoices" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Link href="/sales/invoices?view=overdue" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <StatCard
               title="Overdue invoices"
               value={formatNumber(overview.overdueInvoices)}

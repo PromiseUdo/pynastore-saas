@@ -1,46 +1,48 @@
 /*
- * Paying for an order through Squad, against the real database.
+ * Paying for an order through Paystack (ROADMAP 10.4), against the real
+ * database.
  *
- * Squad itself is stubbed at `fetch`, so these tests prove OUR side of the
- * contract: an order becomes PAID only because Squad's verify endpoint said
- * so, for the amount we asked for, exactly once — whichever door (callback,
- * webhook, confirmation page) asks first, and however often.
+ * Paystack is stubbed at `fetch`, so these tests
+ * prove OUR side of the contract: an order becomes PAID only because the
+ * provider's verify endpoint said so — for the amount we asked for, to the
+ * shop's own subaccount, with nothing for the platform — exactly once,
+ * whichever door (callback, webhook, confirmation page) asks first, and
+ * however often.
  */
-import crypto from 'crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { giveStoreDelivery } from './helpers/delivery';
-import { getCheckoutConfig } from '@/lib/storefront/checkout/config';
+import { getStoreCheckoutConfig } from '@/lib/storefront/checkout/store-config';
 import { placeOrder } from '@/lib/storefront/orders/create';
 import {
   getOrderPaymentState,
   reconcilePayment,
   startOrderPayment,
 } from '@/lib/storefront/checkout/payment-service';
-import { squadBaseUrl, verifyWebhookSignature, webhookTransactionRef } from '@/lib/payments/squad';
 /* Emails are proved in tests/storefront-order-lifecycle.test.ts; never send real ones. */
 vi.mock('@/lib/email', () => ({
   sendStorefrontOrderUpdateEmail: vi.fn(async () => {}),
   sendLowStockAlertEmail: vi.fn(async () => {}),
+  sendStoreOrderAlertEmail: vi.fn(async () => {}),
 }));
 
-import { GET as callback } from '@/app/api/payments/squad/callback/route';
-import { POST as webhook } from '@/app/api/payments/squad/webhook/route';
-import type { CheckoutAddress, CheckoutContact } from '@/lib/storefront/checkout/types';
+import { GET as callback } from '@/app/api/payments/paystack/callback/route';
+import type { CheckoutAddress, CheckoutConfig, CheckoutContact } from '@/lib/storefront/checkout/types';
 
-const SECRET = 'sandbox_sk_test_secret_for_vitest';
-const keyWas = process.env.SQUADCO_SECRET_KEY;
-process.env.SQUADCO_SECRET_KEY = SECRET;
-
-const fixturesWere = process.env.STOREFRONT_FIXTURES;
+const PAYSTACK_SECRET = 'sk_test_secret_for_vitest';
+const envWas = {
+  paystack: process.env.PAYSTACK_SECRET_KEY,
+  fixtures: process.env.STOREFRONT_FIXTURES,
+};
+process.env.PAYSTACK_SECRET_KEY = PAYSTACK_SECRET;
 process.env.STOREFRONT_FIXTURES = '0';
 
 const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const store = { id: '', slug: `__test-payments-${suffix}` };
+const SUBACCOUNT = `ACCT_store_${suffix}`;
 let productId = '';
-
-const config = await getCheckoutConfig({ organizationSlug: 'demo' });
+let config: CheckoutConfig;
 
 const CONTACT: CheckoutContact = {
   firstName: 'Ada',
@@ -53,7 +55,7 @@ const ADDRESS: CheckoutAddress = {
   firstName: 'Ada',
   lastName: 'Okoro',
   phone: '08012345678',
-  country: config.defaultCountryCode,
+  country: 'NG',
   state: 'Rivers',
   city: 'Port Harcourt',
   addressLine1: '12 Example Street',
@@ -61,14 +63,24 @@ const ADDRESS: CheckoutAddress = {
   postalCode: '',
 };
 
-/* ---------------- a fake Squad ---------------- */
+/* ---------------- a fake Paystack ---------------- */
 
-type Verify = { status: string; amount?: number; currency?: string } | 'unknown';
+type Verify =
+  | {
+      status: string;
+      amount?: number;
+      currency?: string;
+      /** which subaccount Paystack says got the money — defaults to the shop's */
+      subaccount?: string | null;
+      /** the platform's share in kobo — defaults to 0 */
+      platform?: number;
+    }
+  | 'unknown';
 
-const squad = {
-  initiated: [] as Record<string, unknown>[],
+const paystack = {
+  initialized: [] as Record<string, unknown>[],
   verify: new Map<string, Verify>(),
-  failInitiate: false,
+  failInitialize: false,
 };
 
 const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -76,31 +88,37 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => 
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-  if (url.endsWith('/transaction/initiate')) {
-    if (squad.failInitiate) return json(500, { success: false, message: 'down', data: {} });
+  if (url.startsWith('https://api.paystack.co/transaction/initialize')) {
+    if (paystack.failInitialize) return json(500, { status: false, message: 'down' });
     const body = JSON.parse(String(init?.body));
-    squad.initiated.push(body);
+    paystack.initialized.push(body);
     return json(200, {
-      success: true,
-      data: { checkout_url: `https://sandbox-pay.squadco.com/c_${body.transaction_ref}`, transaction_ref: body.transaction_ref },
+      status: true,
+      message: 'Authorization URL created',
+      data: { authorization_url: `https://checkout.paystack.com/${body.reference}`, reference: body.reference },
     });
   }
 
-  const verify = url.match(/\/transaction\/verify\/(.+)$/);
-  if (verify) {
-    const ref = decodeURIComponent(verify[1]);
-    const answer = squad.verify.get(ref);
-    if (!answer || answer === 'unknown') return json(400, { success: false, message: 'Invalid', data: null });
+  const paystackVerify = url.match(/^https:\/\/api\.paystack\.co\/transaction\/verify\/(.+)$/);
+  if (paystackVerify) {
+    const ref = decodeURIComponent(paystackVerify[1]);
+    const answer = paystack.verify.get(ref);
+    if (!answer || answer === 'unknown') return json(400, { status: false, message: 'Transaction reference not found.' });
     const attempt = await prisma.orderPayment.findUnique({ where: { reference: ref } });
+    const amount = answer.amount ?? Number(attempt!.amount) * 100;
+    const fee = 250_00;
+    const platform = answer.platform ?? 0;
     return json(200, {
-      success: true,
+      status: true,
       data: {
-        transaction_ref: ref,
-        transaction_status: answer.status,
-        transaction_amount: answer.amount ?? Number(attempt!.amount) * 100,
-        transaction_currency_id: answer.currency ?? 'NGN',
-        transaction_type: 'Card',
-        email: CONTACT.email,
+        id: 900_000_001,
+        reference: ref,
+        status: answer.status,
+        amount,
+        currency: answer.currency ?? 'NGN',
+        channel: 'card',
+        subaccount: answer.subaccount === null ? {} : { subaccount_code: answer.subaccount ?? SUBACCOUNT },
+        fees_split: { paystack: fee, integration: platform, subaccount: amount - fee - platform },
       },
     });
   }
@@ -118,7 +136,7 @@ async function newOrder() {
     contact: CONTACT,
     address: ADDRESS,
     deliveryMethodId,
-    paymentMethodId: 'squad',
+    paymentMethodId: 'paystack',
     note: '',
     config,
   });
@@ -143,15 +161,17 @@ async function startPayment(orderId: string) {
 const orderRow = (id: string) =>
   prisma.order.findUniqueOrThrow({ where: { id }, select: { status: true, paymentStatus: true, paidAt: true } });
 
+const setSetup = (setupStatus: 'ACTIVE' | 'DISABLED') =>
+  prisma.merchantPaymentAccount.update({ where: { organizationId: store.id }, data: { setupStatus } });
+
 let deliveryMethodId = '';
 
 beforeAll(async () => {
   store.id = (await prisma.organization.create({ data: { name: 'Payments Store', slug: store.slug } })).id;
-  deliveryMethodId = await giveStoreDelivery(store.id);
-
   const warehouse = await prisma.warehouse.create({
     data: { organizationId: store.id, name: 'Main', sellsOnline: true, status: 'ACTIVE' },
   });
+  deliveryMethodId = await giveStoreDelivery(store.id);
   const item = await prisma.inventoryItem.create({
     data: {
       organizationId: store.id,
@@ -164,24 +184,38 @@ beforeAll(async () => {
     },
     select: { id: true },
   });
-  await prisma.inventoryLevel.create({ data: { inventoryItemId: item.id, warehouseId: warehouse.id, quantity: 50 } });
+  await prisma.inventoryLevel.create({ data: { inventoryItemId: item.id, warehouseId: warehouse.id, quantity: 200 } });
   productId = item.id;
+
+  // A shop that may take online payments: verified by us, subaccount active.
+  await prisma.merchantPaymentAccount.create({
+    data: {
+      organizationId: store.id,
+      businessName: 'Payments Store',
+      verificationStatus: 'VERIFIED',
+      setupStatus: 'ACTIVE',
+      paystackSubaccountCode: SUBACCOUNT,
+    },
+  });
+  config = await getStoreCheckoutConfig({ organizationSlug: store.slug });
 });
 
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
   fetchMock.mockClear();
-  squad.initiated = [];
-  squad.verify.clear();
-  squad.failInitiate = false;
+  paystack.initialized = [];
+  paystack.verify.clear();
+  paystack.failInitialize = false;
 });
 
 afterAll(async () => {
   vi.unstubAllGlobals();
-  if (keyWas === undefined) delete process.env.SQUADCO_SECRET_KEY;
-  else process.env.SQUADCO_SECRET_KEY = keyWas;
-  if (fixturesWere === undefined) delete process.env.STOREFRONT_FIXTURES;
-  else process.env.STOREFRONT_FIXTURES = fixturesWere;
+  const restore = (key: string, value: string | undefined) => {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  };
+  restore('PAYSTACK_SECRET_KEY', envWas.paystack);
+  restore('STOREFRONT_FIXTURES', envWas.fixtures);
 
   await prisma.orderPayment.deleteMany({ where: { organizationId: store.id } });
   await prisma.orderLineItem.deleteMany({ where: { order: { organizationId: store.id } } });
@@ -191,59 +225,75 @@ afterAll(async () => {
   await prisma.inventoryItem.deleteMany({ where: { organizationId: store.id } });
   await prisma.warehouse.deleteMany({ where: { organizationId: store.id } });
   await prisma.customer.deleteMany({ where: { organizationId: store.id } });
+  await prisma.merchantPaymentAccount.deleteMany({ where: { organizationId: store.id } });
   await prisma.organization.delete({ where: { id: store.id } });
 });
 
-/* ---------------- the client ---------------- */
+/* ---------------- offering it ---------------- */
 
-describe('Squad client', () => {
-  it('talks to the sandbox with a sandbox key', () => {
-    expect(squadBaseUrl()).toBe('https://sandbox-api-d.squadco.com');
-  });
+describe('offering online payment', () => {
+  it('offers "Pay online" through Paystack first — only to a shop that may take it', async () => {
+    expect(config.paymentMethods[0]).toMatchObject({ id: 'paystack', provider: 'paystack' });
 
-  it('accepts only a webhook signed with our secret', () => {
-    const body = JSON.stringify({ Event: 'charge_successful', TransactionRef: 'X' });
-    const signature = crypto.createHmac('sha512', SECRET).update(body).digest('hex').toUpperCase();
-
-    expect(verifyWebhookSignature(body, signature)).toBe(true);
-    expect(verifyWebhookSignature(body, signature.toLowerCase())).toBe(true);
-    expect(verifyWebhookSignature(`${body} `, signature)).toBe(false);
-    expect(verifyWebhookSignature(body, null)).toBe(false);
-    expect(verifyWebhookSignature(body, 'nope')).toBe(false);
-  });
-
-  it('finds the reference wherever the webhook put it', () => {
-    expect(webhookTransactionRef({ TransactionRef: 'A' })).toBe('A');
-    expect(webhookTransactionRef({ Body: { transaction_ref: 'B' } })).toBe('B');
-    expect(webhookTransactionRef({ nothing: true })).toBeNull();
+    await setSetup('DISABLED');
+    try {
+      const off = await getStoreCheckoutConfig({ organizationSlug: store.slug });
+      expect(off.paymentMethods.map((m) => m.id)).not.toContain('paystack');
+    } finally {
+      await setSetup('ACTIVE');
+    }
   });
 });
 
 /* ---------------- starting ---------------- */
 
 describe('starting a payment', () => {
-  it('asks Squad for the order total in kobo and returns its page', async () => {
+  it('asks Paystack for the total in kobo, to the shop’s own subaccount, with the merchant paying the fee and nothing for the platform', async () => {
     const order = await newOrder();
     const { started, attempt } = await startPayment(order.orderId);
 
-    expect(started).toEqual({ ok: true, checkoutUrl: `https://sandbox-pay.squadco.com/c_${attempt.reference}` });
+    expect(started).toEqual({ ok: true, checkoutUrl: `https://checkout.paystack.com/${attempt.reference}` });
 
-    const sent = squad.initiated[0];
+    const sent = paystack.initialized[0];
     const total = await prisma.order.findUniqueOrThrow({ where: { id: order.orderId }, select: { totalAmount: true } });
-    expect(sent.amount).toBe(Number(total.totalAmount) * 100);
-    expect(sent.currency).toBe('NGN');
-    expect(sent.email).toBe(CONTACT.email);
-    expect(sent.transaction_ref).toBe(attempt.reference);
+    expect(sent).toMatchObject({
+      amount: Number(total.totalAmount) * 100,
+      currency: 'NGN',
+      email: CONTACT.email,
+      reference: attempt.reference,
+      subaccount: SUBACCOUNT,
+      bearer: 'subaccount',
+      transaction_charge: 0,
+      metadata: { purpose: 'storefront-order', organizationId: store.id, orderId: order.orderId, attemptId: attempt.id },
+    });
+    expect(attempt).toMatchObject({ provider: 'paystack', subaccountCode: SUBACCOUNT });
     expect(attempt.reference.startsWith(order.reference)).toBe(true);
     expect(sent.callback_url).toBe(
-      `http://shop.pay.app.localhost:3000/api/payments/squad/callback?ref=${encodeURIComponent(attempt.reference)}`,
+      `http://shop.pay.app.localhost:3000/api/payments/paystack/callback?ref=${encodeURIComponent(attempt.reference)}`,
     );
     expect(attempt.returnUrl).toBe('http://shop.pay.app.localhost:3000/checkout/confirmation?t=tok');
     expect((await orderRow(order.orderId)).paymentStatus).toBe('AWAITING_PAYMENT');
   });
 
-  it('keeps the order, and says so, when Squad is unreachable', async () => {
-    squad.failInitiate = true;
+  it('won’t start one for a shop that can no longer take online payments', async () => {
+    const order = await newOrder();
+    await setSetup('DISABLED');
+    try {
+      const started = await startOrderPayment({
+        organizationId: store.id,
+        orderId: order.orderId,
+        origin: 'http://shop.pay.app.localhost:3000',
+        returnPath: '/checkout/confirmation?t=tok',
+      });
+      expect(started).toEqual({ ok: false, reason: 'unavailable' });
+      expect(paystack.initialized).toHaveLength(0);
+    } finally {
+      await setSetup('ACTIVE');
+    }
+  });
+
+  it('keeps the order, and says so, when Paystack is unreachable', async () => {
+    paystack.failInitialize = true;
     const order = await newOrder();
     const { started, attempt } = await startPayment(order.orderId);
 
@@ -263,15 +313,19 @@ describe('starting a payment', () => {
 /* ---------------- settling ---------------- */
 
 describe('settling a payment', () => {
-  it('marks the order paid and confirmed only after Squad verifies it — once', async () => {
+  it('marks the order paid and confirmed only after Paystack verifies it — once — and keeps Paystack’s split', async () => {
     const order = await newOrder();
     const { attempt } = await startPayment(order.orderId);
 
-    // Nothing from Squad yet: nothing changes.
+    // Nothing from Paystack yet: nothing changes.
     expect(await reconcilePayment(attempt.reference)).toBe('pending');
     expect((await orderRow(order.orderId)).paymentStatus).toBe('AWAITING_PAYMENT');
 
-    squad.verify.set(attempt.reference, { status: 'Success' });
+    // Still in progress on Paystack's page.
+    paystack.verify.set(attempt.reference, { status: 'ongoing' });
+    expect(await reconcilePayment(attempt.reference)).toBe('pending');
+
+    paystack.verify.set(attempt.reference, { status: 'success' });
     const [a, b] = await Promise.all([reconcilePayment(attempt.reference), reconcilePayment(attempt.reference)]);
     expect([a, b].sort()).toEqual(['already-paid', 'paid']);
 
@@ -282,7 +336,12 @@ describe('settling a payment', () => {
 
     const settled = await prisma.orderPayment.findUniqueOrThrow({ where: { id: attempt.id } });
     expect(settled.status).toBe('SUCCESS');
-    expect(settled.channel).toBe('Card');
+    expect(settled.channel).toBe('card');
+    expect(settled.gatewayRef).toBe('900000001');
+    // As Paystack reported it: the merchant's share, nothing for the platform, the fee.
+    expect(Number(settled.feeAmount)).toBe(250);
+    expect(Number(settled.platformAmount)).toBe(0);
+    expect(Number(settled.merchantAmount)).toBe(Number(settled.amount) - 250);
 
     expect(await getOrderPaymentState(order.orderId)).toEqual({
       canPay: false,
@@ -294,7 +353,7 @@ describe('settling a payment', () => {
   it('refuses a payment for a different amount', async () => {
     const order = await newOrder();
     const { attempt } = await startPayment(order.orderId);
-    squad.verify.set(attempt.reference, { status: 'success', amount: 100 });
+    paystack.verify.set(attempt.reference, { status: 'success', amount: 100 });
 
     expect(await reconcilePayment(attempt.reference)).toBe('mismatch');
     expect((await orderRow(order.orderId)).paymentStatus).toBe('AWAITING_PAYMENT');
@@ -304,8 +363,26 @@ describe('settling a payment', () => {
   it('refuses a payment in a different currency', async () => {
     const order = await newOrder();
     const { attempt } = await startPayment(order.orderId);
-    squad.verify.set(attempt.reference, { status: 'success', currency: 'USD' });
+    paystack.verify.set(attempt.reference, { status: 'success', currency: 'USD' });
 
+    expect(await reconcilePayment(attempt.reference)).toBe('mismatch');
+    expect((await orderRow(order.orderId)).paymentStatus).toBe('AWAITING_PAYMENT');
+  });
+
+  it('refuses a payment that went to another subaccount, or to none', async () => {
+    for (const subaccount of ['ACCT_somebody_else', null]) {
+      const order = await newOrder();
+      const { attempt } = await startPayment(order.orderId);
+      paystack.verify.set(attempt.reference, { status: 'success', subaccount });
+      expect(await reconcilePayment(attempt.reference)).toBe('mismatch');
+      expect((await orderRow(order.orderId)).paymentStatus).toBe('AWAITING_PAYMENT');
+    }
+  });
+
+  it('refuses a payment that gave the platform a share', async () => {
+    const order = await newOrder();
+    const { attempt } = await startPayment(order.orderId);
+    paystack.verify.set(attempt.reference, { status: 'success', platform: 500_00 });
     expect(await reconcilePayment(attempt.reference)).toBe('mismatch');
     expect((await orderRow(order.orderId)).paymentStatus).toBe('AWAITING_PAYMENT');
   });
@@ -313,7 +390,7 @@ describe('settling a payment', () => {
   it('lets the shopper try again after abandoning the payment page', async () => {
     const order = await newOrder();
     const { attempt } = await startPayment(order.orderId);
-    squad.verify.set(attempt.reference, { status: 'Abandoned' });
+    paystack.verify.set(attempt.reference, { status: 'abandoned' });
 
     expect(await reconcilePayment(attempt.reference)).toBe('failed');
     expect(await getOrderPaymentState(order.orderId)).toEqual({
@@ -326,7 +403,7 @@ describe('settling a payment', () => {
   it('won’t start a second payment for an order an earlier attempt already paid', async () => {
     const order = await newOrder();
     const { attempt } = await startPayment(order.orderId);
-    squad.verify.set(attempt.reference, { status: 'success' });
+    paystack.verify.set(attempt.reference, { status: 'success' });
 
     // The webhook never arrived; the shopper presses "Pay now" again.
     const again = await startOrderPayment({
@@ -337,7 +414,7 @@ describe('settling a payment', () => {
     });
     expect(again).toEqual({ ok: false, reason: 'already-paid' });
     expect((await orderRow(order.orderId)).paymentStatus).toBe('PAID');
-    expect(squad.initiated).toHaveLength(1);
+    expect(paystack.initialized).toHaveLength(1);
   });
 
   it('ignores references that aren’t ours', async () => {
@@ -345,17 +422,17 @@ describe('settling a payment', () => {
   });
 });
 
-/* ---------------- the routes ---------------- */
+/* ---------------- the return route ---------------- */
 
-describe('the callback', () => {
+describe('the Paystack callback', () => {
   it('verifies, then returns the shopper to the stored address — not one from the URL', async () => {
     const order = await newOrder();
     const { attempt } = await startPayment(order.orderId);
-    squad.verify.set(attempt.reference, { status: 'success' });
+    paystack.verify.set(attempt.reference, { status: 'success' });
 
     const res = await callback(
       new NextRequest(
-        `http://shop.pay.app.localhost:3000/api/payments/squad/callback?ref=${attempt.reference}&returnUrl=https://evil.example`,
+        `http://shop.pay.app.localhost:3000/api/payments/paystack/callback?ref=${attempt.reference}&returnUrl=https://evil.example`,
       ),
     );
 
@@ -364,14 +441,14 @@ describe('the callback', () => {
     expect((await orderRow(order.orderId)).paymentStatus).toBe('PAID');
   });
 
-  it('copes with Squad appending its own query to ours', async () => {
+  it('copes with Paystack appending trxref and reference to ours', async () => {
     const order = await newOrder();
     const { attempt } = await startPayment(order.orderId);
-    squad.verify.set(attempt.reference, { status: 'success' });
+    paystack.verify.set(attempt.reference, { status: 'success' });
 
     await callback(
       new NextRequest(
-        `http://shop.pay.app.localhost:3000/api/payments/squad/callback?ref=${attempt.reference}?reference=${attempt.reference}`,
+        `http://shop.pay.app.localhost:3000/api/payments/paystack/callback?ref=${attempt.reference}&trxref=${attempt.reference}&reference=${attempt.reference}`,
       ),
     );
     expect((await orderRow(order.orderId)).paymentStatus).toBe('PAID');
@@ -388,10 +465,10 @@ describe('the callback', () => {
     });
     const attempt = await prisma.orderPayment.findFirstOrThrow({ where: { orderId: order.orderId } });
     expect(attempt.nativeApp).toBe(true);
-    squad.verify.set(attempt.reference, { status: 'success' });
+    paystack.verify.set(attempt.reference, { status: 'success' });
 
     const res = await callback(
-      new NextRequest(`http://m.app.localhost:3000/api/payments/squad/callback?ref=${attempt.reference}`),
+      new NextRequest(`http://m.app.localhost:3000/api/payments/paystack/callback?ref=${attempt.reference}`),
     );
 
     expect(res.status).toBe(200);
@@ -402,54 +479,31 @@ describe('the callback', () => {
   });
 
   it('sends an unknown reference home', async () => {
-    const res = await callback(new NextRequest('http://shop.pay.app.localhost:3000/api/payments/squad/callback?ref=nope'));
+    const res = await callback(new NextRequest('http://shop.pay.app.localhost:3000/api/payments/paystack/callback?ref=nope'));
     expect(res.headers.get('location')).toBe('http://shop.pay.app.localhost:3000/');
   });
 });
 
-describe('the webhook', () => {
-  const post = (body: string, signature: string | null) =>
-    webhook(
-      new NextRequest('https://tunnel.example/api/payments/squad/webhook', {
-        method: 'POST',
-        body,
-        headers: signature ? { 'x-squad-encrypted-body': signature } : {},
-      }),
-    );
-  const sign = (body: string) => crypto.createHmac('sha512', SECRET).update(body).digest('hex').toUpperCase();
+/* ---------------- history: attempts started on Squad (ROADMAP 10.9) ---------------- */
 
-  it('rejects an unsigned or wrongly signed request without touching the order', async () => {
+describe('attempts started on Squad, before it was retired', () => {
+  it('are answered as unverifiable without calling anyone, and never change the order', async () => {
     const order = await newOrder();
-    const { attempt } = await startPayment(order.orderId);
-    squad.verify.set(attempt.reference, { status: 'success' });
-    const body = JSON.stringify({ Event: 'charge_successful', TransactionRef: attempt.reference });
-
-    expect((await post(body, null)).status).toBe(401);
-    expect((await post(body, sign('something else'))).status).toBe(401);
-    expect((await orderRow(order.orderId)).paymentStatus).toBe('AWAITING_PAYMENT');
-  });
-
-  it('settles a signed notification by verifying with Squad, not by believing the body', async () => {
-    const order = await newOrder();
-    const { attempt } = await startPayment(order.orderId);
-
-    // The body claims success; Squad's verify endpoint says otherwise.
-    squad.verify.set(attempt.reference, { status: 'failed' });
-    const body = JSON.stringify({
-      Event: 'charge_successful',
-      TransactionRef: attempt.reference,
-      Body: { transaction_ref: attempt.reference, transaction_status: 'Success' },
+    const attempt = await prisma.orderPayment.create({
+      data: {
+        organizationId: store.id,
+        orderId: order.orderId,
+        provider: 'squad',
+        reference: `${order.reference}-LEGACY-${Math.random().toString(36).slice(2, 7)}`,
+        amount: (await prisma.order.findUniqueOrThrow({ where: { id: order.orderId } })).totalAmount,
+        currency: 'NGN',
+        returnUrl: 'http://shop.pay.app.localhost:3000/checkout/confirmation?t=tok',
+      },
     });
-    expect((await post(body, sign(body))).status).toBe(200);
-    expect((await orderRow(order.orderId)).paymentStatus).toBe('AWAITING_PAYMENT');
 
-    // A real success, delivered twice.
-    const order2 = await newOrder();
-    const { attempt: attempt2 } = await startPayment(order2.orderId);
-    squad.verify.set(attempt2.reference, { status: 'success' });
-    const body2 = JSON.stringify({ Event: 'charge_successful', TransactionRef: attempt2.reference });
-    expect((await post(body2, sign(body2))).status).toBe(200);
-    expect((await post(body2, sign(body2))).status).toBe(200);
-    expect((await orderRow(order2.orderId)).paymentStatus).toBe('PAID');
+    expect(await reconcilePayment(attempt.reference)).toBe('unverifiable');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect((await orderRow(order.orderId)).paymentStatus).toBe('AWAITING_PAYMENT');
+    expect((await prisma.orderPayment.findUniqueOrThrow({ where: { id: attempt.id } })).status).toBe('PENDING');
   });
 });

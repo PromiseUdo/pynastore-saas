@@ -14,7 +14,9 @@ import { PLATFORM_NAME } from '@/lib/brand';
 type DomainOrderNotificationEmailProps = {
   orgName: string;
   orgSlug: string;
-  domainOrderType: 'EXISTING' | 'REGISTER';
+  domainOrderType: 'EXISTING' | 'REGISTER' | 'RENEW';
+  /** the order in the console's queue */
+  queueUrl?: string;
   domain: string;
 };
 
@@ -23,8 +25,10 @@ export function DomainOrderNotificationEmail({
   orgSlug,
   domainOrderType,
   domain,
+  queueUrl,
 }: DomainOrderNotificationEmailProps) {
-  const actionLabel = domainOrderType === 'REGISTER' ? 'Register and connect' : 'Connect existing';
+  const actionLabel =
+    domainOrderType === 'REGISTER' ? 'Register and connect' : domainOrderType === 'RENEW' ? 'Renew at Namecheap' : 'Connect their own domain';
 
   return (
     <Html>
@@ -37,11 +41,10 @@ export function DomainOrderNotificationEmail({
           <Text style={logo}>{PLATFORM_NAME}</Text>
 
           <Section style={card}>
-            <Text style={heading}>New domain order pending fulfillment</Text>
+            <Text style={heading}>Domain work waiting</Text>
 
             <Text style={paragraph}>
-              <strong>{orgName}</strong> ({orgSlug}) paid for a custom domain and is
-              expecting it active within 24 hours.
+              <strong>{orgName}</strong> ({orgSlug}) is expecting this done within 24 hours.
             </Text>
 
             <Text style={paragraph}>
@@ -53,9 +56,8 @@ export function DomainOrderNotificationEmail({
             <Hr style={hr} />
 
             <Text style={footer}>
-              Fulfill manually ({domainOrderType === 'REGISTER' ? 'register the domain and point DNS' : 'confirm DNS with the customer'}),
-              then mark the DomainOrder as ACTIVE and set the org&apos;s
-              customAdminDomain/customStoreDomain.
+              Work through its checklist in the platform console{queueUrl ? `: ${queueUrl}` : ' (Domains)'}, then mark it live
+              there — that routes the shop and emails the merchant.
             </Text>
           </Section>
         </Container>

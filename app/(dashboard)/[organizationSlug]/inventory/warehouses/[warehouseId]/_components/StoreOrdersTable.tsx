@@ -159,6 +159,7 @@ export function StoreOrdersTable({ storeName, list }: { storeName: string; list:
                           {ORDER_STATUS_LABEL[order.status] ?? order.status}
                         </Badge>
                         {order.returnsAwaiting > 0 && <Badge variant="warning">Return requested</Badge>}
+                        {order.partiallySent && <Badge variant="processing">Partially sent</Badge>}
                       </span>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">

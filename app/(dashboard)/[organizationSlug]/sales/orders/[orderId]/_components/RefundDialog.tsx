@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { SwitchRoot } from '@/components/ui/switch';
+import { CheckboxRoot } from '@/components/ui/checkbox';
 import { Field, FieldDescription, FieldError } from '@/components/ui/form-field';
 import {
   DialogRoot,
@@ -32,7 +33,8 @@ import { formatMoney } from '@/lib/format';
 import { refundCancelledStoreOrder, refundOrderReturn } from '@/features/sales/order-returns';
 
 const HOW_TO_REFUND: Record<string, string> = {
-  squad: 'The customer paid online, so refund them from your Squad dashboard first.',
+  paystack: 'The customer paid online and the money was paid into your bank account, so send it back from there first.',
+  squad: 'The customer paid online through our old payment provider — send the money back from your bank first.',
   transfer: 'The customer paid by bank transfer, so send the money back from your bank first.',
   pod: 'The customer paid the courier, so pay them back the way you agree with them first.',
   default: 'Send the money back to the customer first.',
@@ -50,6 +52,7 @@ export function RefundDialog({
   max,
   currency,
   paymentMethod,
+  deliveryFees = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -59,11 +62,25 @@ export function RefundDialog({
   /** major units: what hasn't been refunded yet */
   max: number;
   currency: string;
-  /** how the customer paid: 'squad' | 'transfer' | 'pod' */
+  /** how the customer paid: 'paystack' | 'transfer' | 'pod' (or 'squad', on older orders) */
   paymentMethod: string;
+  /**
+   * Parcels' delivery fees the merchant may add back (ROADMAP Phase 9.6) —
+   * e.g. the parcel whose items all came back. Major units.
+   */
+  deliveryFees?: { id: string; label: string; amount: number }[];
 }) {
   const router = useRouter();
   const [amount, setAmount] = React.useState(String(Math.min(suggested, max)));
+  const [addedFees, setAddedFees] = React.useState<string[]>([]);
+
+  /* Ticking a parcel's delivery adds it to whatever is in the box (and
+   * untick takes it off), so a figure the merchant typed is kept. */
+  function toggleFee(fee: { id: string; amount: number }, on: boolean) {
+    setAddedFees((current) => (on ? [...current, fee.id] : current.filter((id) => id !== fee.id)));
+    const base = Number(amount.replace(/,/g, '')) || 0;
+    setAmount(String(Math.round((base + (on ? fee.amount : -fee.amount)) * 100) / 100));
+  }
   const [note, setNote] = React.useState('');
   const [restock, setRestock] = React.useState(target.kind === 'return' && target.canRestock);
   const [error, setError] = React.useState<{ amount?: string; form?: string }>({});
@@ -86,7 +103,17 @@ export function RefundDialog({
     const result =
       target.kind === 'order'
         ? await refundCancelledStoreOrder(target.orderId, { amount: value, note })
-        : await refundOrderReturn(target.returnId, { amount: value, note, restock });
+        : await refundOrderReturn(target.returnId, {
+            amount: value,
+            // Which parcels' delivery went back, in the merchant's own records.
+            note: [
+              note.trim(),
+              ...deliveryFees.filter((fee) => addedFees.includes(fee.id)).map((fee) => `Includes delivery: ${fee.label}.`),
+            ]
+              .filter(Boolean)
+              .join(' '),
+            restock,
+          });
     setPending(false);
 
     if (!result.success) {
@@ -137,7 +164,7 @@ export function RefundDialog({
               ) : (
                 <FieldDescription>
                   {target.kind === 'return'
-                    ? `The returned items come to ${formatMoney(suggested, currency)} after any discount. Delivery isn’t included.`
+                    ? `The returned items come to ${formatMoney(suggested, currency)} after any discount. Delivery isn’t included${deliveryFees.length ? ' unless you add it below' : ''}.`
                     : 'Everything the customer paid that hasn’t gone back yet.'}{' '}
                   Up to {formatMoney(max, currency)}.
                 </FieldDescription>
@@ -150,12 +177,34 @@ export function RefundDialog({
                 id="refund-note"
                 rows={2}
                 maxLength={500}
-                placeholder="e.g. Refunded in Squad on 18 Sep"
+                placeholder="e.g. Sent back by transfer on 18 Sep"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />
               <FieldDescription>Only your team sees this.</FieldDescription>
             </Field>
+
+            {target.kind === 'return' && deliveryFees.length > 0 && (
+              <fieldset className="space-y-2 rounded-md border p-3">
+                <legend className="px-1 text-sm font-medium">Refund delivery too</legend>
+                {deliveryFees.map((fee) => (
+                  <label key={fee.id} className="flex cursor-pointer items-center justify-between gap-3 text-sm">
+                    <span className="flex items-center gap-2">
+                      <CheckboxRoot
+                        checked={addedFees.includes(fee.id)}
+                        onCheckedChange={(checked) => toggleFee(fee, checked === true)}
+                      />
+                      {fee.label}
+                    </span>
+                    <span className="tabular-nums text-muted-foreground">{formatMoney(fee.amount, currency)}</span>
+                  </label>
+                ))}
+                <p className="text-xs text-muted-foreground">
+                  Each parcel was charged its own delivery. Add one back if its items were all returned, or the fault was
+                  yours.
+                </p>
+              </fieldset>
+            )}
 
             {target.kind === 'return' && target.canRestock && (
               <div className="flex items-start justify-between gap-4 rounded-md border p-3">

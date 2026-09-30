@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     default: PLATFORM_NAME,
     template: `%s · ${PLATFORM_NAME}`,
   },
-  description: 'Modern multi-tenant ERP platform',
+  description: 'Stock, sales, delivery and payments for businesses that sell at a counter, online, or both.',
 };
 
 // viewport-fit=cover + no user zoom is required for a native-feeling

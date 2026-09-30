@@ -10,8 +10,8 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { getOrganizationSettings } from '@/features/settings/organization';
 import { SUPPORTED_CURRENCIES } from '@/lib/currencies';
-import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { GeneralSettingsClient } from './_components/GeneralSettingsClient';
+import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
 export const metadata: Metadata = { title: 'General' };
 
@@ -27,7 +27,7 @@ export default async function GeneralSettingsPage() {
     <GeneralSettingsClient
       settings={result.data}
       canManage={hasPermission(perms, PERMISSIONS.SETTINGS_EDIT)}
-      storeUrl={getStorefrontUrl(result.data.slug)}
+      storeUrl={(await storefrontUrlFor(result.data.slug))}
       currencies={[...SUPPORTED_CURRENCIES]}
     />
   );

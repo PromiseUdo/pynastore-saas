@@ -19,6 +19,7 @@ import { setActiveOrg } from '@/lib/storefront/stores/storage';
 import { useCheckoutStore } from '@/lib/storefront/stores/checkout-store';
 import { toCartLine } from '@/lib/storefront/cart';
 import { getCheckoutConfig } from '@/lib/storefront/checkout/config';
+import { ONLINE_PAYMENT_METHOD } from '@/lib/storefront/mock/checkout';
 import type { CheckoutAccount } from '@/lib/storefront/checkout/types';
 import { PRODUCTS } from '@/lib/storefront/mock/products';
 
@@ -58,7 +59,9 @@ vi.mock('@/features/shop-orders/actions', () => ({
 
 vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
 
-const config = await getCheckoutConfig({ organizationSlug: 'demo' });
+// A store that may take online payments offers "Pay online" first (ROADMAP 10.8).
+const baseConfig = await getCheckoutConfig({ organizationSlug: 'demo' });
+const config = { ...baseConfig, paymentMethods: [ONLINE_PAYMENT_METHOD, ...baseConfig.paymentMethods] };
 const SIMPLE = PRODUCTS.find((p) => p.options.length === 0 && p.variants[0]?.stock > 3)!;
 
 const HOME = {

@@ -34,15 +34,16 @@
  */
 import { prisma } from '@/lib/prisma';
 import { maybeSendLowStockAlert } from '@/features/inventory/shared';
-import { reconcileOpenAttempts, reviveTimedOutOrder, SQUAD_PROVIDER } from '../checkout/payment-service';
-import { TRANSFER_HOLD_HOURS } from '../mock/checkout';
+import { ONLINE_PAYMENT_METHODS, reconcileOpenAttempts, reviveTimedOutOrder } from '../checkout/payment-service';
+import { TRANSFER_HOLD_HOURS, UNPAID_ORDER_HOLD_MINUTES } from './holds';
 import { dispatchOrderStock, releaseOrderStock, type DispatchedStock } from './stock';
+import { markShipmentsCancelled, markShipmentsDelivered, markShipmentsDispatched } from './shipments';
+import { cancelRequestedTransfers, requestGatheringTransfers, waitingOn } from './gather';
 import { releaseDiscountUse } from '../discounts/usage';
 import { notifyMerchant, notifyShopper } from './notifications';
 import { CUSTOMER_CANCELLABLE_STATUSES } from './policy';
 
-/** How long an unpaid online-payment order holds its stock. */
-export const UNPAID_ORDER_HOLD_MINUTES = 60;
+export { UNPAID_ORDER_HOLD_MINUTES } from './holds';
 
 export const PAYMENT_TIMEOUT = 'payment-timeout';
 export const CANCELLED_BY_MERCHANT = 'merchant';
@@ -73,8 +74,9 @@ async function load(scope: Scope) {
 /**
  * Cancel orders nobody paid for within their hold window, and put their stock
  * back on sale:
- *   - online (Squad) orders after UNPAID_ORDER_HOLD_MINUTES — each checked
- *     with Squad first, so a payment that went through unheard settles instead;
+ *   - online orders after UNPAID_ORDER_HOLD_MINUTES — each checked with
+ *     Paystack first, so a payment that went through unheard settles instead
+ *     (a Squad-era one can no longer be checked, and simply expires);
  *   - bank-transfer orders after TRANSFER_HOLD_HOURS, which the shopper was
  *     told when they ordered. A transfer that arrives later can still be
  *     confirmed by the merchant; the order comes back if the stock is there.
@@ -93,7 +95,12 @@ export async function expireUnpaidOrders(options: { organizationId?: string; lim
       ...store,
       status: 'PENDING',
       OR: [
-        { paymentMethod: SQUAD_PROVIDER, paymentStatus: 'AWAITING_PAYMENT', placedAt: { lt: onlineCutoff } },
+        {
+          // Paystack, and any Squad-era order still waiting (ROADMAP 10.9).
+          paymentMethod: { in: [...ONLINE_PAYMENT_METHODS] },
+          paymentStatus: 'AWAITING_PAYMENT',
+          placedAt: { lt: onlineCutoff },
+        },
         { paymentMethod: 'transfer', paymentStatus: 'AWAITING_TRANSFER', placedAt: { lt: transferCutoff } },
       ],
     },
@@ -118,6 +125,8 @@ export async function expireUnpaidOrders(options: { organizationId?: string; lim
       });
       if (claimed.count === 0) return false;
       await releaseOrderStock(tx, id);
+      await markShipmentsCancelled(tx, id);
+      await cancelRequestedTransfers(tx, id);
       await releaseDiscountUse(tx, discountCodeId);
       return true;
     });
@@ -149,7 +158,10 @@ export async function confirmOrder(scope: Scope): Promise<TransitionResult> {
     where: { id: order.id, status: 'PENDING' },
     data: { status: 'CONFIRMED', confirmedAt: new Date() },
   });
-  return claimed.count ? { ok: true } : CHANGED;
+  if (!claimed.count) return CHANGED;
+  // Ask other stores for anything being brought together (Phase 9.7). Idempotent, so safe outside a transaction.
+  await requestGatheringTransfers(prisma, order.id);
+  return { ok: true };
 }
 
 /** The merchant has started packing. No email — the next one says it's on its way. */
@@ -178,14 +190,19 @@ export async function markOrderShipped(
   if (order.paymentStatus !== 'PAID' && order.paymentStatus !== 'DUE_ON_DELIVERY') {
     return { ok: false, error: 'This order hasn’t been paid for yet.' };
   }
+  const waiting = await waitingOn(prisma, { orderId: order.id });
+  if (waiting.length) return stillGathering(waiting);
 
   let moved: DispatchedStock[] = [];
   const shipped = await prisma.$transaction(async (tx) => {
+    const now = new Date();
     const claimed = await tx.order.updateMany({
       where: { id: order.id, status: { in: ['CONFIRMED', 'PROCESSING'] } },
-      data: { status: 'SHIPPED', shippedAt: new Date() },
+      data: { status: 'SHIPPED', shippedAt: now },
     });
     if (claimed.count === 0) return false;
+    // Until parcels are sent one by one (Phase 9.6), they all leave with the order.
+    await markShipmentsDispatched(tx, order.id, now);
     moved = await dispatchOrderStock(tx, {
       organizationId: scope.organizationId,
       orderId: order.id,
@@ -214,17 +231,134 @@ export async function markOrderDelivered(
 
   const collect = Boolean(scope.paymentCollected) && order.paymentStatus === 'DUE_ON_DELIVERY';
 
-  const claimed = await prisma.order.updateMany({
-    where: { id: order.id, status: 'SHIPPED' },
-    data: {
-      status: 'DELIVERED',
-      deliveredAt: new Date(),
-      ...(collect ? { paymentStatus: 'PAID' as const, paidAt: new Date() } : {}),
-    },
+  const delivered = await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const claimed = await tx.order.updateMany({
+      where: { id: order.id, status: 'SHIPPED' },
+      data: {
+        status: 'DELIVERED',
+        deliveredAt: now,
+        ...(collect ? { paymentStatus: 'PAID' as const, paidAt: now } : {}),
+      },
+    });
+    if (!claimed.count) return false;
+    await markShipmentsDelivered(tx, order.id, now);
+    return true;
   });
-  if (!claimed.count) return CHANGED;
+  if (!delivered) return CHANGED;
 
   await notifyShopper(order.id, 'delivered');
+  return { ok: true };
+}
+
+/* ---------------- one parcel at a time (ROADMAP Phase 9.6) ---------------- */
+
+type ShipmentScope = Scope & { shipmentId: string };
+
+async function loadShipment(scope: ShipmentScope) {
+  return prisma.orderShipment.findFirst({
+    where: { id: scope.shipmentId, orderId: scope.orderId, organizationId: scope.organizationId },
+    select: { id: true, status: true, warehouseId: true },
+  });
+}
+
+/**
+ * One store sends its parcel. Only that parcel's stock leaves the shelf.
+ * The first parcel out moves a confirmed order into packing; the last one
+ * out marks the whole order shipped, and that is when the shopper is told —
+ * until then the order reads "Partially sent" on the merchant's side.
+ */
+export async function sendShipment(
+  scope: ShipmentScope & { organizationSlug: string; performedById: string | null; trackingNote?: string | null },
+): Promise<TransitionResult> {
+  const [order, shipment] = await Promise.all([load(scope), loadShipment(scope)]);
+  if (!order || !shipment) return NOT_FOUND;
+  if (!['CONFIRMED', 'PROCESSING'].includes(order.status)) {
+    return {
+      ok: false,
+      error: order.status === 'PENDING' ? 'Confirm the order before sending any of it.' : 'This order can’t be sent now.',
+    };
+  }
+  if (order.paymentStatus !== 'PAID' && order.paymentStatus !== 'DUE_ON_DELIVERY') {
+    return { ok: false, error: 'This order hasn’t been paid for yet.' };
+  }
+  if (shipment.status !== 'PENDING') return { ok: false, error: 'This parcel has already been sent.' };
+  const waiting = await waitingOn(prisma, { orderId: order.id, shipmentId: shipment.id });
+  if (waiting.length) return stillGathering(waiting);
+
+  let moved: DispatchedStock[] = [];
+  let allSent = false;
+  const sent = await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const claimed = await tx.orderShipment.updateMany({
+      where: { id: shipment.id, status: 'PENDING' },
+      data: { status: 'DISPATCHED', dispatchedAt: now, trackingNote: scope.trackingNote?.trim().slice(0, 200) || null },
+    });
+    if (claimed.count === 0) return false;
+
+    moved = await dispatchOrderStock(tx, {
+      organizationId: scope.organizationId,
+      orderId: order.id,
+      performedById: scope.performedById,
+      shipmentId: shipment.id,
+    });
+
+    const waiting = await tx.orderShipment.count({ where: { orderId: order.id, status: 'PENDING' } });
+    allSent = waiting === 0;
+    await tx.order.updateMany({
+      where: { id: order.id, status: { in: ['CONFIRMED', 'PROCESSING'] } },
+      data: allSent
+        ? { status: 'SHIPPED', shippedAt: now }
+        : order.status === 'CONFIRMED'
+          ? { status: 'PROCESSING', packingAt: now }
+          : {},
+    });
+    return true;
+  });
+  if (!sent) return CHANGED;
+
+  await alertLowStock(scope, moved);
+  if (allSent) await notifyShopper(order.id, 'shipped');
+  return { ok: true };
+}
+
+/**
+ * One parcel arrived. The last one to arrive marks the order delivered —
+ * and for pay on delivery, `paymentCollected` then records the money, which
+ * by that point every courier has handed over.
+ */
+export async function deliverShipment(scope: ShipmentScope & { paymentCollected?: boolean }): Promise<TransitionResult> {
+  const [order, shipment] = await Promise.all([load(scope), loadShipment(scope)]);
+  if (!order || !shipment) return NOT_FOUND;
+  if (shipment.status !== 'DISPATCHED') {
+    return { ok: false, error: shipment.status === 'DELIVERED' ? 'This parcel has already arrived.' : 'Send this parcel first.' };
+  }
+
+  let allDelivered = false;
+  const done = await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const claimed = await tx.orderShipment.updateMany({
+      where: { id: shipment.id, status: 'DISPATCHED' },
+      data: { status: 'DELIVERED', deliveredAt: now },
+    });
+    if (claimed.count === 0) return false;
+
+    const outstanding = await tx.orderShipment.count({
+      where: { orderId: order.id, status: { in: ['PENDING', 'DISPATCHED'] } },
+    });
+    allDelivered = outstanding === 0;
+    if (allDelivered) {
+      const collect = Boolean(scope.paymentCollected) && order.paymentStatus === 'DUE_ON_DELIVERY';
+      await tx.order.updateMany({
+        where: { id: order.id, status: 'SHIPPED' },
+        data: { status: 'DELIVERED', deliveredAt: now, ...(collect ? { paymentStatus: 'PAID' as const, paidAt: now } : {}) },
+      });
+    }
+    return true;
+  });
+  if (!done) return CHANGED;
+
+  if (allDelivered) await notifyShopper(order.id, 'delivered');
   return { ok: true };
 }
 
@@ -259,6 +393,8 @@ export async function confirmTransferReceived(scope: Scope): Promise<TransitionR
     },
   });
   if (!claimed.count) return CHANGED;
+  // Confirmed now: ask other stores for anything being brought together (Phase 9.7).
+  if (order.status === 'PENDING') await requestGatheringTransfers(prisma, order.id);
 
   if (!timedOut) {
     await notifyShopper(order.id, 'payment-received');
@@ -326,6 +462,8 @@ async function cancel(
     });
     if (claimed.count === 0) return false;
     await releaseOrderStock(tx, order.id);
+    await markShipmentsCancelled(tx, order.id);
+    await cancelRequestedTransfers(tx, order.id);
     await releaseDiscountUse(tx, order.discountCodeId);
     return true;
   });
@@ -341,6 +479,15 @@ export async function cancelOrder(scope: Scope): Promise<TransitionResult> {
         order.status === 'CANCELLED'
           ? 'This order is already cancelled.'
           : 'This order has already been sent, so it can’t be cancelled.',
+    };
+  }
+
+  /* A parcel already on its way can't be called back by cancelling the order
+   * (Phase 9.6) — that stock has left the shelf. */
+  if (await anyParcelSent(order.id)) {
+    return {
+      ok: false,
+      error: 'Part of this order has already been sent, so it can’t be cancelled. Send the rest, or take the parcel back as a return.',
     };
   }
 
@@ -392,6 +539,18 @@ export async function cancelOrderForCustomer(input: {
 }
 
 /* ---------------- helpers ---------------- */
+
+/** The parcel's store is still waiting for items from others (Phase 9.7). */
+function stillGathering(stores: string[]): TransitionResult {
+  return {
+    ok: false,
+    error: `Still waiting for items from ${stores.join(', ')} to arrive. Receive the transfer first, then send the parcel.`,
+  };
+}
+
+async function anyParcelSent(orderId: string): Promise<boolean> {
+  return (await prisma.orderShipment.count({ where: { orderId, status: { in: ['DISPATCHED', 'DELIVERED'] } } })) > 0;
+}
 
 /**
  * Tell whoever restocks that a shelf just went below its reorder point.

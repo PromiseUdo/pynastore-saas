@@ -2,78 +2,41 @@
 
 import * as React from 'react';
 import { PricingCards } from './PricingCards';
-import { DomainSetupStep, type DomainSummary } from './DomainSetupStep';
 import { CheckoutSummaryStep } from './CheckoutSummaryStep';
-import type { PlanConfig } from '@/lib/billing/plans';
-import type { OrganizationPlan, BillingCycle } from '@/lib/generated/prisma/enums';
-import type { DomainChoiceInput } from '@/lib/billing/checkout';
-
-type Step = 'plan' | 'domain' | 'checkout';
-type PaidPlan = 'STARTER' | 'PRO' | 'ENTERPRISE';
+import type { PlanOffer } from '@/lib/billing/catalogue';
+import type { BillingCycleKey } from '@/lib/billing/plans';
 
 type UpgradeWizardProps = {
-  plans: PlanConfig[];
-  currentPlan: OrganizationPlan;
+  plans: PlanOffer[];
+  /** the plan and cycle being paid for now, if any */
+  current: { planId: string; cycle: string } | null;
   canManageBilling: boolean;
-  orgSlug: string;
-  rootDomain: string;
 };
 
-export function UpgradeWizard({
-  plans,
-  currentPlan,
-  canManageBilling,
-  orgSlug,
-  rootDomain,
-}: UpgradeWizardProps) {
-  const [step, setStep] = React.useState<Step>('plan');
-  const [selectedPlan, setSelectedPlan] = React.useState<PaidPlan | null>(null);
-  const [billingCycle, setBillingCycle] = React.useState<BillingCycle>('MONTHLY');
-  const [domainChoice, setDomainChoice] = React.useState<DomainChoiceInput | null>(null);
-  const [domainSummary, setDomainSummary] = React.useState<DomainSummary | null>(null);
+/**
+ * Choose a plan, then pay. A custom domain is no longer a step here — it has
+ * its own page, Settings → Domain (ROADMAP 12.6).
+ */
+export function UpgradeWizard({ plans, current, canManageBilling }: UpgradeWizardProps) {
+  const [selected, setSelected] = React.useState<{ plan: PlanOffer; cycle: BillingCycleKey } | null>(null);
 
-  if (step === 'plan') {
+  if (!selected) {
     return (
       <PricingCards
         plans={plans}
-        currentPlan={currentPlan}
+        current={current}
         canManageBilling={canManageBilling}
-        onSelectPlan={(plan, cycle) => {
-          setSelectedPlan(plan);
-          setBillingCycle(cycle);
-          setStep('domain');
-        }}
+        onSelectPlan={(plan, cycle) => setSelected({ plan, cycle })}
       />
     );
   }
 
-  if (step === 'domain' && selectedPlan) {
-    return (
-      <DomainSetupStep
-        orgSlug={orgSlug}
-        rootDomain={rootDomain}
-        onBack={() => setStep('plan')}
-        onContinue={(choice, summary) => {
-          setDomainChoice(choice);
-          setDomainSummary(summary);
-          setStep('checkout');
-        }}
-      />
-    );
-  }
-
-  if (step === 'checkout' && selectedPlan && domainChoice && domainSummary) {
-    return (
-      <CheckoutSummaryStep
-        plan={selectedPlan}
-        billingCycle={billingCycle}
-        domainChoice={domainChoice}
-        domainLabel={domainSummary.label}
-        domainPriceNgn={domainSummary.priceNgn}
-        onBack={() => setStep('domain')}
-      />
-    );
-  }
-
-  return null;
+  const price = selected.plan.prices.find((p) => p.cycle === selected.cycle);
+  if (!price) return null;
+  return (
+    <CheckoutSummaryStep
+      plan={{ id: selected.plan.id, name: selected.plan.name, cycle: selected.cycle, amount: price.amount }}
+      onBack={() => setSelected(null)}
+    />
+  );
 }

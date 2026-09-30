@@ -1,6 +1,8 @@
 'use client';
 
-/* Add or edit a pickup location — six fields and a switch, so a dialog. */
+/* Add or edit a pickup location — a short form and a switch, so a dialog.
+ * A pickup point collects ONE store's stock (Phase 9.2), so the store comes
+ * first, and a new location starts from that store's city and state. */
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -21,7 +23,8 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
-import { savePickupLocation, type PickupLocationRow } from '@/features/settings/delivery';
+import { savePickupLocation, type DeliveryStoreRow, type PickupLocationRow } from '@/features/settings/delivery';
+import { StoreSelectField } from './StoreSelectField';
 import { ETA_UNITS, ETA_UNIT_LABELS, formatReady, fromMinutes, toMinutes, type DeliveryEtaUnit } from '@/lib/storefront/delivery/eta';
 
 const UNIT_NOUN: Record<DeliveryEtaUnit, string> = { MINUTES: 'minutes', HOURS: 'hours', DAYS: 'working days' };
@@ -30,16 +33,23 @@ export function PickupDialog({
   open,
   onOpenChange,
   editing,
+  stores,
+  defaultStoreId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing: PickupLocationRow | null;
+  stores: DeliveryStoreRow[];
+  /** the store a new location starts on — the section it was added from */
+  defaultStoreId: string | null;
 }) {
   const router = useRouter();
+  const startStore = editing ? null : stores.find((s) => s.id === defaultStoreId) ?? null;
+  const [warehouseId, setWarehouseId] = React.useState(editing?.warehouseId ?? defaultStoreId ?? '');
   const [name, setName] = React.useState(editing?.name ?? '');
   const [address, setAddress] = React.useState(editing?.address ?? '');
-  const [city, setCity] = React.useState(editing?.city ?? '');
-  const [state, setState] = React.useState(editing?.state ?? '');
+  const [city, setCity] = React.useState(editing?.city ?? startStore?.city ?? '');
+  const [state, setState] = React.useState(editing?.state ?? startStore?.state ?? '');
   const [readyUnit, setReadyUnit] = React.useState<DeliveryEtaUnit>(editing?.readyUnit ?? 'DAYS');
   const [readyTime, setReadyTime] = React.useState(editing ? String(fromMinutes(editing.readyMinutes, editing.readyUnit)) : '1');
   const [instructions, setInstructions] = React.useState(editing?.instructions ?? '');
@@ -51,12 +61,23 @@ export function PickupDialog({
   const minutes = toMinutes(Number(readyTime) || 0, readyUnit);
   const readyPreview = formatReady({ minMinutes: minutes, maxMinutes: minutes, unit: readyUnit });
 
+  /* A new location usually IS the store: fill in its city and state, but
+   * never overwrite what the merchant has already typed. */
+  function chooseStore(id: string) {
+    setWarehouseId(id);
+    const store = stores.find((s) => s.id === id);
+    if (editing || !store) return;
+    if (!city.trim() && store.city) setCity(store.city);
+    if (!state && store.state) setState(store.state);
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setPending(true);
     setErrors({});
     setFormError(null);
     const result = await savePickupLocation(editing?.id ?? null, {
+      warehouseId,
       name,
       address,
       city,
@@ -85,7 +106,7 @@ export function PickupDialog({
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit pickup location' : 'Add pickup location'}</DialogTitle>
             <DialogDescription>
-              Customers anywhere can choose to collect their order here, for free.
+              Customers can collect their order here. It hands over the chosen store’s stock.
             </DialogDescription>
           </DialogHeader>
 
@@ -95,6 +116,16 @@ export function PickupDialog({
                 {formError}
               </p>
             )}
+
+            <StoreSelectField
+              id="pickup-store"
+              label="Stock from"
+              help="The store whose stock is collected here — usually the shop itself."
+              stores={stores}
+              value={warehouseId}
+              onChange={chooseStore}
+              error={errors.warehouseId}
+            />
 
             <Field>
               <Label htmlFor="pickup-name">Name *</Label>

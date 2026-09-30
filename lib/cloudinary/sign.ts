@@ -79,11 +79,88 @@ export function isOrgAsset(
   );
 }
 
+/* ---------------- private documents ---------------- */
+
+/*
+ * Verification documents (ROADMAP 10.2/10.8) are not images for a page: they
+ * are a business's CAC certificate, an ID and a utility bill. They are
+ * uploaded as `type: private`, so Cloudinary serves no public URL for them at
+ * all, and they are opened only through privateDownloadUrl — a link signed on
+ * the server that stops working after a few minutes.
+ */
+
+export const ALLOWED_DOCUMENT_FORMATS = 'pdf,jpg,jpeg,png,webp';
+
+export function documentFolder(organizationId: string): string {
+  return `mansaas/${organizationId}/verification`;
+}
+
+export function signDocumentUpload(
+  organizationId: string,
+  config: CloudinaryConfig = getCloudinaryConfig(),
+  now = Date.now(),
+): SignedUpload {
+  const params = {
+    allowed_formats: ALLOWED_DOCUMENT_FORMATS,
+    folder: documentFolder(organizationId),
+    timestamp: Math.floor(now / 1000),
+    type: 'private',
+  };
+  return {
+    // PDFs are handled by Cloudinary's image pipeline, so one endpoint takes both.
+    uploadUrl: `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
+    fields: {
+      ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
+      api_key: config.apiKey,
+      signature: signParams(params, config.apiSecret),
+    },
+  };
+}
+
+/**
+ * True when `publicId` is a document this org uploaded through us. The server
+ * checks this before saving a document reference, so a crafted request can't
+ * attach another tenant's file.
+ */
+export function isOrgDocument(publicId: string, organizationId: string): boolean {
+  const prefix = `${documentFolder(organizationId)}/`;
+  return publicId.startsWith(prefix) && /^[A-Za-z0-9_\-/.]+$/.test(publicId) && !publicId.includes('..');
+}
+
+/**
+ * A link that downloads one private document and expires after
+ * `expiresInSeconds`. Cloudinary's "private download URL": the parameters are
+ * signed exactly like an upload, so nobody can change the file it points at.
+ */
+export function privateDownloadUrl(
+  publicId: string,
+  format: string,
+  { expiresInSeconds = 300 }: { expiresInSeconds?: number } = {},
+  config: CloudinaryConfig = getCloudinaryConfig(),
+  now = Date.now(),
+): string {
+  const timestamp = Math.floor(now / 1000);
+  const params = {
+    expires_at: timestamp + expiresInSeconds,
+    format,
+    public_id: publicId,
+    timestamp,
+    type: 'private',
+  };
+  const query = new URLSearchParams({
+    ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
+    api_key: config.apiKey,
+    signature: signParams(params, config.apiSecret),
+  });
+  return `https://api.cloudinary.com/v1_1/${config.cloudName}/image/download?${query}`;
+}
+
 /** Best-effort delete; a leftover asset is cheaper than a failed save. */
-export async function destroyAsset(publicId: string): Promise<void> {
+export async function destroyAsset(publicId: string, { type }: { type?: 'private' } = {}): Promise<void> {
   try {
     const config = getCloudinaryConfig();
-    const params = { public_id: publicId, timestamp: Math.floor(Date.now() / 1000) };
+    const params: Record<string, string | number> = { public_id: publicId, timestamp: Math.floor(Date.now() / 1000) };
+    if (type) params.type = type;
     const body = new URLSearchParams({
       ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
       api_key: config.apiKey,

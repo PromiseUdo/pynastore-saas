@@ -47,7 +47,7 @@ import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group';
 
 /* Icons are decoration on top of the label, never the only signal. */
 const ICONS: Record<string, typeof CreditCard> = {
-  squad: CreditCard,
+  paystack: CreditCard,
   card: CreditCard,
   transfer: Landmark,
   pod: Banknote,

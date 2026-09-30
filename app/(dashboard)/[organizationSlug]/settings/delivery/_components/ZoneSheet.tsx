@@ -7,6 +7,9 @@
  * are explained in the merchant's terms, with the matching rule stated once —
  * a customer gets the most specific zone that covers them — so "Within Port
  * Harcourt" next to "Rivers" does what the merchant expects.
+ *
+ * Every zone belongs to the store orders leave from (Phase 9.2): Port
+ * Harcourt → Port Harcourt and Lagos → Port Harcourt are different prices.
  */
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
@@ -23,7 +26,8 @@ import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group';
 import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { SheetRoot, SheetContent, SheetHeader, SheetFooter, SheetTitle, SheetDescription, SheetClose } from '@/components/ui/sheet';
 import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
-import { saveDeliveryZone, type DeliveryZoneRow } from '@/features/settings/delivery';
+import { saveDeliveryZone, type DeliveryStoreRow, type DeliveryZoneRow } from '@/features/settings/delivery';
+import { StoreSelectField } from './StoreSelectField';
 
 type Kind = DeliveryZoneRow['kind'];
 
@@ -45,12 +49,18 @@ export function ZoneSheet({
   open,
   onOpenChange,
   editing,
+  stores,
+  defaultStoreId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing: DeliveryZoneRow | null;
+  stores: DeliveryStoreRow[];
+  /** the store a new zone starts on — the section it was added from */
+  defaultStoreId: string | null;
 }) {
   const router = useRouter();
+  const [warehouseId, setWarehouseId] = React.useState(editing?.warehouseId ?? defaultStoreId ?? '');
   const [name, setName] = React.useState(editing?.name ?? '');
   const [kind, setKind] = React.useState<Kind>(editing?.kind ?? 'CITIES');
   const [state, setState] = React.useState(editing?.state ?? '');
@@ -71,6 +81,7 @@ export function ZoneSheet({
     setErrors({});
     setFormError(null);
     const result = await saveDeliveryZone(editing?.id ?? null, {
+      warehouseId,
       name,
       kind,
       state: kind === 'CITIES' ? (state as (typeof NIGERIAN_STATES)[number]) || null : null,
@@ -108,6 +119,16 @@ export function ZoneSheet({
                 {formError}
               </p>
             )}
+
+            <StoreSelectField
+              id="zone-store"
+              label="Delivers from"
+              help="The store these orders leave from. Each store has its own zones, because the same address costs more to reach from further away."
+              stores={stores}
+              value={warehouseId}
+              onChange={setWarehouseId}
+              error={errors.warehouseId}
+            />
 
             <Field>
               <Label htmlFor="zone-name">Zone name *</Label>

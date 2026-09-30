@@ -4,20 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import {
-  Boxes,
-  Eye,
-  EyeOff,
-  Hammer,
-  Layers,
-  MoreHorizontal,
-  Package,
-  PackagePlus,
-  Pencil,
-  Plus,
-  Search,
-  X,
-} from 'lucide-react';
+import { Boxes, Eye, EyeOff, Hammer, Layers, MoreHorizontal, Package, PackagePlus, Pencil, Plus, Search, X, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -146,6 +133,12 @@ export function ProductsPageClient({
       New product
     </Link>
   ) : null;
+  const importButton = can.create ? (
+    <Link href="/inventory/products/import" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+      <Upload className="size-3.5" />
+      Import
+    </Link>
+  ) : null;
 
   return (
     <>
@@ -161,6 +154,7 @@ export function ProductsPageClient({
                   New kit
                 </Button>
               )}
+              {importButton}
               {newProductButton}
             </>
           ) : undefined
@@ -296,7 +290,15 @@ export function ProductsPageClient({
               Products are what you keep in stock and sell. Add photos, prices and sizes or colours once — they’re used in your
               stores, on invoices and on your online store.
             </p>
-            {newProductButton ? <div className="mt-4">{newProductButton}</div> : (
+            {newProductButton ? (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {newProductButton}
+                <Link href="/inventory/products/import" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                  <Upload className="size-3.5" />
+                  Import from a spreadsheet
+                </Link>
+              </div>
+            ) : (
               <p className="mt-4 text-xs text-muted-foreground">Ask an admin to add products.</p>
             )}
             {categories.length === 0 && can.create && (

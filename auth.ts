@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { authConfig } from '@/auth.config';
 import { isSessionVersionValid } from '@/lib/session-version';
+import { markEmailVerified } from '@/lib/email-verification';
 
 const credentialsSchema = z.object({
   email: z.email(),
@@ -78,6 +79,15 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
       },
     }),
   ],
+
+  events: {
+    /* Google has already confirmed the address, so a Google sign-in counts
+     * as a verified email (ROADMAP 12.5) — including for someone who signed
+     * up with a password first. */
+    async signIn({ user, account }) {
+      if (account?.provider === 'google' && user.id) await markEmailVerified(user.id);
+    },
+  },
 
   callbacks: {
     // authConfig.callbacks.redirect allows cross-subdomain redirects (see

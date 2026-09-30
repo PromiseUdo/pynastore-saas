@@ -60,6 +60,7 @@ import {
   type SocialPostRow,
   type SocialPostStatus,
 } from '@/lib/social/types';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 const STATUS_VARIANTS: Record<SocialPostStatus, 'success' | 'warning' | 'destructive' | 'muted'> = {
   PUBLISHED: 'success',
@@ -148,7 +149,7 @@ export function PostHistoryClient({
     <>
       <PageHeader
         title="Post history"
-        description="Every post you’ve sent to a social account from MansaaS, and what became of it."
+        description={`Every post you’ve sent to a social account from ${PLATFORM_NAME}, and what became of it.`}
         actions={
           canManage ? (
             <Button asChild>
@@ -405,7 +406,7 @@ export function PostHistoryClient({
           <AlertDialogHeader>
             <AlertDialogTitle>Remove this post from your history?</AlertDialogTitle>
             <AlertDialogDescription>
-              This only forgets MansaaS’s record of{' '}
+              This only forgets {PLATFORM_NAME}’s record of{' '}
               {discarding?.status === 'DRAFT' ? 'this unsent draft' : 'this failed attempt'}. Nothing is deleted from
               Facebook or Instagram, and you won’t be able to retry it afterwards.
             </AlertDialogDescription>

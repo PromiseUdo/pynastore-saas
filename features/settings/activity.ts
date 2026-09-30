@@ -19,10 +19,10 @@
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
-import { hasFeature } from '@/lib/billing/entitlements';
+import { getOrganizationEntitlements, hasFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { isAuditArea } from '@/lib/audit-labels';
-import type { Prisma, OrganizationPlan } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/lib/generated/prisma/client';
 
 const PER_PAGE = 25;
 
@@ -103,6 +103,10 @@ function whereFor(organizationId: string, filters: ActivityFilters): Prisma.Audi
   return where;
 }
 
+function isPlatformAction(action: string): boolean {
+  return action.startsWith('platform.');
+}
+
 function toRow(log: {
   id: string;
   action: string;
@@ -118,8 +122,10 @@ function toRow(log: {
     entityType: log.entityType,
     entityId: log.entityId,
     createdAt: log.createdAt.toISOString(),
-    actorName: log.user?.name ?? null,
-    actorEmail: log.user?.email ?? null,
+    // A decision by platform staff shows as the platform, not as a stranger's
+    // name and personal email on the merchant's own log.
+    actorName: isPlatformAction(log.action) ? null : (log.user?.name ?? null),
+    actorEmail: isPlatformAction(log.action) ? null : (log.user?.email ?? null),
     ipAddress: log.ipAddress,
   };
 }
@@ -174,7 +180,7 @@ export async function listActivity(filters: ActivityFilters = {}): Promise<Actio
           name: m.user.name ?? m.user.email,
           email: m.user.email,
         })),
-        canExport: hasFeature(ctx.organization.plan as OrganizationPlan, FEATURES.AUDIT_LOG_EXPORT),
+        canExport: hasFeature((await getOrganizationEntitlements()).plan, FEATURES.AUDIT_LOG_EXPORT),
         exportLimit: EXPORT_LIMIT,
       },
     };
@@ -197,8 +203,8 @@ export async function exportActivity(filters: ActivityFilters = {}): Promise<Act
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SETTINGS_VIEW);
 
-    if (!hasFeature(ctx.organization.plan as OrganizationPlan, FEATURES.AUDIT_LOG_EXPORT)) {
-      return { success: false, error: 'Downloading the activity log is available on the Pro plan' };
+    if (!hasFeature((await getOrganizationEntitlements()).plan, FEATURES.AUDIT_LOG_EXPORT)) {
+      return { success: false, error: 'Downloading the activity log isn’t included in your plan. See Plans to upgrade.' };
     }
 
     const rows = await prisma.auditLog.findMany({

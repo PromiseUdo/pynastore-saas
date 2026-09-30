@@ -10,9 +10,10 @@
  * details they were placed with, so editing or removing an account here never
  * changes the instructions a shopper is already following.
  *
- * The merchant picks a bank and types the number; the account name always
- * comes from the bank via Squad's lookup — checked again on save, so the
- * name customers see can't be typed in by hand.
+ * The merchant picks a bank from Paystack's list and types the number; the
+ * account name always comes from the bank via Paystack's /bank/resolve —
+ * checked again on save, so the name customers see can't be typed in by hand.
+ * (Until ROADMAP 10.9 this used Squad's lookup and NIP bank codes.)
  *
  * Viewing needs `settings.view`; changing needs `settings.edit`.
  */
@@ -22,8 +23,7 @@ import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { lookupAccountName } from '@/lib/payments/squad';
-import { bankByCode } from '@/lib/payments/nigerian-banks';
+import { listNigerianBanks, resolveAccountName as resolveWithPaystack } from '@/lib/payments/paystack';
 
 export type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
 
@@ -38,7 +38,8 @@ export interface BankAccountRow {
 export type BankAccountFieldErrors = Partial<Record<'bankCode' | 'accountNumber', string>>;
 
 const AccountSchema = z.object({
-  bankCode: z.string().refine((code) => bankByCode(code) !== undefined, 'Choose your bank'),
+  // Checked against Paystack's bank list in resolveAccountName.
+  bankCode: z.string().trim().min(1, 'Choose your bank'),
   accountNumber: z
     .string()
     .transform((v) => v.replace(/\s+/g, ''))
@@ -59,25 +60,35 @@ function fieldFailure(error: z.ZodError): FieldFailure {
   return { success: false, error: 'Check the highlighted fields', fieldErrors };
 }
 
-/** Lookups per store per window — each one is a paid call to Squad. */
+/** Lookups per store per window — each one is a call to Paystack. */
 const LOOKUP_LIMIT = 30;
 const LOOKUP_WINDOW_MS = 10 * 60 * 1000;
 
 /**
- * Ask the bank whose account this is. The name comes back from Squad, never
- * from the merchant, so customers see exactly what their banking app will
- * show when they transfer.
+ * Ask the bank whose account this is. The name comes back from Paystack,
+ * never from the merchant, so customers see exactly what their banking app
+ * will show when they transfer.
  */
 async function resolveAccountName(
   organizationId: string,
   bankCode: string,
   accountNumber: string,
-): Promise<{ ok: true; accountName: string } | FieldFailure | { success: false; error: string }> {
+): Promise<{ ok: true; accountName: string; bankName: string } | FieldFailure | { success: false; error: string }> {
+  let bankName: string | undefined;
+  try {
+    bankName = (await listNigerianBanks()).find((bank) => bank.code === bankCode)?.name;
+  } catch (error) {
+    console.error('[settings] bank list failed:', error);
+    return { success: false, error: 'We couldn’t reach the bank to check this account. Try again in a moment.' };
+  }
+  if (!bankName) {
+    return { success: false, error: 'Check the highlighted fields', fieldErrors: { bankCode: 'Choose your bank' } };
+  }
   if (!checkRateLimit(`bank-lookup:${organizationId}`, LOOKUP_LIMIT, LOOKUP_WINDOW_MS)) {
     return { success: false, error: 'Too many account checks. Wait a few minutes and try again.' };
   }
   try {
-    const accountName = await lookupAccountName(bankCode, accountNumber);
+    const accountName = await resolveWithPaystack(bankCode, accountNumber);
     if (!accountName) {
       return {
         success: false,
@@ -85,7 +96,7 @@ async function resolveAccountName(
         fieldErrors: { accountNumber: 'We couldn’t find this account at that bank. Check the number and the bank.' },
       };
     }
-    return { ok: true, accountName };
+    return { ok: true, accountName, bankName };
   } catch (error) {
     console.error('[settings] bank account lookup failed:', error);
     return { success: false, error: 'We couldn’t reach the bank to check this account. Try again in a moment.' };
@@ -156,7 +167,7 @@ export async function saveBankAccount(
     const resolved = await resolveAccountName(ctx.organization.id, bankCode, accountNumber);
     if (!('ok' in resolved)) return resolved;
 
-    const data = { bankName: bankByCode(bankCode)!.name, accountName: resolved.accountName, accountNumber, isActive };
+    const data = { bankName: resolved.bankName, accountName: resolved.accountName, accountNumber, isActive };
     let savedId: string;
 
     if (id) {

@@ -23,6 +23,18 @@ import {
   orderEmailSubject,
   type StorefrontOrderUpdateEmailProps,
 } from '@/emails/storefront-order-update';
+import {
+  PaymentVerificationResultEmail,
+  paymentVerificationSubject,
+  type PaymentVerificationResultEmailProps,
+} from '@/emails/payment-verification-result';
+import { PaymentDisputeEmail, paymentDisputeSubject, type PaymentDisputeEmailProps } from '@/emails/payment-dispute';
+import { PlatformNoticeEmail, type PlatformNoticeEmailProps } from '@/emails/platform-notice';
+import {
+  WorkspaceSuspensionEmail,
+  workspaceSuspensionSubject,
+  type WorkspaceSuspensionEmailProps,
+} from '@/emails/workspace-suspension';
 import { PLATFORM_NAME } from '@/lib/brand';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -224,7 +236,8 @@ export async function sendLowStockAlertEmail(
 type DomainOrderNotificationEmailPayload = {
   orgName: string;
   orgSlug: string;
-  domainOrderType: 'EXISTING' | 'REGISTER';
+  domainOrderType: 'EXISTING' | 'REGISTER' | 'RENEW';
+  queueUrl?: string;
   domain: string;
 };
 
@@ -291,5 +304,84 @@ export async function sendStorefrontOrderUpdateEmail(
     });
   } catch (err) {
     console.error('[email] Failed to send storefront order update email:', err);
+  }
+}
+
+/** The outcome of our check of a merchant's business (ROADMAP 10.8 / 11.3). */
+export async function sendPaymentVerificationResultEmail(
+  payload: PaymentVerificationResultEmailProps & { to: string },
+): Promise<void> {
+  try {
+    const from = sendFrom();
+    if (!from) return;
+    const { to, ...props } = payload;
+    await resend.emails.send({
+      from,
+      to,
+      subject: paymentVerificationSubject(props),
+      react: PaymentVerificationResultEmail(props),
+    });
+  } catch (err) {
+    console.error('[email] Failed to send payment verification result email:', err);
+  }
+}
+
+/** A chargeback opened or settled on an online payment (ROADMAP 10.5). */
+export async function sendPaymentDisputeEmail(payload: PaymentDisputeEmailProps & { to: string[] }): Promise<void> {
+  if (payload.to.length === 0) return;
+  try {
+    const from = sendFrom();
+    if (!from) return;
+    const { to, ...props } = payload;
+    await resend.emails.send({ from, to, subject: paymentDisputeSubject(props), react: PaymentDisputeEmail(props) });
+  } catch (err) {
+    console.error('[email] Failed to send payment dispute email:', err);
+  }
+}
+
+/** A workspace suspended or restored by platform staff, to its owners (ROADMAP 11.4). */
+export async function sendWorkspaceSuspensionEmail(
+  payload: WorkspaceSuspensionEmailProps & { to: string[] },
+): Promise<void> {
+  if (payload.to.length === 0) return;
+  try {
+    const from = sendFrom();
+    if (!from) return;
+    const { to, ...props } = payload;
+    await resend.emails.send({
+      from,
+      to,
+      ...(props.supportEmail ? { replyTo: props.supportEmail } : {}),
+      subject: workspaceSuspensionSubject(props),
+      react: WorkspaceSuspensionEmail(props),
+    });
+  } catch (err) {
+    console.error('[email] Failed to send workspace suspension email:', err);
+  }
+}
+
+/**
+ * A short account email in the platform's name — verifying an address, the
+ * welcome, setup and trial reminders (ROADMAP 12.5). Returns whether it was
+ * handed to the provider, so a reminder job can tell a send from a skip.
+ */
+export async function sendPlatformNoticeEmail(
+  payload: PlatformNoticeEmailProps & { to: string | string[]; subject: string },
+): Promise<boolean> {
+  const to = Array.isArray(payload.to) ? payload.to : [payload.to];
+  if (to.length === 0) return false;
+  try {
+    const from = sendFrom();
+    if (!from) return false;
+    const { to: _to, subject, ...props } = payload;
+    const { error } = await resend.emails.send({ from, to, subject, react: PlatformNoticeEmail(props) });
+    if (error) {
+      console.error('[email] Failed to send platform notice email:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[email] Failed to send platform notice email:', err);
+    return false;
   }
 }

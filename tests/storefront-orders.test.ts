@@ -8,9 +8,10 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { giveStoreDelivery } from './helpers/delivery';
+import { giveStoreDelivery, quotedDeliveryId } from './helpers/delivery';
 import { registerShopper } from '@/lib/storefront/account/shopper';
 import { getCheckoutConfig } from '@/lib/storefront/checkout/config';
+import { ONLINE_PAYMENT_METHOD } from '@/lib/storefront/mock/checkout';
 import { placeOrder } from '@/lib/storefront/orders/create';
 import { releaseOrderStock } from '@/lib/storefront/orders/stock';
 import { cancelOrder } from '@/lib/storefront/orders/lifecycle';
@@ -40,7 +41,10 @@ let foreignProductId = '';
 const fixturesWere = process.env.STOREFRONT_FIXTURES;
 process.env.STOREFRONT_FIXTURES = '0';
 
-const config = await getCheckoutConfig({ organizationSlug: 'demo' });
+// As a store that may take online payments sees it: store-config.ts adds
+// "Pay online" (Paystack) first for such a store (ROADMAP 10.8).
+const baseConfig = await getCheckoutConfig({ organizationSlug: 'demo' });
+const config = { ...baseConfig, paymentMethods: [ONLINE_PAYMENT_METHOD, ...baseConfig.paymentMethods] };
 
 const CONTACT: CheckoutContact = {
   firstName: 'Ada',
@@ -62,8 +66,8 @@ const ADDRESS: CheckoutAddress = {
 };
 
 /*
- * A published product with stock in a store that sells online — the same
- * conditions the catalogue requires, because `placeOrder` re-prices through
+ * A published product with stock in a store that sells online and can
+ * deliver — the same conditions the catalogue requires, because `placeOrder` re-prices through
  * the catalogue and would refuse anything a shopper couldn't have bought.
  */
 async function makeSellableProduct(organizationId: string, name: string, priceMajor: number) {
@@ -88,6 +92,8 @@ async function makeSellableProduct(organizationId: string, name: string, priceMa
     // Deep enough that a suite of orders two-at-a-time never runs it dry.
     data: { inventoryItemId: item.id, warehouseId: warehouse.id, quantity: 250 },
   });
+  // A store that can't deliver doesn't supply the online store (Phase 9.2).
+  await giveStoreDelivery(organizationId);
 
   return item.id;
 }
@@ -108,7 +114,6 @@ let deliveryMethodId = '';
 
 beforeAll(async () => {
   store.id = (await prisma.organization.create({ data: { name: 'Orders Store', slug: store.slug } })).id;
-  deliveryMethodId = await giveStoreDelivery(store.id);
   other.id = (await prisma.organization.create({ data: { name: 'Other Store', slug: other.slug } })).id;
 
   const shopper = await registerShopper({
@@ -124,6 +129,7 @@ beforeAll(async () => {
   // A product with no variants of its own sells as itself.
   variantId = productId;
   foreignProductId = await makeSellableProduct(other.id, 'Foreign', 9000);
+  deliveryMethodId = await giveStoreDelivery(store.id);
 });
 
 afterAll(async () => {
@@ -246,9 +252,12 @@ describe('placing an order', () => {
     ).resolves.toMatchObject({ ok: false, code: 'invalid-payment-method' });
 
     /* The same bag paid online goes through, and pay on delivery is still
-     * fine for a bag without that item. */
+     * fine for a bag without that item. The two items sit in different
+     * stores, so the bag ships as two parcels under the bigger one's option
+     * (ROADMAP 9.3) — quoted, as the browser would. */
+    const mixedDelivery = await quotedDeliveryId(store.slug, ADDRESS, mixed);
     await expect(
-      placeOrder({ ...baseInput(), customerId, lines: mixed, paymentMethodId: online.id }),
+      placeOrder({ ...baseInput(), customerId, lines: mixed, paymentMethodId: online.id, deliveryMethodId: mixedDelivery }),
     ).resolves.toMatchObject({ ok: true });
     await expect(
       placeOrder({ ...baseInput(), customerId, paymentMethodId: pod.id }),

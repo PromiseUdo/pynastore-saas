@@ -164,8 +164,9 @@ export async function getStoreFacts(): Promise<Result<StoreFacts>> {
     const organizationId = ctx.organization.id;
     const [org, activeDeliveryZones, activePickupLocations] = await Promise.all([
       prisma.organization.findUnique({ where: { id: organizationId }, select: { returnWindowDays: true } }),
-      prisma.deliveryZone.count({ where: { organizationId, isActive: true } }),
-      prisma.pickupLocation.count({ where: { organizationId, isActive: true } }),
+      // A zone or pickup with no store isn't offered at checkout (Phase 9.2), so it isn't counted.
+      prisma.deliveryZone.count({ where: { organizationId, isActive: true, warehouseId: { not: null } } }),
+      prisma.pickupLocation.count({ where: { organizationId, isActive: true, warehouseId: { not: null } } }),
     ]);
     return {
       success: true,

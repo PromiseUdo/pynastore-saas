@@ -94,7 +94,7 @@ export function SiteFooter({
         <div className="sf-container flex flex-col items-center justify-between gap-3 py-5 text-xs text-muted-foreground sm:flex-row">
           <p>© {year} {org.name}. All rights reserved.</p>
           {/* Only what checkout offers this store. No card-brand badges: which
-            * cards work is Squad's decision, not something this app checks. */}
+            * cards work is Paystack's decision, not something this app checks. */}
           {paymentNote && <p className="text-center sm:text-right">{paymentNote}</p>}
         </div>
       </div>

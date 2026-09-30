@@ -19,6 +19,7 @@ import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { ItemStatus, WarehouseStatus } from '@/lib/generated/prisma/enums';
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { canUseStore } from '@/lib/store-access';
+import { ONLINE_SUPPLY_WHERE } from '@/lib/storefront/delivery/supply';
 import { type ActionResult, toActionError, variantNameOf } from './shared';
 
 /** Where a level's low-stock threshold came from. */
@@ -28,8 +29,19 @@ export type StoreDetail = {
   id: string;
   name: string;
   location: string | null;
+  /** Where it is (Phase 9.1) — both or neither; see ./store-place.ts. */
+  state: string | null;
+  city: string | null;
   status: WarehouseStatus;
   sellsOnline: boolean;
+  /**
+   * Its stock is actually offered online: selling online AND able to deliver,
+   * or no store can deliver yet (lib/storefront/delivery/supply.ts). False
+   * with `sellsOnline` true means another store delivers and this one can't.
+   */
+  suppliesOnline: boolean;
+  /** Its delivery prices were copied from another store's and not yet confirmed (Phase 9.2). */
+  deliveryNeedsReview: boolean;
   /** Products with a level at this store, whether or not any stock is on hand. */
   productCount: number;
   unitsOnHand: number;
@@ -153,11 +165,21 @@ export async function getStoreDetail(warehouseId: string): Promise<ActionResult<
 
     const store = await prisma.warehouse.findFirst({
       where: { id: warehouseId, organizationId },
-      select: { id: true, name: true, location: true, status: true, sellsOnline: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        location: true,
+        state: true,
+        city: true,
+        status: true,
+        sellsOnline: true,
+        deliveryNeedsReview: true,
+        createdAt: true,
+      },
     });
     if (!store) return { success: false, error: 'Store not found' };
 
-    const [levels, transfersIncoming, transfersOutgoing, openCycleCounts] = await Promise.all([
+    const [levels, transfersIncoming, transfersOutgoing, openCycleCounts, supplies] = await Promise.all([
       prisma.inventoryLevel.findMany({
         where: { warehouseId, inventoryItem: { organizationId, status: { not: ItemStatus.ARCHIVED } } },
         select: {
@@ -170,6 +192,7 @@ export async function getStoreDetail(warehouseId: string): Promise<ActionResult<
       prisma.stockTransfer.count({ where: { organizationId, toWarehouseId: warehouseId, status: 'DISPATCHED' } }),
       prisma.stockTransfer.count({ where: { organizationId, fromWarehouseId: warehouseId, status: 'DISPATCHED' } }),
       prisma.cycleCount.count({ where: { organizationId, warehouseId, status: 'OPEN' } }),
+      prisma.warehouse.count({ where: { id: warehouseId, organizationId, ...ONLINE_SUPPLY_WHERE } }),
     ]);
 
     let unitsOnHand = 0;
@@ -195,6 +218,7 @@ export async function getStoreDetail(warehouseId: string): Promise<ActionResult<
       success: true,
       data: {
         ...store,
+        suppliesOnline: supplies > 0,
         productCount: levels.length,
         unitsOnHand,
         unitsHeld,

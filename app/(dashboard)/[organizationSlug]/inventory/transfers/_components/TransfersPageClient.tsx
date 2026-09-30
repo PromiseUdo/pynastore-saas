@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Loader2, Plus, ArrowLeftRight, Check, X } from 'lucide-react';
+import { Loader2, Plus, ArrowLeftRight, Check, Truck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader, PageToolbar, PageBody } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/layout/empty-state';
@@ -30,7 +30,7 @@ import {
   TableEmpty,
 } from '@/components/ui/table';
 import { DispatchTransferDialog } from './DispatchTransferDialog';
-import { receiveTransfer, cancelTransfer, type TransferRow } from '@/features/inventory/actions';
+import { receiveTransfer, cancelTransfer, sendOrderTransfer, type TransferRow } from '@/features/inventory/actions';
 import type { ItemListRow, WarehouseRow } from '@/features/inventory/actions';
 
 type TransfersPageClientProps = {
@@ -40,13 +40,15 @@ type TransfersPageClientProps = {
   canManage: boolean;
 };
 
-const STATUS_VARIANT: Record<TransferRow['status'], 'pending' | 'completed' | 'muted'> = {
+const STATUS_VARIANT: Record<TransferRow['status'], 'pending' | 'completed' | 'muted' | 'warning'> = {
+  REQUESTED: 'warning',
   DISPATCHED: 'pending',
   RECEIVED: 'completed',
   CANCELLED: 'muted',
 };
 
 const STATUS_LABEL: Record<TransferRow['status'], string> = {
+  REQUESTED: 'Requested',
   DISPATCHED: 'On the way',
   RECEIVED: 'Received',
   CANCELLED: 'Cancelled',
@@ -67,6 +69,20 @@ export function TransfersPageClient({ transfers, items, warehouses, canManage }:
       return;
     }
     toast.success(`${transfer.itemName} received into ${transfer.toWarehouseName}`);
+    router.refresh();
+  }
+
+  /* An order asked for this (Phase 9.7): the source store sends it, which
+   * takes it off their shelf and releases the order's hold there. */
+  async function handleSend(transfer: TransferRow) {
+    setPendingId(transfer.id);
+    const result = await sendOrderTransfer(transfer.id);
+    setPendingId(null);
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`${transfer.itemName} sent from ${transfer.fromWarehouseName} to ${transfer.toWarehouseName}`);
     router.refresh();
   }
 
@@ -146,6 +162,14 @@ export function TransfersPageClient({ transfers, items, warehouses, canManage }:
                       <TableCell className="py-2">
                         <span className="font-medium text-foreground">{t.itemName}</span>
                         <p className="font-mono text-xs text-muted-foreground">{t.sku}</p>
+                        {t.orderId && t.orderReference && (
+                          <p className="text-xs text-muted-foreground">
+                            For order{' '}
+                            <Link href={`/sales/orders/${t.orderId}`} className="text-primary hover:underline">
+                              {t.orderReference}
+                            </Link>
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell muted>
                         {t.fromWarehouseName} → {t.toWarehouseName}
@@ -156,6 +180,9 @@ export function TransfersPageClient({ transfers, items, warehouses, canManage }:
                       <TableCell>
                         <div className="flex flex-col items-start gap-0.5">
                           <Badge variant={STATUS_VARIANT[t.status]}>{STATUS_LABEL[t.status]}</Badge>
+                          {t.status === 'REQUESTED' && (
+                            <span className="text-[11px] text-muted-foreground">Waiting for {t.fromWarehouseName} to send it</span>
+                          )}
                           {t.status === 'DISPATCHED' && (
                             <span className="text-[11px] text-muted-foreground">Waiting to be received</span>
                           )}
@@ -168,6 +195,14 @@ export function TransfersPageClient({ transfers, items, warehouses, canManage }:
                         {formatDate(t.dispatchedAt)}
                       </TableCell>
                       <TableCell align="right">
+                        {t.status === 'REQUESTED' && canManage && t.canSend && (
+                          <div className="flex justify-end">
+                            <Button size="xs" onClick={() => handleSend(t)} disabled={pendingId === t.id}>
+                              {pendingId === t.id ? <Loader2 className="size-3 animate-spin" /> : <Truck className="size-3" />}
+                              Send now
+                            </Button>
+                          </div>
+                        )}
                         {t.status === 'DISPATCHED' && canManage && (
                           <div className="flex justify-end gap-1">
                             <Button size="xs" onClick={() => handleReceive(t)} disabled={pendingId === t.id}>

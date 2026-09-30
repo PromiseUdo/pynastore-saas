@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { discardSocialPost, retrySocialPost } from '@/features/social/posts';
 import type { SocialPostStatus } from '@/lib/social/types';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 export function PostDetailActions({
   postId,
@@ -95,7 +96,7 @@ export function PostDetailActions({
           <AlertDialogHeader>
             <AlertDialogTitle>Remove this post from your history?</AlertDialogTitle>
             <AlertDialogDescription>
-              This only forgets MansaaS’s record of{' '}
+              This only forgets {PLATFORM_NAME}’s record of{' '}
               {status === 'DRAFT' ? 'this unsent draft' : 'this failed attempt'}. Nothing is deleted from Facebook or
               Instagram, and you won’t be able to retry it afterwards.
             </AlertDialogDescription>

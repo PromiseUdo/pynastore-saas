@@ -4,7 +4,15 @@
  */
 import { describe, expect, it } from 'vitest';
 import { normalizePlace, parsePlaceList } from '@/lib/geo/nigeria';
-import { hasAnyDelivery, matchZone, quoteFromSetup, type DeliverySetup, type ZoneSetup } from './match';
+import {
+  hasAnyDelivery,
+  matchZone,
+  quoteEachStore,
+  quoteFromSetup,
+  type DeliverySetup,
+  type StoreDeliverySetup,
+  type ZoneSetup,
+} from './match';
 
 const rate = (id: string, price: number, over: Partial<ZoneSetup['rates'][number]> = {}) => ({
   id,
@@ -130,5 +138,24 @@ describe('place names', () => {
 
   it('cleans a merchant’s list and drops duplicates', () => {
     expect(parsePlaceList('Port Harcourt, port-harcourt ,Obio-Akpor,\nEleme,, ')).toEqual(['Port Harcourt', 'Obio-Akpor', 'Eleme']);
+  });
+});
+
+/* ROADMAP Phase 9.2: each store has its own delivery; ./plan.test.ts covers which one sends an order. */
+describe('delivery from several stores', () => {
+  const PH_STORE: StoreDeliverySetup = { warehouseId: 'ph-store', name: 'Port Harcourt', zones: [PH, REST], pickups: [SHOP] };
+  const LAGOS_STORE: StoreDeliverySetup = {
+    warehouseId: 'lagos-store',
+    name: 'Lagos',
+    zones: [zone({ id: 'lagos-to-rivers', name: 'Rivers', kind: 'STATES', states: ['Rivers'], rates: [rate('interstate', 450_000)] })],
+    pickups: [],
+  };
+
+  it('asks every store on its own', () => {
+    const quotes = quoteEachStore([PH_STORE, LAGOS_STORE], { state: 'Rivers', city: 'Port Harcourt' }, 0);
+    expect(quotes.map((q) => [q.store.name, q.zone?.name])).toEqual([
+      ['Port Harcourt', 'Within Port Harcourt'],
+      ['Lagos', 'Rivers'],
+    ]);
   });
 });

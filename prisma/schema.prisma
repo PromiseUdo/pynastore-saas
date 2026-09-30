@@ -24,11 +24,20 @@ model User {
   // JWT's own sessionVersion claim on every request.
   sessionVersion Int @default(0)
 
+  /**
+   * Platform staff can open the platform console (/platform, ROADMAP 11.1) and
+   * act on any merchant — review verifications and so on. Granted only from
+   * the command line (prisma/platform-staff.ts), never from a screen, and read
+   * fresh from the database on every request, so revoking it works at once.
+   */
+  isPlatformStaff Boolean @default(false)
+
   accounts            Account[]
   sessions            Session[]
   memberships         Membership[]
   answeredQuestions   ProductQuestion[]
   auditLogs           AuditLog[]
+  platformAuditLogs   PlatformAuditLog[]
   passwordResetTokens PasswordResetToken[]
   counterSales        Order[]
 
@@ -112,8 +121,37 @@ model Organization {
    */
   logoUrl      String?
   logoPublicId String?
-  plan         OrganizationPlan   @default(FREE)
   status       OrganizationStatus @default(ACTIVE)
+
+  /**
+   * Set by platform staff (ROADMAP 11.4). While SUSPENDED the admin shows a
+   * page saying so — with this reason, to members only — and the storefront
+   * is offline; proxy.ts enforces both. Cleared on restore; the history is in
+   * the organization's AuditLog.
+   */
+  suspendedAt      DateTime?
+  suspensionReason String?
+
+  /**
+   * Onboarding (ROADMAP 12.5). A new shop starts NOT open: the storefront
+   * says "Opening soon", lists nothing, is left out of search engines and
+   * takes no orders, until the merchant opens it from the setup guide once
+   * the required steps are done. Existing shops were open (the default).
+   * Closing again later (a holiday) is the same switch. Separate from a
+   * lapsed plan (12.1) and a suspension (11.4).
+   */
+  storefrontOpen        Boolean   @default(true)
+  storefrontOpenedAt    DateTime?
+  /**
+   * What the merchant told us at sign-up — only used to order the setup
+   * guide and suggest categories. BusinessType key (lib/onboarding/business)
+   * and ONLINE | IN_PERSON | BOTH.
+   */
+  businessType          String?
+  salesChannels         String?
+  /** The setup guide was hidden from the dashboard; it stays in Settings. */
+  setupGuideDismissedAt DateTime?
+  onboardingEmails      OnboardingEmail[]
 
   /**
    * The currency this business trades in, as an ISO 4217 code. Every money
@@ -176,6 +214,17 @@ model Organization {
    */
   returnWindowDays Int?
 
+  /**
+   * A bag no single store holds (ROADMAP Phase 9.7): false = each store sends
+   * its own parcel (the default); true = the items are brought to one store
+   * first and sent as one parcel, the shopper paying `consolidationFee` for
+   * each store items come from (major units) and waiting the extra time.
+   */
+  consolidateOrders        Boolean         @default(false)
+  consolidationFee         Decimal         @default(0) @db.Decimal(12, 2)
+  consolidationLeadMinutes Int             @default(1440)
+  consolidationLeadUnit    DeliveryEtaUnit @default(DAYS)
+
   memberships Membership[]
   roles       Role[]
   invitations Invitation[]
@@ -199,9 +248,13 @@ model Organization {
   orders                 Order[]
   orderPayments          OrderPayment[]
   orderStockAllocations  OrderStockAllocation[]
+  orderShipments         OrderShipment[]
   orderReturns           OrderReturn[]
   orderRefunds           OrderRefund[]
   bankAccounts           MerchantBankAccount[]
+  paymentAccount         MerchantPaymentAccount?
+  verificationDocuments  MerchantVerificationDocument[]
+  paymentDisputes        PaymentDispute[]
   deliveryZones          DeliveryZone[]
   deliveryRates          DeliveryRate[]
   pickupLocations        PickupLocation[]
@@ -228,18 +281,12 @@ model Organization {
   subscription        Subscription?
   billingTransactions BillingTransaction[]
   domainOrders        DomainOrder[]
+  shopDomain          ShopDomain?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("organizations")
-}
-
-enum OrganizationPlan {
-  FREE
-  STARTER
-  PRO
-  ENTERPRISE
 }
 
 enum OrganizationStatus {
@@ -567,12 +614,28 @@ model POLineItem {
 // ============================================================
 
 model Warehouse {
-  id             String          @id @default(cuid())
-  organizationId String
-  name           String
-  location       String?
-  status         WarehouseStatus @default(ACTIVE)
-  sellsOnline    Boolean         @default(false) // the online store sells this store's available stock
+  id                  String          @id @default(cuid())
+  organizationId      String
+  name                String
+  location            String? // the street or landmark, free text — for people, not for matching
+  /**
+   * Where the store is, so delivery can be priced from where a parcel leaves
+   * (ROADMAP Phase 9). `state` is one of lib/geo/nigeria's NIGERIAN_STATES,
+   * spelled as a delivery zone spells it; `city` is as the merchant typed it,
+   * compared with normalizePlace. Both or neither, and both before the store
+   * may sell online — see features/inventory/store-place.ts. Null on stores
+   * made before Phase 9.1 until someone fills them in.
+   */
+  state               String?
+  city                String?
+  status              WarehouseStatus @default(ACTIVE)
+  sellsOnline         Boolean         @default(false) // the online store sells this store's available stock
+  /**
+   * Its delivery prices were copied from another store's when delivery became
+   * per store (ROADMAP Phase 9.2), and nobody has confirmed them yet. Settings
+   * → Delivery asks until someone does; checkout uses them meanwhile.
+   */
+  deliveryNeedsReview Boolean         @default(false)
 
   organization          Organization           @relation(fields: [organizationId], references: [id])
   stockMovements        StockMovement[]
@@ -585,7 +648,10 @@ model Warehouse {
   invoices              Invoice[]
   fulfillments          Fulfillment[]
   orderStockAllocations OrderStockAllocation[]
+  orderShipments        OrderShipment[]
   memberAccess          MembershipWarehouse[]
+  deliveryZones         DeliveryZone[]
+  pickupLocations       PickupLocation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1058,15 +1124,32 @@ model StockTransfer {
   quantity        Decimal             @db.Decimal(12, 4)
   status          StockTransferStatus @default(DISPATCHED)
   notes           String?
+  /**
+   * An order brought together at one store (ROADMAP Phase 9.7): the order and
+   * parcel these units are travelling for. Raised as REQUESTED when the order
+   * is confirmed; sending it releases the order's hold at the source, and
+   * receiving it holds the units for the order at the destination.
+   */
+  orderId         String?
+  shipmentId      String?
+  /**
+   * when an order asked for it; null on a transfer staff started themselves
+   */
+  requestedAt     DateTime?
   dispatchedById  String?
+  /**
+   * when it left — for a REQUESTED transfer, when it was asked for, until it goes
+   */
   dispatchedAt    DateTime            @default(now())
   receivedById    String?
   receivedAt      DateTime?
 
-  organization  Organization  @relation(fields: [organizationId], references: [id])
-  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
-  fromWarehouse Warehouse     @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
-  toWarehouse   Warehouse     @relation("TransferTo", fields: [toWarehouseId], references: [id])
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  inventoryItem InventoryItem  @relation(fields: [inventoryItemId], references: [id])
+  fromWarehouse Warehouse      @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse      @relation("TransferTo", fields: [toWarehouseId], references: [id])
+  order         Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  shipment      OrderShipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1074,10 +1157,15 @@ model StockTransfer {
   @@index([organizationId])
   @@index([fromWarehouseId])
   @@index([toWarehouseId])
+  @@index([orderId])
   @@map("stock_transfers")
 }
 
 enum StockTransferStatus {
+  /**
+   * asked for by an order (Phase 9.7); nothing has moved yet
+   */
+  REQUESTED
   DISPATCHED
   RECEIVED
   CANCELLED
@@ -1526,7 +1614,10 @@ model Order {
   discountCodeRef DiscountCode?          @relation(fields: [discountCodeId], references: [id], onDelete: SetNull)
   lineItems       OrderLineItem[]
   payments        OrderPayment[]
+  disputes        PaymentDispute[]
   allocations     OrderStockAllocation[]
+  shipments       OrderShipment[]
+  transfers       StockTransfer[]
   reviews         ProductReview[]
   returns         OrderReturn[]
   refunds         OrderRefund[]
@@ -1599,7 +1690,7 @@ model OrderPayment {
   organizationId String
   orderId        String
 
-  provider  String // 'squad'
+  provider  String // 'paystack' for new attempts; 'squad' on history (ROADMAP 10.9)
   /**
    * Our transaction reference, unique across the provider account.
    */
@@ -1618,7 +1709,7 @@ model OrderPayment {
    */
   returnUrl       String
   /**
-   * Started inside the phone app, where Squad opens in an in-app browser:
+   * Started inside the phone app, where Paystack opens in an in-app browser:
    * the callback then hands the shopper back to the app by deep link.
    */
   nativeApp       Boolean @default(false)
@@ -1632,10 +1723,35 @@ model OrderPayment {
    */
   providerPayload Json?
 
+  /**
+   * The Paystack subaccount this attempt was initialised with (ROADMAP 10.4) —
+   * the shop's own. The verified transaction must name the same one, or the
+   * attempt is a MISMATCH, never a payment.
+   */
+  subaccountCode String?
+  /**
+   * As PAYSTACK reported them once the payment verified (`fees_split`), in
+   * major units: what the merchant receives, what the platform receives
+   * (always 0 — no commission, 10.1) and Paystack's fee, which the merchant
+   * bears. Paystack's record, never our arithmetic.
+   */
+  merchantAmount Decimal? @db.Decimal(12, 2)
+  platformAmount Decimal? @db.Decimal(12, 2)
+  feeAmount      Decimal? @db.Decimal(12, 2)
+
   verifiedAt DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /**
+   * A MISMATCH (or other problem) looked into by platform staff (ROADMAP
+   * 11.6): when, by whom, and what they found. Changes nothing about the money.
+   */
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewNote   String?
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  order        Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  disputes     PaymentDispute[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1670,6 +1786,164 @@ enum OrderPaymentAttemptStatus {
  * transfer. The merchant checks their own bank and confirms each transfer by
  * hand (Sales → Orders); nothing here talks to a bank.
  */
+/**
+ * How a shop gets paid online (ROADMAP Phase 10): its business details, the
+ * bank account online payments settle to, and two separate states.
+ * verificationStatus — OUR check of the business (10.8). Platform staff
+ * move it from PENDING to VERIFIED or REJECTED.
+ * setupStatus        — how far the Paystack subaccount got (10.3). Nothing
+ * is sent to Paystack until verification is VERIFIED.
+ * Neither implies the other. The settlement account is always the name
+ * Paystack resolved, never one typed in. The merchant never supplies a
+ * Paystack key — the platform's integration holds the subaccount.
+ */
+model MerchantPaymentAccount {
+  id             String @id @default(cuid())
+  organizationId String @unique
+
+  businessType MerchantBusinessType?
+  businessName String?
+
+  /**
+   * CAC registration — required for a registered company or business name,
+   * absent for an individual.
+   */
+  cacNumber      String?
+  registeredName String?
+
+  /**
+   * The owner's or director's ID. The document itself is a
+   * MerchantVerificationDocument; only its kind is kept here.
+   */
+  idType MerchantIdType?
+
+  /**
+   * Settlement account. `settlementBankCode` is PAYSTACK's bank code (not the
+   * NIP codes in lib/payments/nigerian-banks.ts); the account name is what
+   * Paystack's /bank/resolve returned for it.
+   */
+  settlementBankCode      String?
+  settlementBankName      String?
+  settlementAccountNumber String?
+  settlementAccountName   String?
+
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+
+  verificationStatus MerchantVerificationStatus @default(UNVERIFIED)
+  submittedAt        DateTime?
+  submittedById      String?
+  reviewedAt         DateTime?
+  reviewedById       String?
+  /**
+   * Shown to the merchant when staff send it back.
+   */
+  rejectionReason    String?
+
+  setupStatus            MerchantPaymentSetupStatus @default(NOT_STARTED)
+  paystackSubaccountCode String?                    @unique
+  /**
+   * Why the last attempt to create or check the subaccount failed, in words
+   * for platform staff. Null once it succeeds.
+   */
+  setupError             String?
+  /**
+   * Paystack's own `is_verified` for the subaccount, as last read — cached,
+   * not reinterpreted (ROADMAP 10.13: its meaning is unconfirmed).
+   */
+  paystackIsVerified     Boolean?
+  /**
+   * When the subaccount was last read from Paystack. Paystack sends no
+   * subaccount webhooks, so its state is re-read when this is stale.
+   */
+  paystackSyncedAt       DateTime?
+
+  organization Organization                   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  documents    MerchantVerificationDocument[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("merchant_payment_accounts")
+}
+
+/**
+ * A verification document, stored in Cloudinary as a PRIVATE asset: there is
+ * no public URL, and it is only ever opened through a short-lived signed link
+ * made on the server (lib/cloudinary/sign.ts → privateDownloadUrl).
+ */
+model MerchantVerificationDocument {
+  id             String               @id @default(cuid())
+  organizationId String
+  accountId      String
+  kind           MerchantDocumentKind
+  /**
+   * Always under mansaas/{organizationId}/verification/ — checked before save.
+   */
+  publicId       String               @unique
+  /**
+   * 'pdf', 'jpg', … as Cloudinary reported it; needed to build the link.
+   */
+  format         String
+  bytes          Int
+  fileName       String
+  uploadedById   String?
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account      MerchantPaymentAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
+  @@index([organizationId])
+  @@map("merchant_verification_documents")
+}
+
+enum MerchantBusinessType {
+  /**
+   * Registered with CAC as a company (RC number).
+   */
+  COMPANY
+  /**
+   * Registered with CAC as a business name (BN number).
+   */
+  BUSINESS_NAME
+  /**
+   * Trading in their own name, not registered.
+   */
+  INDIVIDUAL
+}
+
+enum MerchantIdType {
+  NIN
+  INTERNATIONAL_PASSPORT
+  DRIVERS_LICENCE
+  VOTERS_CARD
+}
+
+enum MerchantDocumentKind {
+  CAC_CERTIFICATE
+  ID_DOCUMENT
+  PROOF_OF_ADDRESS
+}
+
+enum MerchantVerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum MerchantPaymentSetupStatus {
+  NOT_STARTED
+  AWAITING_VERIFICATION
+  CREATING
+  ACTIVE
+  ACTION_REQUIRED
+  DISABLED
+}
+
 model MerchantBankAccount {
   id             String  @id @default(cuid())
   organizationId String
@@ -1704,6 +1978,13 @@ model MerchantBankAccount {
 model DeliveryZone {
   id             String           @id @default(cuid())
   organizationId String
+  /**
+   * The store parcels leave from (ROADMAP Phase 9.2): the same address costs
+   * a different amount from Lagos than from Port Harcourt, so every store has
+   * its own zones. Null only for a zone the migration couldn't give a store —
+   * it is never offered at checkout, and Settings asks for one.
+   */
+  warehouseId    String?
   name           String
   kind           DeliveryZoneKind
   /**
@@ -1722,12 +2003,14 @@ model DeliveryZone {
   sortOrder      Int              @default(0)
 
   organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse?     @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
   rates        DeliveryRate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+  @@index([warehouseId])
   @@map("delivery_zones")
 }
 
@@ -1790,6 +2073,11 @@ model DeliveryRate {
 model PickupLocation {
   id             String          @id @default(cuid())
   organizationId String
+  /**
+   * The store whose stock is collected here (ROADMAP Phase 9.2). Null only
+   * when the migration couldn't tell — never offered until it has one.
+   */
+  warehouseId    String?
   name           String
   address        String
   city           String
@@ -1811,11 +2099,13 @@ model PickupLocation {
   isActive       Boolean         @default(true)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse?   @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([organizationId])
+  @@index([warehouseId])
   @@map("pickup_locations")
 }
 
@@ -1893,21 +2183,113 @@ model OrderStockAllocation {
   orderLineItemId String
   inventoryItemId String
   warehouseId     String
+  /**
+   * The parcel these units travel in (ROADMAP Phase 9.4). Null on a counter
+   * sale, which has no delivery.
+   */
+  shipmentId      String?
   quantity        Decimal                    @db.Decimal(12, 4)
   status          OrderStockAllocationStatus @default(RESERVED)
 
-  organization  Organization  @relation(fields: [organizationId], references: [id])
-  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  lineItem      OrderLineItem @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
-  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
-  warehouse     Warehouse     @relation(fields: [warehouseId], references: [id])
+  organization  Organization   @relation(fields: [organizationId], references: [id])
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  lineItem      OrderLineItem  @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem  @relation(fields: [inventoryItemId], references: [id])
+  warehouse     Warehouse      @relation(fields: [warehouseId], references: [id])
+  shipment      OrderShipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([orderId])
   @@index([inventoryItemId, warehouseId])
+  @@index([shipmentId])
   @@map("order_stock_allocations")
+}
+
+/**
+ * One parcel of an online order (ROADMAP Phase 9.4): the store it leaves from
+ * (or is collected at), how it travels, and what that trip was charged. A bag
+ * split across stores is several parcels, each store charging its own trip —
+ * `Order.deliveryFee` is their sum, and the order's delivery window is the
+ * slowest parcel's. Written from the fulfilment plan when the order is placed
+ * (lib/storefront/delivery/plan.ts, lib/storefront/orders/shipments.ts).
+ * The option is copied, like everything else on an order, so a merchant
+ * editing their rates never rewrites what a parcel was charged.
+ */
+model OrderShipment {
+  id                  String              @id @default(cuid())
+  organizationId      String
+  orderId             String
+  /**
+   * The store it leaves from or is collected at. Null only on an order placed
+   * before stock was held per store, where nobody recorded it.
+   */
+  warehouseId         String?
+  kind                OrderShipmentKind   @default(DELIVERY)
+  deliveryMethodId    String
+  deliveryMethodLabel String
+  /**
+   * major units, what this parcel's trip was charged (0 when its free-delivery
+   * threshold was met)
+   */
+  fee                 Decimal             @db.Decimal(12, 2)
+  /**
+   * its own free-delivery threshold made it free
+   */
+  freeOverApplied     Boolean             @default(false)
+  /**
+   * the window quoted, in minutes, with the merchant's unit. Null only on
+   * orders from before windows were recorded.
+   */
+  etaMinMinutes       Int?
+  etaMaxMinutes       Int?
+  etaUnit             DeliveryEtaUnit?
+  status              OrderShipmentStatus @default(PENDING)
+  /**
+   * a courier's name, a waybill number — whatever helps find it
+   */
+  trackingNote        String?
+  dispatchedAt        DateTime?
+  deliveredAt         DateTime?
+  /**
+   * the biggest parcel first, as checkout listed them
+   */
+  sortOrder           Int                 @default(0)
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  order        Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse?             @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  allocations  OrderStockAllocation[]
+  /**
+   * units being brought here from other stores for it (Phase 9.7)
+   */
+  transfers    StockTransfer[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([orderId])
+  @@index([warehouseId])
+  @@map("order_shipments")
+}
+
+enum OrderShipmentKind {
+  DELIVERY
+  PICKUP
+}
+
+/**
+ * Where a parcel is. Until parcels are sent one by one (Phase 9.6) they move
+ * with their order: shipped → DISPATCHED, delivered → DELIVERED, cancelled →
+ * CANCELLED.
+ */
+enum OrderShipmentStatus {
+  PENDING
+  DISPATCHED
+  DELIVERED
+  CANCELLED
 }
 
 enum OrderStockAllocationStatus {
@@ -2031,10 +2413,66 @@ model OrderReturnLine {
 /**
  * Money the merchant says they sent back to the shopper.
  * The app moves no money itself — there is no refund API — so this is a
- * record the merchant makes AFTER refunding (Squad dashboard, bank transfer),
+ * record the merchant makes AFTER refunding (from their own bank),
  * and the shopper is told exactly that. The order's payment status follows
  * the sum: some of it back is PARTIALLY_REFUNDED, all of it is REFUNDED.
  */
+/**
+ * A chargeback or dispute the customer's bank raised against an online
+ * payment (ROADMAP 10.5), as Paystack reported it through its webhook
+ * (`charge.dispute.create | remind | resolve`). One row per Paystack dispute,
+ * kept up to date by later events; an event older than the one already
+ * recorded is ignored, since webhooks can arrive out of order.
+ * Money is major units, like every money column. Who a lost dispute is taken
+ * from is still unconfirmed with Paystack (ROADMAP 10.13), so nothing here
+ * claims it.
+ */
+model PaymentDispute {
+  id                String    @id @default(cuid())
+  organizationId    String
+  orderId           String
+  paymentId         String
+  /**
+   * Paystack's dispute id.
+   */
+  providerDisputeId String    @unique
+  /**
+   * awaiting-merchant-feedback | awaiting-bank-feedback | pending | resolved
+   */
+  status            String
+  /**
+   * merchant-accepted | declined, once resolved
+   */
+  resolution        String?
+  /**
+   * e.g. 'chargeback'
+   */
+  category          String?
+  amount            Decimal   @db.Decimal(12, 2)
+  currency          String
+  /**
+   * The deadline Paystack gives for a response.
+   */
+  dueAt             DateTime?
+  resolvedAt        DateTime?
+  /**
+   * When Paystack last changed it — the event this row reflects.
+   */
+  lastEventAt       DateTime
+  providerPayload   Json?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payment      OrderPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([organizationId, status])
+  @@map("payment_disputes")
+}
+
 model OrderRefund {
   id             String  @id @default(cuid())
   organizationId String
@@ -2495,10 +2933,18 @@ enum PaymentMethod {
 
 enum BillingCycle {
   MONTHLY
+  /**
+   * Every 6 months — Paystack's `biannually` interval (ROADMAP 12.1).
+   */
+  BIANNUAL
   YEARLY
 }
 
 enum SubscriptionStatus {
+  /**
+   * A free trial, no card taken (ROADMAP 12.1). Ends at `trialEndsAt`.
+   */
+  TRIALING
   ACTIVE
   PAST_DUE
   CANCELED
@@ -2516,12 +2962,42 @@ enum BillingTransactionType {
   RENEWAL
 }
 
+/**
+ * A workspace's plan, and whether it's paid up (ROADMAP 12.1). Every
+ * workspace created since 12.1 has one: a trial at least. Access is worked
+ * out from it by lib/billing/access.ts — trial, active, grace or lapsed.
+ */
 model Subscription {
   id             String             @id @default(cuid())
   organizationId String             @unique
-  plan           OrganizationPlan   @default(FREE)
+  /**
+   * Null only for a workspace that never had a plan (a second workspace by
+   * an owner who already used their trial, before they choose one).
+   */
+  planId         String?
   billingCycle   BillingCycle       @default(MONTHLY)
   status         SubscriptionStatus @default(ACTIVE)
+  /**
+   * What this workspace pays per cycle — fixed when it chose the plan, so a
+   * later price change in the console doesn't move it (Paystack renews at
+   * the plan code it was given). Null during a trial.
+   */
+  amount         Decimal?           @db.Decimal(12, 2)
+
+  /**
+   * The free trial. `trialStartedAt` also stops a second trial for the same
+   * owner (lib/billing/trial.ts).
+   */
+  trialStartedAt DateTime?
+  trialEndsAt    DateTime?
+
+  /**
+   * Recorded the first time the trial or paid period is found to have ended
+   * — with the grace days in force at that moment, so changing the setting
+   * later never moves this deadline. Cleared when a plan is bought.
+   */
+  lapsedAt    DateTime?
+  graceEndsAt DateTime?
 
   currentPeriodStart DateTime?
   currentPeriodEnd   DateTime?
@@ -2533,26 +3009,111 @@ model Subscription {
   paystackAuthorizationCode String?
 
   organization Organization         @relation(fields: [organizationId], references: [id])
+  plan         BillingPlan?         @relation(fields: [planId], references: [id])
   transactions BillingTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([planId])
   @@map("subscriptions")
 }
 
 // Caches the Paystack Plan object created per (plan, billingCycle) pair so
 // checkout doesn't need to hit the Paystack API to look it up every time.
+/**
+ * The Paystack plan object made for one plan, cycle and PRICE. A price change
+ * gets a new Paystack plan, so subscribers on the old price keep renewing at
+ * it (ROADMAP 12.1).
+ */
 model BillingPlanCode {
-  id               String           @id @default(cuid())
-  plan             OrganizationPlan
+  id               String       @id @default(cuid())
+  planId           String
   billingCycle     BillingCycle
-  paystackPlanCode String           @unique
+  /**
+   * kobo, as Paystack's plan holds it
+   */
+  amount           Int
+  paystackPlanCode String       @unique
+
+  plan BillingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
-  @@unique([plan, billingCycle])
+  @@unique([planId, billingCycle, amount])
   @@map("billing_plan_codes")
+}
+
+/**
+ * The plan catalogue (ROADMAP 12.1), edited by platform staff in the console
+ * (11.7). The rules it follows — the feature registry, the cycles, how a
+ * cycle's price is worked out — are in lib/billing/plans.ts.
+ */
+model BillingPlan {
+  id            String  @id @default(cuid())
+  /**
+   * stable, lowercase, never shown — e.g. 'pro'
+   */
+  key           String  @unique
+  name          String
+  tagline       String  @default("")
+  /**
+   * NGN, major units
+   */
+  monthlyPrice  Decimal @db.Decimal(12, 2)
+  highlighted   Boolean @default(false)
+  sortOrder     Int     @default(0)
+  /**
+   * False: retired — hidden from sale, but its subscribers keep renewing on it
+   * until they change plan. A plan with subscribers is never deleted.
+   */
+  isOnSale      Boolean @default(true)
+  /**
+   * null = unlimited
+   */
+  maxSeats      Int?
+  maxWarehouses Int?
+
+  prices        BillingPlanPrice[]
+  features      BillingPlanFeature[]
+  subscriptions Subscription[]
+  transactions  BillingTransaction[]
+  paystackCodes BillingPlanCode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("billing_plans")
+}
+
+/**
+ * One cycle's price for a plan. `amount` is `cyclePrice(monthlyPrice, cycle,
+ * discountPct)`, stored so what is shown and what is charged are one number.
+ */
+model BillingPlanPrice {
+  id           String       @id @default(cuid())
+  planId       String
+  billingCycle BillingCycle
+  discountPct  Int          @default(0)
+  amount       Decimal      @db.Decimal(12, 2)
+
+  plan BillingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, billingCycle])
+  @@map("billing_plan_prices")
+}
+
+/**
+ * A feature a plan includes — a key from FEATURES in lib/billing/plans.ts.
+ */
+model BillingPlanFeature {
+  planId  String
+  feature String
+
+  plan BillingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@id([planId, feature])
+  @@map("billing_plan_features")
 }
 
 model BillingTransaction {
@@ -2562,7 +3123,11 @@ model BillingTransaction {
   reference      String                   @unique // Paystack transaction reference
   type           BillingTransactionType
   status         BillingTransactionStatus @default(PENDING)
-  plan           OrganizationPlan
+  planId         String?
+  /**
+   * The plan's name when charged, so history reads correctly after a rename.
+   */
+  planName       String?
   billingCycle   BillingCycle
   amount         Decimal                  @db.Decimal(12, 2)
   currency       String                   @default("NGN")
@@ -2575,6 +3140,7 @@ model BillingTransaction {
 
   organization Organization  @relation(fields: [organizationId], references: [id])
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  plan         BillingPlan?  @relation(fields: [planId], references: [id])
   domainOrder  DomainOrder?
 
   createdAt DateTime @default(now())
@@ -2590,8 +3156,30 @@ model BillingTransaction {
 
 enum DomainOrderType {
   FREE
+  /** connect a domain the merchant already owns (12.6) */
   EXISTING
   REGISTER
+  /** renew a domain registered through us (12.6) */
+  RENEW
+}
+
+enum ShopDomainSource {
+  /** bought through us; we renew it at Namecheap when the merchant pays */
+  REGISTERED
+  /** the merchant's own, at their registrar */
+  CONNECTED
+}
+
+enum ShopDomainStatus {
+  /** waiting: DNS records (connect) or staff (register/connect) */
+  PENDING
+  LIVE
+  /** registered and not renewed: out of routing, recoverable for a while */
+  EXPIRED
+  /** removed by the merchant */
+  DISCONNECTED
+  /** couldn't be done — see the order's failure reason */
+  FAILED
 }
 
 enum DomainOrderStatus {
@@ -2616,6 +3204,26 @@ model DomainOrder {
   notes       String? // filled in manually by admins during fulfillment
   fulfilledAt DateTime?
 
+  /**
+   * When the work became due — payment confirmed, or (connect) the DNS
+   * records found correct. The 24-hour promise runs from here (11.5).
+   */
+  readyAt         DateTime?
+  /** fulfilment checklist, ticked by staff (11.5); drives the merchant's timeline */
+  stepRegisteredAt DateTime?
+  stepDnsAt        DateTime?
+  stepHostAt       DateTime?
+  stepCheckedAt    DateTime?
+  /** the registrar expiry staff recorded (register / renew) */
+  expiresAt        DateTime?
+  /** why it couldn't be done — shown to the merchant */
+  failureReason    String?
+  /** a paid order that failed is refunded by staff in Paystack's dashboard, and recorded here */
+  refundedAt       DateTime?
+  refundAmount     Decimal?  @db.Decimal(12, 2)
+  refundReference  String?
+  handledById      String?
+
   organization       Organization        @relation(fields: [organizationId], references: [id])
   billingTransaction BillingTransaction? @relation(fields: [billingTransactionId], references: [id])
 
@@ -2629,6 +3237,165 @@ model DomainOrder {
 
 // Generic key-value store for platform-wide, admin-tunable settings (e.g.
 // the USD->NGN rate used to price domain registrations). Not org-scoped.
+/**
+ * What platform staff changed that belongs to no one merchant — the plan
+ * catalogue, the trial and grace settings, the exchange rate (ROADMAP 11.7).
+ * A decision about one merchant (a verification) goes on THAT merchant's
+ * AuditLog instead, where they can see it. Written, never edited.
+ */
+model PlatformAuditLog {
+  id         String  @id @default(cuid())
+  /**
+   * the staff member; kept as null if their account is ever removed
+   */
+  userId     String?
+  action     String // "platform.plan.updated", "platform.settings.updated"
+  entityType String // "BillingPlan", "PlatformSetting"
+  entityId   String
+  /**
+   * { before, after } — what changed
+   */
+  metadata   Json?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@map("platform_audit_logs")
+}
+
+/**
+ * One run of a scheduled job (ROADMAP 13.1) — whichever scheduler called it
+ * (Vercel Cron, cron-job.org) or a member of staff pressing "Run now". The
+ * console's Scheduled jobs page reads these; kept 30 days.
+ * A row with no finishedAt older than a few minutes was cut off by the host.
+ */
+model CronRun {
+  id          String    @id @default(cuid())
+  job         String // key in lib/cron/jobs.ts, e.g. "expire-unpaid-orders"
+  trigger     String // "schedule" | "manual"
+  startedById String? // the staff member, for a manual run
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  ok          Boolean?
+  durationMs  Int?
+  result      Json? // what the job reported, e.g. { cancelled: 3 }
+  error       String?
+
+  @@index([job, startedAt])
+  @@index([startedAt])
+  @@map("cron_runs")
+}
+
+/**
+ * An alert already sent to staff about a job (ROADMAP 13.1), so a job that
+ * fails every 15 minutes emails once, not 96 times a day. Deleted when the
+ * job works again, which is also when the "working again" email goes.
+ */
+model CronAlert {
+  id     String   @id @default(cuid())
+  job    String
+  kind   String // "failed" | "overdue"
+  sentAt DateTime @default(now())
+
+  @@unique([job, kind])
+  @@map("cron_alerts")
+}
+
+/**
+ * An onboarding email sent to a workspace (ROADMAP 12.5): the welcome, the
+ * setup reminders and the trial reminders. One row per kind, claimed BEFORE
+ * sending, so the daily job never sends the same reminder twice.
+ */
+model OnboardingEmail {
+  id             String   @id @default(cuid())
+  organizationId String
+  kind           String // "welcome", "setup_day_3", "setup_day_7", "trial_ends_3d", "trial_ends_1d"
+  sentAt         DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, kind])
+  @@map("onboarding_emails")
+}
+
+/**
+ * A shop's own web address (ROADMAP 12.6) — the storefront only; the
+ * dashboard stays on the platform address. One per shop; a new domain
+ * replaces the row. `Organization.customStoreDomain` holds the canonical
+ * host while LIVE and is what routing reads (one indexed query).
+ */
+model ShopDomain {
+  id             String           @id @default(cuid())
+  organizationId String           @unique
+  /** the bare domain, e.g. pncollections.com */
+  hostname       String           @unique
+  /** where shoppers are sent: www.pncollections.com (decided 2026-09-30) */
+  canonicalHost  String
+  source         ShopDomainSource
+  status         ShopDomainStatus @default(PENDING)
+  /** registrar expiry, recorded by staff (registered domains only) */
+  expiresAt      DateTime?
+  liveAt         DateTime?
+  /** the last "Check my domain" (connected domains) */
+  dnsCheckedAt   DateTime?
+  dnsOk          Boolean          @default(false)
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reminders    DomainReminder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, expiresAt])
+  @@map("shop_domains")
+}
+
+/** A renewal reminder sent for one expiry — claimed before sending, so each goes once (12.6). */
+model DomainReminder {
+  id           String   @id @default(cuid())
+  shopDomainId String
+  /** e.g. "before_30:2027-03-01" — the day count and the expiry it's for */
+  kind         String
+  sentAt       DateTime @default(now())
+
+  shopDomain ShopDomain @relation(fields: [shopDomainId], references: [id], onDelete: Cascade)
+
+  @@unique([shopDomainId, kind])
+  @@map("domain_reminders")
+}
+
+/**
+ * A Paystack payment or dispute that matched nothing of ours (ROADMAP 11.6):
+ * a reference we never issued — neither a storefront payment attempt nor a
+ * subscription charge. Recorded for platform staff to look into; nothing is
+ * credited anywhere. One row per (kind, reference); Paystack's retries update it.
+ */
+model UnmatchedPayment {
+  id             String    @id @default(cuid())
+  /** "charge" | "dispute" */
+  kind           String
+  event          String
+  reference      String
+  amount         Decimal?  @db.Decimal(12, 2)
+  currency       String?
+  subaccountCode String?
+  customerEmail  String?
+  payload        Json?
+  resolvedAt     DateTime?
+  resolvedById   String?
+  resolutionNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kind, reference])
+  @@index([resolvedAt])
+  @@map("unmatched_payments")
+}
+
 model PlatformSetting {
   key       String   @id
   value     String

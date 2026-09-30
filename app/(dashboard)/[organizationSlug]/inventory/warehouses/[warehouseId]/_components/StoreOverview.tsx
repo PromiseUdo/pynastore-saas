@@ -259,7 +259,7 @@ export function StoreOverview({
               </Link>
               {restock.upgradeHint && (
                 <p className="text-xs text-muted-foreground">
-                  Automatic restocking suggestions, grouped by supplier, are on Pro.{' '}
+                  Automatic restocking suggestions, grouped by supplier, come with a higher plan.{' '}
                   <Link href="/upgrade" className="text-primary hover:underline">
                     See plans
                   </Link>

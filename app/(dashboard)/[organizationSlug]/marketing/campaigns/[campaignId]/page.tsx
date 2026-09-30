@@ -9,9 +9,9 @@ import { requireFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { getCampaign } from '@/features/marketing/campaign-reads';
-import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { prisma } from '@/lib/prisma';
 import { CampaignDetailClient } from './_components/CampaignDetailClient';
+import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
 export const metadata: Metadata = { title: 'Campaign' };
 
@@ -75,7 +75,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ campa
       currency={ctx.organization.currency}
       canManage={hasPermission(perms, PERMISSIONS.SALES_DISCOUNT_MANAGE)}
       storeName={ctx.organization.name}
-      storeUrl={getStorefrontUrl(ctx.organization.slug)}
+      storeUrl={(await storefrontUrlFor(ctx.organization.slug))}
       destinations={destinations}
     />
   );

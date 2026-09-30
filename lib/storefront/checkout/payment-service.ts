@@ -3,21 +3,36 @@
  *
  * Paying for an online order. Server only.
  *
- * THE FLOW
+ * THE FLOW (ROADMAP 10.4)
  *
- *   place order ─▶ startOrderPayment() ─▶ Squad /transaction/initiate
- *                        │                       └─ checkout_url
- *                        └─ OrderPayment row (PENDING, our reference)
- *   shopper pays on Squad's page
- *   Squad ─▶ /api/payments/squad/callback (the browser)  ┐
- *   Squad ─▶ /api/payments/squad/webhook  (server)       ├─▶ reconcilePayment()
- *   confirmation page load (safety net)                  ┘      └─ Squad /verify
+ *   place order ─▶ startOrderPayment() ─▶ Paystack /transaction/initialize
+ *                        │                  (the shop's subaccount, the merchant
+ *                        │                   bears the fee, platform share 0)
+ *                        │                       └─ authorization_url
+ *                        └─ OrderPayment row (PENDING, our reference, subaccount)
+ *   shopper pays on Paystack's page
+ *   Paystack ─▶ /api/payments/paystack/callback (the browser)  ┐
+ *   Paystack ─▶ webhook (server, ROADMAP 10.5)                 ├─▶ reconcilePayment()
+ *   confirmation page load (safety net)                        ┘   └─ provider's /verify
  *
- * THE ONE RULE: an order becomes PAID only because Squad's verify endpoint,
- * called here with our secret key, said so — for the amount and currency we
- * asked for. The callback's query string and the webhook's body are only ever
- * treated as "go and check this reference". Three doors, one check, and the
- * check is idempotent, so it doesn't matter which arrives first or how often.
+ * THE ONE RULE: an order becomes PAID only because the provider's verify
+ * endpoint, called here with the platform's secret key, said so — for the
+ * amount and currency we asked for and, on Paystack, to the subaccount we sent
+ * it to with nothing for the platform. The callback's query string and a
+ * webhook's body are only ever treated as "go and check this reference". Every
+ * door leads to one check, and the check is idempotent.
+ *
+ * PROVIDERS. Every attempt goes to Paystack. Squad took storefront payments
+ * until checkout moved (10.4) and was retired in 10.9: its attempts stay as
+ * history, and one still PENDING can no longer be verified, so it is answered
+ * 'unverifiable' without calling anyone — never guessed paid or unpaid. The
+ * expiry job still cancels its order after the hold window, as for any
+ * payment that never arrived.
+ *
+ * READINESS. A new payment is only started for a shop that may take online
+ * payments (onlinePaymentReadiness, 10.8): verified by us, subaccount active,
+ * not suspended. Checkout doesn't offer the method otherwise; this is the
+ * server's own check.
  *
  * LATE PAYMENTS. An unpaid order gives its stock back after a while
  * (orders/lifecycle.ts). If the money arrives after that, the order is
@@ -25,26 +40,65 @@
  * cancelled but PAID, the shopper is told to arrange a refund, and the
  * merchant sees exactly that combination on the order.
  *
- * ATTEMPTS. Squad refuses a reused transaction reference, so every "Pay now"
- * is its own OrderPayment row with its own reference. The order keeps its
+ * ATTEMPTS. A provider refuses a reused transaction reference, so every "Pay
+ * now" is its own OrderPayment row with its own reference. The order keeps its
  * shopper-facing ORD- reference throughout.
  *
- * Money: the order stores major units; Squad takes minor units (kobo).
+ * Money: the order stores major units; providers take minor units (kobo).
  */
 import { randomBytes } from 'crypto';
 import { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
-  initiateTransaction,
-  isSquadConfigured,
-  verifyTransaction,
-  type SquadTransaction,
-} from '@/lib/payments/squad';
+  initializeSplitTransaction,
+  isPaystackConfigured,
+  verifyPaystackTransaction,
+} from '@/lib/payments/paystack';
+import { getOnlinePaymentReadiness } from '@/lib/payments/online-readiness';
 import { OutOfStockError, reReserveOrderStock } from '../orders/stock';
+import { requestGatheringTransfers } from '../orders/gather';
 import { reclaimDiscountUse } from '../discounts/usage';
 import { notifyShopper } from '../orders/notifications';
 
-export const SQUAD_PROVIDER = 'squad';
+/** The checkout method (and attempt provider) for paying online. */
+export const ONLINE_PAYMENT_METHOD = 'paystack';
+/** Orders placed before checkout moved to Paystack; Squad is retired (ROADMAP 10.9). History only. */
+export const LEGACY_SQUAD_METHOD = 'squad';
+/** Every method whose money is taken online by a provider, past or present. */
+export const ONLINE_PAYMENT_METHODS = [ONLINE_PAYMENT_METHOD, LEGACY_SQUAD_METHOD] as const;
+
+export function isOnlinePaymentMethod(method: string): boolean {
+  return (ONLINE_PAYMENT_METHODS as readonly string[]).includes(method);
+}
+
+/** What Paystack said about one transaction. */
+interface VerifiedPayment {
+  status: 'success' | 'failed' | 'abandoned' | 'pending';
+  /** minor units */
+  amount: number;
+  currency: string;
+  channel: string | null;
+  gatewayRef: string | null;
+  subaccountCode: string | null;
+  split: { merchant: number; platform: number; fee: number } | null;
+  raw: Record<string, unknown>;
+}
+
+/** Ask Paystack about an attempt. Null: it doesn't know the reference. */
+async function verifyWithProvider(reference: string): Promise<VerifiedPayment | null> {
+  const t = await verifyPaystackTransaction(reference);
+  if (!t) return null;
+  return {
+    status: t.status,
+    amount: t.amount,
+    currency: t.currency,
+    channel: t.channel,
+    gatewayRef: t.id,
+    subaccountCode: t.subaccountCode,
+    split: t.split,
+    raw: t.raw,
+  };
+}
 
 /** Orders in these states may still be paid online. */
 const PAYABLE_ORDER_STATUSES = ['PENDING', 'CONFIRMED'] as const;
@@ -56,7 +110,7 @@ function toMinor(amount: Prisma.Decimal): number {
 
 /**
  * Our transaction reference: the order reference, for a human reading the
- * Squad dashboard, plus randomness, because each attempt needs its own.
+ * Paystack dashboard, plus randomness, because each attempt needs its own.
  */
 function attemptReference(orderReference: string): string {
   return `${orderReference}-${randomBytes(5).toString('hex').toUpperCase()}`;
@@ -69,10 +123,12 @@ export type StartPaymentResult =
   | { ok: false; reason: 'already-paid' | 'not-payable' | 'unavailable' };
 
 /**
- * Open a Squad payment for an order and return where to send the shopper.
+ * Open a Paystack payment for an order and return where to send the shopper.
+ * Everything the provider is told — amount, currency, subaccount, who bears
+ * the fee — comes from the database, never the request.
  *
  * `origin` is the public origin the shopper is browsing (their store's own
- * host), so Squad returns them to the store they bought from. `returnPath`
+ * host), so Paystack returns them to the store they bought from. `returnPath`
  * is the store-relative confirmation page to land on afterwards.
  */
 export async function startOrderPayment(input: {
@@ -83,8 +139,8 @@ export async function startOrderPayment(input: {
   /** started inside the phone app — see the callback route */
   nativeApp?: boolean;
 }): Promise<StartPaymentResult> {
-  if (!isSquadConfigured()) {
-    console.error('[payments] SQUADCO_SECRET_KEY is not set; cannot start a payment.');
+  if (!isPaystackConfigured()) {
+    console.error('[payments] PAYSTACK_SECRET_KEY is not set; cannot start a payment.');
     return { ok: false, reason: 'unavailable' };
   }
 
@@ -119,11 +175,26 @@ export async function startOrderPayment(input: {
   });
   if (fresh.paymentStatus === 'PAID') return { ok: false, reason: 'already-paid' };
   if (
-    order.paymentMethod !== SQUAD_PROVIDER ||
+    order.paymentMethod !== ONLINE_PAYMENT_METHOD ||
     fresh.paymentStatus !== 'AWAITING_PAYMENT' ||
     !(PAYABLE_ORDER_STATUSES as readonly string[]).includes(fresh.status)
   ) {
     return { ok: false, reason: 'not-payable' };
+  }
+
+  // The shop must still be able to take online payments (10.8), and the money
+  // goes to ITS subaccount — read from its own record, never the request.
+  const [readiness, account] = await Promise.all([
+    getOnlinePaymentReadiness(input.organizationId),
+    prisma.merchantPaymentAccount.findUnique({
+      where: { organizationId: input.organizationId },
+      select: { paystackSubaccountCode: true },
+    }),
+  ]);
+  const subaccountCode = account?.paystackSubaccountCode;
+  if (!readiness.ready || !subaccountCode) {
+    console.warn(`[payments] ${order.reference}: the shop can't take online payments (${readiness.blocker ?? 'no subaccount'}).`);
+    return { ok: false, reason: 'unavailable' };
   }
 
   const reference = attemptReference(order.reference);
@@ -133,8 +204,9 @@ export async function startOrderPayment(input: {
     data: {
       organizationId: input.organizationId,
       orderId: order.id,
-      provider: SQUAD_PROVIDER,
+      provider: ONLINE_PAYMENT_METHOD,
       reference,
+      subaccountCode,
       amount: order.totalAmount,
       currency: order.currency,
       returnUrl,
@@ -144,20 +216,27 @@ export async function startOrderPayment(input: {
   });
 
   try {
-    const { checkoutUrl } = await initiateTransaction({
+    const { checkoutUrl } = await initializeSplitTransaction({
       amount: toMinor(order.totalAmount),
       currency: order.currency,
       email: order.email,
-      customerName: `${order.firstName ?? ''} ${order.lastName ?? ''}`.trim() || undefined,
-      transactionRef: reference,
-      callbackUrl: `${input.origin}/api/payments/squad/callback?ref=${encodeURIComponent(reference)}`,
-      metadata: { orderReference: order.reference },
+      reference,
+      callbackUrl: `${input.origin}/api/payments/paystack/callback?ref=${encodeURIComponent(reference)}`,
+      subaccountCode,
+      // For reconciliation and support; never trusted on the way back.
+      metadata: {
+        purpose: 'storefront-order',
+        organizationId: input.organizationId,
+        orderId: order.id,
+        orderReference: order.reference,
+        attemptId: attempt.id,
+      },
     });
 
     await prisma.orderPayment.update({ where: { id: attempt.id }, data: { checkoutUrl } });
     return { ok: true, checkoutUrl };
   } catch (error) {
-    console.error(`[payments] Could not start Squad payment for ${order.reference}:`, error);
+    console.error(`[payments] Could not start a Paystack payment for ${order.reference}:`, error);
     await prisma.orderPayment.update({ where: { id: attempt.id }, data: { status: 'FAILED' } });
     return { ok: false, reason: 'unavailable' };
   }
@@ -172,30 +251,33 @@ export type ReconcileOutcome =
   | 'failed'
   | 'mismatch'
   | 'unknown-reference'
+  /** a Squad-era attempt: Squad is retired, so there's nobody left to ask */
+  | 'unverifiable'
   | 'error';
 
 /**
- * Bring one attempt in line with what Squad says. Safe to call any number of
- * times, from anywhere, in any order: it only ever moves an attempt out of
- * PENDING once, and an order into PAID once.
+ * Bring one attempt in line with what its provider says. Safe to call any
+ * number of times, from anywhere, in any order: it only ever moves an attempt
+ * out of PENDING once, and an order into PAID once.
  */
 export async function reconcilePayment(reference: string): Promise<ReconcileOutcome> {
   const attempt = await prisma.orderPayment.findUnique({
     where: { reference },
-    select: { id: true, status: true, amount: true, currency: true, orderId: true },
+    select: { id: true, status: true, amount: true, currency: true, orderId: true, provider: true, subaccountCode: true },
   });
   if (!attempt) return 'unknown-reference';
   if (attempt.status === 'SUCCESS') return 'already-paid';
+  if (attempt.provider !== ONLINE_PAYMENT_METHOD) return 'unverifiable';
 
-  let transaction: SquadTransaction | null;
+  let transaction: VerifiedPayment | null;
   try {
-    transaction = await verifyTransaction(reference);
+    transaction = await verifyWithProvider(reference);
   } catch (error) {
-    console.error(`[payments] Could not verify ${reference} with Squad:`, error);
+    console.error(`[payments] Could not verify ${reference} with ${attempt.provider}:`, error);
     return 'error';
   }
 
-  // Squad has no record yet: the shopper never reached its page.
+  // The provider has no record yet: the shopper never reached its page.
   if (!transaction || transaction.status === 'pending') return 'pending';
 
   const payload = transaction.raw as Prisma.InputJsonValue;
@@ -215,10 +297,19 @@ export async function reconcilePayment(reference: string): Promise<ReconcileOutc
   /* Paid — but for what we asked? A transaction for a different amount is not
    * payment for this order, whatever its status. It's recorded for a human
    * to look at rather than silently accepted or silently dropped. */
+  /* The money must also have gone to the subaccount we sent it to, with
+   * nothing for the platform (10.1). A payment split any other way is not this
+   * shop's payment, whatever its status. */
   const expected = toMinor(attempt.amount);
-  if (transaction.amount !== expected || transaction.currency.toUpperCase() !== attempt.currency.toUpperCase()) {
+  const wrongAmount =
+    transaction.amount !== expected || transaction.currency.toUpperCase() !== attempt.currency.toUpperCase();
+  const wrongSplit =
+    transaction.subaccountCode !== attempt.subaccountCode || (transaction.split !== null && transaction.split.platform !== 0);
+  if (wrongAmount || wrongSplit) {
     console.error(
-      `[payments] ${reference}: Squad reports ${transaction.amount} ${transaction.currency}, expected ${expected} ${attempt.currency}.`,
+      `[payments] ${reference}: ${attempt.provider} reports ${transaction.amount} ${transaction.currency} to ` +
+        `${transaction.subaccountCode ?? 'no subaccount'} (platform share ${transaction.split?.platform ?? '—'}), ` +
+        `expected ${expected} ${attempt.currency} to ${attempt.subaccountCode ?? '—'}.`,
     );
     await prisma.orderPayment.updateMany({
       where: { id: attempt.id, status: 'PENDING' },
@@ -236,7 +327,15 @@ export async function reconcilePayment(reference: string): Promise<ReconcileOutc
       data: {
         status: 'SUCCESS',
         channel: transaction.channel,
-        gatewayRef: typeof transaction.raw.gateway_ref === 'string' ? transaction.raw.gateway_ref : null,
+        gatewayRef: transaction.gatewayRef,
+        // Paystack's own split, as it reported it — shown to the merchant (10.6).
+        ...(transaction.split
+          ? {
+              merchantAmount: new Prisma.Decimal(transaction.split.merchant).dividedBy(100),
+              platformAmount: new Prisma.Decimal(transaction.split.platform).dividedBy(100),
+              feeAmount: new Prisma.Decimal(transaction.split.fee).dividedBy(100),
+            }
+          : {}),
         providerPayload: payload,
         verifiedAt: now,
       },
@@ -258,6 +357,8 @@ export async function reconcilePayment(reference: string): Promise<ReconcileOutc
         ...(order.status === 'PENDING' ? { status: 'CONFIRMED' as const, confirmedAt: now } : {}),
       },
     });
+    // Confirmed: ask other stores for anything being brought together (Phase 9.7).
+    if (order.status === 'PENDING') await requestGatheringTransfers(tx, attempt.orderId);
 
     return order;
   });
@@ -291,6 +392,7 @@ export async function reviveTimedOutOrder(orderId: string): Promise<boolean> {
       });
       if (claimed.count === 0) throw new OutOfStockError('already-handled');
       await reReserveOrderStock(tx, { organizationId: order.organizationId, orderId });
+      await requestGatheringTransfers(tx, orderId);
       // The cancellation gave the discount code's use back; take it again.
       await reclaimDiscountUse(tx, order.discountCodeId);
     });
@@ -303,6 +405,37 @@ export async function reviveTimedOutOrder(orderId: string): Promise<boolean> {
     }
     return false;
   }
+}
+
+/**
+ * Platform staff's "Check with Paystack" on a payment that never confirmed
+ * (ROADMAP 11.6). The same settling as everywhere else — plus one thing only
+ * staff do: an attempt Paystack has NO record of, older than the hold, is
+ * closed as abandoned (the shopper never reached Paystack's page), so it stops
+ * showing as stuck. An attempt Paystack knows about is never closed here.
+ */
+export async function recheckPaymentForStaff(
+  reference: string,
+  /** the unpaid-order hold (UNPAID_ORDER_HOLD_MINUTES) — passed in to keep lifecycle.ts out of this module */
+  holdMinutes: number,
+  now = new Date(),
+): Promise<ReconcileOutcome | 'abandoned'> {
+  const outcome = await reconcilePayment(reference);
+  if (outcome !== 'pending') return outcome;
+  const attempt = await prisma.orderPayment.findUnique({ where: { reference }, select: { id: true, createdAt: true } });
+  if (!attempt || now.getTime() - attempt.createdAt.getTime() < holdMinutes * 60_000) return outcome;
+  let known: VerifiedPayment | null;
+  try {
+    known = await verifyWithProvider(reference);
+  } catch {
+    return 'error';
+  }
+  if (known) return outcome; // Paystack has it, still pending (e.g. a transfer on its way) — leave it.
+  await prisma.orderPayment.updateMany({
+    where: { id: attempt.id, status: 'PENDING' },
+    data: { status: 'ABANDONED', verifiedAt: now },
+  });
+  return 'abandoned';
 }
 
 /** Re-check every attempt on an order that is still waiting to hear back. */
@@ -343,7 +476,7 @@ export async function getOrderPaymentState(orderId: string): Promise<OrderPaymen
   if (!order) return { canPay: false, lastAttemptFailed: false, cancelReason: null };
 
   const canPay =
-    order.paymentMethod === SQUAD_PROVIDER &&
+    order.paymentMethod === ONLINE_PAYMENT_METHOD &&
     order.paymentStatus === 'AWAITING_PAYMENT' &&
     (PAYABLE_ORDER_STATUSES as readonly string[]).includes(order.status);
 
@@ -355,7 +488,7 @@ export async function getOrderPaymentState(orderId: string): Promise<OrderPaymen
   };
 }
 
-/** Where to send the shopper back to, once Squad returns them. */
+/** Where to send the shopper back to, once the provider returns them. */
 export async function paymentReturn(
   reference: string,
 ): Promise<{ returnUrl: string; nativeApp: boolean } | null> {

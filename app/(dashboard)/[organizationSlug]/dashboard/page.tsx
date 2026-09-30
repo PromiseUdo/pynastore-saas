@@ -11,7 +11,7 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { AlertCircle, ArrowUpRight, Banknote, HelpCircle, PackageX, ShoppingBag, Undo2 } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Banknote, CreditCard, HelpCircle, PackageX, ShoppingBag, Undo2 } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/layout/page-header';
 import { StatCard, StatGrid } from '@/components/dashboard/stat-card';
 import { EmptyState } from '@/components/layout/empty-state';
@@ -34,17 +34,57 @@ import {
   ORDER_PAYMENT_VARIANT,
 } from '@/lib/sales/order-labels';
 import { getDashboardOverview } from '@/features/dashboard/overview';
+import { SetupGuideSection } from '@/components/dashboard/setup-guide-section';
+import { domainAttention } from '@/lib/domains/attention';
+import { getOrganizationContext } from '@/lib/organization';
+import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 
 export const metadata: Metadata = { title: 'Dashboard' };
 
 export default async function DashboardPage() {
   const overview = await getDashboardOverview();
+  const ctx = await getOrganizationContext();
+  const domainNote = hasPermission(ctx.membership.role.permissions, PERMISSIONS.SETTINGS_VIEW)
+    ? await domainAttention(ctx.organization.id)
+    : null;
   const { sales, inventory, currency } = overview;
   const now = new Date();
 
   /* Things that are actually waiting on someone, in the order a shop owner
    * would deal with them. Anything at zero simply isn't mentioned. */
   const attention = [
+    domainNote ? { key: 'domain', icon: AlertCircle, href: '/settings/domain', text: domainNote, action: 'Renew' } : null,
+    /* Only the blockers the merchant can act on. "In review" and "setting up
+     * payouts" are ours to finish, so they stay on the payments page. */
+    overview.onlinePayments === 'not_submitted'
+      ? {
+          key: 'online-payments',
+          icon: CreditCard,
+          href: '/settings/payments/online',
+          text: 'Online payments aren’t set up yet — tell us about your business and where to send your money',
+          action: 'Set up',
+        }
+      : overview.onlinePayments === 'rejected'
+        ? {
+            key: 'online-payments',
+            icon: AlertCircle,
+            href: '/settings/payments/online',
+            text: 'Your details for online payments were sent back — see what to change',
+            action: 'Review',
+          }
+        : null,
+    sales?.openDisputes
+      ? {
+          key: 'disputes',
+          icon: AlertCircle,
+          href: sales.openDisputes === 1 && sales.firstDisputeOrderId ? `/sales/orders/${sales.firstDisputeOrderId}` : '/sales/orders',
+          text:
+            sales.openDisputes === 1
+              ? 'A customer’s bank opened a chargeback on an order'
+              : 'Customers’ banks opened chargebacks on more than one order',
+          action: 'See the order',
+        }
+      : null,
     sales?.openOrders
       ? {
           key: 'orders',
@@ -67,6 +107,18 @@ export default async function DashboardPage() {
               ? '1 customer is waiting on a return decision'
               : `${formatNumber(sales.returnsAwaiting)} customers are waiting on a return decision`,
           action: 'Review returns',
+        }
+      : null,
+    sales?.refundsOwed
+      ? {
+          key: 'refunds',
+          icon: AlertCircle,
+          href: '/sales/orders?status=CANCELLED',
+          text:
+            sales.refundsOwed === 1
+              ? '1 cancelled order was paid for and still needs refunding'
+              : `${formatNumber(sales.refundsOwed)} cancelled orders were paid for and still need refunding`,
+          action: 'See them',
         }
       : null,
     sales?.unansweredQuestions
@@ -112,6 +164,8 @@ export default async function DashboardPage() {
       <PageHeader title="Dashboard" description={`What's happening at ${overview.organizationName} today.`} />
 
       <PageBody className="space-y-6">
+        <SetupGuideSection variant="dashboard" />
+
         {attention.length > 0 && (
           <section aria-label="Needs attention" className="space-y-2">
             {attention.map((item) => (

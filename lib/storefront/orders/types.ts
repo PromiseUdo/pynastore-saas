@@ -93,6 +93,18 @@ export interface StorefrontOrder {
     eta: DeliveryEta;
     /** ISO dates bracketing the estimate, worked out from `placedAt` */
     estimated: { from: string; to: string };
+    /**
+     * The parcels it travels in (ROADMAP Phase 9.4/9.5), biggest first — one
+     * for most orders; several when the bag came from more than one store.
+     */
+    parcels: {
+      /** the store it leaves from; null only on orders from before stores were recorded */
+      storeName: string | null;
+      label: string;
+      fee: Money;
+      kind: 'delivery' | 'pickup';
+      status: 'pending' | 'dispatched' | 'delivered' | 'cancelled';
+    }[];
   };
 
   currency: string;

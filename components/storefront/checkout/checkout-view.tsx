@@ -48,6 +48,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { quoteDeliveryAction } from '@/features/shop-orders/actions';
+import { combineParcelChoice, defaultParcelChoice, type ParcelOffer } from '@/lib/storefront/delivery/plan';
+import { useDeliverToStore } from '@/lib/storefront/stores/deliver-to-store';
 import { openPaymentPage } from '@/lib/storefront/payments/open-payment-page';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useStorefront } from '@/lib/storefront/context';
@@ -158,13 +160,17 @@ export function CheckoutView({
      * empty draft, so a country alone proves nothing. */
     const draftStarted = Boolean(draft.address.addressLine1);
     const savedDefault = account?.addresses[0];
+    const blank = draft.address.country ? draft.address : emptyAddress(config.defaultCountryCode);
+    /* A guest who told the product page where to deliver (Phase 9.8) starts
+     * with that state and city — only into empty fields, never over typing. */
+    const chosen = useDeliverToStore.getState().place;
     const seededAddress = draftStarted
       ? draft.address
       : savedDefault
         ? fromStoredAddress(savedDefault, config)
-        : draft.address.country
-          ? draft.address
-          : emptyAddress(config.defaultCountryCode);
+        : chosen && !blank.state && !blank.city
+          ? { ...blank, state: chosen.state, city: chosen.city }
+          : blank;
 
     return {
       contact: seededContact,
@@ -188,19 +194,25 @@ export function CheckoutView({
    * What delivery costs depends on where it's going, so the options come
    * from the server (the merchant's zones) for the address on the form. They
    * are fetched once the shopper is past their details, and again whenever
-   * the state, city or bag total changes — a free-delivery threshold can
-   * flip with the bag. The demo fixtures carry a fixed list, used as-is. */
+   * the state, city or bag changes — which store sends what depends on the
+   * bag (ROADMAP Phase 9.3), and a free-delivery threshold can flip with it.
+   * The demo fixtures carry a fixed list, used as-is. */
   const fixedOptions = config.deliveryMethods;
   const [quote, setQuote] = React.useState<{
     status: 'idle' | 'loading' | 'ready' | 'error';
     options: ShippingMethod[];
     zoneName: string | null;
     message: string | null;
-  }>({ status: fixedOptions.length ? 'ready' : 'idle', options: fixedOptions, zoneName: null, message: null });
+    notice: string | null;
+    /** a bag split across stores: how each parcel can travel (Phase 9.5) */
+    parcels: ParcelOffer[];
+  }>({ status: fixedOptions.length ? 'ready' : 'idle', options: fixedOptions, zoneName: null, message: null, notice: null, parcels: [] });
 
   const [quoteState, quoteCity] = useWatch({ control: form.control, name: ['address.state', 'address.city'] });
   const pastDetails = step !== 'information';
-  const subtotalForQuote = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  /* The bag as the quote needs it — ids and quantities, re-priced on the
+   * server. A string key, so the quote re-runs only when the bag changes. */
+  const bagKey = items.map((item) => `${item.productId}:${item.variantId}:${item.quantity}`).join('|');
   const quoteAttempt = React.useRef(0);
 
   const requestQuote = React.useCallback(async () => {
@@ -208,35 +220,62 @@ export function CheckoutView({
     const attempt = ++quoteAttempt.current;
     setQuote((q) => ({ ...q, status: 'loading', message: null }));
     try {
-      const result = await quoteDeliveryAction({ state: quoteState ?? '', city: quoteCity ?? '', subtotal: subtotalForQuote });
+      const lines = bagKey
+        ? bagKey.split('|').map((entry) => {
+            const [productId, variantId, quantity] = entry.split(':');
+            return { productId, variantId, quantity: Number(quantity) };
+          })
+        : [];
+      const result = await quoteDeliveryAction({ state: quoteState ?? '', city: quoteCity ?? '', lines });
       // A slower, older answer must not overwrite the one for the current address.
       if (attempt !== quoteAttempt.current) return;
       if (!result.ok) {
-        setQuote({ status: 'error', options: [], zoneName: null, message: result.message });
+        setQuote({ status: 'error', options: [], zoneName: null, message: result.message, notice: null, parcels: [] });
         return;
       }
-      setQuote({ status: 'ready', options: result.options, zoneName: result.zoneName, message: null });
+      setQuote({
+        status: 'ready',
+        options: result.options,
+        zoneName: result.zoneName,
+        message: null,
+        notice: result.notice ?? null,
+        parcels: result.parcels ?? [],
+      });
 
       /* Keep the shopper's choice if it's still offered; otherwise preselect
-       * the first (cheapest delivery) so the summary shows a real total. */
+       * the cheapest — for a bag in several parcels, each parcel's cheapest —
+       * so the summary shows a real total. */
       const current = form.getValues('deliveryMethodId');
-      const next = result.options.some((o) => o.id === current) ? current : (result.options[0]?.id ?? '');
+      const parcels = result.parcels ?? [];
+      const stillOffered = result.options.some((o) => o.id === current) || Boolean(combineParcelChoice(parcels, current));
+      const next = stillOffered ? current : (defaultParcelChoice(parcels) ?? result.options[0]?.id ?? '');
       if (next !== current) {
         form.setValue('deliveryMethodId', next, { shouldValidate: false });
         useCheckoutStore.getState().setDeliveryMethod(next);
       }
     } catch {
       if (attempt !== quoteAttempt.current) return;
-      setQuote({ status: 'error', options: [], zoneName: null, message: 'We couldn’t load delivery options just now. Please try again.' });
+      setQuote({
+        status: 'error',
+        options: [],
+        zoneName: null,
+        message: 'We couldn’t load delivery options just now. Please try again.',
+        notice: null,
+        parcels: [],
+      });
     }
-  }, [fixedOptions.length, quoteState, quoteCity, subtotalForQuote, form]);
+  }, [fixedOptions.length, quoteState, quoteCity, bagKey, form]);
 
   React.useEffect(() => {
     if (pastDetails && hydrated) void requestQuote();
   }, [pastDetails, hydrated, requestQuote]);
 
   const deliveryOptions = quote.options;
-  const deliveryMethod = deliveryOptions.find((m) => m.id === deliveryMethodId) ?? null;
+  /* One option or pickup — or a choice per parcel, added up here exactly as
+   * the server will add it up (combineParcelChoice). */
+  const deliveryMethod =
+    deliveryOptions.find((m) => m.id === deliveryMethodId) ??
+    (deliveryMethodId ? combineParcelChoice(quote.parcels, deliveryMethodId) : null);
   const totals = React.useMemo(
     () => calculateCheckoutTotals({ items, deliveryMethod, discount: coupon, config }),
     [items, deliveryMethod, coupon, config],
@@ -361,7 +400,9 @@ export function CheckoutView({
 
     commit('all');
 
-    const result = await useCheckoutStore.getState().placeOrder({ config, tenantId: org.slug, deliveryOptions });
+    // A choice per parcel isn't in the list; hand over the combined method it adds up to.
+    const offered = deliveryMethod && !deliveryOptions.includes(deliveryMethod) ? [...deliveryOptions, deliveryMethod] : deliveryOptions;
+    const result = await useCheckoutStore.getState().placeOrder({ config, tenantId: org.slug, deliveryOptions: offered });
     if (result.ok) {
       /* Saved AFTER the order, never before: the order is what matters, and
        * an address book write must not be able to fail a checkout. Errors
@@ -372,9 +413,9 @@ export function CheckoutView({
         );
       }
 
-      /* Paying happens on Squad's page, a different origin, so this is a full
+      /* Paying happens on Paystack's page, a different origin, so this is a full
        * navigation. `replace` either way: the shopper must not be able to
-       * reach a submitted checkout with the Back button. Squad returns them
+       * reach a submitted checkout with the Back button. Paystack returns them
        * to the confirmation; if payment couldn't be started, they go there
        * directly and it offers "Pay now".
        *
@@ -525,8 +566,11 @@ export function CheckoutView({
               <DeliveryStep
                 form={form}
                 options={deliveryOptions}
+                parcels={quote.parcels}
+                items={items}
                 status={quote.status}
                 zoneName={quote.zoneName}
+                notice={quote.notice}
                 errorMessage={quote.message}
                 addressLabel={[quoteCity, quoteState].filter(Boolean).join(', ')}
                 onRetry={() => void requestQuote()}

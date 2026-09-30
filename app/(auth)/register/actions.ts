@@ -5,6 +5,7 @@ import { signIn } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { AuthError } from 'next-auth';
 import { z } from 'zod';
+import { sendVerificationEmail } from '@/lib/email-verification';
 
 const RegisterSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -41,8 +42,9 @@ export async function registerAction(
 
   const hashedPassword = await hash(password, 12);
 
-  await prisma.user.create({
+  const user = await prisma.user.create({
     data: { name, email, password: hashedPassword },
+    select: { id: true },
   });
 
   // If an invite token was passed through the form, redirect back to the invite page
@@ -50,6 +52,11 @@ export async function registerAction(
   // requiring an extra button click.
   const inviteToken = formData.get('invite') as string | null;
   const redirectTo = inviteToken ? `/invite/${inviteToken}?auto=1` : '/onboarding';
+
+  // A new shop owner confirms their email before creating a shop (ROADMAP
+  // 12.5); /onboarding waits for it. Someone joining by invitation is
+  // confirmed by accepting it, so they get no link.
+  if (!inviteToken) await sendVerificationEmail(user.id);
 
   try {
     await signIn('credentials', { email, password, redirectTo });

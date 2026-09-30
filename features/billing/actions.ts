@@ -6,29 +6,23 @@ import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS, PermissionDeniedError } from '@/lib/permissions';
 import { disableSubscription } from '@/lib/billing/paystack';
-import { buildAndInitializeCheckout, CheckoutError, type DomainChoiceInput } from '@/lib/billing/checkout';
-import type { OrganizationPlan, BillingCycle } from '@/lib/generated/prisma/enums';
+import { buildAndInitializeCheckout, CheckoutError } from '@/lib/billing/checkout';
+import type { BillingCycleKey } from '@/lib/billing/plans';
 
 type ActionResult<T = void> =
   | { success: true; data: T }
   | { success: false; error: string };
 
-const DomainChoiceSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('FREE') }),
-  z.object({ type: z.literal('EXISTING'), domain: z.string().min(3) }),
-  z.object({ type: z.literal('REGISTER'), domain: z.string().min(3) }),
-]);
-
 const CheckoutSchema = z.object({
-  plan: z.enum(['STARTER', 'PRO', 'ENTERPRISE']),
-  billingCycle: z.enum(['MONTHLY', 'YEARLY']),
-  domainChoice: DomainChoiceSchema.optional(),
+  /** a catalogue plan id — checked against the catalogue on the server */
+  planId: z.string().min(1).max(64),
+  billingCycle: z.enum(['MONTHLY', 'BIANNUAL', 'YEARLY']),
 });
 
 /**
- * Starts a Paystack checkout for the given paid plan + billing cycle, plus
- * an optional domain choice (free subdomain / connect existing / register
- * new — see lib/billing/checkout.ts). Requires BILLING_MANAGE permission.
+ * Starts a Paystack checkout for a plan from the catalogue and a billing cycle
+ * (monthly, every 6 months, yearly). Domains are bought from Settings →
+ * Domain (features/domains/actions.ts). Requires BILLING_MANAGE permission.
  * Returns the hosted checkout URL to redirect the browser to; subscription
  * state is applied by the webhook (and best-effort by the callback route)
  * once payment succeeds.
@@ -44,11 +38,7 @@ export async function createCheckoutSession(
     if (!parsed.success) {
       return { success: false, error: parsed.error.issues[0].message };
     }
-    const { plan, billingCycle, domainChoice } = parsed.data as {
-      plan: OrganizationPlan;
-      billingCycle: BillingCycle;
-      domainChoice?: DomainChoiceInput;
-    };
+    const { planId, billingCycle } = parsed.data as { planId: string; billingCycle: BillingCycleKey };
 
     const user = await prisma.user.findUnique({
       where: { id: ctx.userId },
@@ -63,9 +53,8 @@ export async function createCheckoutSession(
       organizationSlug: ctx.organization.slug,
       userId: ctx.userId,
       userEmail: user.email,
-      plan,
+      planId,
       billingCycle,
-      domainChoice,
     });
 
     // A paid plan is always > 0, so this checkout always requires payment —
@@ -103,8 +92,10 @@ export async function cancelSubscription(): Promise<ActionResult> {
       where: { organizationId: ctx.organization.id },
     });
 
-    if (!subscription || subscription.plan === 'FREE') {
-      return { success: false, error: 'No active paid subscription to cancel.' };
+    // Only a paid plan renews, so only a paid plan can be cancelled — a trial
+    // simply ends (ROADMAP 12.1).
+    if (!subscription || (subscription.status !== 'ACTIVE' && subscription.status !== 'PAST_DUE')) {
+      return { success: false, error: 'There’s no paid plan to cancel.' };
     }
 
     if (subscription.paystackSubscriptionCode && subscription.paystackEmailToken) {

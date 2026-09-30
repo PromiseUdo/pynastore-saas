@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PLATFORM_NAME } from '@/lib/brand';
+import { Wordmark } from '@/components/marketing/wordmark';
 
 export const metadata: Metadata = {
   title: {
@@ -15,15 +16,7 @@ export default function AuthLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 px-4 py-12">
-      {/* Logo */}
-      <a href="/" className="mb-8 flex items-center gap-2.5">
-        <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-          S
-        </div>
-        <span className="text-base font-semibold text-foreground">
-          {PLATFORM_NAME}
-        </span>
-      </a>
+      <Wordmark className="mb-8" />
 
       {/* Card */}
       <div className="w-full max-w-sm rounded-xl border bg-card shadow-sm">

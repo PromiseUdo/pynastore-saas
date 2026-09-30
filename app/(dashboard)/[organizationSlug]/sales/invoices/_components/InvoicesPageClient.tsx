@@ -14,10 +14,11 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Receipt } from 'lucide-react';
+import { CheckCircle2, Plus, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PageHeader, PageBody } from '@/components/layout/page-header';
+import { PageHeader, PageBody, PageToolbar } from '@/components/layout/page-header';
+import { PageTabs } from '@/components/layout/page-tabs';
 import { EmptyState } from '@/components/layout/empty-state';
 import {
   Table,
@@ -33,6 +34,8 @@ import type { InvoiceListRow } from '@/features/sales/actions';
 
 type InvoicesPageClientProps = {
   invoices: InvoiceListRow[];
+  /** `overdue` narrows the list server-side (?view=overdue). */
+  view: 'all' | 'overdue';
   canCreate: boolean;
 };
 
@@ -53,7 +56,7 @@ function daysLate(dueDate: Date | string | null): number | null {
   return days > 0 ? days : null;
 }
 
-export function InvoicesPageClient({ invoices, canCreate }: InvoicesPageClientProps) {
+export function InvoicesPageClient({ invoices, view, canCreate }: InvoicesPageClientProps) {
   const router = useRouter();
 
   const newInvoiceButton = canCreate ? (
@@ -69,6 +72,7 @@ export function InvoicesPageClient({ invoices, canCreate }: InvoicesPageClientPr
     .filter((inv) => inv.status !== 'VOID' && inv.status !== 'WRITTEN_OFF')
     .reduce((sum, inv) => sum + (inv.totalAmount - inv.paidAmount), 0);
   const overdueCount = invoices.filter((inv) => inv.isOverdue).length;
+  const showingOverdue = view === 'overdue';
 
   return (
     <>
@@ -78,8 +82,30 @@ export function InvoicesPageClient({ invoices, canCreate }: InvoicesPageClientPr
         actions={newInvoiceButton}
       />
 
+      <PageToolbar>
+        <PageTabs
+          tabs={[
+            { key: 'all', label: 'All invoices' },
+            { key: 'overdue', label: showingOverdue ? `Overdue (${invoices.length})` : 'Overdue' },
+          ]}
+          current={view}
+        />
+      </PageToolbar>
+
       <PageBody>
-        {invoices.length === 0 ? (
+        {invoices.length === 0 && showingOverdue ? (
+          <EmptyState
+            variant="filtered"
+            icon={CheckCircle2}
+            title="Nothing is overdue"
+            description="Every sent invoice is either paid or still within its due date."
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link href="/sales/invoices">Show all invoices</Link>
+              </Button>
+            }
+          />
+        ) : invoices.length === 0 ? (
           <EmptyState
             icon={Receipt}
             title="No invoices yet"
@@ -91,13 +117,17 @@ export function InvoicesPageClient({ invoices, canCreate }: InvoicesPageClientPr
             {/* What the list adds up to, before the list itself. */}
             {owed > 0 && (
               <p className="mb-4 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{formatMoney(owed)}</span> outstanding
-                {overdueCount > 0 && (
+                <span className="font-medium text-foreground">{formatMoney(owed)}</span>{' '}
+                {showingOverdue ? 'outstanding on overdue invoices' : 'outstanding'}
+                {!showingOverdue && overdueCount > 0 && (
                   <>
                     {' · '}
-                    <span className="font-medium text-destructive">
+                    <Link
+                      href="/sales/invoices?view=overdue"
+                      className="font-medium text-destructive underline-offset-4 hover:underline"
+                    >
                       {overdueCount} {overdueCount === 1 ? 'invoice is' : 'invoices are'} overdue
-                    </span>
+                    </Link>
                   </>
                 )}
               </p>

@@ -84,7 +84,7 @@ export function OrgSwitcher({ orgs, currentOrgSlug, collapsed }: OrgSwitcherProp
               {currentOrg?.name ?? 'Select workspace'}
             </p>
             <p className="truncate text-[10px] capitalize text-muted-foreground">
-              {currentOrg?.plan.toLowerCase()} plan
+              {currentOrg?.plan}
             </p>
           </div>
           <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground/60" />
@@ -142,7 +142,7 @@ function OrgSwitcherMenuContent({
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{org.name}</p>
               <p className="truncate text-xs capitalize text-muted-foreground">
-                {org.plan.toLowerCase()}
+                {org.plan}
               </p>
             </div>
             {isActive && <Check className="size-4 shrink-0 text-primary" />}

@@ -8,11 +8,11 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { isStorePageKind } from '@/lib/storefront/pages/rules';
 import { getStoreFacts, listStorePages } from '@/features/settings/store-pages';
 import { StorePageEditor } from '../_components/StorePageEditor';
+import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
 export const metadata: Metadata = { title: 'New store page' };
 
@@ -42,7 +42,7 @@ export default async function NewStorePagePage({ searchParams }: Props) {
       page={null}
       kind={kind}
       canManage
-      storeUrl={getStorefrontUrl(ctx.organization.slug, '').replace(/\/$/, '')}
+      storeUrl={(await storefrontUrlFor(ctx.organization.slug, '')).replace(/\/$/, '')}
       facts={facts?.success ? facts.data : null}
     />
   );

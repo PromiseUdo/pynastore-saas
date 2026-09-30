@@ -386,7 +386,14 @@ Tests: `tests/storefront-appearance.test.ts` (12 — defaults when nothing is
 set, hidden slides, a button needing both halves, colour and measurement-id
 validation, tenancy).
 
-## Phase 7 — Money, reports and the rest — TODO
+## Phase 7 — Money, reports and the rest — SUPERSEDED (2026-09-29)
+
+Folded into the go-live phases below so each item is planned in one place:
+payouts → **Phase 10** (since rewritten: Paystack settles to merchant
+subaccounts, and the platform builds no payout system); tax settings, notifications, product CSV import, staff
+account security and the reports hub → **Phase 14**; merchant API → dropped from
+what is advertised until it is built (**Phase 12.4**). The list is kept as written
+for the reasoning behind each item.
 
 - **Payouts / settlement.** What the merchant is owed, what has been paid, reconciled
   to orders. Payments settle through the platform Squad account and
@@ -754,6 +761,3370 @@ everywhere as before, a Lagos member refused at Port Harcourt through movements,
 stock-in, transfers, counts, putaway, settings, assignment and the online switch,
 send-but-not-receive, and reads staying open with `canWorkHere` false).
 
+## Phase 9 — Delivery priced from the store that sends it — DONE (2026-09-28)
+
+Agreed 2026-09-26. Once a merchant has two online stores, delivery is priced as if
+every parcel left from the same place. Three facts in the code combine into the
+loss:
+
+- `DeliveryZone`, `DeliveryRate` and `PickupLocation` belong to the organization,
+  not a store. `lib/storefront/delivery/match.ts` looks only at where the order is
+  going. It never asks where it's coming from, and could not anyway, because
+  `Warehouse.location` is free text.
+- The storefront adds up stock from every `sellsOnline` store into one number
+  (`onlineStock` in `lib/storefront/data/from-prisma.ts`), so the shopper never
+  sees or picks where an item ships from.
+- `reserveOrderStock` (`lib/storefront/orders/stock.ts`) holds each line from the
+  **fullest** online store, and it does this *after* `placeOrder` has already priced
+  delivery (`lib/storefront/orders/create.ts`). The address plays no part in the
+  choice of store.
+
+What that costs the merchant, with a Port Harcourt store and a Lagos store:
+
+- A PH shopper buying a Lagos-only item pays the PH local rate, and the parcel
+  crosses the country.
+- A PH shopper can be served from Lagos even when **both** stores stock the item,
+  because Lagos simply has more units.
+- A mixed cart gets one quote and one fee, but the hold silently splits it across
+  stores, and can split a single line. That is two dispatches paid for with one fee.
+- Every pickup point is offered to everyone, so "Pick up in PH" can be chosen
+  while the stock is held in Lagos.
+- `freeOver` is checked against the whole cart, so a split order can be free twice
+  over.
+- The saved default address (sorted first, preselected in `checkout-view.tsx`) only
+  ever fills in the delivery quote. It never affects which store serves the order.
+
+**The decisions that shape all of it:**
+
+1. **A delivery price has two ends.** Zones and pickups belong to the store that
+   dispatches. Lagos→PH and PH→PH are different rates, each set by the merchant.
+   Nothing is calculated from distance, and no courier API is involved.
+2. **The store is chosen from the address, not the stock level.** One pure
+   planner decides which store sends which lines. The checkout quote and
+   `placeOrder` run the same planner, and the stock hold follows *that plan*. If a
+   planned store sells out between quote and payment, the order is refused and
+   re-quoted (like `invalid-delivery-method`). It never falls back silently to
+   another store at the old price.
+3. **A mixed cart becomes separate shipments by default.** Each shipment has its
+   own store, method, fee and arrival estimate, and the delivery fee is their sum.
+   Bringing the goods together in one store first is a merchant option (9.7), never
+   the default.
+4. **A single-store order looks exactly as it does today.** Shipments only
+   appear on screen when there is more than one.
+
+Language: the shopper reads "Ships from Lagos store", never "warehouse" or
+"origin".
+
+### 9.1 A store has a place — DONE (2026-09-27)
+
+- **Schema.** `Warehouse.state` and `Warehouse.city`, both nullable. Migration
+  `20260926090000_store_place` was hand-written and applied with
+  `db execute` + `migrate resolve` (the `orders.customerId` drift again).
+  `location` stays as the street address, free text, for people rather than
+  matching.
+- **The rule, in one place.** `features/inventory/store-place.ts`, pure and
+  client-safe, used by both the actions and the dialog:
+  - state and city go together (both or neither);
+  - the state comes from `NIGERIAN_STATES`, spelled as delivery zones spell it;
+  - the city is kept as typed, trimmed and single-spaced (`cleanCity`);
+  - it also provides `formatStorePlace` ("Port Harcourt, Rivers").
+- **The doors.**
+  - `setWarehouseSellsOnline(true)` refuses a store with no place, and says why.
+  - `updateWarehouse` refuses to clear the place of a store that sells online.
+  - `createWarehouse` and `updateWarehouse` refuse half a place.
+- **Stores that already sold online are kept on.** A store selling online with
+  no place was **not** switched off by the migration. It can still be renamed or
+  edited without a place, but once switched off it can't come back on without
+  one. Its list card and store page show a `Needs a location` badge and an
+  "Add location" link. 9.2 relies on every online store having a place, so its
+  migration should treat any store still missing one as "needs review".
+- **Screens.**
+  - The store dialog has City or town + State (a select, with "Not set" unless
+    the store sells online) and a line saying delivery will be priced from here.
+    Required markers appear only when the store sells online.
+  - The list card and store header read "City, State · street address".
+  - The "Sells online" switch is disabled with the reason, plus an "Add
+    location" link, while a store has no place.
+- **Fixed on the way.** Clearing a store's address box used to do nothing
+  (`updateWarehouse` passed `undefined`, which Prisma treats as "leave it"). The
+  field now clears.
+- **Audit.** A change of place is recorded as `{ place: { from, to } }` on
+  `inventory.warehouse.updated`. Creation records the place it was given.
+- **Tests.** `features/inventory/store-place.test.ts` (10, the pure rule).
+  `tests/store-place.test.ts` (7, against the database): creating with and
+  without a place, refusing half a place or a misspelled state, refusing to
+  switch on without a place, refusing to clear an online store's place, the
+  store that sold online before places existed, and clearing the address.
+
+### 9.2 Delivery belongs to a store — DONE (2026-09-27)
+
+- **Schema.** New columns: `DeliveryZone.warehouseId`, `PickupLocation.warehouseId`
+  (both nullable, `onDelete: SetNull`, indexed) and `Warehouse.deliveryNeedsReview`.
+  Migration `20260927090000_delivery_per_store` was hand-written, with its data
+  step in PL/pgSQL, and applied with `db execute` + `migrate resolve`.
+- **How existing rows were handed out, per business.**
+  - Target stores are the open stores that sell online. If there are none, the
+    business's only store; otherwise no one.
+  - The oldest target store keeps the original zones, so rate ids still resolve
+    mid-checkout. Every other target store gets a copy of each zone and rate.
+    With more than one target store, all of them are flagged
+    `deliveryNeedsReview`.
+  - Pickups are physical places and are never copied. One target store takes
+    them. With several, a pickup goes to the one store in the same city and
+    state; otherwise it's left without a store.
+  - Nothing was deleted. A row left without a store is kept but never offered,
+    and Settings asks for its store.
+  - On the dev database, `pynacode` (two online stores, two zones) came out with
+    both stores holding both zones and both flagged. Nothing was left
+    unassigned.
+- **Which stores supply online stock, defined once.** `ONLINE_SUPPLY_WHERE` in
+  `lib/storefront/delivery/supply.ts`: open, selling online, and with its own
+  switched-on zone+option or pickup. The one exception is when **no** store can
+  deliver yet: then nothing is left out, because checkout is closed anyway and
+  marking everything sold out would say something untrue. It's a static Prisma
+  filter, used by:
+  - the catalogue (`from-prisma.ts` level select);
+  - the stock hold (`reserveOrderStock`);
+  - the admin's "available online" and per-store "sells online"
+    (`features/inventory/products.ts`);
+  - the product checklist's online-store count;
+  - the store page.
+- **Quoting.** `quoteFromSetup` still takes one store's setup. New functions:
+  `quoteEachStore`, and `quoteAcrossStores` — **the interim checkout rule until
+  9.3.** Stock is still held fullest-first, so the sending store isn't known at
+  quote time. Among the stores that deliver to the address, the one whose
+  cheapest option costs most prices delivery, with ties going to the older
+  store. With one store, or identical copies, this is exactly the old quote.
+  Pickups from every store are still offered, until 9.5.
+  - `loadDeliverySetup` returns a list of stores (supplying stores only; a
+    zone with no store is never read).
+  - `quoteDelivery` returns the combined quote, including `store`.
+  - `deliveryOverview` names the store ("Delivery to Rivers from Lagos") when
+    more than one store delivers.
+- **Settings → Delivery.**
+  - One section per store that sells online or has delivery set up. Each shows
+    its place, a badge (Sells online / Not selling yet / Not selling online /
+    Closed), its zones and its pickups.
+  - A "Check these prices" callout with **Prices are right**
+    (`confirmStoreDelivery`) on stores whose prices were copied.
+  - A warning when a store sells online but its stock is left out for lack of
+    delivery.
+  - A per-store empty state with a per-store **Use a starting setup**
+    (`createSuggestedDelivery(warehouseId)`).
+  - A "Not linked to a store" section for rows the migration couldn't place.
+  - The zone sheet and pickup dialog open with a required **Delivers from** /
+    **Stock from** store picker (`StoreSelectField`). A new pickup fills in the
+    store's city and state.
+  - The overlap refusal is per store: two stores covering Rivers is allowed.
+  - A store id from the form is only used together with the org id, so another
+    business's store is a "no longer exists" miss.
+- **Check an address** shows what each store would charge, and what checkout
+  charges, with the interim rule explained in one line.
+- **Store page.** Shows a "Not selling yet · Set up delivery" line for an online
+  store whose stock is left out, and a "Check prices" line while prices await
+  review.
+- **Also.** `getStoreFacts` (store pages) counts only zones and pickups that
+  have a store. AGENTS.md now says delivery belongs to a store, and where
+  online stock comes from.
+- **Tests.**
+  - `lib/storefront/delivery/match.test.ts`: +6 for multiple stores (each store
+    asked; the dearest store priced; a store that doesn't cover the address
+    ignored; every store's pickups offered; ties to the older store; nobody
+    covering the address).
+  - `tests/settings-delivery.test.ts`: +7 against the database (stock left out
+    until a store can deliver; the same place covered by two stores; overlap
+    only within one store; another business's store refused; per-store preview
+    and the dearest store charged; confirming a review; a starting setup per
+    store).
+  - `tests/helpers/delivery.ts` now gives every online store its own copy, like
+    the migration. It must be called after the stores exist, and is safe to
+    call again (a store that already has a zone keeps it). Four order suites
+    were reordered to do so, and `storefront-orders`' `makeSellableProduct`
+    calls it, because a product whose store can't deliver is no longer
+    sellable — the rule working as intended.
+  - Full run: 560/560 database tests with files run one at a time, plus
+    987/987 unit and component tests. The parallel full run shows timeouts
+    against Neon that pass when re-run (the known flakiness), so run the
+    database suites with `--no-file-parallelism` when judging a change.
+
+### 9.3 The fulfilment planner — DONE (2026-09-27)
+
+- **The planner.** `planOrder(stores, stock, bag, address)` in
+  `lib/storefront/delivery/plan.ts` — pure and client-safe. It returns the
+  shopper's options, and for each option (server-side only) the plan behind
+  it: parcels, each with its store, its lines, its goods subtotal and how it
+  travels. Rules, in order:
+  1. One store that holds the whole bag and delivers to the address. If
+     several do, the cheapest cheapest-option wins, then the shopper's state,
+     then the older store.
+  2. Otherwise the fewest stores (exact search over combinations, capped at 10
+     stores). Whole lines go to the cheapest store in the combination. A line is
+     split only when no chosen store holds all of it. Ties go to fewer splits,
+     then the lower total delivery, then more stores in the shopper's state,
+     then the older stores.
+  3. A store that doesn't deliver to the address is never used for delivery.
+  4. With no plan there are no delivery options, and a reason: `no-delivery`
+     (no store delivers to the address) or `not-in-stock-here` (stores deliver,
+     but don't hold the bag). Checkout says the second one in its own words.
+- **Free delivery is checked per parcel**, against that parcel's goods.
+- **Pickups moved here from 9.5.** A pickup is offered only when its store holds
+  the whole bag, and choosing it sends everything from that store. It had to
+  land with the planner: the planner now decides where stock is held, and a
+  pickup in Port Harcourt holding stock in Lagos was one of the losses Phase 9
+  exists to stop.
+- **Several parcels, until checkout shows them one by one (9.5).** The shopper
+  picks how the biggest parcel travels, and every other parcel goes by its
+  store's cheapest option. The combined option:
+  - keeps the big parcel's option id;
+  - is labelled "Standard · 2 parcels" (the label is copied onto the order);
+  - says "Sent in 2 parcels, from Port Harcourt and Lagos";
+  - costs the sum of the parcels;
+  - promises the slowest parcel's window;
+  - carries no `freeOver`, since each parcel has its own threshold.
+- **One plan for quote and hold.**
+  - `quoteDelivery(slug, address, bag)` loads the stores and their stock for
+    the bag (`loadStockFor`, same filter as the catalogue) and runs the planner.
+  - `quoteDeliveryAction` now takes the bag's lines (ids and quantities only)
+    and re-prices them through `resolveLines`, which is now exported.
+  - `placeOrder` plans again from the re-priced bag and charges the chosen
+    option's plan. `reserveOrderStock` takes `planned` (built by
+    `plannedStockOf`) and holds **exactly** there, with a conditional update per
+    store. A planned store that sold out throws, and the order is refused with
+    "Stock moved… go back to Delivery" (`invalid-delivery-method`). It never
+    falls back to another store.
+- **Late payments.** `reReserveOrderStock` re-plans. It holds only if the same
+  option still exists at the same fee; otherwise it throws `OutOfStockError`,
+  and the existing late-payment path leaves the order cancelled and paid for
+  staff — logged as needing a refund. A proper "needs attention" list for these
+  belongs with 9.6.
+- **The interim "dearest store" rule from 9.2 is gone.** The admin's "Check an
+  address" now shows what checkout would do if every store had the items (the
+  cheapest store to send from), via `planWithAnyStock`.
+- **Tests.**
+  - `lib/storefront/delivery/plan.test.ts` (14): a Port Harcourt order from Port
+    Harcourt at the local price; a Lagos-only item at the Lagos → Port Harcourt
+    price; the same-state tie-break; a store that can't deliver never used; a
+    split charging each store's trip, with the biggest parcel's choice, the
+    slowest window and per-parcel lines; one line split only when it must be;
+    both no-plan reasons; per-parcel free delivery; pickup only where the whole
+    bag is; the admin check.
+  - `tests/settings-delivery.test.ts`: the Port Harcourt shopper case against
+    the database — local item, Lagos-only item, and a mixed bag charged ₦1,500 +
+    ₦6,000 with stock held in both stores.
+
+### 9.4 Shipments on the order — DONE (2026-09-27)
+
+- **Schema.** `OrderShipment`: order, store (`warehouseId`, nullable only for
+  pre-allocation orders), `kind` (DELIVERY/PICKUP), the copied option
+  (`deliveryMethodId`/`Label`), `fee`, `freeOverApplied`, the ETA columns,
+  `status` (PENDING/DISPATCHED/DELIVERED/CANCELLED), `trackingNote`,
+  `dispatchedAt`/`deliveredAt` and `sortOrder` (biggest parcel first).
+  `OrderStockAllocation.shipmentId` is new (SetNull). Migration
+  `20260927120000_order_shipments` was hand-written, and applied with
+  `db execute` + `migrate resolve`.
+- **Writing.** `lib/storefront/orders/shipments.ts` → `writeShipments` writes
+  the plan's parcels in the order's transaction. `plannedStockOf(plan,
+  shipmentIds)` makes every hold point at its parcel. Each parcel records its
+  **own** option and fee (e.g. Local ₦1,500 + Interstate ₦6,000), not the
+  combined checkout option. `Order.deliveryFee` stays the total and the
+  order-level ETA the slowest parcel's, so payments, receipts and reports are
+  unchanged.
+- **Parcels move with the order until 9.6.**
+  - `markOrderShipped` → DISPATCHED.
+  - `markOrderDelivered` → DELIVERED (now one transaction).
+  - Cancelling or expiring → CANCELLED.
+  - A revived late payment clears the never-sent parcels and writes new ones
+    from its new plan.
+- **Backfill.** Every online order with a delivery gets one parcel per store its
+  stock was held at. The store with the most units comes first and carries the
+  order's option and fee. Any other store's parcel carries the same option at
+  ₦0 — which is what happened on pre-9.3 split orders, not a guess at a split
+  nobody made. Orders with no allocations get one parcel with no store, and
+  status is mapped from the order.
+  - Dev database: 41/41 online orders got parcels, each order's parcel fees sum
+    to its delivery fee, and 2 parcels have no store. One allocation belongs to
+    a test fixture order with no delivery option, so it's correctly left
+    unlinked.
+- **Not in 9.4.** Parcels aren't shown on any screen yet — the order page and
+  sending parcels one by one are 9.6, and checkout listing them is 9.5.
+- **Tests.**
+  - `storefront-order-lifecycle`: a parcel written and holding its stock;
+    DISPATCHED on ship; DELIVERED on delivery; CANCELLED on expiry; rewritten
+    on a revived late payment; a split line making two parcels, biggest first.
+  - `settings-delivery`: the mixed bag writes Local ₦1,500 from Main and
+    Interstate ₦6,000 from Lagos, each holding its own item and summing to the
+    order's fee; free delivery recorded as `freeOverApplied`.
+
+### 9.5 Checkout — DONE (2026-09-27)
+
+- **A choice per parcel.** A bag split across stores comes back from the quote
+  as `parcels` (store name, lines, that store's options). The delivery step
+  shows one card per parcel ("Parcel 1 of 2 · From Port Harcourt", naming its
+  items), each with its own radio group, and each parcel's cheapest option is
+  preselected. A single-parcel bag looks exactly as before.
+- **One id for the choice.** Each parcel's option id, in parcel order, joined
+  by `+` (`rate_a+rate_b`), so the form field, the checkout store,
+  `placeOrderAction` and `Order.deliveryMethodId` keep one string. Pure helpers
+  in `lib/storefront/delivery/plan.ts`:
+  - `parcelChoiceId` / `parcelChoices` / `defaultParcelChoice`;
+  - `combineParcelChoice` — the method charged: the parcels summed, the slowest
+    window, labelled "Local + Interstate · 2 parcels", with a per-parcel
+    breakdown in `ShippingMethod.parcels`;
+  - `resolveDeliveryChoice(quote, id)` — the server's check, which returns the
+    method and plan, or null for an id that doesn't fit this quote's parcels.
+    `placeOrder` and the late-payment re-hold both use it.
+  - The 9.3 stand-in (the shopper chose only the biggest parcel, the others
+    went by their cheapest) is gone.
+- **Free delivery** is still per parcel, and the combined method carries no
+  single `freeOver`.
+- **Pickup** ("Or collect everything from one store") sits under the parcels,
+  and only where one store holds the whole bag (since 9.3).
+- **Browser payload.** `quoteDeliveryAction` sends parcels without store ids.
+  The checkout view computes the combined method for the summary with the same
+  function the server uses, and hands it to the submit validation.
+- **Review step** lists each parcel: store, option, window, price and its items.
+- **After the order.** `StorefrontOrder.delivery.parcels` is read from
+  `OrderShipment`. The confirmation page lists the parcels when there's more
+  than one, and the order emails add "Comes in 2 parcels — from Port Harcourt:
+  Local; from Lagos: Interstate."
+- **Speed.** `writeShipments` now writes every parcel in one
+  `createManyAndReturn`. The order transaction had grown by a round trip per
+  parcel, and the lifecycle suite was brushing its 20s timeout.
+- **Tests.**
+  - `plan.test.ts`: parcels offered biggest first with their own options; the
+    cheapest preselected and summed; each parcel chosen on its own and resolved
+    to a plan; four malformed or mismatched choice ids refused.
+  - `checkout-view.test.tsx`: two parcel cards, both cheapest preselected,
+    changing one leaves the other, the summary re-totals, and the review lists
+    both parcels with the stored choice `rate_ph_same+rate_lagos`.
+  - `settings-delivery`: the mixed bag placed with a per-parcel choice, labelled
+    "Local + Interstate · 2 parcels".
+  - The lifecycle helper quotes only when the plain option is refused.
+
+### 9.6 Sending and after-sales — DONE (2026-09-27)
+
+- **One parcel at a time.** New lifecycle moves `sendShipment` and
+  `deliverShipment` (`lib/storefront/orders/lifecycle.ts`).
+  - Sending dispatches **only that parcel's** stock
+    (`dispatchOrderStock({ shipmentId })`) and saves an optional
+    courier/tracking note.
+  - The first parcel out moves a confirmed order to packing; the last one out
+    marks the order shipped, and that is when the shopper is emailed.
+  - The last parcel to arrive marks the order delivered. For pay on delivery,
+    its "every courier has handed over the money" switch records payment.
+  - The whole-order "Mark as shipped" / "Mark as delivered" still work and move
+    every remaining parcel. With several parcels they read "Send all parcels" /
+    "Send the rest" / "Mark all delivered".
+- **Store access (8.6) on sending.** `updateStoreShipment` checks the parcel's
+  store with `requireStoreAccess`, and the whole-order "ship" checks every store
+  still holding a parcel. A Lagos-only member can send Lagos's parcel and
+  nothing else. The page shows other stores' parcels as view-only, with the
+  reason.
+- **"Partially sent".** Derived from the parcels (some sent, some waiting) and
+  shown as a badge on the order page, Sales → Orders and the store page's
+  Orders tab. The order page's hint names the stores still to send.
+- **Cancelling** is refused once any parcel has left: "Part of this order has
+  already been sent…".
+- **Pay on delivery, per courier.** `collectionSplit` in
+  `lib/sales/parcel-collection.ts` (pure): each courier collects its parcel's
+  delivery fee plus its share of the rest of the total, in proportion to the
+  goods it carries, so a discount is shared out with the goods. It works in
+  kobo, and the odd kobo goes to the biggest parcel so the shares always add up
+  to the total.
+- **The Parcels panel** on the order page shows each parcel: store, option,
+  fee (and whether its free-delivery threshold was met), window, items, what
+  its courier collects, the tracking note and dates. It has "Send parcel" (with
+  a tracking-note dialog) and "Mark delivered".
+- **Packing slip per parcel** at `/sales/orders/[id]/parcels/[shipmentId]`,
+  built on the shared receipt document. It shows where the parcel goes from and
+  to, what's in the box, the delivery for this parcel, and "Courier collects
+  ₦X" or "Nothing — already paid".
+- **Refunds can include a parcel's delivery.** The return refund dialog has
+  "Refund delivery too" tick-boxes, one per parcel with a fee. Ticking adds or
+  removes the fee from the amount, and the refund's note records which parcel's
+  delivery went back. Refunds stay records, not money movements.
+- **Late payments that can't be held (from 9.3).** A new "N cancelled orders
+  were paid for and still need refunding" callout on the dashboard
+  (`refundsOwed`) links to cancelled orders. The orders list already badged
+  them "Refund owed".
+- **Audit.** Labels for `sales.order.parcel_send`, `sales.order.parcel_deliver`
+  and `settings.delivery.reviewed` (that one had shipped in 9.2 without a
+  label).
+- **Tests.**
+  - `lib/sales/parcel-collection.test.ts` (5).
+  - `tests/settings-delivery.test.ts` "sent parcel by parcel" (4): what each
+    courier collects adding up to the total; a Lagos-only member refused on
+    Main's parcel and on "send all" while sending Lagos's; partially sent with
+    only Lagos's stock dispatched; cancelling refused; shipped on the last send,
+    delivered and paid on the last delivery.
+
+### 9.7 Bring it together first (optional) — DONE (2026-09-27)
+
+- **The setting.** `Organization.consolidateOrders` (default false, so nobody's
+  checkout changed), `consolidationFee` (per store items come from),
+  `consolidationLeadMinutes` + `consolidationLeadUnit`. Set in Settings →
+  Delivery, on an "Orders from more than one store" card that appears once
+  more than one store sells online (`saveConsolidationPolicy`, audited).
+- **Planning** (`planOrder(..., consolidation)`). Only for a bag no single store
+  holds: a bag one store can fill is still a plain parcel.
+  - The gathering store must deliver to the address, and is chosen by fewest
+    stores to bring from, then cheapest (its option plus fee × stores), then the
+    shopper's state, then the older store.
+  - Stock can be gathered from any supplying store, including one that doesn't
+    deliver there itself.
+  - Each of its options costs the fee per source store on top, and takes the
+    extra time on top (said in the larger unit). It's labelled "Standard ·
+    brought together", with a line saying where the items come from and no
+    single `freeOver`.
+  - A pickup point that can gather the bag is offered on the same terms.
+  - The parcel records its `sources`.
+- **Holds stay honest.** The gathering store holds what it has; the rest is held
+  **at the stores that have it**, against the same parcel
+  (`plannedStockOf` reads `sources`).
+- **Transfers.** A new `StockTransferStatus.REQUESTED`, plus
+  `StockTransfer.orderId`/`shipmentId`/`requestedAt`. Migration
+  `20260927150000_bring_orders_together`. `lib/storefront/orders/gather.ts`:
+  - `requestGatheringTransfers` runs when the order is **confirmed** — paid
+    online, transfer confirmed, pay on delivery accepted, or a late payment
+    revived. It's idempotent, and nothing is asked of a store for an order
+    nobody has committed to.
+  - `sendRequestedTransfer` (Transfers screen → "Send now", the source store's
+    access checked) releases the order's hold there and takes the units off
+    that shelf in one step.
+  - `receiveTransfer` → `holdReceivedForOrder` holds the units for the order at
+    the gathering store at once.
+  - `cancelRequestedTransfers` runs on cancel and expiry; a transfer already on
+    its way simply arrives as ordinary stock.
+- **The parcel waits.** `sendShipment` and `markOrderShipped` refuse while any
+  transfer for it is requested or on its way ("Still waiting for items from
+  Lagos to arrive…"). The Parcels panel lists each item being brought, its
+  source and status, hides "Send parcel" until everything has arrived, and
+  links to Transfers. The Transfers screen shows "Requested", "Waiting for
+  Lagos to send it", and a link to the order.
+- **Order page fix.** A released hold used to read "stock was released back"
+  even when it had travelled on, so `stockReleased` now needs a cancelled order.
+- **Tests.**
+  - `plan.test.ts` +5: one parcel from the delivering store with the rest
+    brought in, the fee, the time, the label and the sources; the fewest-source
+    store chosen (a bag one store fills stays plain); a gathered pickup; still
+    split with the setting off; gathering from a store that doesn't deliver
+    there.
+  - `settings-delivery` +2 against the database: the whole path (one parcel at
+    Main, ₦1,500 + ₦1,000, the lamp held in Lagos; no transfer until confirmed,
+    then REQUESTED; the parcel refused while waiting; sending releases Lagos's
+    hold and stock; receiving holds it at Main; the parcel ships both from Main)
+    and cancelling cancels an unsent transfer.
+  - Speed: a confirmation that has nothing to gather costs one query (a single
+    `EXISTS`), and confirming a pay-on-delivery order or a bank transfer isn't
+    wrapped in a transaction (the transfer step is idempotent).
+  - Two journey tests have longer limits, with the reason in the test: the new
+    gather journey (60s) and lifecycle "moves through packing" (45s, two orders
+    and every stage). Against the remote dev database they had crept past 20s.
+
+### 9.8 Deliver-to before checkout — DONE (2026-09-28)
+
+- **Where the shopper is.** `useDeliverToStore`
+  (`lib/storefront/stores/deliver-to-store.ts`) is kept in this browser, per
+  store, and only used to ask for an estimate and to start the checkout
+  address. A signed-in shopper with nothing chosen is estimated for their
+  default address, looked up on the server, and choosing a place overrides that
+  for this browser.
+- **The estimate is checkout's own answer for a bag of one.**
+  `estimateDelivery` (`lib/storefront/delivery/estimate.ts`) re-prices the
+  variant from the catalogue (`resolveLines`) and runs `quoteDelivery`, so it
+  names the store the item would really leave from (or be gathered at) and
+  that store's cheapest option. It says when there are more options or a
+  pickup, and it gives reasons when it can't: `no-delivery` / `pickup-only` /
+  `not-in-stock-here` / `unavailable`. `cleanDeliverTo` accepts only a real
+  Nigerian state. The server action `estimateDeliveryAction` resolves the place
+  (chosen → default address → none).
+- **Product page.** `DeliverToEstimate` sits in the buy box, above the delivery
+  panel, for the chosen variant (or one in stock until the picker is
+  complete).
+  - It shows "Deliver to Port Harcourt, Rivers · Change" (with "(your default
+    address)" when that's the source) and "Ships from Lagos Store / Interstate ·
+    ₦4,500 · 2–4 working days".
+  - It always adds "For one of this item. Your exact options and price are
+    confirmed at checkout."
+  - A guest who hasn't chosen is asked "Where should we deliver?", and nothing
+    is sent to the server until they choose.
+  - The place picker is a state select plus a city field.
+- **Checkout.** A guest's address form starts with the chosen state and city,
+  only into empty fields and never over typing or a saved address.
+- **AGENTS.md** now says any product-specific delivery figure shown before
+  checkout goes through `estimateDelivery`.
+- **Follow-up (2026-09-28): no price table.** The product page's "Delivery &
+  returns" card listed every store × zone with its price ("Within Port Harcourt
+  · Free" above an item shipping from Lagos). That list is gone.
+  - The card keeps what holds wherever the shopper is: pickups, the return
+    window, pay-before-delivery and the policy link. It renders nothing when
+    there's none of that.
+  - Before a location is chosen, the Deliver-to box shows one line from
+    `deliverySummary` (`store-claims.ts`): "Delivery across Nigeria, from
+    ₦2,500. Choose a location to see your price and which store it ships from."
+    The box is hidden for a store that delivers nowhere.
+  - `DeliveryPromise` options now carry `nationwide`. The utility bar and the
+    homepage band had checked the label "Delivery across Nigeria", which
+    multi-store labels ("… from Lagos Store") never matched, so they said
+    "Delivery to selected areas". Both now check the flag.
+  - The assistant keeps its per-location lines (to answer "do you deliver to
+    Kano?"), gets `deliveryFrom`, and is told to quote "from" prices and never
+    one zone's price for a particular item.
+- **Tests.**
+  - `deliver-to-estimate.test.tsx` (4): a guest is asked and nothing is sent;
+    choosing shows the store and price and remembers the place; signed in means
+    the default address, labelled as such; "doesn't deliver" and "collect
+    only" said plainly.
+  - `checkout-view.test.tsx` +1: the prefill.
+  - `settings-delivery` +1 against the database: the tote from Main at ₦1,500,
+    the Lagos-only lamp from Lagos at ₦6,000 to Port Harcourt and ₦2,000 to
+    Kano, an unknown item unavailable, and only real states accepted.
+
+**Tests:** the planner (one store, split cart, tie-break, a store that can't
+deliver, no plan at all, free-over per shipment). Also: `placeOrder` refuses when
+a planned store sold out after the quote, the migration (one-store and multi-store
+orgs), and a store with no delivery setup leaving online stock.
+
+---
+
+# Go-live
+
+Audited 2026-09-29. Phases 0–9 built the product a merchant uses; what stands
+between it and real merchants is the business around it — how a merchant gets
+paid, how the platform is run, and what production needs. Phases 10–14 are
+ordered by what blocks taking real money first. See "Sequencing" for the order.
+
+## What's next — build order (updated 2026-09-29)
+
+**Phase 10 is done** except refunds (10.7, paused for the wallet partnership)
+and the legal wording (10.10, with counsel). Online payments work end to end in
+Paystack test mode. What stands between that and a merchant who can sign up,
+set up, get paid and use their own domain is below, **in the order to build
+it**.
+
+**12.1 is done (2026-09-29)** — plans live in the database, with three
+billing cycles, a no-card trial at signup, and lapsing with grace.
+
+**11.0, the console shell (sidebar + overview), is done (2026-09-29).**
+
+**11.7, plans and pricing in the console, is done (2026-09-29)** — plans,
+prices, features, limits, the trial, grace and the exchange rate are edited
+at `/platform/plans` and `/platform/settings`.
+
+**11.2 merchants and 11.4 suspend/restore are done (2026-09-29).**
+
+**12.5 onboarding is done (2026-09-29)**, except the spreadsheet import.
+
+**14.2 product CSV import is done (2026-09-30)**, and the setup guide offers it.
+
+**12.6 custom domains and 11.5's staff queue are done (2026-09-30).**
+
+**11.6, payment problems in the console, is done (2026-09-30).**
+
+**12.2 is done with the working name Notely (2026-09-30).**
+
+**12.3, the public site and pricing, is done (2026-09-30).**
+
+**12.4, nothing half-there on screen, is done (2026-09-30).** Phase 12 is
+complete except what's noted in its sections.
+
+**13.1, scheduled jobs, is done (2026-10-01)** — cron-job.org calls the
+15-minute jobs while on Vercel Hobby (docs/SCHEDULED-JOBS.md).
+
+**START HERE: Phase 13 — production hardening (next 13.2)** before the first
+live merchant.
+
+**In order:**
+
+| # | What | Why now |
+|---|---|---|
+| 1 | ~~**12.1** Plans, cycles, trial, lapsing~~ | DONE 2026-09-29. |
+| 2 | ~~**11.7** Plans and pricing in the console~~ | DONE 2026-09-29. |
+| 3 | ~~**11.2** Merchant list and **11.4** suspend/restore~~ | DONE 2026-09-29. |
+| 4 | ~~**12.5** Onboarding~~ and ~~**14.2** CSV import~~ | DONE 2026-09-29/30. |
+| 5 | ~~**12.6** Custom domains, with **11.5**'s staff queue~~ | DONE 2026-09-30. |
+| 6 | ~~**11.6** Payments, disputes and payout problems in the console~~ | DONE 2026-09-30. |
+| 7 | ~~**12.2** One name, **12.3** public site and pricing, **12.4** clean-ups~~ | DONE 2026-09-30. |
+
+**In parallel, before the first live merchant:** Phase 13 — scheduled jobs
+(13.1), shared rate limits (13.2), error monitoring (13.3), security headers
+(13.4), database drift and backups (13.6), CI (13.7), data rights (13.8), live
+keys and approvals (13.9).
+
+**Launch gates that aren't code:**
+- 10.10's terms and privacy, reviewed by counsel;
+- Paystack's written answers (10.13), above all who pays a lost chargeback;
+- `PAYSTACK_MODE=live` and the webhook URL set;
+- the brand name decided (12.2);
+- 12.5's proposed choices confirmed.
+
+**After launch:** Phase 14, and 13.5 (automating domains through Namecheap's
+API).
+
+## Phase 10 — Money reaches the merchant (Paystack subaccounts) — DONE (2026-09-29), except 10.7 (paused) and 10.10 (legal review)
+
+Rewritten 2026-09-29 after the payment architecture was decided (10.1). The
+earlier draft's "Option A / Option B" choice is closed.
+
+**The gap, as the code stands today:**
+
+- Every store's online payments go into **one platform Squad account**.
+  `lib/payments/squad.ts` is the client, it reads `SQUADCO_SECRET_KEY`, and
+  `lib/storefront/checkout/payment-service.ts` holds the flow. Nothing moves
+  the money on to the merchant: there is no settlement, balance or payout.
+- **Refunds are records only.** `OrderRefund` is written by
+  `lib/storefront/orders/returns.ts` (`refundReturn`, `refundCancelledOrder`),
+  whose header says "the app moves none". The refund dialog, the order hint in
+  `lib/sales/order-labels.ts` and `emails/store-order-alert.tsx` tell the
+  merchant to refund "from your Squad dashboard", which a merchant does not
+  have — the account is the platform's.
+- **The terms say the opposite of the code.** `app/(legal)/terms/page.tsx`
+  says payments are taken by "the merchant's payment provider" and that the
+  platform "does not hold merchant funds or settle payouts".
+
+**No merchant takes live online payments until this phase is done.**
+
+**What already exists and is kept:**
+
+- **The payment flow in `payment-service.ts`.** Every "Pay now" is its own
+  `OrderPayment` attempt with its own reference. There are three ways in — the
+  browser callback, the webhook, and the confirmation page as a safety net —
+  and all of them lead to one check, `reconcilePayment`. That check:
+  - asks the provider's verify endpoint, server to server, whether the
+    attempt was paid;
+  - compares the amount and currency, recording a difference as `MISMATCH`;
+  - claims the attempt with a conditional update, so the order is settled
+    exactly once;
+  - revives an order whose payment arrived after its hold expired
+    (`reviveTimedOutOrder`), or leaves it cancelled and paid as "refund owed".
+
+  **This is provider-neutral in design and stays.** Only the provider calls
+  inside it change.
+- **The phone-app return** (`nativeApp` on `OrderPayment`, the deep-link page
+  in the callback route, `lib/storefront/payments/open-payment-page.ts`).
+- **Refund arithmetic.** `refundableAmount` and `paymentStatusAfterRefund` in
+  `lib/storefront/orders/policy.ts`, plus the per-parcel delivery-fee refunds
+  from 9.6.
+- **The expiry cron.** `lib/storefront/orders/lifecycle.ts` checks unpaid
+  online orders with the provider before cancelling them.
+- **Paystack itself, already integrated for subscription billing.**
+  - `lib/billing/paystack.ts` has `paystackFetch`, `initializeTransaction`,
+    `verifyTransaction` and `verifyWebhookSignature`, and reads
+    `PAYSTACK_SECRET_KEY`.
+  - `app/api/billing/paystack/webhook` and `…/callback` are the routes.
+  - `applySuccessfulCharge` ignores a reference that isn't a
+    `BillingTransaction`.
+- **Bank accounts shown for bank-transfer checkout.** `MerchantBankAccount`
+  (`features/settings/bank-accounts.ts`, Settings → Payments). The account name
+  is resolved by lookup, currently through Squad's `/payout/account/lookup`.
+
+### 10.1 Payment and settlement architecture — DECIDED (2026-09-29)
+
+**The decision:**
+
+- The platform's **existing Paystack account** is the only payment
+  integration for storefront orders, the same account that already takes
+  subscription billing.
+- **Merchants never connect a Paystack account of their own, never paste an
+  API key, and are never asked for one.** No merchant-supplied credential is
+  stored anywhere, the same rule Social Commerce keeps for Meta.
+- Each merchant gets a **Paystack subaccount** under the platform's
+  integration, **only after our merchant verification (10.8) is approved** —
+  never before, and never for a merchant we have rejected. The subaccount
+  carries the merchant's settlement bank account.
+- A shopper's payment is initialised on the platform integration **against
+  the merchant's subaccount**, and settles through Paystack to the merchant's
+  settlement account.
+- **No commission on sales.** The platform earns only the plan subscription
+  (Settings → Billing, `lib/billing/`). The platform's share of every
+  storefront payment is **zero**: no percentage, no flat charge, no setting to
+  create one. The subaccount is created with a zero platform share, and the
+  transaction carries none.
+- **The merchant pays Paystack's processing fee, and nothing else.** In
+  Paystack's terms the subaccount is the fee bearer; confirm the parameter name
+  and value. The platform must never end up absorbing the fee.
+- **Verify** that Paystack settles the whole amount, less its fee, to a
+  subaccount whose platform share is zero with the subaccount bearing the fee,
+  and that no amount lands in the platform's balance.
+- **Verification documents are stored in Cloudinary**, as private, access-
+  controlled assets — not the public image delivery used for products (10.8).
+- **The platform keeps no merchant balance, no wallet, no payout ledger and no
+  payout run**, and does not use Paystack's Transfer API to pay merchants.
+  MansaaS keeps order, payment, refund and reconciliation records. It never
+  represents merchant money as a balance it holds.
+
+```
+Shopper → storefront checkout → Paystack (platform integration)
+                                   ├── amount − Paystack fee → merchant's settlement account (subaccount)
+                                   └── platform share: none (no commission; the platform earns subscriptions only)
+```
+
+**Rejected, and not to be reintroduced:**
+
+- the Squad settlement architecture;
+- the platform collecting funds and paying merchants out (ledger, wallet,
+  Transfer API payouts);
+- "connect your own Paystack", or anything else that has merchants supply
+  Paystack keys.
+
+**Why:** settling each merchant's share directly through Paystack is intended to
+avoid the platform receiving merchant funds into its own account and paying them
+out later. It also keeps the terms' promise that the platform does not settle
+payouts close to true. How this arrangement is characterised under Nigerian
+payment regulation is **not** decided here: confirm it with qualified legal and
+regulatory advice before launch (10.10).
+
+**Multi-vendor carts: there are none today, and none are designed here.**
+- Every order belongs to exactly one organization: the cart is persisted per
+  store slug (`lib/storefront/stores/storage.ts`), and `placeOrder` takes one
+  organization.
+- Stores inside one organization are the **same merchant** with one settlement
+  account, so a split across stores (Phase 9 parcels) is not a money split.
+- Every Phase 10 payment is therefore **one merchant subaccount, with no
+  platform share**.
+- Paystack's multi-split (several subaccounts on one transaction) is only
+  needed if a single checkout ever spans several merchants, or a merchant
+  settles different stores to different accounts. Both are out of scope.
+- The code **refuses** to build a split naming more than one merchant
+  subaccount rather than half-supporting it. If a cross-merchant cart is ever
+  built, it gets its own phase, starting with verifying multi-split against
+  that cart's shape.
+
+**Verify before coding — desk check DONE 2026-09-29; test-mode checks and
+Paystack's written answers still OPEN.** Results are in 10.13. The two
+findings that changed the design: `bearer: "subaccount"` is mandatory, since
+without it Paystack charges the fee to the platform; and every transaction
+sends `transaction_charge: 0`. Refund and dispute liability on subaccount
+transactions is unresolved. Refunds are paused (10.7), but the chargeback half
+still matters. The items checked were:
+- subaccount creation and update (`/subaccount`, the `subaccount_code` it
+  returns);
+- the subaccount fields on `/transaction/initialize` (`subaccount`, a zero
+  `transaction_charge` / percentage, `bearer`), and the `/split` objects only
+  for the record, since multi-split isn't built;
+- settlement timing and how settlement is reported;
+- bank listing and resolution (`/bank`, `/bank/resolve`);
+- refunds (`/refund`) on a subaccount transaction;
+- dispute/chargeback endpoints and events;
+- the webhook events for each.
+
+**Platform prerequisites (operations, not code):**
+- the platform Paystack business account is fully activated for live
+  payments;
+- subaccounts are enabled on it;
+- Paystack has confirmed in writing any limits on refunds and disputes for
+  subaccount transactions.
+
+### 10.2 Merchant payment onboarding — DONE (2026-09-29)
+
+**As shipped.**
+- **"Get paid online"** is a full page at `/settings/payments/online`, with a
+  status card at the top of Settings → Payments.
+- **Status.** The card shows one of: Not set up / Not submitted / Checking
+  your details / Needs changes / Approved / Ready / Needs attention, each with
+  a sentence saying what happens next. It also shows steps done and the
+  masked settlement account.
+- **What the page asks for:**
+  - **Business type:** registered company, registered business name, or
+    individual/sole trader.
+  - **Business name.**
+  - **CAC details** — the RC/BN number (normalised to `RC1234567` /
+    `BN1234567`), the registered name and the certificate — for registered
+    businesses only.
+  - **ID:** its type and the document, from the owner or a director.
+  - **Proof of address.**
+  - **Settlement account:** the bank is searched from Paystack's list
+    (282 banks in test mode); the account name is resolved by Paystack.
+  - **Payments contact**, prefilled from Settings → General and the member's
+    own name.
+- **What's missing** is shown beside the form: a live checklist, computed by
+  the same rules the server applies (`lib/payments/payment-setup.ts`).
+- **Save and submit.** "Save and finish later" saves a draft, which may be
+  incomplete but may not be wrong. "Submit for review" requires everything
+  and sets `verificationStatus: PENDING` + `setupStatus:
+  AWAITING_VERIFICATION`. **Nothing is sent to Paystack**; the subaccount
+  waits for approval (10.3).
+- **While under review** the page is read-only, with "Take back to make
+  changes" (withdraw → `UNVERIFIED`). Once approved it stays read-only;
+  changing the account is 10.3.
+- **Schema:** `MerchantPaymentAccount` (one per org, including the empty 10.3
+  columns `setupStatus`, `paystackSubaccountCode`, `setupError`),
+  `MerchantVerificationDocument`, and five enums. Migration
+  `20260929120000_merchant_payment_accounts`, hand-trimmed of the
+  `orders.customerId` drift and applied with `db execute` +
+  `migrate resolve`.
+- **Paystack client:** one server-only client, `lib/payments/paystack.ts`
+  (`paystackFetch`, `listNigerianBanks` cached 12h, `resolveAccountName`).
+  Subscription billing now uses the same `paystackFetch` rather than its own.
+- **Private documents (10.8's storage, built here).** Uploads are signed as
+  Cloudinary `type: private` into `mansaas/{org}/verification`, with PDF, JPG,
+  PNG and WebP accepted, up to 10 MB and 3 files per kind. They are opened
+  only through `privateDownloadUrl`, a signed link that lasts 5 minutes.
+  - Before saving, a document is checked to be in this org's folder
+    (`isOrgDocument`) and in an accepted format.
+  - A document the merchant removes is deleted from Cloudinary too.
+  - The uploader is `components/media/document-uploader.tsx`, a sibling of the
+    image uploader.
+- **Permissions:** `settings.view` to see; `settings.edit` to change, upload,
+  or open a document. No new permission, so no role backfill.
+- **Audit:** `settings.payment_setup.saved` / `.submitted` / `.withdrawn`, with
+  labels.
+- **Tests:**
+  - `tests/settings-payment-setup.test.ts` (12):
+    - prefill;
+    - Paystack lookup, and an outage not read as a wrong account;
+    - a draft may be partial but not wrong;
+    - submit names every missing field;
+    - another org's document and an `.exe` refused;
+    - the account name comes from Paystack, not the browser, and a smuggled
+      key is dropped;
+    - locked while in review;
+    - signed document link, and refused for another org;
+    - withdraw, then change to an individual, which drops CAC and deletes
+      removed files from storage;
+    - view-only members can't change anything;
+    - tenancy.
+  - `lib/payments/payment-setup.test.ts` (7).
+  - `lib/cloudinary/sign.test.ts` +3: private signing, the folder check, the
+    download link.
+
+**Not in 10.2, and where it goes:**
+- Platform staff reviewing submissions: 11.3.
+- Emailing the merchant the result: with 11.3.
+- ~~The bank-transfer accounts on the same page still use Squad's account
+  lookup and NIP codes: 10.9.~~ Done in 10.9.
+- Cloudinary's private delivery was built from its documented API and unit
+  tested, but **has not yet been exercised against the real Cloudinary
+  account**. Upload one file and open it once, before 11.3 relies on it.
+
+**The original spec, kept for reference:**
+
+
+**The merchant's side.** Settings → Payments gains an "Accept online payments"
+card, above the existing bank-transfer accounts. It shows:
+- a checklist of what is still missing;
+- the current state in plain words ("Not set up", "Checking your details",
+  "Ready — shoppers can pay online", "Needs attention", with the reason);
+- one primary action: "Set up online payments".
+
+The rest of the dashboard only links to that card; it never collects any of
+this itself. The flow:
+
+1. **Business details:** business or trading name, and the type of business —
+   registered company, business name, or individual/sole trader.
+2. **Settlement account:**
+   - the merchant picks a bank from Paystack's own bank list (not the NIP-coded
+     `lib/payments/nigerian-banks.ts`, see 10.9) and types an account number;
+   - the account name is **resolved by Paystack and shown for the merchant to
+     confirm**, never typed. This is the same pattern `resolveAccountName`
+     already follows for transfer accounts.
+3. **Contact:** a primary contact name, email and phone for payment matters,
+   prefilled from Settings → General (`supportEmail`, `supportPhone`) where set.
+4. **Verification details** that our own checks need (10.8). Which fields
+   these are depends on the type of business.
+5. **Review and submit.** Submitting sends the details for **our**
+   verification (10.8); no subaccount exists yet. The merchant sees "Checking
+   your details" and is told what happens next. Once platform staff approve
+   (11.3), the subaccount is created (10.3) and the merchant is emailed that
+   online payments are on — or what went wrong.
+
+**Two field lists, kept apart on purpose.** Implementation starts by writing
+both down from Paystack's current documentation and from whatever our
+compliance advice requires. No field is hard-coded from assumption.
+
+- **A. What Paystack needs to create and maintain the subaccount.** Expected
+  to include the business name, settlement bank and account number, the
+  platform's percentage (zero), and optional contact fields — confirm the exact
+  required and optional fields. This is the only data sent to Paystack.
+- **B. What our own merchant verification needs** (10.8). Candidates:
+  - CAC registration (RC/BN number, registered name) for a company or a
+    registered business name;
+  - identity details for an individual or sole trader;
+  - proof of address, where required.
+
+  This data stays with us unless Paystack or a regulator requires it. The two
+  lists may overlap, but neither is inferred from the other.
+
+**Rules:**
+- Only `settings.edit` members (or a new `payments.manage`, decided in
+  implementation — check `lib/permissions.ts` first) may start or change
+  payment setup. Every step is audited, with labels added to
+  `lib/audit-labels.ts`.
+- No field asks for, or accepts, an API key, a secret, or a password for any
+  provider account.
+- Whatever the merchant typed survives a failed step (AGENTS §4).
+
+### 10.3 Subaccount lifecycle — DONE (2026-09-29), except changing the settlement account
+
+**As shipped.**
+- **One place creates subaccounts:** `provisionSubaccount` in
+  `lib/payments/subaccounts.ts`.
+  - Approving in the console (11.3) calls it. The approval stands whatever
+    Paystack answers.
+  - It refuses anything not `VERIFIED`, whoever calls it.
+- **Exactly once, in four layers:**
+  - a conditional claim (`→ CREATING`) before Paystack is called;
+  - a claim older than 5 minutes may be taken over;
+  - a retry first searches Paystack for a subaccount carrying this org's id in
+    its metadata, and adopts it;
+  - `paystackSubaccountCode` is unique.
+
+  This matters because **Paystack itself creates a second subaccount for the
+  same bank account without complaint** (test mode, 2026-09-29).
+- **What Paystack receives:** `percentage_charge: 0`, the settlement bank
+  code and account, the business name, the payments contact, a description
+  naming the shop, and `metadata: { organizationId, platform: 'mansaas' }`.
+- **On success:** the code, `setupStatus` `ACTIVE` (or `DISABLED` if Paystack
+  says it's inactive), Paystack's `is_verified` cached as `paystackIsVerified`,
+  and `paystackSyncedAt`. New columns, migration
+  `20260929170000_subaccount_sync`.
+- **Failures:** `ACTION_REQUIRED` with a `setupError` in words.
+  - A 4xx says Paystack refused, and why.
+  - A timeout or 5xx says we don't know whether it was created, so the retry
+    looks first.
+
+  The merchant sees "Needs attention". Staff see the reason and a
+  **Try again** button in the console's new **Payouts** panel, alongside
+  **Check with Paystack**.
+- **No webhooks, so we re-read** (`syncSubaccount`): on Settings → Payments,
+  on Get paid online and on the console case page, when our copy is over 10
+  minutes old, or forced from the console.
+  - Paystack `active: false` → `DISABLED`, which turns off online payments
+    (the readiness rule, 10.8).
+  - A code Paystack no longer knows → `DISABLED`.
+  - Switched back on → `ACTIVE`.
+- **The approval email** now says either that payouts are set up, or that
+  they're still being set up (`payoutsReady`).
+- **Test mode:** the setup form tells a developer that Paystack checks only 3
+  real accounts a day, and to use Zenith Bank + `0000000000`.
+- **Audit:** `platform.payouts.subaccount_created` / `_adopted` / `_failed`,
+  with labels. They show in the case history, and as the platform on the
+  merchant's log.
+- **Tests:**
+  - `tests/subaccounts.test.ts` (8): not-verified refused; created once with a
+    zero share and the org in its metadata, and payments become possible;
+    racing approvals create one; a refusal needs attention, then a retry
+    creates; a timeout that DID create is adopted on retry, not duplicated; a
+    dead claim taken over but a fresh one not; no settlement account refused;
+    sync off → on → gone.
+  - `tests/platform-verification.test.ts`: approval now creates the
+    subaccount and makes the shop ready.
+  - **An end-to-end run against Paystack test mode** of the real code: create
+    → second call no-op → found by metadata → fetched → "lost" and adopted on
+    retry → deactivated on Paystack → synced to `DISABLED`. The throwaway org
+    was deleted and the test subaccounts deactivated.
+
+**Not built: changing the settlement account after approval.** Today an
+approved setup is read-only, so there is no half-built path.
+- Designing it means deciding whether a change pauses online payments while
+  it's re-checked. A request that goes back to `PENDING` would do that under
+  the readiness rule.
+- The alternative is a separate change request that keeps the current account
+  paying until the new one is approved.
+- Build it with an Owner email and a re-authentication step, as below.
+  **Open decision.**
+
+**The original spec, kept for reference:**
+
+
+**Where it lives.** Store the Paystack link on the organization, because the
+merchant is the organization; stores inside it share it (10.1). This can be
+columns on `Organization` or a small one-to-one `MerchantPaymentAccount` table.
+Pick the table if it keeps provider fields out of `Organization`, the same
+reason `Subscription` is its own table. Either way it holds:
+
+- `paystackSubaccountCode` (unique, nullable);
+- the settlement bank's Paystack code, the bank name, the account number
+  **stored masked for display plus what Paystack needs**, and the resolved
+  account name;
+- no commission field: the platform share is always zero and the merchant
+  always bears Paystack's fee (10.1), so both are constants in code, not
+  stored state;
+- `setupStatus`: `NOT_STARTED | AWAITING_VERIFICATION | CREATING | ACTIVE |
+  ACTION_REQUIRED | DISABLED`.
+  This is **our** record of how far setup got. Paystack's own state for the
+  subaccount (e.g. `active`) is read from Paystack and cached with a
+  `lastSyncedAt`, not re-invented. Add a column only for a state Paystack
+  doesn't expose.
+- `lastError` (a readable reason) and timestamps.
+
+**Creating the subaccount:**
+- **Triggered by approval, not by the merchant.** Approving a merchant in the
+  platform console (11.3) sets our verification to `VERIFIED` and, in the same
+  step, creates the subaccount through a new server-only Paystack module
+  (10.11). Submitting the onboarding form never calls Paystack. The creating
+  function refuses any organization whose verification isn't `VERIFIED`, so no
+  other caller can create a subaccount early.
+- **Idempotent and exactly once.** Claim the row with a conditional update
+  (`AWAITING_VERIFICATION|ACTION_REQUIRED → CREATING`) before calling
+  Paystack, as `SocialPost` claims `PUBLISHING`.
+- A unique `paystackSubaccountCode`, plus a per-organization unique row,
+  makes a second subaccount impossible to record.
+- A retry after a timeout first **looks the merchant up on Paystack** (by our
+  stored code, or by listing and matching the business name, account number and
+  metadata carrying our organization id — confirm what Paystack lets us search
+  on) and **adopts** an existing subaccount instead of creating another.
+
+**When creation fails:**
+- `ACTION_REQUIRED` with the reason in words. Our verification stays
+  `VERIFIED` — the merchant was approved; it is the Paystack step that failed.
+  Platform staff can retry from 11.6, and the merchant sees what, if anything,
+  they must change. Online payment stays off; offline selling is untouched.
+- A platform outage is logged and shown as "try again shortly", **never** as
+  "your account details are wrong" — the distinction `lookupAccountName`
+  already draws.
+
+**Changing the settlement account:**
+- Re-resolve the new account. Whether a change needs re-verification by
+  platform staff before it reaches Paystack is decided with 10.8's review
+  rules; a change of account **name** (a different person or business) always
+  does. Then update the **existing** subaccount. Never create a second one.
+- Requires a recent re-authentication or confirmation step, and is audited
+  with the old and new masked account.
+- Emails every Owner, as with other security-sensitive changes.
+- While Paystack confirms the change, keep taking payments on the old details
+  only if Paystack's behaviour allows that; otherwise pause online payment and
+  say so. Verify which.
+
+**Disabled or rejected subaccounts:** if Paystack exposes an inactive or
+rejected state, sync it (webhook if there is one, otherwise on load and in the
+reconcile path), set `DISABLED` or `ACTION_REQUIRED`, and turn online payment
+off at checkout at once.
+
+**Merchants who haven't finished setup:**
+- The storefront simply doesn't offer online payment. Pay on delivery and
+  bank transfer still work if configured.
+- The dashboard's needs-attention callouts gain "Online payments aren't set
+  up", with a link.
+
+**Secrets:** `PAYSTACK_SECRET_KEY` is read only in server modules. Nothing about
+a subaccount that is sent to the browser includes a secret, and the subaccount
+code is never accepted *from* the browser (10.4).
+
+### 10.4 Payment initialisation and settlement to the subaccount — DONE (2026-09-29)
+
+**As shipped.**
+- **Checkout offers "Pay online" (id `paystack`) first, and only to a shop
+  that passes the readiness rule.** `getStoreCheckoutConfig` adds
+  `ONLINE_PAYMENT_METHOD` when `onlinePaymentsReady(slug)` is true. The base
+  config now lists only pay on delivery, and bank transfer is still added per
+  store. This is the **10.8 checkout gate**, now wired.
+- **Other places that follow the same rule:**
+  - the footer's payment line, which names Paystack only when it's offered;
+  - the homepage's "Pay your way" promise, which says "Pay on delivery" for a
+    shop that can't take online payments;
+  - Settings → Payments' "Pay online" row, "On" only when setup is Ready.
+- **Starting a payment** (`startOrderPayment`):
+  - it refuses (`unavailable`) unless the shop is ready and has a subaccount;
+  - everything comes from the database: `Order.totalAmount` in kobo, the
+    currency, the shop's own `paystackSubaccountCode`;
+  - `initializeSplitTransaction` fixes `bearer: "subaccount"` and
+    `transaction_charge: 0` in code, not as parameters;
+  - the metadata carries `purpose`, `organizationId`, `orderId`,
+    `orderReference` and `attemptId`;
+  - the attempt stores `provider: 'paystack'` and the `subaccountCode` it was
+    sent to.
+- **The provider seam** (`verifyWithProvider` in `payment-service.ts`):
+  - the provider is read from the ATTEMPT: `paystack` → `verifyPaystackTransaction`;
+    `squad` → the legacy Squad verify;
+  - `reconcilePayment` keeps every rule it had, and adds that a Paystack
+    payment to another subaccount, or to none, or with any platform share, is
+    `MISMATCH`, never paid;
+  - on success it stores Paystack's own split, from `fees_split`, as
+    `merchantAmount` / `platformAmount` / `feeAmount` on `OrderPayment`
+    (migration `20260929190000_order_payment_split`), and `gatewayRef` =
+    Paystack's transaction id.
+- **The return route** `/api/payments/paystack/callback`. The logic moved to
+  `lib/storefront/payments/payment-return.ts`, shared with the Squad callback,
+  which now just delegates. It copes with Paystack appending `trxref` and
+  `reference`.
+- **Unpaid-order expiry** covers both `paystack` and legacy `squad` orders
+  (`ONLINE_PAYMENT_METHODS`), each checked with its own provider first.
+- **Copy:**
+  - Squad is gone from the checkout, storefront, emails and admin wording;
+  - `PAYMENT_METHOD_LABEL` gains `paystack: 'Online (Paystack)'` and keeps
+    `squad` for old orders;
+  - the refund hints say to send the money back from the merchant's own bank,
+    because online payments settle there, and Paystack refunds are paused
+    (10.7).
+- **Verified in Paystack test mode:**
+  - our `initializeSplitTransaction` + `verifyPaystackTransaction` against the
+    real API. For ₦12,345.00 the verify reports `split { merchant: 1205982,
+    platform: 0, fee: 28518 }` (kobo) and the subaccount code;
+  - an unknown reference → null.
+- **Tests:**
+  - `tests/storefront-payments.test.ts` rewritten (20), against a fake
+    Paystack at `fetch`:
+    - the method offered only to a ready shop;
+    - kobo, subaccount, bearer, zero charge and metadata sent;
+    - a not-ready shop refused before calling Paystack;
+    - Paystack unreachable;
+    - paid once, with Paystack's split stored;
+    - `ongoing` stays pending;
+    - wrong amount, currency, subaccount, or a platform share → mismatch;
+    - an abandoned payment can be retried; no second charge;
+    - the callback's stored return address, appended query and phone-app
+      deep link;
+    - legacy Squad attempts still verified with Squad (and never Paystack),
+      through the old return route and webhook.
+  - `tests/storefront-order-lifecycle.test.ts` (23) moved to Paystack.
+  - Component and unit tests updated for the per-store method.
+
+**Not in 10.4:**
+- **The Paystack webhook (10.5).** Payments settle through the return route
+  and the confirmation page's re-check for now. A shopper who closes the tab
+  on Paystack's page is still caught by the expiry job's check before the
+  order is cancelled.
+- **The merchant's payments view (10.6).**
+
+**The original spec, kept for reference:**
+
+
+**One provider seam.**
+- Turn the Squad-specific calls in `payment-service.ts` into a
+  `PaymentProvider` interface with three operations: `initiate`, `verify` and
+  `refund`, the last added only when 10.7 resumes (paused).
+- A Paystack implementation serves new orders; a read-only Squad
+  implementation serves `verify` for historical attempts only (10.9).
+- `reconcilePayment`, `startOrderPayment` and `reconcileOpenAttempts` keep their
+  shape and rules. They pick the provider from `OrderPayment.provider`, not
+  from configuration, so a Squad attempt is always checked against Squad.
+- Share the HTTP client with `lib/billing/paystack.ts` (move `paystackFetch` to
+  one server-only module both import) rather than writing a second one.
+
+**Initialising.** `startOrderPayment` builds everything **on the server, from
+the database**:
+- the amount is `Order.totalAmount` in kobo, as `toMinor` does today;
+- the currency is the order's;
+- the subaccount is the order's organization's `paystackSubaccountCode`;
+- `bearer: "subaccount"` on every transaction — **mandatory**: without it
+  Paystack charges the fee to the platform (10.13) — and `transaction_charge: 0`
+  on every transaction, so the platform's share is zero whatever the
+  subaccount's `percentage_charge` turns out to mean (10.13).
+
+It passes our attempt reference and a callback to the storefront's own origin,
+plus `metadata` carrying `organizationId`, `orderId`, `orderReference`,
+`attemptId` and `purpose: "storefront-order"`. It refuses (`unavailable`) if the
+organization's payment setup isn't `ACTIVE`, and it sends exactly one
+subaccount — no multi-split in this phase (10.1).
+
+**What the merchant receives:**
+- **Order total − Paystack's fee.** There is no platform deduction (10.1).
+- The fee and its rounding are Paystack's. Record Paystack's reported fee and
+  settled amount (below) and show those, never our own estimate of the fee.
+
+**One merchant's money can never reach another merchant.**
+- The subaccount comes from the order's own `organizationId`, and the order is
+  loaded with `{ id, organizationId, channel: 'ONLINE' }`, as now.
+- No subaccount, amount, charge or organization id is ever taken from the
+  browser.
+- A test sets two merchants side by side and asserts that each order's
+  initialise call names only its own subaccount.
+
+**What each attempt records.** Keep `OrderPayment` and add the following.
+Everything existing stays; `provider` becomes `'paystack'` for new rows.
+- `subaccountCode`, as sent;
+- the fee bearer as sent (always the subaccount);
+- after verification, from Paystack's own answer:
+  - the provider's transaction id and reference (`gatewayRef` can hold one);
+  - the fees;
+  - the settled breakdown — the merchant amount and the fee, as Paystack
+    reports them. A non-zero platform amount is an error, flagged for 11.6;
+  - `providerPayload`.
+
+  That is what 10.6 shows, and it is Paystack's record, not our arithmetic.
+
+**Reconciliation chain.** Every confirmed payment must be traceable:
+
+```
+Order (+ OrderLineItem) → OrderPayment → Paystack transaction/reference
+      → organization → Paystack subaccount → settlement data
+```
+
+A confirmed Paystack transaction that matches no attempt, or an attempt whose
+verified subaccount differs from what was sent, is flagged for the platform
+console (11.6). It is never dropped and never auto-applied.
+
+**Not built:** any internal ledger, balance, or "amount owed to merchant" column.
+
+### 10.5 Verification and webhooks — DONE (2026-09-29)
+
+**As shipped.**
+- **One webhook for the whole integration:** `lib/payments/paystack-webhook.ts`,
+  served at **`/api/payments/paystack/webhook`** and at the older
+  `/api/billing/paystack/webhook`, which now delegates to the same handler.
+  Whichever URL Paystack's dashboard names, nothing is missed.
+  **Action for launch: set the dashboard's webhook URL to
+  `https://{PLATFORM_HOST}/api/payments/paystack/webhook`**, for both test and
+  live mode.
+- **Signature:** `verifyPaystackSignature` (in `lib/payments/paystack.ts`) is a
+  constant-time compare of the hex HMAC-SHA512 of the raw body. Billing's old
+  `===` compare now delegates to it. A bad signature is a 401 and touches
+  nothing; a signed non-JSON body is a 400.
+- **Routing** (`routePaystackEvent`):
+  - `charge.success` whose reference is an `OrderPayment` → `reconcilePayment`.
+    It verifies with Paystack itself; the body is never believed.
+  - Every other `charge.success`, and `subscription.*` / `invoice.*` →
+    `handleBillingEvent` (`lib/billing/webhook-events.ts`: the old billing
+    route's switch, moved there unchanged).
+  - `charge.dispute.*` → `recordDispute`.
+  - `refund.*` → acknowledged and logged only, since refunds are paused
+    (10.7).
+  - Anything else → acknowledged.
+
+  It always answers 200 once signed, as both earlier webhooks did.
+- **Chargebacks:**
+  - A new `PaymentDispute` table (migration
+    `20260929210000_payment_disputes`) holds one row per Paystack dispute id,
+    matched to our payment by the transaction reference. A dispute on
+    anything else is logged and left alone.
+  - It stores the status, resolution, category, amount (kobo → major), due
+    date, resolved date and Paystack's payload.
+  - An event older than the one recorded is ignored, because webhooks arrive
+    out of order.
+  - **Told on the way in and on the way out:** an email
+    (`emails/payment-dispute.tsx`) to the shop's order handlers and Owner plus
+    `PLATFORM_ADMIN_EMAIL`, since disputes reach the platform's account.
+    Reminders update the row quietly.
+  - Audited as `platform.payments.dispute_opened / _updated / _resolved`.
+  - **On the order page:** a "Chargeback" panel with a plain-language status
+    (`lib/sales/dispute-labels.ts`), the amount, the date and the response
+    deadline, or the outcome once settled.
+  - **On the dashboard:** a "needs attention" line while one is open, linking
+    straight to the order when there's one.
+  - Nothing claims whose money a lost dispute comes from — that question is
+    still open with Paystack (10.13).
+- **Abandoned payments:** unchanged. The expiry job checks each unpaid online
+  order with its provider before cancelling it.
+- **Tests:** `tests/paystack-webhook.test.ts` (10):
+  - the signature, including a tampered body, the wrong key, short and
+    missing values;
+  - unsigned or wrongly signed deliveries refused with nothing touched;
+  - non-JSON refused;
+  - a body claiming success while Paystack says failed stays unpaid;
+  - one payment delivered three times through both URLs → paid once, and
+    never routed to billing;
+  - other charges and subscription events reach billing, through either URL;
+  - refund events acknowledged with no effect;
+  - the full chargeback path — recorded against the order and payment, owner
+    and platform emailed once, a duplicate is a no-op, a reminder updates
+    quietly, an older event is ignored, resolution recorded and emailed;
+  - a dispute on a payment that isn't ours is left alone.
+
+**Not in 10.5:**
+- **Answering a dispute** — uploading evidence, accepting. This waits on
+  Paystack's answer to question 2 (who can respond on a subaccount
+  transaction).
+- **The platform console's disputes list** (11.6).
+
+**The original spec, kept for reference:**
+
+
+**The lifecycle:**
+1. initialise;
+2. the shopper pays on Paystack's page;
+3. the browser returns through the callback **and/or** Paystack sends a
+   webhook;
+4. the server verifies with Paystack (`/transaction/verify/:reference`);
+5. `reconcilePayment` settles the attempt and the order once.
+
+Its existing rules carry over unchanged:
+- **only a server-side verify makes an order paid**; the callback's query
+  string and the webhook body mean nothing more than "go and check this
+  reference";
+- a wrong amount or currency is `MISMATCH`;
+- a duplicate delivery finds the attempt already claimed and does nothing;
+- a verify failure is `'error'` and retried by the next door, never read as
+  unpaid.
+
+The verify must also confirm that **the transaction settled to the subaccount
+this attempt sent**. A mismatch is treated like an amount mismatch.
+
+**One webhook URL for the whole integration.**
+- Paystack sends every event on the platform account to the one configured
+  URL (confirm this), so storefront events will arrive alongside subscription
+  billing's.
+- Build one route that verifies `x-paystack-signature` against the raw body
+  **in constant time**. `lib/billing/paystack.ts` compares with `===` today;
+  fix that here.
+- The route dispatches by what the reference belongs to:
+  - a `BillingTransaction` → `applySuccessfulCharge`, as now;
+  - an `OrderPayment` → `reconcilePayment`;
+  - neither → logged and acknowledged.
+- `metadata.purpose` is a hint for logging only; the database lookup decides.
+- Either keep `/api/billing/paystack/webhook` as that route, or move it to a
+  neutral `/api/payments/paystack/webhook` and repoint the dashboard setting in
+  the same release.
+- It always answers 200 once the signature is good, like both existing
+  webhooks.
+
+**Events to handle** (names to confirm):
+- `charge.success` → reconcile;
+- failed and abandoned charges → the attempt becomes `FAILED`/`ABANDONED` by
+  the same verify;
+- refund events → none while 10.7 is paused (they are acknowledged and logged);
+- dispute events → below;
+- any subaccount status event → 10.3.
+
+**Abandoned attempts.** The existing expiry cron already re-checks unpaid
+orders with the provider before cancelling them (`lifecycle.ts`), so a payment
+that went through unheard settles instead. Keep that, going through the
+provider seam.
+
+**Chargebacks and disputes.** If Paystack exposes them on subaccount transactions,
+store each dispute against its `OrderPayment` (amount, status, deadline,
+provider id), show it on the order and in 10.6, and notify Owners. Whether a
+dispute debits the subaccount or the platform is **to verify**; don't assume.
+
+**Never trusted from the client:** amount, currency, organization, subaccount,
+fee bearer, payment status, or "success" from a redirect.
+
+### 10.6 The merchant's payments view — DONE (2026-09-29)
+
+**As shipped.**
+- **Sales → Payments** (`/sales/payments`, a new sidebar entry under Sales,
+  `sales.view`, the Sales module like Orders). Every successful online
+  payment, newest first.
+- **Each row:** the date, the order (linked; the whole row opens it), the
+  customer, **Customer paid**, **Paystack fee**, **You receive** and the
+  Paystack reference.
+  - Badges for a chargeback (its plain-language status), refunds recorded,
+    and a Squad-era payment.
+  - Figures are Paystack's own, from `fees_split` on the verified transaction
+    (10.4) — never our arithmetic. A Squad-era payment shows "—" for fee and
+    net, because Squad reported no split.
+- **No platform fee column and no balance.** The line above the figures says:
+  - the amounts are Paystack's;
+  - Paystack pays into the masked settlement account on its own schedule;
+  - MansaaS holds nothing and takes no cut;
+  - the page can't show when each payment reached the bank, because Paystack
+    reports no per-subaccount settlement (10.13) — the bank statement can.
+- **Headline figures** for the filtered set: customers paid (with the count),
+  Paystack fees, and what the merchant receives "before any refunds you send
+  back".
+- **Filters in the URL:**
+  - period: 7, 30 (the default) or 90 days, or all time;
+  - every payment, or only those with a chargeback;
+  - search by order number, attempt reference, Paystack reference, email or
+    customer surname;
+  - pagination, with a page past the end clamped.
+
+  The three states: no online payments yet (with "Set up online payments" if
+  payouts aren't set up), no results for the filters, and the route's error
+  boundary.
+- **CSV:** every payment the filters match (capped at 5,000) through
+  `ExportCsvButton`'s `fetchRows`.
+- **On the order page:** "Paystack's split" — what went to the bank,
+  Paystack's fee and its reference — under the payment method.
+- **Code:** `features/sales/payments.ts` (`listOnlinePayments`,
+  `exportOnlinePayments`).
+- **Tests:** `tests/sales-payments.test.ts` (10):
+  - only this store's successful payments, the Squad-era row without a split,
+    refunds and a chargeback per row;
+  - totals over the whole filtered set;
+  - period filters, and an unknown period falling back to 30 days;
+  - the chargeback view;
+  - search by order, Paystack reference and email;
+  - never another business's payment;
+  - the masked settlement account;
+  - page clamping;
+  - the export returning every match;
+  - `sales.view` required.
+
+**Not in 10.6:**
+- **Settlement dates per payment.** Paystack's API reports none per
+  subaccount; revisit if Paystack's answer to 10.13 question 4 says
+  otherwise.
+- **Refunds through Paystack**, paused (10.7). Recorded manual refunds show
+  as a badge.
+
+**The original spec, kept for reference:**
+
+
+This replaces the earlier "Payouts" page, which assumed the platform held the
+money. The merchant is shown **what Paystack did**, never a balance MansaaS
+owes them.
+
+**Sales → Payments** (or a tab on Settings → Payments; decide against AGENTS §2)
+lists online payments, filtered in the URL and paginated (AGENTS §3), with a CSV
+export (`ExportCsvButton`). Each row shows:
+- the order reference, linked, and the date;
+- **Customer paid** — the transaction amount;
+- **Paystack fee** — always shown, since the merchant bears it;
+- **You receive** — the amount after Paystack's fee, as Paystack reported it;
+
+There is **no platform fee column**: MansaaS takes nothing from a sale, and the
+line above the table says so ("MansaaS doesn't take a cut of your sales — the
+only deduction is Paystack's fee").
+- the Paystack reference;
+- the settlement status and date where Paystack exposes them, otherwise "—";
+- the destination account, masked ("GTBank ••••4821");
+- refunds and disputes against it.
+
+A line above the table says what it measures and where the figures come from
+(AGENTS §10): amounts are as reported by Paystack; money settles from Paystack
+to the account shown; MansaaS doesn't hold it.
+
+**Wording rule:** no "balance", "wallet", "withdraw" or "owed by MansaaS"
+anywhere. Settlement timing and status come from Paystack's settlement data if
+it offers it per subaccount — verify what exists. Where Paystack says nothing,
+the screen says "Paystack settles to your account on its schedule" rather than
+estimating.
+
+The order detail page shows the same breakdown for that order's payment.
+
+### 10.7 Refunds — PAUSED (2026-09-29)
+
+**Paused. Don't build any of 10.7 until this note is lifted.** The platform is
+in talks with a third-party wallet provider. The expected model is:
+- a merchant initiates a refund;
+- the money goes to the **customer's wallet on the storefront**, not to their
+  bank account or card.
+
+That would replace the Paystack refund flow below. The provider isn't chosen
+and the terms aren't agreed, so nothing about wallets is designed here yet.
+When the talks conclude, this section is rewritten around the chosen provider.
+
+**While paused:**
+- **No new refund work anywhere:**
+  - no Paystack `/refund` calls;
+  - no refund statuses or `OrderRefund` schema changes;
+  - no refund webhooks (10.5);
+  - no refund columns beyond what is already recorded (10.6);
+  - no counter-sale refunds (14.7);
+  - no refund acceptance tests (10.12).
+- **What is already built is left exactly as it is.** The returns flow and
+  "record a refund" (`lib/storefront/orders/returns.ts`,
+  `features/sales/order-returns.ts`) keep recording money the merchant sends
+  back themselves. Whether that stays switched on meanwhile is a product call,
+  not decided here.
+- **The copy that points merchants at "your Squad dashboard"** (the refund
+  dialog, `lib/sales/order-labels.ts`, `emails/store-order-alert.tsx`) must
+  still stop naming Squad once 10.9 retires it, and should say "send the money
+  back yourself and record it here". That is a copy change, not refund work.
+- **The "paid after cancellation — refund owed" orders (9.3/9.6) will still
+  happen** once payments move to Paystack. Until a refund path exists, the
+  merchant sends that money back themselves, as today.
+
+The design below is kept as a record of the Paystack-refund approach and of
+what the checks in 10.13 found. **It is not a plan to build.**
+
+- **An `OrderRefund` row is not proof that money moved.** For an order paid
+  online through Paystack:
+  - "Refund" creates the refund in a **pending** state;
+  - it calls Paystack's refund endpoint for the order's successful attempt,
+    with the amount, which allows a partial refund;
+  - it stores Paystack's refund id and reference;
+  - the refund becomes **refunded only when Paystack confirms it** (webhook or
+    verify, per its documented behaviour);
+  - a failed refund is shown as failed, with a retry, and leaves the order's
+    payment status unchanged.
+- **Schema.** `OrderRefund` gains:
+  - `method` (`PAYSTACK | MANUAL`);
+  - `status` (`PENDING | PROCESSING | NEEDS_ATTENTION | REFUNDED | FAILED`),
+    following Paystack's refund statuses (10.13). `NEEDS_ATTENTION` asks the
+    merchant for the customer's bank details and retries through
+    `/refund/retry_with_customer_details/{id}`;
+  - `provider`, `providerRefundId`, `providerReference`;
+  - `paymentId`, pointing at the `OrderPayment`;
+  - a `failureReason`;
+  - an `idempotencyKey`, unique per organization.
+
+  Existing rows backfill to `MANUAL` + `REFUNDED`, because that is what they
+  recorded.
+- **Payment status.** `paymentStatusAfterRefund` and `refundableAmount` count
+  only `REFUNDED` rows toward what has gone back. What they count toward what
+  can still be refunded is `REFUNDED` **plus in-flight**, so two refunds can't
+  both take the last naira. The existing guard against that (the header of
+  `returns.ts`) carries over.
+- **No double refunds:**
+  - a unique idempotency key per request;
+  - a conditional claim on the return/order;
+  - a pre-flight check that the Paystack transaction isn't already fully
+    refunded;
+  - "already refunded" answered by Paystack recorded as such, not as an
+    error.
+- **Full and partial:**
+  - returns, cancelled-but-paid orders (the "refund owed" callout from 9.3/9.6
+    and `refundsOwed` on the dashboard), and per-parcel delivery fees (9.6)
+    all go through the same call;
+  - the late-payment "refund owed" orders get a real **Refund now**.
+- **Subaccount transactions — BLOCKED on Paystack's written answer (10.13,
+  questions 1–3); a third-party guide says the main account pays.** From Paystack's docs, and from
+  Paystack support if the docs don't answer it, establish:
+  - that a refund on a subaccount transaction is debited from the
+    **merchant's** settlement, never the platform's balance — the platform has
+    no share in the sale to refund from;
+  - what happens when the merchant's money has already settled (a debit on a
+    later settlement? a negative balance?), and what happens if the merchant
+    has no later sales;
+  - whether Paystack's fee is returned on a refund, or stays a cost to the
+    merchant;
+  - whether partial refunds on subaccount transactions are supported.
+
+  Record the answers in 10.13. Until then, the refund dialog must not claim
+  whose money it comes from.
+- **Manual refunds stay manual.**
+  - Pay on delivery, bank transfer and counter-sale refunds remain
+    merchant-sent money that is recorded, with `method = MANUAL`, recorded
+    straight as `REFUNDED` exactly as today.
+  - The dialog says the merchant sends this one themselves.
+  - Squad-paid historical orders are also `MANUAL` (10.9).
+- **Fix the copy that is wrong today.** The refund dialog (`HOW_TO_REFUND`),
+  the order hint in `lib/sales/order-labels.ts` and
+  `emails/store-order-alert.tsx` send merchants to "your Squad dashboard".
+  Online refunds now happen from the order page.
+
+### 10.8 Merchant verification — DONE (2026-09-29), except the checkout gate
+
+**As shipped** (together with 11.1 and 11.3, which carry out the review):
+- **The data and private document storage** shipped in 10.2.
+- **The rule, `onlinePaymentReadiness`** (`lib/payments/payment-setup.ts`,
+  loaded by `getOnlinePaymentReadiness` in `lib/payments/online-readiness.ts`):
+  online payment only when OUR status is `VERIFIED`, the subaccount is
+  `ACTIVE`, and the org is `ACTIVE`. Otherwise it names the first blocker:
+  `not_submitted | in_review | rejected | payouts_not_ready | suspended`.
+- **The review:**
+  - `approveVerification` / `rejectVerification` in
+    `features/platform/verification.ts`, each claimed on
+    `verificationStatus: PENDING`, so a case is decided once. Two staff
+    pressing together, or a merchant who withdrew meanwhile, get "not waiting
+    any more".
+  - Approval leaves `setupStatus` at `AWAITING_VERIFICATION`: the subaccount
+    is 10.3's, and the hook is marked in the code.
+  - Sending back needs a reason of 10–500 characters, stores it, and resets
+    `setupStatus` to `NOT_STARTED`.
+- **The merchant is emailed either way** (`emails/payment-verification-result.tsx`,
+  sent to the payments contact). The approval email says honestly that payouts
+  still need setting up.
+- **Dashboard:** a "needs attention" line appears for members with
+  `settings.edit`, but only for blockers the merchant can act on:
+  `not_submitted` and `rejected`. "In review" and "payouts not ready" are ours
+  to finish, so they stay on the payments page.
+- **Tests:** `onlinePaymentReadiness` (+1 in
+  `lib/payments/payment-setup.test.ts`) and `tests/platform-verification.test.ts`
+  (7).
+
+**Not yet wired: checkout.** Checkout doesn't call the readiness rule yet,
+because the "Pay online" method is still Squad. Gating Squad on Paystack's
+readiness would switch off online payment in every store for a provider it
+doesn't use. **10.4 wires it** into `lib/storefront/checkout/store-config.ts`,
+the payment step and `startOrderPayment`, in the same change that moves
+checkout to Paystack.
+
+**The original spec, kept for reference:**
+
+
+**Two different states, never merged:**
+
+1. **Our verification** — has MansaaS checked this merchant? It is stored on
+   the organization (or the 10.3 table) as `UNVERIFIED | PENDING | VERIFIED |
+   REJECTED`, plus a reviewer, a date and a rejection reason the merchant sees.
+   It is reviewed in the platform console (11.3).
+2. **Paystack's state** — does a working subaccount exist, and is it active
+   (10.3)? It comes from Paystack.
+
+`VERIFIED` never implies that Paystack has approved anything, and an active
+subaccount never implies that we have verified the merchant.
+
+**What is checked** is list B from 10.2, confirmed from compliance advice and
+Paystack's requirements. Candidates:
+- the business name;
+- CAC registration where the business is registered;
+- identity details for an individual or sole trader;
+- the resolved settlement account name, matched against the business or
+  person;
+- contact details.
+
+**Documents are stored in Cloudinary — privately.** Today every upload goes
+through `lib/cloudinary/sign.ts`, signed as `image/upload` (public delivery)
+into `mansaas/{organizationId}/{purpose}`, with image formats only. Documents
+need their own path through it:
+- a new purpose (e.g. `verification`) that signs uploads with Cloudinary's
+  **authenticated or private delivery type**, so no public URL exists — verify
+  which type fits and that signed URLs can be made short-lived;
+- the formats a merchant will actually send (PDF plus images), with a size
+  limit; confirm how Cloudinary handles PDFs under the chosen delivery type;
+- **viewing only through a server action** that checks the viewer — platform
+  staff reviewing (11.3), or the merchant's own members with the payments
+  permission — and returns a short-lived signed URL. The stored record keeps
+  the `publicId`, never a URL a browser could reuse;
+- the same ownership check `isOwnedAsset` makes for images, so a request can't
+  attach another organization's asset;
+- a stated retention period, and what happens to documents when a merchant
+  closes their workspace (13.8).
+
+AGENTS §9 routes all merchant *image* uploads through
+`components/media/image-uploader.tsx`; documents get a sibling document
+uploader rather than bending that one.
+
+**The order is fixed: verification first, then the subaccount** (10.1). A
+merchant goes `UNVERIFIED → PENDING` on submitting, then `VERIFIED` or
+`REJECTED` on review. Only `VERIFIED` triggers subaccount creation (10.3). A
+`REJECTED` merchant gets no subaccount and can correct and resubmit.
+
+**Online payment is offered at checkout only when all three hold:**
+- our status is `VERIFIED`;
+- the subaccount is `ACTIVE`;
+- the organization isn't `SUSPENDED` (11.4).
+
+`VERIFIED` alone is not enough: the subaccount step can still fail (10.3).
+Enforce the rule in one
+server-side function used by `lib/storefront/checkout/store-config.ts`, the
+payment step and `startOrderPayment`. The storefront just doesn't list the
+method; the dashboard says exactly what is missing.
+
+**Offline selling is unaffected**, consistent with the product today: the
+till, invoices, bank transfer to the merchant's published account, and pay on
+delivery.
+
+### 10.9 Retiring Squad — DONE (2026-09-29)
+
+**As shipped.**
+- **Removed outright** rather than kept verify-only:
+  - `lib/payments/squad.ts`;
+  - `/api/payments/squad/callback` and `/api/payments/squad/webhook`;
+  - `lib/payments/nigerian-banks.ts`, the NIP-coded bank list.
+
+  The plan was to keep verification while any Squad attempt could still be
+  pending. On the dev database the newest pending one was 3 days old (the
+  hold window is 60 minutes), all on test orders; nothing is live, so nothing
+  could still complete.
+- **History is intact.** No row was deleted or changed.
+  - `OrderPayment.provider = 'squad'` and `Order.paymentMethod = 'squad'`
+    stay, labelled "Online (Squad)".
+  - They show on Sales → Payments (fee and net as "—") and in exports.
+  - A Squad-era attempt still PENDING is answered `'unverifiable'` by
+    `reconcilePayment`, without any network call, never guessed paid or
+    unpaid. The expiry job still cancels its order after the window.
+- **Bank-transfer accounts** (Settings → Payments):
+  - they now use Paystack's bank list and `/bank/resolve`, like the
+    settlement account;
+  - the bank picker was extracted to `components/dashboard/bank-picker.tsx`
+    and shared by both forms;
+  - an account saved under the old list is matched by name (`bankCodeForName`),
+    or chosen again when editing, with a hint saying so;
+  - the test-mode hint appears here too.
+- **Fixed on the way:** the checkout's payment step still keyed its card icon
+  to `squad`, so "Pay online" had lost its icon since 10.4.
+- **Copy:**
+  - the privacy page's processor list now names Paystack for both
+    subscriptions and storefront payments, including the payout details it
+    receives;
+  - the terms' payment paragraph has only the provider's NAME corrected, with
+    a comment that the paragraph is 10.10's;
+  - `MOBILE.md` and the schema comments updated.
+- **Tests:**
+  - `storefront-payments` now proves a Squad-era attempt is `'unverifiable'`
+    with no fetch and the order unchanged;
+  - `settings-bank-accounts` mocks Paystack instead of Squad, and adds "a
+    bank Paystack doesn't list is refused".
+
+**The original spec, kept for reference:**
+
+
+**Historical data stays. Nothing is deleted or rewritten to simplify the new
+code.**
+
+- **Stays as history:**
+  - `OrderPayment` rows with `provider = 'squad'`;
+  - `Order.paymentMethod = 'squad'`;
+  - their `providerPayload`, `gatewayRef` and `verifiedAt`;
+  - every `OrderRefund`.
+
+  They remain readable on the order page, in reports and in exports.
+  `PAYMENT_METHOD_LABEL` (`lib/sales/order-labels.ts`) keeps `squad: 'Online (Squad)'` for old orders.
+- **Removed from new orders:**
+  - the `'squad'` checkout method (`CHECKOUT_PAYMENT_METHODS` in
+    `lib/storefront/mock/checkout.ts`, and the `'squad'` value of the
+    `provider` union in `lib/storefront/checkout/types.ts`);
+  - `SQUAD_PROVIDER` checks in `payment-service.ts`, `lifecycle.ts` and
+    `features/shop-orders/actions.ts`. These become "paid online through a
+    provider", not a string comparison against one provider.
+- **Code:**
+  - `lib/payments/squad.ts` shrinks to what is needed to **verify** old
+    references while any Squad attempt could still be pending. Once none are
+    open (they expire within the unpaid-order window), `initiateTransaction`
+    goes.
+  - The Squad account-name lookup is replaced by Paystack's bank resolution
+    for both the settlement account (10.2) and the bank-transfer accounts in
+    `features/settings/bank-accounts.ts`.
+- **Bank codes.**
+  - `lib/payments/nigerian-banks.ts` is keyed by NIP codes for Squad.
+    Paystack uses its own bank codes from its bank list, so replace it with
+    Paystack's list (fetched and cached server-side, or a checked-in snapshot
+    — decide).
+  - `MerchantBankAccount` stores `bankName` but **no code**, so existing
+    transfer accounts keep working as display data. Resolving them again is
+    only needed if they become settlement accounts.
+- **Routes:**
+  - `/api/payments/squad/callback` and `/api/payments/squad/webhook` stay
+    until the dashboard no longer points at them and no Squad attempt is
+    open. Then they are removed, in a release that says so.
+  - New: the Paystack callback for storefront orders, and the shared webhook
+    (10.5).
+- **Environment:** `SQUADCO_SECRET_KEY`, `SQUADCO_PUBLIC_KEY` (unused in code
+  today) and `SQUADCO_BASE_URL` become obsolete once the routes go (10.11).
+- **Tests:**
+  - `tests/storefront-payments.test.ts` (18 cases, with a Squad fetch mock) is
+    rewritten against a Paystack mock, keeping every rule it asserts;
+  - one case keeps a historical Squad attempt verifying through the legacy
+    path;
+  - `tests/settings-bank-accounts.test.ts` and `checkout-view.test.tsx` follow;
+  - `tests/storefront-order-lifecycle.test.ts` covers expiry through the
+    provider seam.
+- **Copy and pages that name Squad:**
+  - the storefront trust lines (`lib/storefront/store-claims.ts`, the catalogue
+    feature list in `lib/storefront/catalog.ts`, `site-footer.tsx`);
+  - the checkout payment step and confirmation page;
+  - `open-payment-page.ts` and `pay-now-button.tsx` comments;
+  - Settings → Payments;
+  - the privacy page's processor list.
+
+  Each must say Paystack, or nothing provider-specific.
+- **No schema change removes a Squad column or row.** Migrations here only
+  add. The `orders.customerId` drift note in Phase 8.6 applies to how they are
+  applied.
+
+### 10.10 Terms, privacy and merchant agreement — TODO
+
+This is engineering's list of what the legal documents must accurately cover.
+The wording itself is for counsel, not for this file.
+
+- **Terms** (`app/(legal)/terms/page.tsx`). The payments paragraph currently
+  says payments go through "the merchant's payment provider, currently Squad"
+  and that the platform "does not hold merchant funds or settle payouts". It
+  must describe:
+  - the platform's role, Paystack's role and the merchant's role;
+  - how shopper payments are processed through the platform's Paystack
+    integration;
+  - that merchant settlement goes through a Paystack subaccount to the
+    merchant's account;
+  - that the platform charges **no commission on sales** — its only charge is
+    the plan subscription — and that the merchant bears Paystack's processing
+    fee;
+  - refunds: say only what the product does while 10.7 is paused (the
+    merchant returns money themselves), and revisit once the wallet partner is
+    agreed;
+  - chargebacks and disputes;
+  - merchant verification;
+  - when online payment may be paused or disabled (incomplete setup,
+    verification rejected, subaccount disabled, suspension);
+  - any marketplace or platform terms Paystack requires us to pass on.
+- **Privacy** (`app/(legal)/privacy/page.tsx`):
+  - replace Squad in the processor list with Paystack;
+  - list what verification and bank data is collected, why, where it is
+    stored, how long it is kept, and what is shared with Paystack.
+- **Merchant agreement.** Decide whether the payment terms merchants accept at
+  onboarding (10.2) are a section of the terms or a separate agreement they
+  explicitly accept, recorded with version and time.
+- **Legal review of the final wording is a launch gate**, as is the regulatory
+  question flagged in 10.1.
+
+### 10.11 Environment and configuration — DONE (2026-09-29)
+
+**As shipped.**
+- **`PAYSTACK_SECRET_KEY`** is the only Paystack credential: server-side, and
+  shared by billing, subaccounts, checkout and the webhook, whose signature is
+  an HMAC with this same key (confirmed; there's no separate webhook secret).
+- **`PAYSTACK_MODE`** (`live` | `test`) — new, deliberately standardised
+  here. When it disagrees with the key's prefix, `paystackConfigProblem()`
+  names the problem, **nothing talks to Paystack**
+  (`isPaystackConfigured()` is false and `paystackFetch` throws), and no
+  webhook verifies. This stops a test key left on the live site from marking
+  real orders paid with test cards, and a live key on staging from moving
+  real money. Unset, the key decides, as locally.
+  **Set `PAYSTACK_MODE=live` in production.**
+- **Removed from `.env.example`:** the Squad section (`SQUADCO_SECRET_KEY`,
+  `SQUADCO_PUBLIC_KEY`, `SQUADCO_BASE_URL`), and
+  `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY`, which nothing read — the redirect flow
+  needs no public key.
+- **Documented in `.env.example`:** the dashboard webhook URL
+  (`/api/payments/paystack/webhook`); that callbacks need no dashboard entry;
+  and the test-mode realities (3 real resolves a day; Zenith `057` +
+  `0000000000`).
+- **Local `.env` files** still holding `SQUADCO_*` keys are harmless — nothing
+  reads them — and can be deleted by hand.
+- **Tests:** `lib/payments/paystack.test.ts` (4): the key decides when no mode
+  is set; a mismatch in either direction refuses; an unknown mode value
+  refuses; a validly signed webhook is refused while misconfigured.
+
+**The original spec, kept for reference:**
+
+
+- **Existing and reused:** `PAYSTACK_SECRET_KEY` (server-only, already read by
+  `lib/billing/paystack.ts`). The Paystack webhook signature is an HMAC with
+  this same key, so no separate webhook secret exists to configure — confirm.
+- **Existing, check before relying on it:** `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` is
+  in `.env.example` but nothing in `app/`, `lib/`, `features/` or `components/`
+  reads it. Only keep it if a client-side Paystack step (e.g. inline popup) is
+  deliberately chosen; the redirect flow needs no public key.
+- **No commission configuration.** There is no commission (10.1), so there is
+  no rate to store in env, `PlatformSetting` or the console.
+- **The fee bearer is not configuration.** It is always the merchant (10.1),
+  so it is a constant in the Paystack module, not a setting.
+- **Cloudinary** needs no new variables for documents; the existing
+  `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` and server-side key/secret read by
+  `lib/cloudinary/config.ts` serve the private delivery type too — confirm.
+- **Test vs live** follows the key, as the Squad client does for its
+  sandbox. Live mode must refuse to start a payment with a test key.
+- **Dashboard configuration:** in the Paystack dashboard, point the webhook URL
+  at the shared route (10.5). The callback is per transaction and needs no
+  dashboard entry — confirm.
+- **Removed** after 10.9: `SQUADCO_SECRET_KEY`, `SQUADCO_PUBLIC_KEY`,
+  `SQUADCO_BASE_URL` and the Squad section of `.env.example`.
+- No Paystack secret, subaccount secret, or merchant credential is ever in a
+  `NEXT_PUBLIC_` variable, a client bundle, a log line or an audit entry.
+
+### 10.12 Tests and acceptance criteria — TODO
+
+Database tests run with `--no-file-parallelism` (the Neon note in 9.2). The
+Paystack API is mocked at `fetch`, as `storefront-payments.test.ts` mocks Squad
+today. A manual pass in Paystack **test mode** with a real test subaccount is
+also required before switching to live.
+
+**Merchant onboarding:**
+- a merchant can complete payment setup, and the account name shown is the one
+  Paystack resolved;
+- the subaccount is created **exactly once**; a double submit and a retry
+  after a timeout both leave one subaccount, and the retry adopts it;
+- invalid bank details are refused next to the field; a Paystack outage reads
+  as "try again", not "wrong details";
+- changing the settlement account updates the same subaccount and is audited;
+- incomplete setup, `PENDING` or `REJECTED` verification, or a disabled
+  subaccount each keep online payment off at checkout and on `startOrderPayment`;
+- **no subaccount exists before approval**: submitting the form makes no
+  Paystack call, and the creating function refuses a merchant who isn't
+  `VERIFIED`;
+- approving a merchant creates the subaccount once; a failed creation leaves
+  them `VERIFIED` + `ACTION_REQUIRED` and can be retried without a duplicate;
+- verification documents have no public URL: fetching the stored asset
+  without a signed URL fails; a member of another organization and a member
+  without the payments permission can't get a signed URL; platform staff can.
+
+**Paying (one merchant per order):**
+- the shopper can pay, and the initialise call carries the server-computed
+  amount, the order's own subaccount, the merchant as fee bearer, and no
+  platform charge;
+- the merchant receives total − Paystack's fee, as Paystack reports it, and
+  the platform's share is zero; a non-zero platform amount is flagged;
+- two merchants side by side: each order names only its own subaccount;
+- the webhook is idempotent: a repeated or racing callback and webhook
+  settles once;
+- the order becomes paid only after a server-side verify; a forged callback or
+  replayed webhook body alone changes nothing;
+- an amount, currency or subaccount mismatch is `MISMATCH`, not paid;
+- a late payment still revives, or leaves "refund owed", as today;
+- a split naming more than one merchant subaccount is refused (10.1).
+
+**Multi-merchant (guard only, since no such cart exists):**
+- a cart or order can't span two organizations;
+- no code path builds a multi-split. If one is ever built, its own phase adds
+  the criteria: each merchant receives only its share; the platform receives
+  nothing; references stay traceable; partial failure is
+  handled; and the behaviour matches Paystack's supported multi-split.
+
+**Refunds — PAUSED with 10.7; not part of Phase 10's acceptance:**
+- a full refund works;
+- a partial refund works, if 10.7's verification confirms support;
+- a double refund is prevented, both from the same click and across two tabs;
+- the refund reaches `REFUNDED` only on Paystack's confirmation, with its
+  reference stored;
+- a failed refund leaves the order's payment status unchanged and offers a
+  retry;
+- manual refunds still record straight to `REFUNDED`.
+
+**Security:**
+- merchants are never asked for, and can't submit, a Paystack key;
+- Paystack secrets stay server-side — a bundle check for the key names, and
+  no secret in logs;
+- the client can't choose a subaccount, a fee bearer, a platform charge, an
+  amount or an organization — the action signatures don't accept them;
+- webhook signatures are verified in constant time against the raw body, and
+  a bad signature is 401;
+- no payment status is ever taken from the browser.
+
+**Reconciliation:**
+- for every `SUCCESS` attempt, the chain in 10.4 resolves end to end;
+- an unmatched Paystack transaction is surfaced for 11.6, never dropped.
+
+**No confirmed payment is ever unattributed.**
+
+**Historical data:**
+- a Squad-paid order still shows, exports and refunds manually;
+- no migration deletes or alters Squad rows.
+
+### 10.13 Implementation notes — fill in as built
+
+**The architecture, in one paragraph.** MansaaS does not operate a merchant
+wallet or a merchant payout system. Paystack processes shopper payments on the
+platform's integration and settles each one to the merchant's subaccount and
+settlement account, less Paystack's fee, which the merchant bears. MansaaS takes
+no commission on sales; it earns only the plan subscription. MansaaS keeps order,
+payment,
+refund, dispute and reconciliation records, and never represents merchant funds
+as a balance the platform holds.
+
+**Verified Paystack behaviour — desk check, 2026-09-29.** Paystack's docs
+site refuses automated requests (HTTP 403), so this was checked against two
+sources Paystack publishes itself:
+
+- **PaystackOSS/openapi** — `dist/paystack.yaml` and `dist/marketplace.yaml`,
+  last commit 2026-06-09;
+- **PaystackOSS/doc-code-snippets** — the request and payload examples the docs
+  pages render.
+
+It was also checked against one Paystack support article,
+support.paystack.com/en/articles/2132802 ("Transaction splits").
+
+Each item is marked:
+
+- **Confirmed** — both official sources agree.
+- **Conflict** — official sources disagree, or an official and a third-party
+  source disagree.
+- **Unconfirmed** — no official source says; ask Paystack support or test in
+  test mode.
+
+**No payment code is written against a Conflict or an Unconfirmed item until it
+is resolved.** The test-mode checks are listed under "Before 10.3 is coded"
+below.
+
+- **Test mode, checked against the real API on 2026-09-29** (these supersede
+  anything below they contradict):
+  - `POST /subaccount` accepts the bank code as **`settlement_bank` or
+    `bank_code`** — both returned 201. The Conflict below is resolved; we send
+    `settlement_bank`.
+  - The response: `subaccount_code`, `settlement_bank` as the bank's NAME,
+    `percentage_charge: 0` as sent, `active: true`, `is_verified: false`,
+    `settlement_schedule: "AUTO"`, `account_name` as resolved. `metadata`,
+    sent as a JSON string, comes back **as an object**.
+  - **Paystack creates a second subaccount for the same bank account without
+    complaint.** Duplicate prevention is entirely ours (10.3).
+  - `PUT /subaccount/{code} { active: false }` deactivates; `GET` reflects it.
+  - `GET /subaccount` pages with `meta.pageCount`, and `metadata` is an object
+    there too.
+  - **Test-mode limits:** `/bank/resolve` allows 3 real-bank lookups a day
+    ("Use test bank codes 001"). Code `001` resolves `0000000000` as
+    "TEST ACCOUNT", but a subaccount **can't** be created with `001`.
+    **Zenith (`057`) + `0000000000`** both resolves (as "Test") and creates a
+    subaccount. Use that pair when testing.
+  - An account Paystack can't resolve fails creation with 400 "Account
+    details are invalid", including the docs' own example account in test
+    mode.
+- **Subaccount creation and update:**
+  - **Confirmed:**
+    - `POST /subaccount` requires `business_name`, a bank code,
+      `account_number` and `percentage_charge`. Optional fields are
+      `description`, `primary_contact_email` / `_name` / `_phone`, and
+      `metadata` (a stringified JSON string, not an object).
+    - `PUT /subaccount/{code}` takes the same fields plus `active`, so a
+      subaccount can be deactivated.
+    - `GET /subaccount` lists with `perPage`, `page` and an `active` filter.
+      **There is no search by business name or metadata**, so 10.3's "look the
+      merchant up before creating again" must page through the list and
+      match on `metadata`. Better still, never lose the code: store it in the
+      same transaction as the claim, and treat a timeout as "fetch and match"
+      before any retry.
+    - The response carries `subaccount_code` (`ACCT_…`), `account_name`
+      (resolved by Paystack), `settlement_bank` (as a bank name),
+      `is_verified`, `active` and `settlement_schedule` (`"AUTO"` in the
+      example).
+  - **Conflict:** the API reference names the bank field `settlement_bank`,
+    while the docs guide's snippet sends `bank_code`. Test which one the API
+    accepts.
+  - **Unconfirmed:** what `is_verified` means (Paystack's own check of the
+    account?), and what the `settlement_schedule` values are and whether they
+    can be set. 10.3 caches `is_verified` and `active` as Paystack's state and
+    doesn't reinterpret them.
+- **Transaction parameters for "the merchant gets everything, less the fee":**
+  - **Confirmed:**
+    - `POST /transaction/initialize` takes `subaccount`, `transaction_charge`
+      ("A flat fee to charge the subaccount for a transaction. This overrides
+      the split percentage set when the subaccount was created") and `bearer`
+      (`account` | `subaccount`), plus `reference`, `callback_url`, `metadata`
+      (an object), `channels` and `currency`.
+    - The docs guide's own "bearer" snippet sends
+      `subaccount` + `bearer: "subaccount"`.
+  - **Confirmed, and it changes the design:** the support article says that
+    with a single subaccount, "the transaction fee is automatically charged to
+    the main account". **Leaving `bearer` out means the platform pays every
+    shop's Paystack fee.** `bearer: "subaccount"` is mandatory on every
+    storefront transaction, and a test asserts it.
+  - **Conflict — critical:** which side `percentage_charge` pays.
+    - The docs guide describes it as the main account's cut.
+    - A widely read third-party guide (mctaba.com) treats it as the
+      subaccount's share, which would make 0 send everything to the platform.
+    - The API reference's own description of the field is a copy-paste error
+      ("Customer's phone number").
+
+    **Design consequence:** don't rely on `percentage_charge` alone. Create the
+    subaccount with `percentage_charge: 0` **and** send
+    `transaction_charge: 0` on every transaction. That is the flat amount
+    taken *from the subaccount*, and it overrides the percentage whatever the
+    percentage means.
+  - **Unconfirmed:** that an explicit `transaction_charge: 0` is honoured
+    rather than ignored as "not set". Resolve with a test-mode transaction
+    before 10.4 ships, and keep the reconcile check (a non-zero platform share
+    becomes `MISMATCH`, 10.4) as the permanent guard.
+  - **Unconfirmed:** the verify response has `subaccount`, `split`, `fees`,
+    `fees_split` and `requested_amount` fields, but the spec leaves `subaccount`
+    and `split` untyped and `fees_split` null. Which field reports the
+    subaccount's settled share must be read from a real test-mode
+    transaction.
+- **Multi-split (`/split`)** (for the record, not built): split groups have a
+  `type` (`percentage` | `flat`), `subaccounts` with shares, and a
+  `bearer_type` (`subaccount` | `account` | `all-proportional` | `all`).
+  Transactions take a `split_code` or an inline `split` object. Confirmed from
+  the spec.
+- **Settlement:**
+  - **Confirmed:** `GET /settlement` (paged) and
+    `GET /settlement/{id}/transactions` exist.
+  - **Unconfirmed:**
+    - whether settlements can be listed per subaccount — the spec shows no
+      `subaccount` filter;
+    - settlement timing per subaccount.
+
+    10.6 shows settlement status only if a per-subaccount source is found;
+    otherwise it says Paystack settles on its own schedule (as 10.6 already
+    allows).
+- **Refunds:**
+  - **Confirmed:**
+    - `POST /refund` takes `transaction` (the reference) and an optional
+      `amount`, which "cannot be more than the original transaction amount".
+      **Partial refunds are supported.** It also takes `customer_note` and
+      `merchant_note`.
+    - A new refund comes back `"pending"`, with `expected_at`,
+      `deducted_amount` and `fully_deducted`.
+    - Statuses and webhook events: `refund.pending`, `refund.processing`,
+      `refund.processed`, `refund.failed` and **`refund.needs-attention`**.
+      The last one is retried through
+      `POST /refund/retry_with_customer_details/{id}` with the customer's
+      bank details.
+    - Refund events carry `transaction_reference` and `refund_reference`.
+
+    For 10.7, this confirms the lifecycle:
+    - `PROCESSING` covers pending and processing;
+    - `REFUNDED` is set only on `processed`;
+    - `FAILED` covers failed;
+    - add **`NEEDS_ATTENTION`**, which asks the merchant for the customer's
+      bank details.
+  - **Conflict / unconfirmed — parked while 10.7 is paused:** who pays for a refund on a
+    subaccount transaction.
+    - The third-party guide states that the refund comes from the **main
+      account's balance** and that "the subaccount's share is not automatically
+      clawed back". After settlement, it is taken from the main account's next
+      settlement.
+    - The `deducted_amount` / `fully_deducted` fields fit a balance being
+      debited, but don't say whose.
+    - No official source was found either way.
+
+    **If the third-party guide is right, every Paystack refund is paid by the
+    platform, which earns nothing from the sale (10.1).** Get Paystack's
+    written answer before 10.7 is built.
+    - If the platform's balance is debited, 10.7 changes. Either online
+      refunds become merchant-sent and recorded (like transfers today), or
+      Paystack offers a way to debit the subaccount.
+    - Record the answer here and in 10.10's terms.
+- **Disputes and chargebacks:**
+  - **Confirmed:**
+    - the events are `charge.dispute.create`, `charge.dispute.remind` and
+      `charge.dispute.resolve`;
+    - the payload carries `refund_amount`, `status`
+      (`awaiting-merchant-feedback` | `awaiting-bank-feedback` | `pending` |
+      `resolved`), `resolution` (`merchant-accepted` | `declined`), `dueAt`,
+      `category` (e.g. `chargeback`), `messages` and the full `transaction`
+      (with its `reference`, so it can be matched to an `OrderPayment`);
+    - the API has `GET /dispute`, `GET /dispute/{id}`,
+      `PUT /dispute/{id}/resolve` and `POST /dispute/{id}/evidence`.
+  - **Unconfirmed — and still live, since chargebacks happen whether or not we
+    offer refunds:** whose balance a lost dispute on a subaccount transaction
+    is taken from. Ask Paystack (question 1 below).
+- **Webhooks:**
+  - **Confirmed:**
+    - `x-paystack-signature` is a hex HMAC-SHA512 of the raw body, keyed with
+      the secret key. Paystack's own snippet compares with `==`; ours uses a
+      constant-time compare (10.5).
+    - Events arrive as `{ event, data }`.
+  - **Confirmed:** there are **no subaccount events** in Paystack's event
+    list. Subaccount state (`active`, `is_verified`) is synced by fetching
+    `GET /subaccount/{code}` — on the merchant's payment settings page load,
+    on each payment start, and from the platform console — not by webhook.
+  - **Unconfirmed:** that an integration has exactly one webhook URL.
+    **No longer matters:** both `/api/payments/paystack/webhook` and
+    `/api/billing/paystack/webhook` serve the same shared handler (10.5), so
+    whichever one the dashboard names receives everything.
+- **Banks:**
+  - **Confirmed:**
+    - `GET /bank?currency=NGN` lists Paystack's bank codes (the codes the
+      subaccount takes; the docs example uses "058").
+    - **`include_nip_sort_code=true` also returns each bank's NIP code**, so
+      the NIP-coded `lib/payments/nigerian-banks.ts` can be mapped to Paystack
+      codes rather than retyped (10.9).
+    - `GET /bank/resolve?account_number&bank_code` resolves the account name
+      and replaces Squad's lookup.
+- **Merchant verification requirements Paystack imposes on subaccounts:**
+  **Answered from Paystack's own dashboard (2026-09-29, seen by the owner).**
+  The dashboard's "create subaccount" form asks only for: currency (NGN), bank,
+  account number, subaccount name (prefilled with the resolved account name),
+  an optional alias, and the transaction split ("your share %" / "subaccount
+  gets %"). So **Paystack asks for no KYC on a subaccount**, and CAC, ID and
+  proof of address are purely OUR verification (10.2 list B, 10.8). The split
+  labelled "your share" also suggests `percentage_charge` is the MAIN
+  account's share, which resolves the Conflict above in favour of the docs
+  guide. Still send `transaction_charge: 0`, and confirm with the test-mode
+  check. The old note follows:
+  **Unconfirmed (superseded).** The create call needs only the fields above; the support
+  article says nothing more. Ask Paystack whether a subaccount needs KYC of
+  its own, and what `is_verified` gates.
+- **Cloudinary private delivery for documents:** not yet checked. Check it
+  before 10.8's upload work.
+
+**Before 10.3 is coded — the test-mode checks** (needs the platform's Paystack
+**test** secret key, and a short manual session):
+
+1. Create a subaccount sending `settlement_bank`, and again sending
+   `bank_code`. Record which one works.
+2. Initialise ₦10,000 with `subaccount`, `transaction_charge: 0` and
+   `bearer: "subaccount"`, and pay it with a test card. From the verify
+   response and the dashboard, record:
+   - the subaccount's share;
+   - the main account's share (**must be 0**);
+   - who paid the fee;
+   - which response fields carry each.
+3. Repeat step 2 without `transaction_charge`, with `percentage_charge: 0` on
+   the subaccount, to settle what `percentage_charge` means.
+4. ~~Refund part of the transaction from step 2, and record which balance
+   Paystack debits.~~ Paused with 10.7.
+
+**Questions to put to Paystack support, in writing** (they block 10.10's
+chargeback wording and the launch):
+
+1. On a subaccount transaction where the main account's share is zero and the
+   subaccount bears the fee, whose balance pays a **lost chargeback**, before
+   and after the subaccount has been settled? This still matters with refunds
+   paused: chargebacks are raised by the customer's bank, not by us.
+2. Can a chargeback loss be debited from the subaccount's future settlements
+   instead?
+3. Does a subaccount need its own KYC, and what does `is_verified` mean?
+4. Can settlements be listed or reported per subaccount?
+
+The earlier questions on refund liability are **parked with 10.7**. Quarterly
+billing was dropped in favour of the intervals Paystack does list (12.1).
+
+## Phase 11 — Platform console — TODO
+
+The gap: there is no platform-side admin at all — no super-admin role, no screen,
+and `OrganizationStatus.SUSPENDED` exists in the schema but nothing enforces it.
+Custom domain orders end in an email to `PLATFORM_ADMIN_EMAIL` and are finished by
+hand in the database.
+
+- **11.0 Console shell — DONE (2026-09-29).** Added before 11.7 so the
+  console's later pages have a frame to go into.
+  - `components/platform/console-shell.tsx`: a sidebar grouped by job
+    (Overview; *Merchants* → Verification), with the staff member's name and
+    sign-out at its foot. Below `lg` a top bar opens the same navigation in a
+    `Sheet` drawer (focus trapped, closes on Escape and after navigating). It
+    borrows the admin's tokens and sidebar colours, not the merchant sidebar,
+    which is built around a workspace.
+  - Verification shows a count of submissions waiting beside it.
+  - **Only pages that exist are listed** (AGENTS §7). Each console phase adds
+    its own entry to `NAV` in that file: 11.7 *Billing* → Plans and pricing;
+    11.2/11.4 *Merchants* → Merchants; 11.5 *Operations* → Domain queue;
+    11.6 *Billing* → Payments.
+  - `/platform` is now an **Overview** (`features/platform/overview.ts`)
+    instead of a redirect: a "needs attention" callout for verification
+    (with the oldest submission's age and a "Review now" link), and active
+    workspaces by plan state (paying, trial, grace, closed, and "no
+    subscription" for pre-12.1 test data), new this week and suspended. The
+    states use the same rule as the merchant's dashboard, but looking never
+    records a lapse. The workspace figures gain links when 11.2's merchant
+    list exists.
+  - Test: `tests/platform-overview.test.ts` (staff only; each state counted
+    once; suspended counted apart; the pending count; no lapse recorded).
+
+- **11.1 Access — DONE (2026-09-29).**
+  - `User.isPlatformStaff` (migration `20260929150000_platform_staff`) is
+    granted and revoked only by `npx tsx prisma/platform-staff.ts
+    grant|revoke <email>` (and `list`), never from a screen.
+  - It is read fresh from the database on every request
+    (`lib/platform-staff.ts`), so revoking works at once. A test covers this.
+  - The console is `/platform` on the platform host: `proxy.ts` adds it to
+    `AUTH_ONLY_PREFIXES`, so a session is required, and `app/platform/layout.tsx`
+    answers non-staff with a plain 404.
+  - `platform` is now a reserved shop address. No existing shop used it.
+  - Platform decisions are written to the MERCHANT's audit log with the
+    staff member's id. `features/settings/activity.ts` shows `platform.*`
+    entries as the platform, never as a stranger's name and personal email.
+  - No impersonation, as planned.
+  - **To use it:** sign up normally, then run the grant command for that
+    email.
+
+  The original plan: A platform-staff flag on `User` (not a `Role` — roles belong to
+  one organization) and its own host or path, outside every tenant. Every
+  platform action is written to the audit log with the staff member's id. No
+  "log in as the merchant" in the first version, because impersonation needs its
+  own consent and audit design.
+- **11.2 Merchants — DONE (2026-09-29).** As shipped:
+  - `/platform/merchants` (sidebar → *Merchants*): every workspace newest
+    first, with tabs All / Active / Suspended (counts), a plan-state filter
+    (Paying, Free trial, In grace, Closed, No subscription) and search by
+    name, web address or any member's email — all in the URL, paginated
+    (25). Columns: merchant (web address, owner email, "Suspended" badge),
+    plan state + plan name, online-payments verification, stores, orders
+    this month (every channel, less cancelled), online takings this month
+    (successful `OrderPayment`s by `verifiedAt`, before Paystack's fee),
+    joined. A line under the toolbar says what the two figures count.
+  - `/platform/merchants/[organizationId]`: back link, name, Active /
+    Suspended and plan-state badges, "Payment details" (→ the verification
+    case) and Suspend / Restore. A summary (shop link, dashboard address,
+    plan with price and next date, verification, joined, customer contact),
+    figures (stores, products, orders this month, takings this month, orders
+    all time), members, billing history (`BillingTransaction`, 50 newest),
+    domain orders, and the suspension history.
+  - The plan state is `resolveAccess` (12.1), not a column, so the list
+    reads the cheap columns for every matching workspace, filters by state,
+    then loads stores/orders/takings/owners for the one page shown
+    (`features/platform/merchants.ts`). Fine to thousands of workspaces;
+    past that it wants a stored state. Nothing here records a lapse.
+  - The Overview's workspace figures now open this list, filtered to what
+    they count, and it gained a *Suspended* figure.
+- **11.3 Verification queue — DONE (2026-09-29).**
+  - `/platform/verification`: tabs for Waiting / Sent back / Approved / All,
+    with counts; waiting cases oldest first. Search by business name, shop
+    name or web address. Filters live in the URL and are paginated.
+  - `/platform/verification/[organizationId]`:
+    - the business facts and documents, each opened through a 5-minute signed
+      link that only works under the business it belongs to;
+    - the settlement account with the Paystack-resolved name;
+    - the payments contact and the history;
+    - Approve (AlertDialog, which warns if a document is missing) and Send back
+      (a reason dialog).
+  - **Not built:** telling platform staff that a new submission arrived — for
+    now someone checks the queue. An email to `PLATFORM_ADMIN_EMAIL` on submit
+    is the obvious next step.
+
+  The original plan: Review 10.8 submissions (our verification, not
+  Paystack's subaccount state), viewing documents through short-lived signed
+  URLs only: approve, or reject with a reason the merchant sees. **Approving
+  creates the merchant's Paystack subaccount** (10.3), and the result — active,
+  or the Paystack error — shows on the same screen.
+- **11.4 Suspend and restore — DONE (2026-09-29).** As shipped:
+  - **Enforced in `proxy.ts`**, for every page, server action and data
+    request: `getOrgStatus(slug)` (`lib/tenant/org-status.ts`, cached 15 s per
+    slug per instance; custom domains and the mobile `/s/{slug}` path read
+    it in their own lookup) —
+    - a suspended **admin** is rewritten to `/unavailable/workspace`. A
+      member sees the workspace name, the date, the reason staff wrote, that
+      nothing is deleted, who to write to (`PLATFORM_SUPPORT_EMAIL`, falling
+      back to `PLATFORM_ADMIN_EMAIL`), their other workspaces, and sign out.
+      A signed-in non-member sees only "This workspace is unavailable";
+    - a suspended **storefront** is rewritten to its root, where the layout
+      renders "{shop} is unavailable" and nothing else — a POST (server
+      action) lands there too and fails. Shoppers aren't told why;
+    - `DELETED` redirects to the platform, as an unknown shop does.
+    The data layer's own `status: 'ACTIVE'` filters (org context, catalogue,
+    `placeOrder` → `store-unavailable`) cover the seconds before the cache
+    turns over. Checked over HTTP against a production build: a suspended
+    shop's root and deep links, a POST, the member and non-member admin
+    pages, and a normal shop unaffected.
+  - `Organization.suspendedAt` + `suspensionReason` (migration
+    `20260930140000_organization_suspension`), cleared on restore.
+  - **Suspend** needs a reason (10–1,000 characters) the merchant will read,
+    in an AlertDialog that states the consequence; **Restore** has its own.
+    Each is a conditional update (a double click or two staff can't
+    double-apply), writes `platform.organization.suspended` / `.restored`
+    to the **merchant's** AuditLog (they see it in Settings → Activity) with
+    the reason, and emails the owners (`emails/workspace-suspension.tsx`,
+    reply-to the support address).
+  - The signed-in `/` redirect falls back to a suspended workspace rather
+    than onboarding, so a suspended owner lands on the explanation, not on
+    "create a shop". The workspace switcher hides deleted workspaces.
+  - `unavailable` is a reserved slug.
+  - **Not done, deliberately:** suspension doesn't cancel the plan — Paystack
+    keeps renewing a monthly plan while suspended (the dialog says so).
+    Decide whether a long suspension should pause billing. `DELETED`'s
+    retention is 13.8.
+  - Tests: `tests/platform-merchants.test.ts` (staff only; search by name,
+    email, web address; figures; plan filter; detail; reason required;
+    suspend → status, cache, audit, email, `placeOrder` refused, listed as
+    suspended, history; double-suspend refused; restore → cleared, audit,
+    email; double-restore refused) and `lib/tenant/reserved-slugs.test.ts`.
+- **11.5 Domain orders — DONE (2026-09-30).** As shipped:
+  - **`/platform/domains`** (console sidebar → *Operations* → Domains, with
+    a waiting count): tabs Waiting / Done / Failed / All; waiting work
+    oldest first with "Nh left" / "Nh overdue" against 24 hours, counted
+    from `DomainOrder.readyAt` (payment confirmed, or a connected domain's
+    records found). Only paid (or free connect) work appears — an order
+    whose checkout was never paid doesn't.
+  - **Renewals due**: registered domains expiring within 14 days or
+    expired-but-renewable, marked "Paid — renew at Namecheap" or "Not
+    renewed by merchant". **Namecheap balance** (added 2026-09-30): read
+    **live** from Namecheap's API (`namecheap.users.getBalances`, read-only,
+    cached a minute — `getAccountBalance` in `lib/domains/namecheap.ts`),
+    next to **what the waiting work will cost** (the quoted `usdPrice` of
+    paid registrations and renewals not yet done at Namecheap), with a
+    "top up at least $X" warning when it isn't enough. If Namecheap can't be
+    reached (credentials, or the server's IP not whitelisted), the reason is
+    shown and the last hand-entered figure stands in (audited in
+    `PlatformAuditLog`).
+  - **`/platform/domains/[orderId]`**: the checklist for its kind
+    (`STEPS_FOR`/`STEP_INFO` in `lib/domains/rules.ts` — register: register
+    at Namecheap with the merchant as registrant + record expiry, DNS, add
+    both hostnames at the host, check https; connect: DNS (auto-ticked by
+    the merchant's check; "Check DNS now"), host, https; renew: renew +
+    record the new expiry), the registrant (business name and payments
+    contact from 10.2, else the owner), the DNS records with copy buttons,
+    and **Mark live / Mark renewed** (refused until every step is ticked;
+    routes the shop, stores the expiry, emails the owners and payments
+    contact), **Mark failed** (a reason the merchant sees, emailed), and
+    **Record refund** (amount ≤ paid + Paystack reference, for a failed paid
+    order — refunds are done in Paystack's dashboard). Each decision is on
+    the merchant's AuditLog (`platform.domain.*`).
+  - The `PLATFORM_ADMIN_EMAIL` alert stays as the nudge and now links to
+    the queue; a morning digest of renewals due goes there too (below).
+
+  The original brief: A queue of paid domain work, oldest first, each with the
+  **time left against the 24-hour promise**. The kinds of work:
+  - **register** a new domain;
+  - **connect** a domain the merchant already owns;
+  - **renew** an expiring one.
+
+  Each order opens a checklist of the exact steps for its kind: register at
+  Namecheap with the merchant as registrant; set the DNS records; add both
+  hostnames at the host so the certificate is issued; check that
+  `https://` loads. Staff record the Namecheap expiry date as they go.
+  - **Mark live** sets the shop's storefront domain (12.6: the apex and
+    `www`, one canonical), stores the expiry date, and emails the merchant.
+  - **Mark failed** records a reason the merchant sees. A registration that
+    can't be done after payment is refunded by staff in Paystack's dashboard
+    (platform billing money — not the paused storefront refunds, 10.7), and
+    the refund is recorded on the order.
+  - **Every morning, a list of domains** expiring within 14 days that the
+    merchant has renewed but staff haven't yet renewed at Namecheap, and
+    those the merchant hasn't renewed.
+  - Staff see the Namecheap account's balance as a reminder to keep it
+    funded. It is entered by hand, since there's no API until 13.5.
+  - Replaces today's email to `PLATFORM_ADMIN_EMAIL` as the only record,
+    though the email stays as the alert.
+- **11.6 Payments — DONE (2026-09-30).** As shipped: **Console →
+  Operations → Payments** (`/platform/payments`, `features/platform/payments.ts`),
+  badge = everything needing a human (not stuck payments, which are mostly
+  abandoned checkouts), and the Overview's "Needs attention" lists each kind
+  with a link. Tabs, each with a line saying what it is:
+  - **Mismatched**: `OrderPayment` `MISMATCH` — Paystack says paid but for a
+    different amount/currency, to a different subaccount, or with a
+    platform share — showing asked-for vs reported. **Mark reviewed** with a
+    note (`reviewedAt/ById/Note`; the money and order don't change).
+  - **Unmatched**: new `UnmatchedPayment` — the webhook now records a
+    `charge.success` whose reference is neither a storefront attempt nor a
+    subscription checkout, and isn't a renewal (Paystack sends renewals with
+    the plan), and any dispute on a reference we never issued; one row per
+    (kind, reference); the shop is named when the subaccount is ours.
+    **Mark dealt with** with a note. Nothing is credited.
+  - **Disputes**: open `PaymentDispute`s, soonest deadline first
+    (responses happen in Paystack's dashboard).
+  - **Payout setup**: `ACTION_REQUIRED` / `DISABLED` accounts with Paystack's
+    reason, **Retry creating subaccount** and **Check with Paystack** (the
+    verification queue's actions), and a link to the case.
+  - **Stuck**: attempts still `PENDING` past the one-hour hold, last 30
+    days. **Check with Paystack** (one, or all on the page) —
+    `recheckPaymentForStaff`: settles exactly as the webhook would, and an
+    attempt Paystack has NO record of, past the hold, is closed
+    `ABANDONED`; one Paystack knows about is never closed.
+  - Migration `20260930200000_payment_review`. Tests:
+    `tests/platform-payments.test.ts` (unknown charge recorded once, renewal
+    left to billing, dispute on nothing recorded; staff only; each list;
+    stuck → paid / abandoned / left inside the hold; review and dealt-with
+    notes); `tests/paystack-webhook.test.ts` updated.
+  - Still no refund queue (10.7 paused) and no payout runs (Paystack settles).
+
+  The original brief: Stuck payments (attempts that never confirmed),
+  Paystack transactions that matched no attempt or the wrong subaccount (10.4),
+  open disputes (10.5) — refunds are paused (10.7) — and
+  subaccounts in `ACTION_REQUIRED` or `DISABLED` (10.3), with a "Retry
+  creating subaccount" action. There are no payout runs to show — Paystack
+  settles to merchants (10.1).
+- **11.7 Plans and pricing — DONE (2026-09-29).** As shipped:
+  - **Plans and pricing** (`/platform/plans`): the catalogue in merchants'
+    order, with each cycle's price and discount, features, limits,
+    workspaces on the plan, on sale or not, "Popular" and "Free trial plan"
+    badges; up/down buttons reorder (the whole list is renumbered, so ties
+    can't stall a move). "Recent changes" below lists the console's audit
+    trail.
+  - **The editor** (`/platform/plans/new`, `/platform/plans/[planId]`):
+    details, price (monthly + 6-month and yearly discounts, with a table of
+    what each cycle costs and works out to per month, before saving),
+    features (built ones only, from `FEATURES`), limits (a number or
+    unlimited). A new plan **starts off sale**; its key is made from the name
+    once and never changes. At most one plan is "Popular" — marking one
+    unmarks the rest.
+  - **Rules enforced on the server** (`features/platform/plans.ts`,
+    validation shared with the editor in `lib/billing/plan-edit.ts`):
+    - a price change says it reaches new subscriptions and plan changes;
+      current subscribers keep `Subscription.amount` and their Paystack plan;
+    - removing a feature from a plan with workspaces returns
+      `needsConfirmation` until the editor's AlertDialog (naming the count and
+      the features) confirms; they lose it on their next request;
+    - "Take off sale" (AlertDialog) keeps subscribers renewing; the free
+      trial's plan can't be taken off sale or deleted;
+    - **delete** exists only for a plan never subscribed to or charged — a
+      mistake, not a retirement.
+  - **Billing settings** (`/platform/settings`,
+    `features/platform/billing-settings.ts`): trial length (0 = no trial) and
+    plan (on-sale plans only), grace days (0–365), and naira per US dollar
+    with a "$10 domain costs ₦…" preview. The screen says a trial change
+    applies to new workspaces and a grace change to plans that end from now
+    on. Saved together; one audit entry with only what changed.
+  - **Audit:** a new `PlatformAuditLog` table (migration
+    `20260930120000_platform_audit_log`) for changes that belong to no one
+    merchant — `AuditLog` needs an organization. Written in the same
+    transaction as the change, with `{ before, after }` (or `changes` and,
+    on a reprice, every cycle's price before and after). Labels in
+    `lib/platform-audit.ts`.
+  - The console sidebar gained a *Billing* group: Plans and pricing, Billing
+    settings.
+  - Tests: `lib/billing/plan-edit.test.ts` (validation, prices, diffs, keys)
+    and `tests/platform-plans.test.ts` (staff only; create off sale with
+    prices and audit; field errors; reprice leaves a subscriber's amount;
+    feature removal needs confirmation then applies; one Popular; reorder;
+    on/off sale and the trial plan guard; delete only unused; settings saved
+    with a changes-only audit; range and on-sale checks). It restores the
+    shared catalogue and settings afterwards.
+  - Save transactions get a 20-second timeout: against Neon a save is ~8
+    sequential round trips, past Prisma's 5-second default.
+
+  The original brief:
+  - create, rename, reorder, highlight, hide or retire plans;
+  - set the monthly price, and the twice-yearly and yearly discounts, with the
+    resulting price per cycle shown before saving;
+  - tick which features (from the code registry, built ones only) and set
+    which limits each plan includes;
+  - set the **free trial**: its length in days, and which plan it gives (12.1);
+  - set the **grace period**: how many days a lapsed workspace's storefront
+    keeps taking orders — 10 by default, and 0 is allowed (12.1). The screen
+    says a change applies to subscriptions that lapse after it.
+
+  The rules:
+  - Saving a price change says it applies to new subscriptions and plan
+    changes, not to current subscribers (12.1).
+  - Removing a feature from a plan shows how many workspaces lose it, and asks
+    for confirmation.
+  - Every change is written to the audit log with before and after.
+  - Only platform staff can reach it.
+
+## Phase 12 — Ready for a first merchant — DONE (2026-09-30), see each part
+
+The gap: things a new merchant would hit in their first hour.
+
+- **12.1 Plans, prices and billing cycles — DONE (2026-09-29).** As shipped
+  (the decisions and the design it follows are kept below):
+  - **The catalogue is in the database.** `BillingPlan` (key, name, tagline,
+    monthly price, highlighted, sort order, `isOnSale`, `maxSeats`,
+    `maxWarehouses`), `BillingPlanPrice` (a row per plan and cycle: discount %
+    and the resulting amount) and `BillingPlanFeature`. Seeded by migration
+    `20260930090000_plan_catalogue`: **Starter ₦5,000/month** (10 members,
+    1 store), **Pro ₦45,000** (highlighted), **Enterprise ₦150,000**; every
+    plan **10% off every 6 months, 17% off yearly**. `api.access` is not sold.
+    `Organization.plan` and the `OrganizationPlan` enum are gone;
+    `Subscription.planId` points at the catalogue, and
+    `BillingTransaction` keeps `planId` + `planName` as a snapshot.
+  - **Rules in code, rows in the database.** `lib/billing/plans.ts` (pure):
+    `FEATURES`/`FEATURE_INFO` (label, description, built), `LIMIT_INFO`,
+    `CYCLES` (months, label, Paystack interval), `cyclePrice`, `periodEnd`
+    (a month-end start ends on the shorter month's last day), `NO_PLAN`.
+    `lib/billing/catalogue.ts` reads the rows: `listPlansForSale`,
+    `priceForCheckout` (on-sale plans only, priced on the server),
+    `loadEffectivePlan` (cached per request).
+  - **Access is one pure rule**, `lib/billing/access.ts`: `trial | active |
+    grace | lapsed | none`. A renewing plan gets 3 days for Paystack's renewal
+    to arrive; a cancelled or past-due one ends with its paid period.
+    `entitlementsFor(orgId)` applies it and **records the lapse the first
+    time it's seen** (`lapsedAt` + `graceEndsAt`, a claimed `updateMany`), so
+    the grace setting at that moment is fixed for that merchant. Grace counts
+    from when access ended, not from when someone looked.
+  - **Trial at signup, no card.** `startWorkspaceSubscription`
+    (`lib/billing/trial.ts`) runs inside `bootstrapOrganization`: a
+    `TRIALING` subscription on the trial plan for the trial days. An owner who
+    already had a trial on any workspace gets none: the new workspace starts
+    `INCOMPLETE`, lapsed, with no grace (nothing to lapse from). Defaults, in
+    `PlatformSetting` via `getBillingSettings()` until 11.7 adds the screen:
+    **14-day trial of Pro, 10 days' grace**.
+  - **Lapsed means:** the storefront layout shows "{shop} is closed for now"
+    (not an error), and `placeOrder` refuses with `store-closed` — the check
+    that counts. The dashboard shows `PlanEndedPage` for everything except
+    Settings → Billing, `/upgrade` and existing orders (`isOpenWhileLapsed`;
+    `/sales/orders/new` stays closed). `proxy.ts` passes the admin path as
+    `x-admin-path` for this. During a trial or grace a banner (`PlanNotice`)
+    gives the days left, with "Choose a plan" one click away for anyone who
+    can manage billing. The sidebar badge and workspace switcher show the plan
+    ("Pro · Trial", "Plan ended").
+  - **Paying reopens at once.** `applySuccessfulCharge` sets the plan, its
+    cycle and price, and clears any lapse; a renewal does the same. On a plan
+    change the previous Paystack subscription is disabled after the new one is
+    created, and its code is forgotten first so its "disabled" webhook can't
+    cancel the new plan. `subscription.disable` now only marks the
+    subscription cancelled — there is no fall back to a plan.
+  - **Paystack plans are keyed by (plan, cycle, amount)** in
+    `BillingPlanCode`: a new price creates a new Paystack plan; existing
+    subscribers keep renewing at theirs. A retired plan (`isOnSale: false`)
+    can't be bought but keeps its subscribers.
+  - **Screens:** `/upgrade` shows the cycles on sale (Monthly / Every 6
+    months / Yearly, "Save N%"), the monthly equivalent, the built features
+    and the limits, all from the catalogue; "Current plan" only for the plan
+    and cycle actually being paid for. Settings → Billing names the plan and
+    what it means now (trial end, grace deadline, renewal date and amount),
+    and cancel appears only for a paid plan.
+  - **Tests:** `lib/billing/access.test.ts` (states, tolerance, grace 0,
+    recorded deadline, what stays open, cycle prices, period ends, labels) and
+    `tests/billing-plans.test.ts` (trial at signup and none for a second
+    workspace, lapse recorded once, shop selling through grace then refusing
+    orders, payment reopening, a removed feature closing on the next request,
+    a new price → a new Paystack plan, a retired plan keeping subscribers).
+    `tests/helpers/plans.ts` gives test workspaces a plan (`givePlan`) and
+    removes billing rows (`dropBilling`; billing rows don't cascade).
+  - **Dev data:** workspaces without a subscription (old Free test orgs)
+    resolve to `none` — not locked, no features. `pynacode`'s Enterprise
+    period ended on 2026-09-02, so it is **lapsed**; buy a plan with a
+    Paystack test card to reopen it.
+  - **Left for 11.7:** editing plans, prices, features, trial and grace in the
+    console. The domain step in `/upgrade` is unchanged until 12.6.
+
+  **The original decision and design:**
+
+  **The decisions:**
+  - **There is no free plan.** Every workspace is on a paid plan.
+  - Plans bill **monthly, twice-yearly (every 6 months) or yearly** — the
+    intervals Paystack's plan API offers (`monthly`, `biannually`,
+    `annually`). Quarterly was dropped on 2026-09-29 because Paystack lists no
+    such interval. Twice-yearly and yearly each carry a discount on the monthly
+    price.
+  - The cheapest plan starts at **₦5,000 per month**.
+  - **Everything is configurable by platform staff in the platform console**
+    (11.7): the plans, their names and prices, each cycle's discount, which
+    features each plan includes, and its limits.
+  - The platform's only income is these subscriptions — no commission on sales
+    (10.1).
+
+  **What the code does today, and why it must change:**
+  - Plans are a Prisma enum, `OrganizationPlan` (`FREE | STARTER | PRO |
+    ENTERPRISE`), used on `Organization.plan`, `Subscription.plan`,
+    `BillingPlanCode` and `BillingTransaction`.
+  - Prices, features and limits are TypeScript constants in `PLANS`
+    (`lib/billing/plans.ts`), so none of it can be edited from a console.
+  - `BillingCycle` is `MONTHLY | YEARLY` only. The yearly price is hard-coded as
+    ten months (`getYearlyPrice`).
+  - **Free is load-bearing:**
+    - it is the column default;
+    - a lapsed subscription falls back to it — lazily in
+      `getOrganizationEntitlements`, and on `subscription.disable` in the
+      Paystack webhook;
+    - `/upgrade`, `PricingCards`, Settings → Billing and `cancelSubscription`
+      all branch on `'FREE'`.
+
+  **The build:**
+  - **Plans move into the database.**
+    - `BillingPlan`: key, name, tagline, monthly price, highlighted, sort
+      order, active or retired.
+    - The price per cycle, either as a row per plan and cycle or as columns.
+      Each cycle holds its discount percentage and the resulting amount, shown
+      to the merchant as the price and as "save N%".
+    - Its features: the plan↔feature rows.
+    - Its limits: seats and stores.
+    - `Organization`, `Subscription` and `BillingTransaction` point at a plan
+      id instead of the enum.
+    - `BillingTransaction` also keeps a snapshot of the plan name, cycle and
+      amount charged, so history reads correctly after a plan is renamed or
+      repriced.
+  - **Feature keys stay in code.** A feature is something the code gates on, so
+    `FEATURES` remains the registry. The console only chooses which plans
+    include which features; it cannot invent one. Each registry entry has a
+    label, a one-line description for the pricing page, and whether it is
+    **built** — `API_ACCESS` and TikTok are not (12.4), and the console won't
+    let an unbuilt feature be sold. Limit keys work the same way. `maxProjects`
+    goes with the Projects page.
+  - **Gating keeps its call sites.** About 50 files use `hasFeature`,
+    `requireFeature`, `getPlanLimit` or the `FEATURES` keys. They keep the same
+    functions; only the source changes:
+    - `getOrganizationEntitlements` loads the org's plan, features and limits
+      once per request (it is already `cache`d);
+    - `planHasFeature` and `getPlanLimit` read that instead of `PLANS`;
+    - `PLAN_ORDER` / `isPlanAtLeast` become the plan's sort order.
+  - **Twice-yearly.** Add a six-month cycle to `BillingCycle` (e.g.
+    `BIANNUAL`), mapped to Paystack's `biannually` plan interval, as `YEARLY`
+    maps to `annually` in `ensurePaystackPlan`. The period end is +6 months, in
+    both `apply-charge.ts` and the renewal branch of the Paystack webhook,
+    which today treats anything not `YEARLY` as a month. The screens call it
+    "Every 6 months", never "biannual", which people read both ways.
+  - **Price changes and Paystack plans.**
+    - `ensurePaystackPlan` caches one Paystack plan per (plan, cycle) in
+      `BillingPlanCode`. Once a price can change, that key is wrong: cache per
+      (plan, cycle, amount) and create a new Paystack plan when the amount
+      changes.
+    - **Existing subscribers keep their price until they change plan or
+      cycle.** Changing a price in the console must say so. Verify whether
+      Paystack can move existing subscriptions to a new amount, and don't use
+      that without a deliberate decision to reprice everyone.
+  - **Retiring a plan.** A plan with subscribers can be hidden from sale but
+    not deleted. Its subscribers renew on it until they change plan.
+  - **No free plan means "no plan" is a real state.** Decided 2026-09-29:
+    - **Free trial at signup.** A new workspace starts on a trial of a paid
+      plan for a number of days.
+      - Both the **trial length** and **which plan the trial gives** are set in
+        the console (11.7).
+      - The code has no trial today, so this needs a `TRIALING` subscription
+        status with `trialEndsAt`.
+      - One trial per workspace, and a workspace created only to restart a
+        trial is not given another. Decide how that is detected; the owner's
+        user account is the obvious key.
+      - The dashboard shows the days left, and "Choose a plan" is always one
+        click away.
+      - **No card is taken to start a trial.** The merchant pays when they
+        choose a plan, through the existing Paystack checkout.
+    - **Lapsing.** A subscription lapses when:
+      - it was cancelled and its period has ended;
+      - renewals keep failing (`PAST_DUE`, after Paystack's retries — verify
+        when Paystack gives up);
+      - a trial ends without a plan being bought.
+
+      Then **the storefront keeps taking orders for a grace period, 10 days by
+      default**:
+      - the grace period is set in the console (11.7), and **0 is allowed**,
+        meaning the storefront closes the moment the subscription lapses;
+      - it is one platform-wide number, read at the moment of lapse and stored
+        on the subscription (`graceEndsAt`), so changing the setting later
+        doesn't move a merchant's deadline;
+      - after it, the storefront shows a closed page — not an error — and
+        takes no orders. Nothing is deleted, and buying a plan reopens it at
+        once;
+      - all of this replaces today's silent fall back to `'FREE'`, in
+        `getOrganizationEntitlements` and in the `subscription.disable` branch
+        of the Paystack webhook.
+    - **The admin while lapsed:**
+      - during grace, everything works, under a banner giving the days left;
+      - after grace, the admin opens only to billing, and to reading and
+        finishing orders already placed — dispatch, delivery, refunds —
+        because those customers have paid;
+      - it never locks the owner out of paying.
+
+      Suspension (11.4) is separate, set by platform staff, and closes both
+      the admin and the storefront.
+    - **Existing workspaces on `FREE` are test data** and will be deleted before
+      launch. **No migration or fallback is built for them.** Once they're gone,
+      `FREE` is removed from the schema outright.
+  - **Screens that read the catalogue:** `/upgrade` (`PricingCards`,
+    `CheckoutSummaryStep`, `UpgradeWizard`), Settings → Billing, the public
+    pricing page (12.3), and onboarding. Each shows the three cycles (monthly,
+    every 6 months, yearly), with the saving named against paying monthly. None hard-codes a plan name, a price
+    or "Free".
+  - **Tests:**
+    - each cycle's price and period end;
+    - a console price change leaving current subscribers' charge unchanged and
+      creating a new Paystack plan;
+    - a feature removed from a plan closing its pages on the next request;
+    - a retired plan still renewing;
+    - a new workspace starting a trial of the console's plan and length, and
+      a second workspace by the same owner not getting another;
+    - a lapsed workspace's storefront taking orders until `graceEndsAt` and
+      refusing them after, with grace 0 closing it immediately;
+    - changing the grace setting not moving an existing `graceEndsAt`;
+    - buying a plan reopening the storefront at once;
+    - no code path that yields `'FREE'`.
+- **12.2 One name — DONE (2026-09-30), with a working name.** **Notely** at
+  `getnotely.io`, chosen by the owner "for now" while the final name is still
+  being decided — so the point of the work is that renaming again is one edit.
+  As shipped:
+  - `lib/brand.ts`: `PLATFORM_NAME = 'Notely'`, `PLATFORM_DOMAIN`,
+    `PLATFORM_OPERATOR` ("Pynacode") and its CAC registration line. Every
+    surface people read takes the name from there: page titles, auth and
+    onboarding screens, the console, platform emails, the social-commerce
+    and payments wording that used to say "MansaaS" in the text, and the
+    Terms and Privacy Policy (≈80 hard-coded mentions, now the constants;
+    their canonical URLs too). AGENTS.md now says never to type the name.
+  - The mobile app's **display name** is Notely (Capacitor config, Android
+    strings, iOS `CFBundleDisplayName`, the offline page); its **id stays
+    `com.mansaas.app`**.
+  - **Deliberately not renamed** — identifiers nobody reads, where a change
+    would break live data: browser storage keys (`mansaas:sf:…`, saved bags
+    and consent), token issuers/audiences and the social-token key salt
+    (would sign people out / make stored tokens unreadable), the Cloudinary
+    folder (`mansaas/{org}/…`, existing images and ownership checks),
+    billing references (`mansaas_…`), the subaccount metadata, the npm
+    package name and the app id. Listed in `lib/brand.ts`.
+  - New Paystack plan objects are named "Notely …"; existing ones keep their
+    old name in Paystack's dashboard (they're keyed by price and reused).
+  - **When the final name is chosen:** change `lib/brand.ts`, the four native
+    display-name spots (see MOBILE.md), the legal pages' "Last updated"
+    date, and the production hosts/env; nothing else.
+- **12.3 A public front door — DONE (2026-09-30).** As shipped:
+  - **`app/(marketing)/`** with its own header (Features, How it works,
+    Pricing, Questions; Sign in; Start free trial; a menu on phones) and
+    footer. `/` is the landing page; signed-in visitors are still sent to
+    their shop by proxy.ts. `/pricing` is added to `PUBLIC_PATHS`.
+  - **Landing page**: hero with the dashboard drawn in HTML
+    (`components/marketing/product-visuals.tsx` — the product's own tokens
+    and badges, a sample fabric shop, figures marked as illustration);
+    where you can sell; three feature rows (stock by branch, the online shop
+    that knows where it ships from, payments straight to your bank with a
+    worked example); the rest of the day-to-day; how it works (the real
+    onboarding steps); a pricing band; questions; a last call to action.
+  - **Every changeable number is read, not typed**: trial length and plan,
+    the cheapest monthly price and grace days come from the catalogue and
+    billing settings (`lib/marketing/offer.ts`), re-read every 10 minutes,
+    with number-free wording if the database can't be read. No
+    testimonials, customer counts or logos — none we could stand behind yet.
+    "Recommended", not "most popular".
+  - **Pricing** (`/pricing`): the three cycles with the saving and the
+    monthly equivalent, plan cards and a comparison table (built features
+    only), billing questions (card through Paystack; renews at the price
+    signed up at; change or cancel any time; grace; domains).
+  - Sign-up (`/register`) says "Start your free trial", and the auth and
+    onboarding screens use the site's wordmark. **Fixed:** the live sign-up
+    (`app/(auth)/register/actions.ts`) never sent the 12.5 confirmation
+    email — it went from an unused `features/auth/actions.ts`, now deleted.
+  - `PLATFORM_CONTACT_EMAIL` added to `lib/brand.ts` (footer and legal pages).
+  - Checked in a real browser (desktop and phone, production build).
+- **12.4 Nothing half-there on screen — DONE (2026-09-30).** The two-systems
+  question was settled on 2026-09-30: **keep both** — the invoice pair is how a
+  business dispatches and takes back goods sold on account (B2B), which online
+  orders don't cover — and **merge the screens**. As shipped:
+  - **Projects removed.** The page and its sidebar entry are gone, and so is the
+    Project Manager system role. `project.*`, `task.*` and
+    `inventory.requisition.*` permissions are hidden by `isBuiltPermission`
+    (`lib/permissions.ts`), which the roles matrix (`lib/permission-labels.ts`)
+    and new-workspace bootstrap both use. The `Project` tables stay, so no data
+    is dropped. `maxProjects` had already gone when plans moved to the database
+    (12.1).
+  - **One "to send" list.** Sales → Fulfillment
+    (`features/sales/work-lists.ts` → `listToSend`) merges online-order parcels
+    (`OrderShipment`, "open" by the same rule `sendShipment` enforces: pending
+    parcel, order confirmed/processing, paid or pay-on-delivery) with invoice
+    fulfilments (open = not shipped or cancelled). There are tabs for To send
+    (n), Sent and All, a source filter, search and pagination, all in the URL.
+    Each row wears a source badge and opens its own record: the order page, or
+    the invoice fulfilment.
+  - **One returns list.** Sales → Returns (`listAllReturns`) works the same way:
+    "Waiting on you (n)" (order returns requested/approved, invoice returns
+    requested) and "All returns". The old `?view=invoices` link still works and
+    maps to `source=invoice`.
+  - **Transfer hold is real config.** `UNPAID_ORDER_HOLD_MINUTES` and
+    `TRANSFER_HOLD_HOURS` live in `lib/storefront/orders/holds.ts`. Nothing
+    outside the mock layer imports `lib/storefront/mock/checkout` for them now.
+  - **API access and TikTok:** checked, not advertised. Pricing lists only
+    `built` features, and TikTok is offered in neither the composer, the
+    history filter nor on connect. No change was needed.
+  - **Invoices → Overdue.** `?view=overdue` filters in the database with the
+    same rule as the overview count (sent or part-paid, due date past). The
+    Sales overview tile and the list's "n invoices are overdue" line both link
+    to it, and an empty Overdue view says so and offers "Show all invoices".
+  - Tests: `tests/sales-work-lists.test.ts` covers the merge, open/done, the
+    source filter, search, another store's records being a miss, and the
+    overdue rule.
+- **12.5 Merchant onboarding, from sign-up to first sale — DONE (2026-09-29),
+  except product CSV import (14.2), which follows as its own step.** The
+  *proposed* choices were confirmed on 2026-09-29: new shops start closed;
+  the form asks what they sell AND where; reminders run from a daily cron
+  route; CSV import straight after. As shipped:
+  - **Email first.** `signUp` sends a confirm link (`lib/email-verification.ts`:
+    SHA-256 of a 256-bit token in `VerificationToken`, 48 h, single use,
+    60-second resend cooldown). `/verify-email/[token]` confirms on a button
+    press — not on page load — so a mail scanner can't use the link up.
+    `/onboarding` shows "Confirm your email" (resend, sign out) until then,
+    and `createShop` re-checks. Google sign-in marks the address verified
+    (`events.signIn`), and so does accepting an invitation sent to it.
+    Invited staff get no link.
+  - **Create your shop** (`app/onboarding`): shop name; **web address**
+    prefilled from the name, checked as they type against every workspace
+    and `reserved-slugs.ts`, with up to three free suggestions (city first)
+    when taken or reserved — never suffixed; the real shop and dashboard
+    hosts from `lib/tenant/urls.ts`, and a line that it can't change later;
+    **what they sell** (`lib/onboarding/business.ts`, with starter
+    categories they may tick — only ticked ones are created) and **where**
+    (online / in person / both); **first store** name, state and city; the
+    trial it comes with (or "you'll choose a plan" for a repeat owner).
+    `bootstrapOrganization` (moved to `lib/onboarding/bootstrap.ts`) creates
+    the org (closed), roles, owner, store with its place, categories and the
+    subscription in one transaction. A welcome email follows. The unused
+    `features/org` `createOrganization` (which suffixed silently) is gone.
+  - **The setup guide** (`lib/onboarding/setup-steps.ts` pure,
+    `setup-guide.ts` reads the records, batched): store place → sells
+    online → delivery (`HAS_LIVE_DELIVERY_WHERE`) → a published product in
+    stock at an `ONLINE_SUPPLY_WHERE` store → payment (online payments
+    active or a bank account — recommended, not required, since pay on
+    delivery always works) → Open your shop; optional: logo, store pages,
+    own web address. In-person shops see their product and payment steps
+    first. Pinned on the dashboard for Owners/Admins until complete or
+    hidden; always at **Settings → Setup guide**. Each step links to its
+    screen; without the permission, "An owner or admin can do this".
+  - **Opening** (`Organization.storefrontOpen`, existing shops default open;
+    migration `20260930160000_merchant_onboarding`): a closed shop shows
+    "{shop} is opening soon" (or "closed for now" if it has opened before),
+    its catalogue reads empty (`lib/storefront/opening.ts`, used by the one
+    catalogue seam), it's out of robots/sitemap/metadata, and `placeOrder`
+    refuses `store-not-open`. The merchant's **team** sees the real shop
+    with a preview banner (the root-domain session reaches the storefront).
+    "Open your shop" (AlertDialog, with a preview link) is refused on the
+    server until every required step is done; "Close shop" in Settings.
+    Both are audited (`settings.storefront.opened` / `.closed`).
+    Order of closed states: suspended (11.4) → plan ended (12.1) → not open.
+  - **Reminders** (`lib/onboarding/reminders.ts`,
+    `/api/cron/onboarding-reminders`, `vercel.json` daily at 08:00 UTC):
+    setup on trial days 3 and 7 while not open (listing what's left), trial
+    ending in 3 days and 1 day. Each claimed once in `OnboardingEmail`
+    before sending; a failed send releases it.
+  - **Platform:** the merchant list has a "Shop setup" column (Open, or
+    "Not open · 2 of 4" with the next step) and the merchant page lists the
+    steps.
+  - Fixed on the way: the storefront sitemap passed the shop to
+    `listProducts` outside `store`, so it relied on the proxy header.
+  - **Not built:** "Import from a spreadsheet" (14.2, next). The domain step
+    links to Settings → Billing until 12.6.
+  - Tests: `lib/onboarding/onboarding.test.ts` (addresses, categories, step
+    order and readiness, reminder timing, email wording) and
+    `tests/onboarding.test.ts` (link single-use/expiry/cooldown; unverified
+    refused; taken/reserved refused with suggestions, never suffixed; the
+    shop created whole and closed; nothing created when a step fails; each
+    step done/undone with the records; closed shop empty to shoppers but
+    not the team, no sitemap, no order; open refused until ready then
+    allowed and audited, close; guide only for owners/admins; reminders
+    once each).
+
+  The original proposal:
+
+  **The gap.** The whole of onboarding today is one field:
+  - `signUp` (`features/auth/actions.ts`) creates the user and signs them in,
+    with no email verification.
+  - `/onboarding` asks only for an "Organization name". `bootstrapOrganization`
+    (`lib/onboarding.ts`) then creates the org, its system roles and the Owner
+    membership, and drops the merchant on an empty dashboard.
+
+  Everything after that is left for the merchant to discover across six
+  screens, in an order the code depends on but never states. To take a first
+  online order, a merchant must, unprompted:
+  1. **create a store** — none is created at onboarding, yet stock,
+     `sellsOnline`, delivery and the till all hang off one;
+  2. **give it a city and state** (9.1), or it can't sell online;
+  3. **switch on "Sells online"**;
+  4. **set up delivery for that store** (9.2), or its stock is left out of the
+     catalogue;
+  5. **add a product** with a price, a photo and stock at that store, then
+     publish it;
+  6. **set up a way to be paid** — Phase 10's verification and subaccount,
+     and/or a bank account for transfers.
+
+  The code also has these faults:
+  - **The web address is chosen for them, badly, and forever.**
+    `createOrganizationAction` turns the name into the slug and, if it's
+    taken, silently appends a random suffix (`acme-x7k2`). That slug becomes
+    the admin host and `shop-{slug}` — the storefront's address — and an
+    existing org is never renamed (AGENTS §7). The merchant never gets to
+    choose it.
+  - **The onboarding page is out of date.**
+    - Its preview says `app.safebase.com/{slug}` — the old name, and a
+      path-based address the platform doesn't use; the real one is
+      `getStorefrontUrl`.
+    - Its logo is a hard-coded "S", and its placeholder is "Acme
+      Manufacturing Ltd" for a platform aimed at shops.
+    - Phase 0 renamed the platform everywhere except here.
+  - **The storefront is public from the first second.** `shop-{slug}` answers,
+    appears in its own sitemap and can be indexed while it has no products,
+    no delivery and no way to pay. No setting says "not open yet".
+  - **Nothing welcomes the merchant or tells them what to do next.** There is
+    no welcome email, no setup guide on the dashboard, and the dashboard's
+    empty states assume an established shop. The per-product checklist in the
+    product editor is the only guidance of its kind.
+
+  **The build:**
+  - **Sign-up** (with 12.3's public front door):
+    - verify the owner's email before the workspace is created — moved here
+      from 14.5, because a workspace, a trial and a subaccount shouldn't hang
+      off an unconfirmed address;
+    - Google sign-up stays available.
+  - **Create your shop** — replacing the single field, in one short form:
+    - **Shop name.**
+    - **Web address, chosen by the merchant.** Prefilled from the name, and
+      checked live against existing orgs and `reserved-slugs.ts`. When the
+      address is taken, the form says so and suggests alternatives; it never
+      appends a suffix silently. The preview shows the real storefront and
+      admin addresses from `lib/tenant/urls.ts`. A line says the address
+      can't be changed later, because links customers save must keep working.
+    - **What they sell**, and whether they sell in person, online or both
+      (*proposed*). Used only to choose which setup steps to show first, and
+      to seed suggested categories the merchant can accept or skip. It never
+      creates products or storefront content (Storefront data rules: never
+      invent a merchant's content).
+    - **Their first store**: name, city and state (the 9.1 place), created in
+      the same transaction as the org, so the merchant never meets "create a
+      store first".
+    - The currency stays NGN (Settings → General).
+    - The trial (12.1) starts here, and the form says how many days and on
+      which plan.
+  - **The setup guide on the dashboard** — a "Get your shop ready" checklist
+    pinned above the dashboard until done or dismissed, then reachable from
+    Settings:
+    - **Each step is derived, never ticked by hand.** It reads the real
+      records — store place, `sellsOnline`, delivery per store
+      (`ONLINE_SUPPLY_WHERE`), a published product with stock online,
+      payment setup (10.2/10.8) or a bank account, logo, store pages — so it
+      can't claim something is done that isn't. Same principle as the product
+      checklist.
+    - **Each step links to the one screen that does it**, and says in one
+      line why it matters ("Shoppers can't check out until your store can
+      deliver or offer pickup").
+    - The order follows the dependencies above. Steps are optional where the
+      product allows it (a logo, store pages, social).
+    - Only members with the relevant permission see a step as actionable;
+      others see who can do it.
+    - One function computes it, and the dashboard and the storefront's "not
+      open yet" state both read that same function.
+  - **Opening the storefront** (*proposed*):
+    - A new storefront starts **not open**: it shows the shop's name and
+      "Opening soon", lists nothing, is left out of sitemap and robots, and
+      takes no orders.
+    - The merchant opens it with an "Open your shop" button, which is offered
+      once the required steps are done. The button says what shoppers will
+      see, and a preview link lets the merchant look first.
+    - It can be closed again later, e.g. for a holiday.
+    - This is a new `Organization` setting. Closing is separate from the
+      lapsed-subscription closure (12.1) and suspension (11.4); the
+      storefront says the right thing for each.
+  - **"Use your own web address"** is an optional guide step, after the
+    required ones. It links to Settings → Domain (12.6), explains in one line
+    what it gives ("Customers find you at yourshop.com"), and during the trial
+    shows what's available then (12.6 decides). It's never a required step and
+    never part of paying for a plan.
+  - **Getting products in.** The guide's product step offers "Add a product"
+    and "Import from a spreadsheet". **Product CSV import (14.2) moves before
+    launch for this reason**: a shop arriving with 300 products won't type
+    them in.
+  - **Emails:**
+    - a welcome email on shop creation, in the platform's name, with the
+      storefront and admin addresses and the first step;
+    - a reminder if setup stalls (*proposed*: day 3 and day 7 of the trial,
+      only while steps remain);
+    - trial reminders before the trial ends (12.1).
+  - **Invited staff** already have their own path (`/invite/[token]`). They
+    skip shop creation and land on the dashboard without the setup guide
+    unless they're an Owner or Admin.
+  - **Platform view:** 11.2's merchant list shows setup progress per merchant,
+    so platform staff can see who is stuck and on which step.
+
+  **Tests:**
+  - an address that is taken or reserved is refused with suggestions, never
+    suffixed;
+  - the org, its first store with its place, the roles, the Owner membership
+    and the trial are created together or not at all;
+  - each guide step reflects the real records, and becomes done or undone as
+    they change;
+  - a not-open storefront lists nothing, takes no order, and is left out of
+    the sitemap;
+  - "Open your shop" is refused while a required step is missing;
+  - an invited member never sees shop creation.
+
+- **12.6 Custom domains — fulfilled manually — DONE (2026-09-30).** The two
+  open proposals were confirmed on 2026-09-30: **`www` is canonical** (the
+  bare domain redirects to it), and **connecting an existing domain is
+  allowed during the trial**. As shipped:
+  - **Data** (migration `20260930180000_shop_domains`): `ShopDomain` (one
+    per shop: hostname, canonical www host, REGISTERED | CONNECTED,
+    PENDING | LIVE | EXPIRED | DISCONNECTED | FAILED, registrar expiry,
+    DNS-check state), `DomainReminder` (each reminder once per expiry
+    cycle), and `DomainOrder` gains `RENEW`, `readyAt`, the four step
+    timestamps, the recorded expiry, `failureReason` and refund fields.
+    `Organization.customStoreDomain` (the www host) is still the one routing
+    lookup, set and cleared only by `lib/domains/shop-domain.ts`.
+  - **Routing** (`proxy.ts`, `resolveTenant`): a merchant's domain serves the
+    **storefront only** — `customAdminDomain` is no longer resolved, so a
+    dashboard never opens on it. The bare domain 308s to `www`; the
+    platform's `shop-{slug}` address 308s to the live custom domain (the
+    mobile origin is left alone). Checked over HTTP against a production
+    build. `getStorefrontUrl(slug, path, customDomain?)` and the server's
+    `storefrontUrlFor(slug)` give the custom address only while it's live;
+    the storefront's metadata/canonical, sitemap, robots, product JSON-LD,
+    invoice links and the admin's "view shop" links use it.
+  - **Settings → Domain** (`/settings/domain`; sidebar, the setup guide's
+    optional step, a link card on Billing — the Billing card and the
+    `/upgrade` domain step are gone, so upgrading is plan → pay):
+    - **Get a new domain**: `.com` search (other endings explained), up to
+      4 available alternatives when taken, "₦X for the first year · renews
+      at ₦Y a year · usually ready within 24 hours" (renewal price from
+      Namecheap's renew pricing), a confirm dialog, then Paystack. Locked
+      with "See plans" on the trial; the server refuses too. Re-quoted and
+      re-checked (`.com`, not held by another shop) before charging.
+    - **Connect a domain you own** (free, trial allowed): the A and CNAME
+      records with copy buttons, short guides (Namecheap, GoDaddy,
+      Whogohost, Cloudflare), and **Check my domain** (our DNS lookup, per
+      record, plain words); once right it becomes an `EXISTING` work order.
+    - A **timeline** (Paid/Records found → Registering → Connecting → Live)
+      that follows staff's ticks, with an apology past 24 hours.
+    - **Live**: the address; for registered domains the expiry, the renew-by
+      date, the renewal price and **Renew** (a billing charge → `RENEW`
+      order); banners from 30 days before the deadline, past the deadline,
+      in grace (renew restores), in redemption (contact us; the platform
+      never pays the fee). **Remove this domain** (AlertDialog) takes it out
+      of routing at once.
+    - A dashboard "needs attention" line from 30 days before the deadline.
+  - **Daily job** (`lib/domains/lifecycle.ts`, `/api/cron/domain-lifecycle`,
+    07:00 UTC in `vercel.json`): expires lapsed registrations (out of
+    routing, shop back on its platform address); reminders to the owner and
+    payments contact 30/14/7/3/1 days before the deadline, on expiry day,
+    and weekly in grace — none once renewal is paid; the staff digest.
+  - `CUSTOM_DOMAIN_CNAME_TARGET` / `CUSTOM_DOMAIN_APEX_IP` set the records
+    merchants add (Vercel's by default).
+  - Tests: `lib/domains/rules.test.ts` (names, www, suggestions, records,
+    deadline/stages, reminder schedule, timeline/overdue, email wording) and
+    `tests/shop-domains.test.ts` (connect on the trial while buying is
+    refused; another shop can't claim it; queued only once DNS is right;
+    staff checklist gates Mark live; apex→www redirect, storefront-only,
+    `storefrontUrlFor`; remove stops routing; buying charges the quoted price
+    and only joins the queue once paid; expiry recorded; reminders once,
+    none after renewal is paid, double renewal refused; expiry takes it out
+    of routing; failed with reason and a recorded refund; staff only);
+    `tests/tenant-resolution.test.ts` updated for storefront-only.
+  - **Not built:** paying the redemption (recovery) fee online — shown as
+    "contact us"; Namecheap's grace/redemption lengths are the typical 30 +
+    30 days, still to confirm; automation through Namecheap's API is 13.5.
+    Local dev can't route a custom domain (unknown hosts are the mobile
+    origin there).
+
+  The original decision and design:
+
+  **Decided:**
+  - **Registration and set-up are done by hand** by the platform team, within
+    24 hours of payment (11.5's queue). Automation through Namecheap's API is
+    after launch (13.5).
+  - **Renewal is the merchant's to pay.** The platform reminds them as expiry
+    nears; the merchant sees the expiry date on the platform and renews there;
+    the platform team renews at Namecheap. They never see how it's done.
+  - **Not renewed means the custom domain stops working.** The shop stays
+    reachable on its platform address (`shop-{slug}.…`) — only the custom
+    address goes.
+  - **Confirmed by the owner, 2026-09-29:**
+    - the domain opens **the storefront only**, and the dashboard stays on the
+      platform address;
+    - **buying a domain needs a paid plan**;
+    - **the merchant is recorded as the domain's owner** (registrant);
+    - **`.com` only** at launch;
+    - the renewal deadline and reminders follow common registrar practice
+      (below).
+
+  **What's there today, and why it changes:**
+  - A domain is chosen as a step of the plan upgrade (`/upgrade`: plan →
+    domain → pay) or from a card on Settings → Billing. Payment is one Paystack
+    charge on the platform's billing account (`lib/billing/checkout.ts`),
+    priced from Namecheap's dollar price at an exchange rate stored in platform
+    settings. Then an email goes to `PLATFORM_ADMIN_EMAIL`, and a person edits
+    the database.
+  - What's wrong with it for a merchant:
+    - asked at the moment of paying for a plan, where every extra decision
+      loses people;
+    - hidden under Billing, when an address is part of the shop's identity;
+    - "we'll reach out" and then silence;
+    - the first-year price only, with no renewal price, no expiry date, no
+      renewal at all;
+    - nothing decides which address the domain serves;
+    - the Billing card shows "Active" only when a *dashboard* domain is set.
+
+  **Where a merchant meets it:**
+  - **Settings → Domain**, a page of its own. It is not in Billing, and not a
+    step of upgrading: remove the domain step from `/upgrade` and the card from
+    Settings → Billing, which links here instead.
+  - **An optional step in 12.5's setup guide:** "Use your own web address".
+
+  **What the domain serves (decided): the storefront only.**
+  - `pncollections.com` and `www.pncollections.com` both open the shop; one
+    is canonical (*proposed*: `www.`), and the other redirects to it.
+  - The old `shop-{slug}.…` address permanently redirects to the canonical
+    one, so saved links keep working and search engines see one shop.
+  - **The dashboard stays on `{slug}.{PLATFORM}`.** Staff sign-in cookies are
+    scoped to the platform's domain (`auth.config.ts`), so a dashboard on the
+    merchant's domain would loop at sign-in. Shoppers never see the dashboard
+    address.
+  - `customAdminDomain` stops being offered.
+  - Every link we generate uses the canonical address once the domain is
+    live: `getStorefrontUrl`, emails (some already use `customStoreDomain`),
+    "view store", social posts, the sitemap and the canonical tag.
+
+  **Buying a new domain** (Settings → Domain → "Get a new domain"):
+  1. **Search**, `.com` only (decided), using the existing Namecheap
+     availability check. When a name is taken, suggest close `.com`
+     alternatives (with or without a hyphen, with "ng", "shop" or "store"
+     added). Any other ending typed in is explained ("We offer .com addresses
+     only for now"), not refused silently.
+  2. **An honest price, in naira only:**
+     - "₦X for the first year · renews at ₦Y a year" — the renewal price from
+       Namecheap's pricing, renew category;
+     - what's included (the padlock, the `www.` version);
+     - "Usually ready within 24 hours".
+  3. **Pay** through the existing billing checkout, domain-only (the
+     `purchaseDomain` path). The server quotes again before charging, as it
+     does today.
+  4. **A status timeline on the page:** Paid → Registering your domain →
+     Connecting it to your shop → Live. Each step moves as staff tick it in
+     11.5, and there's an email when it's live. If it's past 24 hours, it
+     says so and apologises, rather than going quiet.
+  5. **If it can't be done** (the name was taken in between, Namecheap
+     refuses), the page says why and that the money is being returned.
+     Staff refund it and record it (11.5).
+
+  **Connecting a domain the merchant already owns** (free):
+  - The page shows the exact records to add at their registrar, with copy
+    buttons and short guides for common registrars. A **"Check my domain"**
+    button looks the DNS up from our side and says what's missing, in plain
+    words.
+  - Once the records are right it becomes a work order in 11.5 (staff add the
+    hostnames at the host so the certificate is issued), and shows the same
+    timeline.
+  - There's no expiry or renewal on our side: their registrar handles that.
+    We only warn if the DNS stops pointing at us.
+
+  **Expiry and renewal (registered domains only):**
+  - The domain page always shows the **expiry date**, the **renewal price**
+    and a **Renew** button. The date is the one staff recorded from Namecheap.
+  - **The renewal deadline is 7 days before Namecheap's expiry** (decided,
+    following common practice for manually fulfilled renewals), so staff
+    always have a week to renew after the merchant pays.
+  - **Reminders** (decided, following common registrar practice) by email to
+    the Owner and the payments contact:
+    - 30, 14, 7, 3 and 1 day(s) before the deadline;
+    - on the expiry day;
+    - once a week during the grace period.
+
+    Also a banner on the domain page, and a dashboard "needs attention" line
+    from 30 days out. Reminders stop the moment it's renewed.
+  - **Renewing** is a billing charge like buying. It creates a renew work
+    order in 11.5, which staff complete at Namecheap and then record the new
+    expiry date.
+  - **Past the deadline, the merchant can still renew until Namecheap's
+    expiry**, with a clear "renew now or your address stops working on {date}".
+  - **After expiry:**
+    - the custom domain is taken out of routing (status `EXPIRED`), and the
+      shop is served on its platform address again;
+    - the page says what happened and whether it can still be recovered. For a
+      `.com` there are three stages (Namecheap's current lengths and fees to
+      be confirmed):
+      - **grace period** (about 30 days): renewal at the normal price still
+        restores it;
+      - **redemption** (about 30 days more): the registry deletes it, and
+        getting it back costs Namecheap's redemption fee — tens of dollars —
+        on top of the renewal;
+      - then the name is released and anyone can register it.
+    - **Decided default:** the merchant can renew during grace at the normal
+      price; during redemption they're shown the recovery cost and can pay it
+      (staff do the recovery at Namecheap); **the platform never pays it on
+      their behalf**. After release, the name is gone;
+    - links we generate go back to the platform address.
+
+  **The trial and plans:**
+  - **Buying a new domain needs a paid plan** (decided). During the trial the
+    option is shown locked, explaining why and linking to the plans
+    (AGENTS §7).
+  - Connecting an existing domain during the trial (*proposed*) — free for
+    us, and a shop on its own address converts better. Not yet confirmed.
+  - When a subscription lapses (12.1), the custom domain follows the shop: it
+    shows the same closed page after grace.
+
+  **Who owns it (decided):** the merchant is recorded as registrant when
+  staff register it, using the business name and payments contact from 10.2.
+  If they leave the platform, they can ask for the domain to be transferred to
+  them.
+
+  **Data:**
+  - `DomainOrder` gains the kind `RENEW`, a `CONNECT` flow for existing
+    domains, and fulfilment steps with timestamps (for the timeline).
+  - A **per-shop domain record** holds:
+    - the hostname and canonical host;
+    - the status (`PENDING`, `LIVE`, `EXPIRING`, `EXPIRED`, `DISCONNECTED`);
+    - whether it was registered through us or connected by the merchant;
+    - the registrar expiry date and the renewal deadline.
+  - `Organization.customStoreDomain` stays the routing lookup
+    (`resolveTenant.ts`) and is set and cleared from that record, so routing
+    stays one indexed query.
+  - The dollar-to-naira rate moves from a hidden platform setting to the
+    console (11.7).
+
+  **Tests:**
+  - a purchase creates one paid order and a "Registering" timeline, and the
+    price shown equals the price charged;
+  - the apex and `www` both route to the storefront and one redirects to the
+    other; the old `shop-` address redirects to the canonical one;
+    `getStorefrontUrl` returns the custom address only while the domain is
+    live;
+  - a dashboard request never resolves on a merchant's domain;
+  - a renewal before the deadline creates a renew order; reminders go out on
+    the days chosen and stop once renewed;
+  - an expired domain stops routing while the platform address keeps
+    working;
+  - during the trial, connecting is allowed and buying is refused with the
+    reason;
+  - another shop can't claim a domain already connected or ordered.
+
+  **Still open:**
+  - which is canonical, `www` or the apex (*proposed*: `www`);
+  - connecting an existing domain during the trial (*proposed*: yes).
+
+  **Decided on 2026-09-29:** storefront only; a paid plan to buy; the
+  merchant as registrant; `.com` only; the 7-day renewal deadline; the
+  reminder schedule; the platform never pays a redemption fee.
+
+## Phase 13 — Production hardening — TODO
+
+The gap: what a live, multi-instance deployment needs that local development
+never showed.
+
+- **13.1 Scheduled jobs — DONE (2026-10-01).** Decided 2026-10-01: the
+  project is on **Vercel Hobby**, which only allows daily cron jobs (and fails a
+  deploy asking for more), so the two 15-minute jobs are called by
+  **cron-job.org** until the move to Pro, when they go into `vercel.json`
+  instead. Setup is in `docs/SCHEDULED-JOBS.md`. As shipped:
+  - **One registry**, `lib/cron/jobs.ts`: each job's title, plain description,
+    schedule, `everyMinutes`, its work, and a `describe()` that turns its
+    result into words. Every `app/api/cron/*` route is now three lines around
+    `cronRoute(key)` (`lib/cron/route.ts`: the constant-time bearer check,
+    then 500 on failure so the scheduler sees it too).
+  - **Every run is recorded** (`CronRun`, kept 30 days) by `runCronJob`
+    (`lib/cron/run.ts`), whichever scheduler started it, or when staff press
+    **Run now**.
+  - **Alerts** go to `PLATFORM_ADMIN_EMAIL`:
+    - a failed scheduled run emails at most every 6 hours while the job stays
+      broken, and once more when it works again (`CronAlert`);
+    - a failed manual run doesn't email;
+    - a job nobody is calling fails nothing, so after every run the OTHER jobs
+      are checked, and one that is late (three missed beats; a day plus two
+      hours for daily jobs) or has never run gets a "hasn't run" email. The
+      Vercel jobs watch the cron-job.org ones, and the other way round. The
+      rules are in `lib/cron/health.ts`.
+  - **Console → Scheduled jobs** (`/platform/jobs`): each job's state (Working
+    / Running / Failing / Not running / Hasn't run yet), when it last ran and
+    last worked, its last error, and Run now (refused while a copy is still
+    running). Recent runs can be filtered by job in the URL. It warns when
+    `CRON_SECRET` or `PLATFORM_ADMIN_EMAIL` is unset. The overview and the
+    sidebar count jobs that need a look.
+  - Tests: `lib/cron/health.test.ts`, and `tests/cron-runs.test.ts` (a fake
+    registry: recording, throttled alerts, recovery, overdue detection).
+    `tests/cron-runs.test.ts` also checks that registry, routes and
+    `vercel.json` agree, and that `vercel.json` stays daily-only while on
+    Hobby.
+- **13.2 Shared rate limits.** `lib/rate-limit.ts` is in-memory and says so, and
+  the Gemini, discovery and social publish quotas are counted per instance. On
+  serverless or with multiple instances none of them hold. Move them to a shared
+  store (e.g. Redis), keeping the current call signatures.
+- **13.3 Seeing failures.** Error tracking on server and client, structured logs,
+  an `/api/health` route and an uptime check on it, plus the webhook routes
+  (Squad, Paystack, Meta callback) alerting on repeated failures.
+- **13.4 Security headers.** A CSP (allowing only the analytics and pixel scripts a
+  merchant configured, per Phase 6), HSTS, frame and referrer policies in
+  `next.config.ts`. Remove the demo image hosts (`picsum.photos`,
+  `i.pravatar.cc`) from `images.remotePatterns`.
+- **13.5 Custom domains, automated — AFTER LAUNCH (moved 2026-09-29).** Launch
+  is manual (12.6 / 11.5). Afterwards, "staff approve, the app does the
+  clicking", through Namecheap's API — the commands below are to be verified
+  against Namecheap's current docs first, as Paystack's were:
+  - `namecheap.domains.create` registers, with the merchant as registrant, and
+    is paid from the platform's Namecheap balance;
+  - `namecheap.domains.dns.setHosts` points the domain at the platform;
+  - `namecheap.domains.getInfo` / `getList` read expiry dates daily, so they
+    are never typed by hand;
+  - `namecheap.domains.renew` renews the moment the merchant pays, which
+    removes the risk of a paid renewal staff forgot;
+  - `namecheap.users.getPricing` (renew category) gives renewal prices.
+
+  **Prerequisites:** Namecheap API access (it has account-balance or spending
+  thresholds), a **whitelisted fixed outbound IP** (`NAMECHEAP_CLIENT_IP`;
+  serverless hosting has none by default), and a funded balance with a
+  low-balance alert. Also: DNS checking and certificate issuance through the
+  hosting provider's domains API for domains merchants connect themselves.
+  11.5's manual queue remains the fallback.
+- **13.6 Database.** Fix the `orders.customerId` foreign-key drift so `migrate dev`
+  / `migrate deploy` work again instead of hand-applied SQL. Set up automated
+  backups with a restore rehearsed at least once, and connection pooling
+  settings for production.
+- **13.7 CI.** Typecheck, `next build`, unit tests on every push, and the database
+  suites with `--no-file-parallelism` (the known Neon flakiness) before a
+  release.
+- **13.8 Data rights (NDPA).** A shopper can delete their account and download
+  their data. A merchant can close their workspace, with a stated retention period
+  for orders and invoices they are legally required to keep. What `DELETED` means
+  is written down and enforced.
+- **13.9 Outside approvals and live keys.**
+  - Meta App Review (Advanced Access for the permissions in `.env.example`)
+    before merchants outside the testers can connect.
+  - Paystack live key, `PAYSTACK_MODE=live`, and the webhook URL
+    `/api/payments/paystack/webhook` set in the dashboard (10.11). Squad is
+    retired (10.9).
+  - `EMAIL_FROM` and the sending domain verified in Resend.
+  - `SOCIAL_TOKEN_KEY` set, not derived from `AUTH_SECRET`.
+  - App Store and Play Store listings and privacy forms for the mobile app.
+
+## Phase 14 — Running the business day to day — TODO
+
+The rest of the former Phase 7, plus gaps found in the 2026-09-29 audit. Not
+launch blockers, but a merchant will feel each within weeks.
+
+- **14.1 Tax settings** per org: VAT registered or not, rate, inclusive or
+  exclusive, VAT number on invoices and receipts. Replaces the hard-coded
+  `VAT_RATE` (7.5% inclusive) in `lib/storefront/pricing.ts` and the env flag in
+  `lib/storefront/checkout/config.ts`. Many small shops are not VAT-registered and
+  should not show VAT at all.
+- **14.2 Product CSV import — DONE (2026-09-30), moved before launch by 12.5.**
+  As shipped:
+  - **Inventory → Products → Import** (`/inventory/products/import`; also
+    from the products empty state and the setup guide's product step,
+    "Import from a spreadsheet"). Needs `inventory.create`; stock columns
+    need `inventory.movement.create` and access to each store (8.6).
+  - **Format** (`lib/inventory/product-import.ts`, pure): one row per thing
+    sold. Name + SKU required; variants are rows sharing a Name (or a
+    Product SKU), with Option 1–3 name/value; Price, Compare-at price, Cost
+    price, Barcode, Unit, Description, Category (an existing one, by path
+    "Women > Tops" or unique name), Brand (existing), Reorder point; one
+    "Stock: <store>" column per store. Headings match case-insensitively
+    with common aliases; comma, semicolon or tab separated; quoted fields,
+    BOM and CRLF handled; up to 500 rows / 1 MB. The downloadable template
+    has the headings only (a stock column per store the member may stock) —
+    **no example rows**, since an example imported by mistake becomes a
+    product; the page shows the pattern instead.
+  - **Preview first** (`previewProductImport`, writes nothing): per product,
+    Ready or Will be skipped with every problem by row number, notes for an
+    unmatched category/brand (imported without it) or a missing price;
+    totals of products, variants, stock lines and skips. File-level
+    problems — an unknown store, stock the member may not record, a store
+    they can't use, duplicate or missing headings — block the whole import.
+  - **Import** (`importProducts`) re-checks everything, then creates each
+    ready product through `createProduct` (same rules, audit and image
+    indexing as by hand) as a **draft**, since photos can't be imported, and
+    records opening stock as `IN` movements through `createStockMovement`
+    (the ledger, average cost from Cost price). A product whose SKU already
+    exists is skipped — updating by import isn't built. A variant product
+    without a Product SKU gets one from its name. One
+    `inventory.item.imported` audit entry summarises the run.
+  - Tests: `lib/inventory/product-import.test.ts` (parser, columns, amounts,
+    grouping, row errors, limits, template) and `tests/product-import.test.ts`
+    (preview writes nothing; file-level stops for unknown store / no stock
+    permission / store access / no create permission; import creates drafts
+    with variants, category, brand, stock levels and ledger entries with
+    cost; existing SKUs skipped on a second run).
+  - **Not built:** updating existing products by import, importing images
+    by URL (AGENTS: merchant images are uploaded, never linked).
+- **14.3 Notifications.** A `Notification` model, the header bell (removed in 0.4),
+  and per-member email preferences. New-order and low-stock emails already send
+  but are neither visible in the app nor configurable.
+- **14.4 SMS/WhatsApp order updates** for shoppers, alongside email, with the
+  same message set as `emails/storefront-order-update.tsx`. Opt-in, and sent
+  only for events the order actually went through.
+- **14.5 Staff account security.** Own profile and password change (owner
+  email verification at sign-up moved to 12.5), 2FA, and "sign out everywhere" (`User.sessionVersion`
+  already exists).
+- **14.6 Reports hub** at `/reports`: revenue by day and channel, top products,
+  top customers, discount and campaign performance, and 8.5's "Which store
+  sells" moved here from Inventory.
+- **14.7 Returns for counter sales — PAUSED with 10.7** (Phase 2's known gap):
+  an in-store return and refund against a `WALK_IN` order, putting stock back
+  on that store's shelf. Revisit with the wallet decision.
+
+**Still deferred, with their reasons unchanged:** email campaigns (Phase 5 — needs
+unsubscribe, suppression and bounce handling first), paying an invoice online
+(Phase 3 — revisit once Phase 10 has settled how money moves), and the merchant
+API (12.4).
+
 ---
 
 ## Sequencing
@@ -771,6 +4142,46 @@ cheap now and very expensive in six months.
 and every one of 8.2–8.5 puts something on it. 8.6 changes what existing actions
 accept, so it lands once those actions have stopped moving — and it is the only
 part with a migration.
+
+**Phase 9 in order: 9.1 → 9.5 stop the loss, 9.6 is needed to run it.** 9.1–9.3 alone
+(planner prefers one store, fees summed across stores) already stop most of the
+leakage before the shipment screen exists. 9.7 and 9.8 are improvements and can wait.
+
+**Go-live: 10.1 before everything; 13 before the first live merchant; 12 before
+the public launch; 14 after it.** The current build order is **"What's next"**
+at the top of the Go-live section (updated 2026-09-29); the notes below are the
+reasoning behind it.
+
+- **Phase 10 first.** 10.1 is decided (Paystack subaccounts and split
+  settlement), but the Paystack behaviour it lists must be verified before
+  10.3–10.6 are coded, and the regulatory question goes to legal advice in
+  parallel. Inside the phase: 10.11 and the provider seam from 10.4 → 10.2/10.3
+  (onboarding and subaccounts) → 10.4/10.5 (paying) → 10.6 (the payments view)
+  → 10.9 (retiring Squad). **10.7 (refunds) is paused** pending the wallet
+  partnership and is not a launch gate. Nothing that takes online payment from
+  a real shopper ships before 10.3, 10.5 and 10.8, or before 10.10's legal
+  review.
+- **Parts of 11 before Phase 10 goes live.** A subaccount is only created when
+  platform staff approve a merchant, so 11.1 (access) and 11.3 (verification
+  queue) must ship with Phase 10; the rest of Phase 11 can follow.
+- **12.5 before the public launch, with 14.2 (CSV import) pulled forward into
+  it.** The trial (12.1) starts inside onboarding, and the setup guide's
+  payment step needs 10.2 (done), so 12.5 lands after 12.1.
+- **12.6 (custom domains) after 12.5, with 11.5.** Its entry point is an
+  optional step in 12.5's guide, its prices need 11.7's exchange rate, and it
+  is fulfilled by hand through 11.5's queue. Automation (13.5) is after launch.
+- **12.1 and 11.7 before the first paying merchant.** With no free plan, nobody
+  can use the platform without a plan to buy. The catalogue (12.1) and the
+  console that edits it (11.7) land together. Seeding the catalogue from
+  today's `PLANS` lets 12.1 ship first, with 11.7 following before prices need
+  to change.
+- **The rest of 11 alongside 10.** Suspending a store (11.4) must exist before
+  a store can take money.
+- **12 and 13 in parallel with 10/11.** They touch different code. 12.2 is
+  small, and 12.1 unblocks onboarding anyone at all; 13.1 (scheduled jobs) and 13.2
+  (shared rate limits) are required the moment there is more than one instance.
+- **14 after launch,** in the order merchants ask for it. 14.1 (tax) and 14.2
+  (import) are the likeliest first.
 
 ## Smaller cleanups — DONE (2026-09-25)
 

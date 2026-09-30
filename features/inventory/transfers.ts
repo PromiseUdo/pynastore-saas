@@ -6,8 +6,9 @@ import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { StockTransferStatus } from '@/lib/generated/prisma/enums';
-import { requireStoreAccess } from '@/lib/store-access';
+import { canUseStore, requireStoreAccess } from '@/lib/store-access';
 import { type ActionResult, toActionError, getAvailableStock } from './shared';
+import { GatherTransferError, holdReceivedForOrder, sendRequestedTransfer } from '@/lib/storefront/orders/gather';
 
 export type TransferRow = {
   id: string;
@@ -19,6 +20,11 @@ export type TransferRow = {
   status: StockTransferStatus;
   dispatchedAt: Date;
   receivedAt: Date | null;
+  /** an order brought together at one store (Phase 9.7): which one, to link to */
+  orderId: string | null;
+  orderReference: string | null;
+  /** the member may send it — the source is one of their stores (Phase 8.6) */
+  canSend: boolean;
 };
 
 const DispatchTransferSchema = z.object({
@@ -169,6 +175,9 @@ export async function receiveTransfer(transferId: string): Promise<ActionResult>
         where: { id: transferId },
         data: { status: StockTransferStatus.RECEIVED, receivedById: ctx.userId, receivedAt: new Date() },
       });
+
+      // Brought here for an order (Phase 9.7): hold it for that order at once.
+      await holdReceivedForOrder(tx, transfer);
     });
 
     await createAuditLog({
@@ -182,6 +191,41 @@ export async function receiveTransfer(transferId: string): Promise<ActionResult>
     return { success: true, data: undefined };
   } catch (err) {
     return toActionError(err, 'Failed to receive transfer');
+  }
+}
+
+/**
+ * Send a transfer an order asked for (ROADMAP Phase 9.7). The source store's
+ * act, so its access is checked; the order's hold there goes with the units.
+ */
+export async function sendOrderTransfer(transferId: string): Promise<ActionResult> {
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.INVENTORY_MOVEMENT_CREATE);
+
+    const transfer = await prisma.stockTransfer.findFirst({
+      where: { id: String(transferId), organizationId: ctx.organization.id },
+      select: { fromWarehouseId: true, toWarehouseId: true, quantity: true, fromWarehouse: { select: { name: true } } },
+    });
+    if (!transfer) return { success: false, error: 'Transfer not found' };
+    requireStoreAccess(ctx.membership, transfer.fromWarehouseId, transfer.fromWarehouse.name);
+
+    await prisma.$transaction((tx) =>
+      sendRequestedTransfer(tx, { organizationId: ctx.organization.id, transferId: String(transferId), performedById: ctx.userId }),
+    );
+
+    await createAuditLog({
+      organizationId: ctx.organization.id,
+      userId: ctx.userId,
+      action: 'inventory.transfer.dispatched',
+      entityType: 'StockTransfer',
+      entityId: String(transferId),
+      metadata: { fromWarehouseId: transfer.fromWarehouseId, toWarehouseId: transfer.toWarehouseId, quantity: Number(transfer.quantity), forOrder: true },
+    });
+    return { success: true, data: undefined };
+  } catch (err) {
+    if (err instanceof GatherTransferError) return { success: false, error: err.message };
+    return toActionError(err, 'Failed to send transfer');
   }
 }
 
@@ -264,6 +308,8 @@ export async function listTransfers(filters?: { warehouseId?: string }): Promise
         inventoryItem: { select: { name: true, sku: true } },
         fromWarehouse: { select: { name: true } },
         toWarehouse: { select: { name: true } },
+        fromWarehouseId: true,
+        order: { select: { id: true, reference: true } },
       },
       orderBy: { dispatchedAt: 'desc' },
     });
@@ -280,6 +326,9 @@ export async function listTransfers(filters?: { warehouseId?: string }): Promise
         status: t.status,
         dispatchedAt: t.dispatchedAt,
         receivedAt: t.receivedAt,
+        orderId: t.order?.id ?? null,
+        orderReference: t.order?.reference ?? null,
+        canSend: canUseStore(ctx.membership, t.fromWarehouseId),
       })),
     };
   } catch (err) {

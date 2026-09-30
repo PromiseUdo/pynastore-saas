@@ -23,11 +23,13 @@ import type { StorefrontOrder } from '@/lib/storefront/orders/types';
 import { MiniCart } from '@/components/storefront/layout/mini-cart';
 import { StorefrontProvider } from '@/lib/storefront/context';
 import { useCartStore, useCartCount } from '@/lib/storefront/stores/cart-store';
+import { useDeliverToStore } from '@/lib/storefront/stores/deliver-to-store';
 import { useCheckoutStore } from '@/lib/storefront/stores/checkout-store';
 import { useUIStore } from '@/lib/storefront/stores/ui-store';
 import { toCartLine } from '@/lib/storefront/cart';
 import { formatMoney } from '@/lib/storefront/format';
 import { getCheckoutConfig } from '@/lib/storefront/checkout/config';
+import { ONLINE_PAYMENT_METHOD } from '@/lib/storefront/mock/checkout';
 import { calculateCheckoutTotals } from '@/lib/storefront/checkout/totals';
 import { PRODUCTS } from '@/lib/storefront/mock/products';
 
@@ -69,7 +71,7 @@ const placeOrderAction = vi.fn(async (_request: unknown) => ({
 });
 const payForOrderAction = vi.fn(async (_token: string, _options?: unknown) => ({
   ok: true as const,
-  paymentUrl: 'https://sandbox-pay.squadco.com/c_retry',
+  paymentUrl: 'https://checkout.paystack.com/c_retry',
 }));
 vi.mock('@/features/shop-orders/actions', () => ({
   placeOrderAction: (request: unknown) => placeOrderAction(request as never),
@@ -122,7 +124,10 @@ Object.defineProperty(window, 'location', {
   value: { ...window.location, replace: locationReplace, assign: locationAssign },
 });
 
-const config = await getCheckoutConfig({ organizationSlug: 'demo' });
+// A store that may take online payments: store-config.ts adds "Pay online"
+// (Paystack) first for such a store (ROADMAP 10.8).
+const baseConfig = await getCheckoutConfig({ organizationSlug: 'demo' });
+const config = { ...baseConfig, paymentMethods: [ONLINE_PAYMENT_METHOD, ...baseConfig.paymentMethods] };
 
 const MULTI = PRODUCTS.find((p) => p.options.length > 0 && p.variants.some((v) => v.stock > 2))!;
 const SIMPLE = PRODUCTS.find((p) => p.options.length === 0 && p.variants[0]?.stock > 3)!;
@@ -449,7 +454,7 @@ describe('delivery and payment selection', () => {
     expect(screen.getAllByText('Free').length).toBeGreaterThan(0);
   });
 
-  it('collects no card details, and says card payment happens on Squad', async () => {
+  it('collects no card details, and says card payment happens on Paystack', async () => {
     const user = userEvent.setup();
     addToBag(SIMPLE, 1);
     renderIn(<CheckoutView config={config} account={null} />);
@@ -458,7 +463,7 @@ describe('delivery and payment selection', () => {
 
     await user.click(screen.getByRole('radio', { name: /^pay online/i }));
 
-    expect(await screen.findByText(/squad’s secure payment page/i)).toBeDefined();
+    expect(await screen.findByText(/paystack’s secure payment page/i)).toBeDefined();
     /* Nothing anywhere that could take a card number. */
     expect(screen.queryByLabelText(/card number/i)).toBeNull();
     expect(screen.queryByLabelText(/cvv|security code|expiry/i)).toBeNull();
@@ -585,6 +590,68 @@ describe('delivery quoted for the address', () => {
     expect(await screen.findByRole('heading', { name: 'Payment' })).toBeDefined();
   });
 
+  /* ROADMAP Phase 9.5: a bag split across stores is chosen parcel by parcel. */
+  it('lets the shopper choose how each parcel travels when the bag comes from two stores', async () => {
+    const eta = (min: number, max: number) => ({ minMinutes: min, maxMinutes: max, unit: 'DAYS' as const });
+    const rate = (id: string, label: string, price: number, window = eta(1440, 2880)) => ({
+      id,
+      kind: 'delivery' as const,
+      label,
+      description: '',
+      price,
+      regularPrice: price,
+      freeOver: null,
+      eta: window,
+    });
+    const original = quoteDeliveryAction.getMockImplementation()!;
+    quoteDeliveryAction.mockImplementation(async () => {
+      const [item] = useCartStore.getState().items;
+      return {
+        ok: true as const,
+        zoneName: null,
+        notice: null,
+        options: [],
+        parcels: [
+          {
+            storeName: 'Port Harcourt',
+            lines: [{ itemId: item.variantId, quantity: 1 }],
+            options: [rate('rate_ph_local', 'Local', 150_000), rate('rate_ph_same', 'Same day', 400_000, eta(0, 0))],
+          },
+          { storeName: 'Lagos', lines: [{ itemId: item.variantId, quantity: 1 }], options: [rate('rate_lagos', 'Interstate', 450_000, eta(2880, 5760))] },
+        ],
+      } as unknown as Awaited<ReturnType<typeof original>>;
+    });
+
+    try {
+      const user = userEvent.setup();
+      addToBag(SIMPLE, 1);
+      useCheckoutStore.getState().reset(quotedConfig);
+      renderIn(<CheckoutView config={quotedConfig} account={null} />);
+      await fillInformation(user);
+
+      expect(await screen.findByRole('heading', { name: /parcel 1 of 2 · from port harcourt/i })).toBeDefined();
+      expect(screen.getByRole('heading', { name: /parcel 2 of 2 · from lagos/i })).toBeDefined();
+
+      // Each parcel's cheapest is preselected, and delivery is what they add up to.
+      expect(screen.getByRole('radio', { name: /^local/i }).getAttribute('aria-checked')).toBe('true');
+      expect(screen.getByRole('radio', { name: /^interstate/i }).getAttribute('aria-checked')).toBe('true');
+      expect(screen.getAllByText(formatMoney(150_000 + 450_000, 'NGN')).length).toBeGreaterThan(0);
+
+      // Changing one parcel leaves the other as it was.
+      await user.click(screen.getByRole('radio', { name: /^same day/i }));
+      expect(screen.getByRole('radio', { name: /^interstate/i }).getAttribute('aria-checked')).toBe('true');
+      expect(screen.getAllByText(formatMoney(400_000 + 450_000, 'NGN')).length).toBeGreaterThan(0);
+
+      await user.click(screen.getByRole('button', { name: /continue to payment/i }));
+      await choosePayment(user);
+      expect(await screen.findByText(/parcel 1 from port harcourt: same day/i)).toBeDefined();
+      expect(screen.getByText(/parcel 2 from lagos: interstate/i)).toBeDefined();
+      expect(useCheckoutStore.getState().deliveryMethodId).toBe('rate_ph_same+rate_lagos');
+    } finally {
+      quoteDeliveryAction.mockImplementation(original);
+    }
+  });
+
   it('says so plainly when the store doesn’t deliver to the address', async () => {
     quoteDeliveryAction.mockImplementationOnce(async () => ({ ok: true as const, zoneName: null, options: [] }));
     const user = userEvent.setup();
@@ -596,6 +663,22 @@ describe('delivery quoted for the address', () => {
     expect(await screen.findByText(/doesn’t deliver to port harcourt, rivers yet/i)).toBeDefined();
     await user.click(screen.getByRole('button', { name: /change address/i }));
     expect(await screen.findByRole('heading', { name: 'Your details' })).toBeDefined();
+  });
+
+  /* ROADMAP Phase 9.8: the place a guest chose on a product page starts the address. */
+  it('starts a guest’s address with the state and city they chose on the product page', () => {
+    useDeliverToStore.setState({ place: { state: 'Rivers', city: 'Port Harcourt' }, hydrated: true });
+    try {
+      addToBag(SIMPLE, 1);
+      useCheckoutStore.getState().reset(quotedConfig);
+      renderIn(<CheckoutView config={quotedConfig} account={null} />);
+      expect((screen.getByLabelText('State') as HTMLSelectElement).value).toBe('Rivers');
+      expect((screen.getByLabelText('City or town') as HTMLInputElement).value).toBe('Port Harcourt');
+      // The street is theirs to type.
+      expect((screen.getByLabelText('Address') as HTMLInputElement).value).toBe('');
+    } finally {
+      useDeliverToStore.setState({ place: null });
+    }
   });
 
   it('won’t open checkout at all for a store with no delivery set up', () => {
@@ -636,7 +719,7 @@ describe('placing the order', () => {
       ok: true,
       reference: 'ORD-2026-000001',
       confirmationToken: 'token-abc',
-      paymentUrl: 'https://sandbox-pay.squadco.com/c_abc',
+      paymentUrl: 'https://checkout.paystack.com/c_abc',
     }));
     const user = userEvent.setup();
     addToBag(SIMPLE, 1);
@@ -645,7 +728,7 @@ describe('placing the order', () => {
 
     await user.click(screen.getByRole('button', { name: /place order/i }));
 
-    await waitFor(() => expect(locationReplace).toHaveBeenCalledWith('https://sandbox-pay.squadco.com/c_abc'));
+    await waitFor(() => expect(locationReplace).toHaveBeenCalledWith('https://checkout.paystack.com/c_abc'));
     expect(replace).not.toHaveBeenCalled();
     expect(useCartStore.getState().items).toHaveLength(0);
     expect(await screen.findByText(/secure payment page/i)).toBeDefined();
@@ -694,7 +777,7 @@ describe('placing the order', () => {
     await user.click(screen.getByRole('button', { name: /place order/i }));
     await waitFor(() => expect(placeOrderAction).toHaveBeenCalled());
     const sent = placeOrderAction.mock.calls[0][0] as unknown as { paymentMethodId: string };
-    expect(sent.paymentMethodId).toBe('squad');
+    expect(sent.paymentMethodId).toBe('paystack');
   });
 
   it('drops a pay-on-delivery choice made before such an item was added', async () => {
@@ -838,7 +921,7 @@ describe('confirmation', () => {
     reference: 'ORD-2026-000001',
     status: 'PENDING',
     paymentStatus: 'AWAITING_PAYMENT',
-    paymentMethodId: 'squad',
+    paymentMethodId: 'paystack',
     transferDetails: null,
     placedAt: '2026-09-16T10:00:00.000Z',
     stageDates: { confirmedAt: null, packingAt: null, shippedAt: null, deliveredAt: null },
@@ -859,6 +942,7 @@ describe('confirmation', () => {
       fee: 250_000,
       eta: { minMinutes: 2880, maxMinutes: 5760, unit: 'DAYS' as const },
       estimated: { from: '2026-09-18T10:00:00.000Z', to: '2026-09-22T10:00:00.000Z' },
+      parcels: [{ storeName: 'Main', label: 'Standard delivery', fee: 250_000, kind: 'delivery' as const, status: 'pending' as const }],
     },
     currency: 'NGN',
     totals: { subtotal: 1_000_000, discount: 0, shipping: 250_000, tax: 0, total: 1_250_000 },
@@ -917,7 +1001,7 @@ describe('confirmation', () => {
     renderIn(<ConfirmationView order={order} config={config} signedIn={false} payment={unpaid} />);
     await user.click(screen.getByRole('button', { name: /^pay /i }));
     await waitFor(() => expect(payForOrderAction).toHaveBeenCalledWith('token-abc', { nativeApp: false }));
-    expect(locationAssign).toHaveBeenCalledWith('https://sandbox-pay.squadco.com/c_retry');
+    expect(locationAssign).toHaveBeenCalledWith('https://checkout.paystack.com/c_retry');
   });
 
   it('says a declined or abandoned payment didn’t go through', () => {

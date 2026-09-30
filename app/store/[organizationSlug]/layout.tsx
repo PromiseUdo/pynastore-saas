@@ -12,7 +12,6 @@ import { cookies, headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { Fraunces } from 'next/font/google';
 import { prisma } from '@/lib/prisma';
-import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { StorefrontProviders } from '@/components/storefront/providers';
 import { StorefrontAnalytics } from '@/components/storefront/layout/storefront-analytics';
 import { getStorefrontLook } from '@/lib/storefront/catalog';
@@ -22,7 +21,10 @@ import { listWishlist } from '@/lib/storefront/account/wishlist';
 import { getProductsByIds, getStorePages } from '@/lib/storefront/catalog';
 import { pageOfKind } from '@/lib/storefront/pages/rules';
 import { WishlistSync } from '@/components/storefront/wishlist/wishlist-sync';
+import { storefrontIsOpen } from '@/lib/billing/workspace-access';
+import { getStorefrontOpening } from '@/lib/storefront/opening';
 import './storefront.css';
+import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
 /*
  * Display face for the storefront only. Fraunces is a variable "soft serif":
@@ -52,9 +54,12 @@ export async function generateMetadata({
       logoUrl: true,
       storefrontTagline: true,
       storefrontSocialImageUrl: true,
+      storefrontOpen: true,
     },
   });
   if (!org) return {};
+  // Not open yet (12.5): the "Opening soon" page stays out of search results.
+  if (!org.storefrontOpen) return { title: org.name, robots: { index: false, follow: false } };
 
   /* The merchant's own line if they have written one. No claims about what
    * the store sells or how it delivers: those were template words ("free
@@ -64,7 +69,7 @@ export async function generateMetadata({
   const image = org.storefrontSocialImageUrl ?? org.logoUrl ?? null;
 
   return {
-    metadataBase: new URL(getStorefrontUrl(organizationSlug)),
+    metadataBase: new URL((await storefrontUrlFor(organizationSlug))),
     title: { default: `${org.name} — Online Store`, template: `%s · ${org.name}` },
     description,
     alternates: { canonical: '/' },
@@ -73,7 +78,7 @@ export async function generateMetadata({
       siteName: org.name,
       title: org.name,
       description,
-      url: getStorefrontUrl(organizationSlug),
+      url: (await storefrontUrlFor(organizationSlug)),
       ...(image ? { images: [{ url: image }] } : {}),
     },
     twitter: {
@@ -95,10 +100,54 @@ export default async function StorefrontRootLayout({
   const { organizationSlug } = await params;
 
   const organization = await prisma.organization.findFirst({
-    where: { slug: organizationSlug, status: 'ACTIVE' },
-    select: { id: true, name: true, slug: true, logoUrl: true },
+    where: { slug: organizationSlug, status: { in: ['ACTIVE', 'SUSPENDED'] } },
+    select: { id: true, name: true, slug: true, logoUrl: true, status: true },
   });
   if (!organization) notFound();
+
+  /* Three ways a shop is closed, each shown as a page — not an error, not a
+   * 404 — and each refusing orders (placeOrder checks too). In this order:
+   * - suspended by platform staff (ROADMAP 11.4). proxy.ts sends every
+   *   request for a suspended shop here, to the root, so nothing else runs.
+   *   The shopper isn't told why; that's between the platform and merchant.
+   * - the merchant's plan ended and grace ran out (12.1). It reopens the
+   *   moment they pay.
+   * - not open yet (12.5): "Opening soon", until the merchant opens it from
+   *   the setup guide. Their own team sees the real shop with a preview
+   *   banner instead. */
+  const suspended = organization.status === 'SUSPENDED';
+  const lapsed = !suspended && !(await storefrontIsOpen(organization.id));
+  const opening = await getStorefrontOpening(organization.slug);
+  const notOpen = !suspended && !lapsed && !opening.open && !opening.previewer;
+  if (suspended || lapsed || notOpen) {
+    return (
+      <div
+        data-storefront
+        className={`${display.variable} flex min-h-screen items-center justify-center bg-background px-4 text-foreground`}
+      >
+        <main className="max-w-md text-center">
+          {organization.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={organization.logoUrl} alt="" className="mx-auto mb-5 h-12 w-auto object-contain" />
+          ) : null}
+          <h1 className="font-display text-3xl">
+            {suspended
+              ? `${organization.name} is unavailable`
+              : notOpen && !opening.everOpened
+                ? `${organization.name} is opening soon`
+                : `${organization.name} is closed for now`}
+          </h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            {suspended
+              ? 'This shop isn’t available at the moment, so it can’t take orders.'
+              : notOpen && !opening.everOpened
+                ? 'This shop isn’t open yet. Please check back soon.'
+                : 'This shop isn’t taking orders at the moment. Please check back soon.'}
+          </p>
+        </main>
+      </div>
+    );
+  }
 
   const isMobileRuntime = (await headers()).get('x-runtime') === 'mobile';
 
@@ -163,6 +212,12 @@ export default async function StorefrontRootLayout({
         }
       >
         <WishlistSync serverItems={savedItems} />
+        {!opening.open && (
+          <div role="status" className="sticky top-0 z-50 bg-foreground px-4 py-2 text-center text-xs text-background">
+            Preview — your shop is closed, so only your team can see this and nothing can be ordered. Open it from
+            Settings → Setup guide.
+          </div>
+        )}
         {children}
       </StorefrontProviders>
     </div>

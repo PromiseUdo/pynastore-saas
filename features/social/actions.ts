@@ -39,6 +39,7 @@ import {
 import { getProvider, isProviderKey, listProviders, primaryPlatform, type ProviderKey } from '@/lib/social/registry';
 import { createNonce, encodeState, STATE_COOKIE, stateCookieOptions } from '@/lib/social/state';
 import { SocialProviderError, type SocialAccountRow, type SocialCandidate } from '@/lib/social/types';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 export type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
 
@@ -52,7 +53,7 @@ function failure(error: unknown, fallback: string): { success: false; error: str
     console.error('[social] provider error:', error.kind, error.message);
     switch (error.kind) {
       case 'not_configured':
-        return { success: false, error: 'Social posting isn’t set up on this MansaaS installation yet' };
+        return { success: false, error: `Social posting isn’t set up on this ${PLATFORM_NAME} installation yet` };
       case 'unsupported':
         return { success: false, error: 'That platform isn’t available yet' };
       case 'invalid_state':

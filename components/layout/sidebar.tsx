@@ -11,7 +11,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  FolderKanban,
   LogOut,
   Megaphone,
   Share2,
@@ -23,13 +22,6 @@ import type { OrgInfo, UserInfo } from './dashboard-layout';
 import { OrgSwitcher, type OrgSwitcherItem } from '@/components/org-switcher';
 import { Badge } from '@/components/ui/badge';
 import { getMarketingUrl } from '@/lib/tenant/urls';
-
-const PLAN_LABELS: Record<string, string> = {
-  FREE: 'Free',
-  STARTER: 'Starter',
-  PRO: 'Pro',
-  ENTERPRISE: 'Enterprise',
-};
 
 /* ─── Nav data ─────────────────────────────────────────────────────────── */
 
@@ -49,7 +41,6 @@ const navGroups: NavGroup[] = [
   {
     items: [
       { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-      { title: 'Projects', href: '/projects', icon: FolderKanban },
     ],
   },
   {
@@ -89,6 +80,7 @@ const navGroups: NavGroup[] = [
         icon: TrendingUp,
         children: [
           { title: 'Orders', href: '/sales/orders' },
+          { title: 'Payments', href: '/sales/payments' },
           { title: 'Customers', href: '/sales/customers' },
           { title: 'Quotes', href: '/sales/quotes' },
           { title: 'Invoices', href: '/sales/invoices' },
@@ -122,6 +114,7 @@ const navGroups: NavGroup[] = [
         icon: Settings,
         children: [
           { title: 'General', href: '/settings' },
+          { title: 'Setup guide', href: '/settings/setup' },
           { title: 'Members', href: '/settings/members' },
           { title: 'Activity', href: '/settings/activity' },
           { title: 'Roles & Permissions', href: '/settings/roles' },
@@ -129,6 +122,7 @@ const navGroups: NavGroup[] = [
           { title: 'Payments', href: '/settings/payments' },
           { title: 'Delivery and returns', href: '/settings/delivery' },
           { title: 'Store pages', href: '/settings/pages' },
+          { title: 'Domain', href: '/settings/domain' },
           { title: 'Billing', href: '/settings/billing' },
         ],
       },
@@ -298,25 +292,33 @@ function SidebarPanel({
         {collapsed ? (
           <Link
             href="/upgrade"
-            title={`${PLAN_LABELS[org.plan] ?? org.plan} plan — Upgrade`}
+            title={`${org.plan} — Plans`}
             className="flex size-6 items-center justify-center rounded-md text-muted-foreground/70 hover:text-primary"
           >
             <ArrowUpCircle className="size-4" />
           </Link>
         ) : (
           <>
-            <Badge variant={org.plan === 'FREE' ? 'muted' : 'success'}>
-              {PLAN_LABELS[org.plan] ?? org.plan}
+            <Badge
+              variant={
+                org.planState === 'active'
+                  ? 'success'
+                  : org.planState === 'trial'
+                    ? 'info'
+                    : org.planState === 'none'
+                      ? 'muted'
+                      : 'warning'
+              }
+            >
+              {org.plan}
             </Badge>
-            {org.plan !== 'ENTERPRISE' && (
-              <Link
-                href="/upgrade"
-                className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-              >
-                <ArrowUpCircle className="size-3" />
-                Upgrade
-              </Link>
-            )}
+            <Link
+              href="/upgrade"
+              className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+            >
+              <ArrowUpCircle className="size-3" />
+              {org.planState === 'active' ? 'Plans' : 'Choose a plan'}
+            </Link>
           </>
         )}
       </div>

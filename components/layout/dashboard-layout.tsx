@@ -7,7 +7,9 @@ import type { OrgSwitcherItem } from '@/components/org-switcher';
 export type OrgInfo = {
   name: string;
   slug: string;
+  /** the plan as shown: "Pro", "Pro · Trial", "Plan ended" (planLabel) */
   plan: string;
+  planState: import('@/lib/billing/access').AccessState;
 };
 
 export type UserInfo = {
@@ -26,6 +28,8 @@ type DashboardLayoutProps = {
   user: UserInfo;
   breadcrumbs?: Breadcrumb[];
   headerActions?: React.ReactNode;
+  /** the trial / plan-ended notice, above every page (ROADMAP 12.1) */
+  notice?: React.ReactNode;
 };
 
 export function DashboardLayout({
@@ -35,6 +39,7 @@ export function DashboardLayout({
   user,
   breadcrumbs,
   headerActions,
+  notice,
 }: DashboardLayoutProps) {
   return (
     <SidebarProvider>
@@ -42,6 +47,7 @@ export function DashboardLayout({
         <Sidebar org={org} orgs={orgs} user={user} />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <Header breadcrumbs={breadcrumbs} actions={headerActions} user={user} />
+          {notice}
           <main className="flex-1 overflow-y-auto">{children}</main>
         </div>
       </div>

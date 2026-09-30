@@ -5,9 +5,12 @@
  *
  * ./config.ts holds everything that is the same for every store and is safe
  * to import into client components (the find* lookups live there). What
- * depends on the merchant's own records is added here — today, bank transfer,
- * which is offered only while the merchant has an active bank account
- * (Settings → Payments), listed last.
+ * depends on the merchant's own records is added here:
+ *   - "Pay online" (Paystack), listed first, only while the shop may take
+ *     online payments — verified by us, subaccount active, not suspended
+ *     (onlinePaymentReadiness, ROADMAP 10.8);
+ *   - bank transfer, listed last, only while the merchant has an active bank
+ *     account (Settings → Payments).
  *
  * Use this, not getCheckoutConfig, anywhere payment methods matter: the
  * checkout page, the confirmation page, and placing the order — so a shopper
@@ -15,7 +18,8 @@
  */
 import { prisma } from '@/lib/prisma';
 import type { StoreScope } from '../types';
-import { BANK_TRANSFER_METHOD } from '../mock/checkout';
+import { BANK_TRANSFER_METHOD, ONLINE_PAYMENT_METHOD } from '../mock/checkout';
+import { onlinePaymentReadiness } from '@/lib/payments/payment-setup';
 import { getCheckoutConfig } from './config';
 import { useFixtures } from '../data/current';
 import { storeHasDelivery } from '../delivery/quote';
@@ -29,11 +33,22 @@ export async function activeTransferAccounts(organizationSlug: string): Promise<
   });
 }
 
+/** The one readiness rule, looked up by the store's slug. */
+export async function onlinePaymentsReady(organizationSlug: string): Promise<boolean> {
+  const organization = await prisma.organization.findUnique({
+    where: { slug: organizationSlug },
+    select: { status: true, paymentAccount: { select: { verificationStatus: true, setupStatus: true } } },
+  });
+  if (!organization) return false;
+  return onlinePaymentReadiness({ account: organization.paymentAccount, organizationStatus: organization.status }).ready;
+}
+
 export async function getStoreCheckoutConfig(scope: StoreScope): Promise<CheckoutConfig> {
-  const [base, transferAccounts, hasDelivery] = await Promise.all([
+  const [base, transferAccounts, hasDelivery, onlineReady] = await Promise.all([
     getCheckoutConfig(scope),
     activeTransferAccounts(scope.organizationSlug),
     storeHasDelivery(scope.organizationSlug),
+    onlinePaymentsReady(scope.organizationSlug),
   ]);
 
   /* Under the demo fixtures the store keeps the fixed demo delivery list, so a
@@ -51,7 +66,11 @@ export async function getStoreCheckoutConfig(scope: StoreScope): Promise<Checkou
   return {
     ...base,
     ...delivery,
-    paymentMethods: transferAccounts.length ? [...base.paymentMethods, BANK_TRANSFER_METHOD] : base.paymentMethods,
+    paymentMethods: [
+      ...(onlineReady ? [ONLINE_PAYMENT_METHOD] : []),
+      ...base.paymentMethods,
+      ...(transferAccounts.length ? [BANK_TRANSFER_METHOD] : []),
+    ],
     transferAccounts,
   };
 }

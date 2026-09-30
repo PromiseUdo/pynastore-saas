@@ -65,7 +65,7 @@ export function SuppliersPageClient({ suppliers, canManage, performanceEnabled, 
             show, and where to see the plans (AGENTS §7). */}
         {!performanceEnabled && suppliers.length > 0 && (
           <p className="text-xs text-muted-foreground">
-            Supplier performance — how reliably each one delivers, and what their prices have done — is on Pro.{' '}
+            Supplier performance — how reliably each one delivers, and what their prices have done — comes with a higher plan.{' '}
             <Link href="/upgrade" className="text-primary hover:underline">
               See plans
             </Link>

@@ -253,7 +253,9 @@ describe('resolveTenant', () => {
       }
     });
 
-    it('resolves a customAdminDomain to its org slug', async () => {
+    // A merchant's own domain serves the storefront only (ROADMAP 12.6): the
+    // dashboard stays on the platform address, where the sign-in cookie lives.
+    it('never resolves a dashboard on a merchant’s domain', async () => {
       const org = await prisma.organization.create({
         data: {
           name: 'Custom Domain Test Org',
@@ -271,7 +273,7 @@ describe('resolveTenant', () => {
           subdomain: null,
           isCustomDomain: true,
         }),
-      ).resolves.toEqual({ orgSlug: org.slug, siteType: 'admin' });
+      ).resolves.toBeNull();
     });
 
     it('resolves a customStoreDomain to its org slug', async () => {
@@ -292,18 +294,20 @@ describe('resolveTenant', () => {
           subdomain: null,
           isCustomDomain: true,
         }),
-      ).resolves.toEqual({ orgSlug: org.slug, siteType: 'storefront' });
+      ).resolves.toEqual({ orgSlug: org.slug, siteType: 'storefront', status: 'ACTIVE' });
     });
 
-    it('ignores a suspended organization', async () => {
+    // A suspended workspace still resolves, carrying its status, so proxy.ts
+    // can show "unavailable" rather than bounce the visitor away (ROADMAP 11.4).
+    it('resolves a suspended organization with its status', async () => {
       const org = await prisma.organization.create({
         data: {
           name: 'Suspended Org',
           slug: `suspended-test-${suffix}`,
-          customAdminDomain: `suspended-${suffix}.example.com`,
+          customStoreDomain: `suspended-${suffix}.example.com`,
           status: 'SUSPENDED',
         },
-        select: { id: true },
+        select: { id: true, slug: true },
       });
       createdOrgIds.push(org.id);
 
@@ -314,7 +318,7 @@ describe('resolveTenant', () => {
           subdomain: null,
           isCustomDomain: true,
         }),
-      ).resolves.toBeNull();
+      ).resolves.toEqual({ orgSlug: org.slug, siteType: 'storefront', status: 'SUSPENDED' });
     });
   });
 });

@@ -74,6 +74,19 @@ export const PERMISSIONS = {
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
+/**
+ * Permissions for features that aren't built yet — projects, tasks and
+ * stock requisitions (ROADMAP 12.4). The keys stay (roles already saved may
+ * hold them, harmlessly), but nothing offers them: the roles screen hides
+ * them and new workspaces' roles are created without them. Remove a prefix
+ * here when its feature ships.
+ */
+export const UNBUILT_PERMISSION_PREFIXES = ['project.', 'task.', 'inventory.requisition.'] as const;
+
+export function isBuiltPermission(key: string): boolean {
+  return !UNBUILT_PERMISSION_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
 // ─── Permission Check Helpers ─────────────────────────────────────────────────
 
 /**
@@ -175,21 +188,6 @@ export const SYSTEM_ROLES = {
       PERMISSIONS.CUSTOMER_CREATE,
       PERMISSIONS.CUSTOMER_EDIT,
       PERMISSIONS.SOCIAL_VIEW,
-    ],
-  },
-  PROJECT_MANAGER: {
-    name: 'Project Manager',
-    isSystem: true,
-    permissions: [
-      PERMISSIONS.PROJECT_VIEW,
-      PERMISSIONS.PROJECT_CREATE,
-      PERMISSIONS.PROJECT_EDIT,
-      PERMISSIONS.TASK_VIEW,
-      PERMISSIONS.TASK_CREATE,
-      PERMISSIONS.TASK_EDIT,
-      PERMISSIONS.TASK_ASSIGN,
-      PERMISSIONS.INVENTORY_VIEW,
-      PERMISSIONS.INVENTORY_REQUISITION_CREATE,
     ],
   },
   VIEWER: {

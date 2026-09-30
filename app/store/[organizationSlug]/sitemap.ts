@@ -16,6 +16,8 @@ import {
   listProducts,
 } from '@/lib/storefront/catalog';
 import { getStorefrontUrl } from '@/lib/tenant/urls';
+import { getOrgRouting } from '@/lib/tenant/org-status';
+import { prisma } from '@/lib/prisma';
 import type { CategoryNode } from '@/lib/storefront/types';
 
 /** Search engines stop reading a sitemap long before this. */
@@ -35,10 +37,16 @@ export default async function sitemap({
 }): Promise<MetadataRoute.Sitemap> {
   const { organizationSlug } = await params;
   const scope = { organizationSlug };
-  const url = (path: string) => getStorefrontUrl(organizationSlug, path);
+
+  // Not open yet (12.5), or not a live shop: nothing to list.
+  const open = await prisma.organization.count({ where: { slug: organizationSlug, status: 'ACTIVE', storefrontOpen: true } });
+  if (!open) return [];
+  // The shop's own domain once it's live (12.6), else its platform address.
+  const { customStoreDomain } = await getOrgRouting(organizationSlug);
+  const url = (path: string) => getStorefrontUrl(organizationSlug, path, customStoreDomain);
 
   const [products, tree, collections, pages] = await Promise.all([
-    listProducts({ perPage: MAX_PRODUCTS, ...scope }),
+    listProducts({ perPage: MAX_PRODUCTS, store: scope }),
     getCategoryTree(scope),
     getCollections(scope),
     getStorePages(scope),

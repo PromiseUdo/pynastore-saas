@@ -14,6 +14,8 @@ import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { startOfTodayInLagos } from '@/lib/day';
+import { getOnlinePaymentReadiness } from '@/lib/payments/online-readiness';
+import type { OnlinePaymentBlocker } from '@/lib/payments/payment-setup';
 
 /** Orders the merchant still has something to do about. */
 const OPEN_ORDER_STATUSES = ['PENDING', 'CONFIRMED', 'PROCESSING'] as const;
@@ -44,11 +46,26 @@ export interface DashboardOverview {
     returnsAwaiting: number;
     unansweredQuestions: number;
     overdueInvoices: number;
+    /**
+     * Orders cancelled after they were paid and not refunded in full — a
+     * cancellation, or a payment that arrived after its stock was gone (or
+     * would now ship from dearer stores than the customer paid for).
+     */
+    refundsOwed: number;
+    /** chargebacks not yet settled — 2 means "more than one" (only two are read) */
+    openDisputes: number;
+    firstDisputeOrderId: string | null;
   } | null;
   inventory: {
     lowStockCount: number;
   } | null;
   recentOrders: RecentOrder[];
+  /**
+   * What stands between this shop and taking online payments (ROADMAP 10.8),
+   * for members who can change settings — null when nothing does, or when the
+   * member couldn't act on it anyway.
+   */
+  onlinePayments: OnlinePaymentBlocker | null;
 }
 
 export async function getDashboardOverview(): Promise<DashboardOverview> {
@@ -57,13 +74,15 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const perms = ctx.membership.role.permissions;
   const canViewSales = hasPermission(perms, PERMISSIONS.SALES_VIEW);
   const canViewInventory = hasPermission(perms, PERMISSIONS.INVENTORY_VIEW);
+  const canEditSettings = hasPermission(perms, PERMISSIONS.SETTINGS_EDIT);
 
   const since = startOfTodayInLagos();
 
-  const [sales, inventory, recentOrders] = await Promise.all([
+  const [sales, inventory, recentOrders, readiness] = await Promise.all([
     canViewSales ? salesSnapshot(organizationId, since) : Promise.resolve(null),
     canViewInventory ? inventorySnapshot(organizationId) : Promise.resolve(null),
     canViewSales ? recentOrdersFor(organizationId) : Promise.resolve([]),
+    canEditSettings ? getOnlinePaymentReadiness(organizationId) : Promise.resolve(null),
   ]);
 
   return {
@@ -71,6 +90,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     currency: ctx.organization.currency,
     canViewSales,
     canViewInventory,
+    onlinePayments: readiness?.blocker ?? null,
     sales,
     inventory,
     recentOrders,
@@ -78,8 +98,17 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
 }
 
 async function salesSnapshot(organizationId: string, since: Date) {
-  const [paidToday, ordersToday, byChannel, openOrders, returnsAwaiting, unansweredQuestions, overdueInvoices] =
-    await Promise.all([
+  const [
+    paidToday,
+    ordersToday,
+    byChannel,
+    openOrders,
+    returnsAwaiting,
+    unansweredQuestions,
+    overdueInvoices,
+    refundsOwed,
+    openDisputes,
+  ] = await Promise.all([
       /* Money counts from the moment it actually arrived, not from when the
        * order was placed — an unpaid order is not revenue. */
       prisma.order.aggregate({
@@ -104,6 +133,17 @@ async function salesSnapshot(organizationId: string, since: Date) {
           dueDate: { lt: new Date() },
         },
       }),
+      prisma.order.count({
+        where: { organizationId, status: 'CANCELLED', paymentStatus: { in: ['PAID', 'PARTIALLY_REFUNDED'] } },
+      }),
+      /* Chargebacks still open (ROADMAP 10.5) — oldest first, so a single one
+       * can be linked to directly. */
+      prisma.paymentDispute.findMany({
+        where: { organizationId, status: { not: 'resolved' } },
+        select: { orderId: true },
+        orderBy: { createdAt: 'asc' },
+        take: 2,
+      }),
     ]);
 
   return {
@@ -114,6 +154,9 @@ async function salesSnapshot(organizationId: string, since: Date) {
     returnsAwaiting,
     unansweredQuestions,
     overdueInvoices,
+    refundsOwed,
+    openDisputes: openDisputes.length,
+    firstDisputeOrderId: openDisputes[0]?.orderId ?? null,
   };
 }
 

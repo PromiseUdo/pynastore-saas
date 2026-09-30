@@ -7,82 +7,27 @@ import { RotateCcw, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PageHeader, PageToolbar, PageBody } from '@/components/layout/page-header';
+import { PageBody, PageHeader, PageToolbar } from '@/components/layout/page-header';
 import { PageTabs } from '@/components/layout/page-tabs';
 import { EmptyState } from '@/components/layout/empty-state';
 import { TablePagination } from '@/components/ui/table-pagination';
-import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import {
-  Table,
-  TableWrapper,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableColumnHeader,
-  TableCell,
-} from '@/components/ui/table';
-import { enumLabel, formatDate, formatMoney, formatNumber } from '@/lib/format';
-import { ORDER_RETURN_LABEL, ORDER_RETURN_VARIANT } from '@/lib/sales/order-labels';
-import type { ReturnListRow } from '@/features/sales/actions';
-import type { OrderReturnFilter, OrderReturnListRow } from '@/features/sales/order-returns';
+import { SelectContent, SelectItem, SelectRoot, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableColumnHeader, TableHead, TableRow, TableWrapper } from '@/components/ui/table';
+import { formatDate, formatMoney, formatNumber } from '@/lib/format';
+import type { ReturnsFilter, ReturnsPage, SourceFilter } from '@/features/sales/work-lists';
 
-const TABS = [
-  { key: 'online', label: 'Online store' },
-  { key: 'invoices', label: 'Invoices' },
-];
+const SOURCE_LABEL: Record<SourceFilter, string> = { all: 'Orders and invoices', order: 'Online store only', invoice: 'Invoices only' };
 
-const FILTER_LABEL: Record<OrderReturnFilter, string> = {
-  open: 'Waiting on you',
-  all: 'All returns',
-  REQUESTED: 'New requests',
-  APPROVED: 'Approved, not refunded',
-  REFUNDED: 'Refunded',
-  REJECTED: 'Declined',
-  WITHDRAWN: 'Withdrawn',
-};
-
-const INVOICE_STATUS_VARIANT: Record<ReturnListRow['status'], 'pending' | 'approved' | 'rejected'> = {
-  REQUESTED: 'pending',
-  APPROVED: 'approved',
-  REJECTED: 'rejected',
-};
-
-type Props =
-  | { view: 'invoices'; invoiceReturns: ReturnListRow[] }
-  | {
-      view: 'online';
-      online: { rows: OrderReturnListRow[]; total: number; page: number; pageSize: number; openCount: number };
-      filter: OrderReturnFilter;
-      query: string;
-    };
-
-export function ReturnsPageClient(props: Props) {
-  return (
-    <>
-      <PageHeader
-        title="Returns"
-        description="Items customers are sending back, and the refunds you’ve recorded for them."
-      />
-      <PageToolbar className="gap-y-2">
-        <PageTabs tabs={TABS} current={props.view} />
-      </PageToolbar>
-      {props.view === 'online' ? (
-        <OnlineReturns online={props.online} filter={props.filter} query={props.query} />
-      ) : (
-        <InvoiceReturns returns={props.invoiceReturns} />
-      )}
-    </>
-  );
-}
-
-function OnlineReturns({
-  online,
+export function ReturnsPageClient({
+  data,
   filter,
-  query,
+  source,
+  q,
 }: {
-  online: { rows: OrderReturnListRow[]; total: number; page: number; pageSize: number; openCount: number };
-  filter: OrderReturnFilter;
-  query: string;
+  data: ReturnsPage;
+  filter: ReturnsFilter;
+  source: SourceFilter;
+  q: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -91,9 +36,10 @@ function OnlineReturns({
   const setParams = React.useCallback(
     (patch: Record<string, string | null>) => {
       const next = new URLSearchParams(searchParams.toString());
-      for (const [key, value] of Object.entries(patch)) {
-        if (value === null || value === '') next.delete(key);
-        else next.set(key, value);
+      next.delete('view');
+      for (const [k, v] of Object.entries(patch)) {
+        if (!v) next.delete(k);
+        else next.set(k, v);
       }
       if (!('page' in patch)) next.delete('page');
       const qs = next.toString();
@@ -102,56 +48,54 @@ function OnlineReturns({
     [pathname, router, searchParams],
   );
 
-  const filtering = filter !== 'open' || query.trim().length > 0;
-  const totalPages = Math.max(1, Math.ceil(online.total / online.pageSize));
+  const tabs = [
+    { key: 'open', label: `Waiting on you (${formatNumber(data.counts.open)})` },
+    { key: 'all', label: 'All returns' },
+  ];
+  const filtering = source !== 'all' || q.length > 0;
 
   return (
     <>
+      <PageHeader
+        title="Returns"
+        description="Items customers are sending back — from your online store and against invoices — and the refunds you’ve recorded."
+      />
+      <PageToolbar className="gap-y-2">
+        <PageTabs tabs={tabs} current={filter} param="status" />
+      </PageToolbar>
       <PageToolbar>
         <div className="relative w-full sm:max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             aria-label="Search returns"
-            placeholder="Order number or customer"
-            defaultValue={query}
+            placeholder="Order, invoice or customer"
+            defaultValue={q}
             onChange={(e) => setParams({ q: e.target.value })}
             className="pl-8"
           />
         </div>
-        <SelectRoot value={filter} onValueChange={(value) => setParams({ status: value === 'open' ? null : value })}>
-          <SelectTrigger className="w-full sm:w-52" aria-label="Filter by status">
+        <SelectRoot value={source} onValueChange={(v) => setParams({ source: v === 'all' ? null : v })}>
+          <SelectTrigger aria-label="Show" className="w-48">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(Object.keys(FILTER_LABEL) as OrderReturnFilter[]).map((key) => (
-              <SelectItem key={key} value={key}>
-                {FILTER_LABEL[key]}
-                {key === 'open' && online.openCount > 0 ? ` (${formatNumber(online.openCount, 0)})` : ''}
+            {(Object.keys(SOURCE_LABEL) as SourceFilter[]).map((k) => (
+              <SelectItem key={k} value={k}>
+                {SOURCE_LABEL[k]}
               </SelectItem>
             ))}
           </SelectContent>
         </SelectRoot>
       </PageToolbar>
-
       <PageBody>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Customers ask for a return from their account, within the return window you set in{' '}
-          <Link href="/settings/delivery#returns" className="font-medium text-foreground underline-offset-2 hover:underline">
-            Settings → Delivery and returns
-          </Link>
-          . Open a return’s order to approve it, decline it or record the refund.
-        </p>
-
-        {online.rows.length === 0 ? (
+        {data.rows.length === 0 ? (
           filtering ? (
             <EmptyState
               variant="filtered"
+              icon={Search}
               title="No returns match"
-              description={
-                filter === 'open' ? 'Nothing waiting on you matches that search.' : 'Nothing here fits that search or filter.'
-              }
               action={
-                <Button size="sm" variant="outline" onClick={() => setParams({ q: null, status: null })}>
+                <Button variant="outline" size="sm" onClick={() => setParams({ q: null, source: null })}>
                   Clear filters
                 </Button>
               }
@@ -159,13 +103,8 @@ function OnlineReturns({
           ) : (
             <EmptyState
               icon={RotateCcw}
-              title="Nothing waiting on you"
-              description="When a customer asks to send items back, the request shows up here and you’re emailed."
-              action={
-                <Button size="sm" variant="outline" onClick={() => setParams({ status: 'all' })}>
-                  See all returns
-                </Button>
-              }
+              title={filter === 'open' ? 'Nothing waiting on you' : 'No returns yet'}
+              description="Online-store customers ask to return items from their account; returns against an invoice are raised from the invoice. Both appear here."
             />
           )
         ) : (
@@ -174,107 +113,61 @@ function OnlineReturns({
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableColumnHeader>Order</TableColumnHeader>
-                    <TableColumnHeader>Customer</TableColumnHeader>
-                    <TableColumnHeader>Status</TableColumnHeader>
+                    <TableColumnHeader>Return for</TableColumnHeader>
                     <TableColumnHeader>Reason</TableColumnHeader>
                     <TableColumnHeader align="right">Items</TableColumnHeader>
+                    <TableColumnHeader>Status</TableColumnHeader>
                     <TableColumnHeader align="right">Refunded</TableColumnHeader>
-                    <TableColumnHeader>Requested</TableColumnHeader>
+                    <TableColumnHeader>Asked</TableColumnHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {online.rows.map((row) => (
-                    <TableRow key={row.id} clickable onClick={() => router.push(`/sales/orders/${row.orderId}#returns`)}>
-                      <TableCell className="font-medium text-foreground">
-                        <Link
-                          href={`/sales/orders/${row.orderId}#returns`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="hover:underline"
-                        >
-                          {row.reference}
-                        </Link>
-                      </TableCell>
-                      <TableCell muted>{row.customerName}</TableCell>
+                  {data.rows.map((r) => (
+                    <TableRow
+                      key={r.key}
+                      className="cursor-pointer"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('a')) return;
+                        router.push(r.href);
+                      }}
+                    >
                       <TableCell>
-                        <Badge variant={ORDER_RETURN_VARIANT[row.status] ?? 'draft'}>
-                          {ORDER_RETURN_LABEL[row.status] ?? '—'}
-                        </Badge>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Link href={r.href} className="font-medium text-foreground hover:underline">
+                            {r.reference}
+                          </Link>
+                          <Badge variant={r.source === 'order' ? 'info' : 'muted'}>{r.source === 'order' ? 'Online store' : 'Invoice'}</Badge>
+                        </div>
+                        <span className="block text-xs text-muted-foreground">{r.customerName}</span>
                       </TableCell>
-                      <TableCell muted>{row.reasonLabel}</TableCell>
+                      <TableCell className="text-muted-foreground">{r.reason ?? '—'}</TableCell>
                       <TableCell align="right" className="tabular-nums">
-                        {formatNumber(row.itemCount, 0)}
+                        {formatNumber(r.itemCount)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={r.statusVariant}>{r.statusLabel}</Badge>
                       </TableCell>
                       <TableCell align="right" className="tabular-nums">
-                        {row.refunded === null ? '—' : formatMoney(row.refunded, row.currency)}
+                        {r.refunded === null ? '—' : formatMoney(r.refunded, r.currency)}
                       </TableCell>
-                      <TableCell muted>{formatDate(row.requestedAt)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(r.requestedAt)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </TableWrapper>
-            {online.total > online.pageSize && (
+            {data.total > data.pageSize && (
               <TablePagination
-                page={online.page}
-                totalPages={totalPages}
-                totalItems={online.total}
-                pageSize={online.pageSize}
-                onPageChange={(next) => setParams({ page: String(next) })}
+                page={data.page}
+                totalPages={Math.ceil(data.total / data.pageSize)}
+                totalItems={data.total}
+                pageSize={data.pageSize}
+                onPageChange={(p) => setParams({ page: p > 1 ? String(p) : null })}
               />
             )}
           </>
         )}
       </PageBody>
     </>
-  );
-}
-
-function InvoiceReturns({ returns }: { returns: ReturnListRow[] }) {
-  const router = useRouter();
-
-  return (
-    <PageBody>
-      {returns.length === 0 ? (
-        <EmptyState
-          icon={RotateCcw}
-          title="No invoice returns yet"
-          description="Returns raised from an invoice show up here, ready to approve and restock."
-        />
-      ) : (
-        <TableWrapper>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableColumnHeader>Invoice</TableColumnHeader>
-                <TableColumnHeader>Customer</TableColumnHeader>
-                <TableColumnHeader>Status</TableColumnHeader>
-                <TableColumnHeader align="right">Line items</TableColumnHeader>
-                <TableColumnHeader>Requested</TableColumnHeader>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {returns.map((r) => (
-                <TableRow key={r.id} clickable onClick={() => router.push(`/sales/returns/${r.id}`)}>
-                  <TableCell className="font-medium text-foreground">
-                    <Link href={`/sales/returns/${r.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline">
-                      {r.invoiceNumber}
-                    </Link>
-                  </TableCell>
-                  <TableCell muted>{r.customerName}</TableCell>
-                  <TableCell>
-                    <Badge variant={INVOICE_STATUS_VARIANT[r.status]}>{enumLabel(r.status)}</Badge>
-                  </TableCell>
-                  <TableCell align="right" className="tabular-nums">
-                    {r.itemCount}
-                  </TableCell>
-                  <TableCell muted>{formatDate(r.createdAt)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableWrapper>
-      )}
-    </PageBody>
   );
 }

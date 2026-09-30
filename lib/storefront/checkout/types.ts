@@ -86,10 +86,11 @@ export interface CheckoutCountry {
 /**
  * A payment choice.
  *
- * `provider` says who takes the money: 'squad' sends the shopper to Squad's
- * hosted page after the order exists (lib/storefront/checkout/payment-service.ts);
- * 'manual' would be settled outside the app (a transfer the merchant checks,
- * cash on delivery). Components don't branch on it — the server does.
+ * `provider` says who takes the money: 'paystack' sends the shopper to
+ * Paystack's hosted page after the order exists, and the money settles to the
+ * shop's own subaccount (lib/storefront/checkout/payment-service.ts); 'manual'
+ * is settled outside the app (a transfer the merchant checks, cash on
+ * delivery). Components don't branch on it — the server does.
  */
 export interface PaymentMethodOption {
   id: string;
@@ -97,7 +98,7 @@ export interface PaymentMethodOption {
   description: string;
   /** what happens after Place Order, in the shopper's words */
   handoffNote: string;
-  provider: 'squad' | 'manual';
+  provider: 'paystack' | 'manual';
   /**
    * The money is collected when the goods arrive, not before.
    *

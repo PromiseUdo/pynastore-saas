@@ -12,7 +12,8 @@
  * lib/storefront/orders/returns.ts; this only checks who is asking.
  *
  * Money is MAJOR units here, like the rest of the admin. The app sends no
- * money: the merchant refunds from their Squad dashboard or bank, then
+ * money: the merchant sends it back from their own bank (online payments
+ * settle there through Paystack), then
  * records it, and the customer is emailed that the store says it's sent.
  */
 import { z } from 'zod';

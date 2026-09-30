@@ -15,7 +15,8 @@
  * doesn't want back needs no approval step first.
  *
  * MONEY: the app moves none. There is no refund API; the merchant sends the
- * money (Squad dashboard, bank transfer) and records it here, and the
+ * money from their own bank and records it here (refunds through Paystack
+ * are paused, ROADMAP 10.7), and the
  * shopper is told it was sent. An OrderRefund row is that record, and the
  * order's payment status follows the sum (./policy.ts).
  *

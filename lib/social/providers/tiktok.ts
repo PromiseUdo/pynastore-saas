@@ -75,6 +75,7 @@
  */
 import type { PublishRules, SocialProvider } from '../types';
 import { SocialProviderError } from '../types';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 function notYet(): never {
   throw new SocialProviderError('unsupported', 'TikTok publishing is not enabled on this installation');
@@ -92,7 +93,7 @@ export const tiktokProvider: SocialProvider = {
   },
 
   unavailableReason(): string | null {
-    return 'TikTok isn’t available yet. We’ll turn it on once TikTok approves MansaaS for posting.';
+    return `TikTok isn’t available yet. We’ll turn it on once TikTok approves ${PLATFORM_NAME} for posting.`;
   },
 
   /* Answers, rather than throwing, so a screen can render the row greyed

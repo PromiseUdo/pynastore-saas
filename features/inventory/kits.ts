@@ -35,7 +35,7 @@ export async function createKit(
 
     const { plan } = await getOrganizationEntitlements();
     if (!hasFeature(plan, FEATURES.INVENTORY_KITS)) {
-      return { success: false, error: 'Kits & assemblies require the Pro plan or higher' };
+      return { success: false, error: 'Kits and assemblies aren’t included in your plan. See Plans to upgrade.' };
     }
 
     const data = CreateKitSchema.parse(input);
@@ -110,7 +110,7 @@ export async function assembleKit(
 
     const { plan } = await getOrganizationEntitlements();
     if (!hasFeature(plan, FEATURES.INVENTORY_KITS)) {
-      return { success: false, error: 'Kits & assemblies require the Pro plan or higher' };
+      return { success: false, error: 'Kits and assemblies aren’t included in your plan. See Plans to upgrade.' };
     }
 
     const data = AssembleKitSchema.parse(input);

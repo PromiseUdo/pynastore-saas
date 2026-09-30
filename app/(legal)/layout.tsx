@@ -5,13 +5,14 @@
  * pages, not tenant pages: proxy.ts serves them on the marketing/platform
  * host only (they are listed in PUBLIC_PATHS there), so they load with no
  * session, no organization and no JavaScript interaction — which is what
- * the Meta App Review reviewer opening https://getnotely.io/privacy in a
+ * the Meta App Review reviewer opening the platform's /privacy in a
  * private window needs.
  *
  * Deliberately plain: the same tokens, font and radius as the rest of the
  * app (app/globals.css), and the same wordmark as the sign-in pages.
  */
 import Link from 'next/link';
+import { PLATFORM_CONTACT_EMAIL, PLATFORM_NAME, PLATFORM_OPERATOR } from '@/lib/brand';
 
 export default function LegalLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,9 +24,9 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
               aria-hidden
               className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground"
             >
-              N
+              {PLATFORM_NAME.charAt(0)}
             </span>
-            <span className="text-base font-semibold text-foreground">Notely</span>
+            <span className="text-base font-semibold text-foreground">{PLATFORM_NAME}</span>
           </Link>
           <nav aria-label="Legal" className="flex items-center gap-4 text-sm">
             <Link
@@ -48,7 +49,9 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
 
       <footer className="border-t bg-card">
         <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <p>Notely — operated by Pynacode.</p>
+          <p>
+            {PLATFORM_NAME} — operated by {PLATFORM_OPERATOR}.
+          </p>
           <nav aria-label="Footer" className="flex flex-wrap items-center gap-4">
             <Link href="/privacy" className="underline-offset-4 hover:text-foreground hover:underline">
               Privacy Policy
@@ -57,7 +60,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
               Terms of Service
             </Link>
             <a
-              href="mailto:pynacode@gmail.com"
+              href={`mailto:${PLATFORM_CONTACT_EMAIL}`}
               className="underline-offset-4 hover:text-foreground hover:underline"
             >
               Contact

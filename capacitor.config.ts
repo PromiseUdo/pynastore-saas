@@ -1,5 +1,5 @@
 /*
- * capacitor.config.ts — native shell configuration for the MansaaS
+ * capacitor.config.ts — native shell configuration for the Notely
  * storefront mobile app (iOS + Android).
  *
  * The app has no bundled web build: it is a thin native wrapper around the
@@ -24,8 +24,10 @@ const productionUrl = process.env.NEXT_PUBLIC_MOBILE_URL?.trim();
 const serverUrl = liveReloadUrl || productionUrl || undefined;
 
 const config: CapacitorConfig = {
+  // The id is permanent — changing it makes a different app in the stores, so
+  // it keeps the original name. The display name follows lib/brand.ts (12.2).
   appId: 'com.mansaas.app',
-  appName: 'MansaaS',
+  appName: 'Notely',
   // Required even though we load over the network — Capacitor copies this
   // into the native bundle as the offline fallback.
   webDir: 'mobile/www',

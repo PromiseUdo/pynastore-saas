@@ -267,6 +267,7 @@ export function OrdersPageClient({
                             {STATUS_LABEL[order.status] ?? '—'}
                           </Badge>
                           {order.returnsAwaiting > 0 && <Badge variant="warning">Return requested</Badge>}
+                        {order.partiallySent && <Badge variant="processing">Partially sent</Badge>}
                           {order.refundOwed && <Badge variant="warning">Refund owed</Badge>}
                         </span>
                       </TableCell>

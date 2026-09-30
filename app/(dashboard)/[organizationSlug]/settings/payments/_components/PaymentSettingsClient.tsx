@@ -1,10 +1,11 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Banknote, CircleCheck, CreditCard, Landmark, Loader2, MoreHorizontal, Pencil, Plus, RotateCw, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ArrowRight, Banknote, CircleCheck, CreditCard, Landmark, Loader2, MoreHorizontal, Pencil, Plus, RotateCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,16 +47,35 @@ import {
   type BankAccountFieldErrors,
   type BankAccountRow,
 } from '@/features/settings/bank-accounts';
-import { NIGERIAN_BANKS, bankByName } from '@/lib/payments/nigerian-banks';
+import { BankPicker, bankCodeForName } from '@/components/dashboard/bank-picker';
+import type { PaystackBank } from '@/lib/payments/paystack';
+import { maskAccountNumber, type SetupState } from '@/lib/payments/payment-setup';
+
+export interface OnlineSetupSummary {
+  state: SetupState;
+  done: number;
+  total: number;
+  settlement: { bankName: string | null; accountNumber: string | null; accountName: string } | null;
+}
 
 export function PaymentSettingsClient({
   accounts,
   canManage,
   transferHoldHours,
+  onlineSetup,
+  banks,
+  banksError,
+  testMode = false,
 }: {
   accounts: BankAccountRow[];
   canManage: boolean;
   transferHoldHours: number;
+  onlineSetup: OnlineSetupSummary;
+  /** Paystack's bank list, for the account dialog — empty for someone who can't manage */
+  banks: PaystackBank[];
+  banksError: string | null;
+  /** the server's Paystack key is a test key */
+  testMode?: boolean;
 }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -110,7 +130,9 @@ export function PaymentSettingsClient({
       />
 
       <PageBody>
-        <section className="rounded-lg border bg-card">
+        <OnlineSetupCard setup={onlineSetup} canManage={canManage} />
+
+        <section className="mt-6 rounded-lg border bg-card">
           <h2 className="border-b px-4 py-3 text-sm font-semibold">Payment options at checkout</h2>
           <ul className="divide-y text-sm">
             <li className="flex items-start gap-3 px-4 py-3">
@@ -118,10 +140,13 @@ export function PaymentSettingsClient({
               <div className="min-w-0 flex-1">
                 <p className="font-medium">Pay online</p>
                 <p className="text-xs text-muted-foreground">
-                  Card or bank transfer through Squad. Orders are marked paid automatically.
+                  Card, bank transfer or USSD through Paystack, paid into your bank account less Paystack’s fee. Orders
+                  are marked paid automatically.
                 </p>
               </div>
-              <Badge variant="success">On</Badge>
+              <Badge variant={onlineSetup.state.key === 'ready' ? 'success' : 'draft'}>
+                {onlineSetup.state.key === 'ready' ? 'On' : 'Off — set up Get paid online'}
+              </Badge>
             </li>
             <li className="flex items-start gap-3 px-4 py-3">
               <Banknote className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -248,6 +273,9 @@ export function PaymentSettingsClient({
             open={dialogOpen}
             onOpenChange={setDialogOpen}
             editing={editing}
+            banks={banks}
+            banksError={banksError}
+            testMode={testMode}
             onSaved={() => {
               setDialogOpen(false);
               router.refresh();
@@ -278,6 +306,63 @@ export function PaymentSettingsClient({
   );
 }
 
+/**
+ * Where "Get paid online" stands, and the one thing to do next. The details
+ * live on their own page (./online); this card only points there.
+ */
+function OnlineSetupCard({ setup, canManage }: { setup: OnlineSetupSummary; canManage: boolean }) {
+  const { state } = setup;
+  const action =
+    state.key === 'not_started'
+      ? 'Set up online payments'
+      : state.key === 'in_progress'
+        ? 'Continue setup'
+        : state.key === 'needs_changes'
+          ? 'Review and resubmit'
+          : 'View details';
+  const primary = canManage && ['not_started', 'in_progress', 'needs_changes'].includes(state.key);
+
+  return (
+    <section className="rounded-lg border bg-card p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-semibold">Get paid online</h2>
+              <Badge variant={state.variant}>{state.label}</Badge>
+            </div>
+            <p className="mt-0.5 text-sm text-muted-foreground">{state.hint}</p>
+            {state.key === 'in_progress' && setup.total > 0 && (
+              <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                {setup.done} of {setup.total} steps done
+              </p>
+            )}
+            {setup.settlement && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Paid into {setup.settlement.bankName ?? 'your bank'} {maskAccountNumber(setup.settlement.accountNumber)} ·{' '}
+                {setup.settlement.accountName}
+              </p>
+            )}
+            {!canManage && state.key === 'not_started' && (
+              <p className="mt-1 text-xs text-muted-foreground">Ask someone who can change settings to set this up.</p>
+            )}
+          </div>
+        </div>
+        {(canManage || state.key !== 'not_started') && (
+          <Link
+            href="/settings/payments/online"
+            className={buttonVariants({ variant: primary ? 'default' : 'outline', size: 'sm', className: 'shrink-0 self-start' })}
+          >
+            {action}
+            <ArrowRight className="size-3.5" />
+          </Link>
+        )}
+      </div>
+    </section>
+  );
+}
+
 type Lookup =
   | { state: 'idle' }
   | { state: 'checking' }
@@ -288,14 +373,22 @@ function BankAccountDialog({
   open,
   onOpenChange,
   editing,
+  banks,
+  banksError,
+  testMode,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing: BankAccountRow | null;
+  banks: PaystackBank[];
+  banksError: string | null;
+  testMode: boolean;
   onSaved: () => void;
 }) {
-  const [bankCode, setBankCode] = React.useState(() => (editing ? bankByName(editing.bankName)?.code ?? '' : ''));
+  // An account saved before the move to Paystack's bank list (ROADMAP 10.9)
+  // is matched by name; one that doesn't match is simply chosen again.
+  const [bankCode, setBankCode] = React.useState(() => (editing ? bankCodeForName(banks, editing.bankName) : ''));
   const [accountNumber, setAccountNumber] = React.useState(editing?.accountNumber ?? '');
   const [isActive, setIsActive] = React.useState(editing?.isActive ?? true);
   const [lookup, setLookup] = React.useState<Lookup>({ state: 'idle' });
@@ -376,23 +469,32 @@ function BankAccountDialog({
 
             <Field>
               <Label htmlFor="bank-code">Bank *</Label>
-              <SelectRoot value={bankCode} onValueChange={setBankCode}>
-                <SelectTrigger id="bank-code" aria-invalid={errors.bankCode ? true : undefined}>
-                  <SelectValue placeholder="Choose your bank" />
-                </SelectTrigger>
-                <SelectContent>
-                  {NIGERIAN_BANKS.map((bank) => (
-                    <SelectItem key={bank.code} value={bank.code}>
-                      {bank.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </SelectRoot>
-              {errors.bankCode && <FieldError>{errors.bankCode}</FieldError>}
-              {!errors.bankCode && editing && !bankCode && (
+              <BankPicker
+                id="bank-code"
+                banks={banks}
+                value={bankCode}
+                onChange={(code) => {
+                  setBankCode(code);
+                  setErrors((prev) => ({ ...prev, bankCode: undefined }));
+                }}
+                disabled={banksError !== null}
+                invalid={Boolean(errors.bankCode)}
+                savedName={null}
+              />
+              {banksError ? (
+                <FieldError>{banksError}</FieldError>
+              ) : errors.bankCode ? (
+                <FieldError>{errors.bankCode}</FieldError>
+              ) : editing && !bankCode ? (
                 <FieldDescription>
-                  Choose “{editing.bankName}” from the list so we can check the account with your bank.
+                  Search for “{editing.bankName}” and choose it, so we can check the account with your bank.
                 </FieldDescription>
+              ) : (
+                testMode && (
+                  <FieldDescription>
+                    Test mode: Paystack checks only 3 real accounts a day. Use Zenith Bank with account 0000000000.
+                  </FieldDescription>
+                )
               )}
             </Field>
 

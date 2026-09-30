@@ -18,6 +18,10 @@ import type { HostnameInfo, SiteType } from './resolveHostname';
 export interface TenantResolution {
   orgSlug: string;
   siteType: Extract<SiteType, 'admin' | 'storefront'>;
+  /** known when the lookup already read it (custom domains, the mobile path) */
+  status?: 'ACTIVE' | 'SUSPENDED';
+  /** the request arrived on the bare domain: send it to this canonical host (12.6) */
+  redirectHost?: string;
 }
 
 /**
@@ -27,11 +31,12 @@ export interface TenantResolution {
  */
 export async function resolveTenantBySlug(slug: string): Promise<TenantResolution | null> {
   if (!slug) return null;
+  // A suspended shop still resolves, so it can say it's unavailable (11.4).
   const org = await prisma.organization.findFirst({
-    where: { slug, status: 'ACTIVE' },
-    select: { slug: true },
+    where: { slug, status: { in: ['ACTIVE', 'SUSPENDED'] } },
+    select: { slug: true, status: true },
   });
-  return org ? { orgSlug: org.slug, siteType: 'storefront' } : null;
+  return org ? { orgSlug: org.slug, siteType: 'storefront', status: org.status as 'ACTIVE' | 'SUSPENDED' } : null;
 }
 
 export async function resolveTenant(info: HostnameInfo): Promise<TenantResolution | null> {
@@ -44,22 +49,25 @@ export async function resolveTenant(info: HostnameInfo): Promise<TenantResolutio
     return null;
   }
 
+  /* A merchant's own domain serves the STOREFRONT only (ROADMAP 12.6): the
+   * dashboard stays on the platform address, where the sign-in cookie lives.
+   * `customStoreDomain` is the canonical www host; the bare domain resolves
+   * too, with a redirect to it. */
+  const host = info.hostname.toLowerCase();
   const org = await prisma.organization.findFirst({
     where: {
-      status: 'ACTIVE',
-      OR: [{ customAdminDomain: info.hostname }, { customStoreDomain: info.hostname }],
+      status: { in: ['ACTIVE', 'SUSPENDED'] },
+      customStoreDomain: { in: host.startsWith('www.') ? [host] : [host, `www.${host}`] },
     },
-    select: { slug: true, customAdminDomain: true, customStoreDomain: true },
+    select: { slug: true, status: true, customStoreDomain: true },
   });
+  if (!org?.customStoreDomain) return null;
 
-  if (!org) return null;
-
-  if (org.customAdminDomain === info.hostname) {
-    return { orgSlug: org.slug, siteType: 'admin' };
-  }
-  if (org.customStoreDomain === info.hostname) {
-    return { orgSlug: org.slug, siteType: 'storefront' };
-  }
-
-  return null;
+  const status = org.status as 'ACTIVE' | 'SUSPENDED';
+  return {
+    orgSlug: org.slug,
+    siteType: 'storefront',
+    status,
+    ...(org.customStoreDomain !== host ? { redirectHost: org.customStoreDomain } : {}),
+  };
 }

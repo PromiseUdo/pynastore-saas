@@ -55,6 +55,7 @@ import type {
   SocialPostListResult,
   SocialPostRow,
 } from '@/lib/social/types';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 export type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
 
@@ -74,7 +75,7 @@ function copyFailure(error: unknown): { success: false; error: string } {
     console.error('[social] copywriter:', error.kind, error.message);
     switch (error.kind) {
       case 'not_configured':
-        return { success: false, error: 'AI writing isn’t set up on this MansaaS installation yet' };
+        return { success: false, error: `AI writing isn’t set up on this ${PLATFORM_NAME} installation yet` };
       case 'budget_exhausted':
       case 'rate_limited':
         return { success: false, error: 'We’ve hit today’s limit for AI writing. Try again shortly.' };

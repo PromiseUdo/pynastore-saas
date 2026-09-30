@@ -56,6 +56,7 @@ import type {
   SocialProvider,
 } from '../types';
 import { SocialProviderError } from '../types';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 /** Pinned deliberately: Meta versions expire, and a silent bump is a silent breakage. */
 export const GRAPH_VERSION = 'v26.0';
@@ -347,7 +348,7 @@ export const metaProvider: SocialProvider = {
 
   unavailableReason(): string | null {
     if (!appId() || !appSecret()) {
-      return 'Facebook and Instagram aren’t set up on this MansaaS installation yet.';
+      return `Facebook and Instagram aren’t set up on this ${PLATFORM_NAME} installation yet.`;
     }
     return null;
   },
@@ -448,7 +449,7 @@ export const metaProvider: SocialProvider = {
         parentAccountId: null,
         unavailableReason: canPublish
           ? null
-          : 'Your role on this Page doesn’t allow posting, so MansaaS can’t publish to it.',
+          : `Your role on this Page doesn’t allow posting, so ${PLATFORM_NAME} can’t publish to it.`,
       });
 
       const ig = page.instagram_business_account;

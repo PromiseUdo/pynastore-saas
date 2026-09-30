@@ -1,87 +1,56 @@
 /*
  * lib/billing/paystack.ts
  *
- * Thin server-only client for the Paystack API. Never import from a
- * client component — uses PAYSTACK_SECRET_KEY.
+ * Subscription billing on the Paystack API. Never import from a client
+ * component — uses PAYSTACK_SECRET_KEY. Requests go through the shared
+ * client in lib/payments/paystack.ts.
  */
-import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
-import { PLANS, getYearlyPrice } from '@/lib/billing/plans';
-import type { OrganizationPlan } from '@/lib/generated/prisma/enums';
-import type { BillingCycle } from '@/lib/generated/prisma/enums';
-
-const PAYSTACK_BASE_URL = 'https://api.paystack.co';
-
-function secretKey(): string {
-  const key = process.env.PAYSTACK_SECRET_KEY;
-  if (!key) throw new Error('PAYSTACK_SECRET_KEY is not configured.');
-  return key;
-}
-
-async function paystackFetch<T = any>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
-  const res = await fetch(`${PAYSTACK_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${secretKey()}`,
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  });
-
-  const body = await res.json();
-  if (!res.ok || body.status === false) {
-    throw new Error(body.message ?? `Paystack request failed: ${path}`);
-  }
-  return body;
-}
+import { paystackFetch, verifyPaystackSignature } from '@/lib/payments/paystack';
+import { PLATFORM_NAME } from '@/lib/brand';
+import { CYCLES, type BillingCycleKey } from '@/lib/billing/plans';
 
 /** Amount in NGN major units -> kobo (Paystack works in the lowest currency unit). */
 function toKobo(amountNaira: number): number {
   return Math.round(amountNaira * 100);
 }
 
-export function amountForPlan(plan: OrganizationPlan, billingCycle: BillingCycle): number {
-  const { monthlyPrice } = PLANS[plan];
-  return billingCycle === 'YEARLY' ? getYearlyPrice(monthlyPrice) : monthlyPrice;
-}
-
 /**
- * Ensures a Paystack Plan object exists for the given (plan, billingCycle)
- * pair, creating it on first use and caching the code in BillingPlanCode.
+ * The Paystack Plan object for one plan, cycle AND price, creating it on first
+ * use (ROADMAP 12.1). Keyed by the price, not just the plan: when staff change
+ * a price, the next subscriber gets a new Paystack plan, while everyone
+ * subscribed at the old price keeps renewing at it.
  */
-export async function ensurePaystackPlan(
-  plan: OrganizationPlan,
-  billingCycle: BillingCycle,
-): Promise<string> {
+export async function ensurePaystackPlan(input: {
+  planId: string;
+  planName: string;
+  billingCycle: BillingCycleKey;
+  /** NGN, major units — what this cycle costs */
+  amount: number;
+}): Promise<string> {
+  const amount = toKobo(input.amount);
   const existing = await prisma.billingPlanCode.findUnique({
-    where: { plan_billingCycle: { plan, billingCycle } },
+    where: { planId_billingCycle_amount: { planId: input.planId, billingCycle: input.billingCycle, amount } },
   });
   if (existing) return existing.paystackPlanCode;
 
-  const amount = amountForPlan(plan, billingCycle);
-  const planConfig = PLANS[plan];
-
+  const cycle = CYCLES[input.billingCycle];
   const created = await paystackFetch<{ data: { plan_code: string } }>('/plan', {
     method: 'POST',
     body: JSON.stringify({
-      name: `MansaaS ${planConfig.name} (${billingCycle === 'YEARLY' ? 'Yearly' : 'Monthly'})`,
-      amount: toKobo(amount),
-      interval: billingCycle === 'YEARLY' ? 'annually' : 'monthly',
+      name: `${PLATFORM_NAME} ${input.planName} (${cycle.label})`,
+      amount,
+      interval: cycle.paystackInterval,
       currency: 'NGN',
     }),
   });
 
   const paystackPlanCode = created.data.plan_code;
-
   await prisma.billingPlanCode.upsert({
-    where: { plan_billingCycle: { plan, billingCycle } },
-    create: { plan, billingCycle, paystackPlanCode },
-    update: { paystackPlanCode },
+    where: { planId_billingCycle_amount: { planId: input.planId, billingCycle: input.billingCycle, amount } },
+    create: { planId: input.planId, billingCycle: input.billingCycle, amount, paystackPlanCode },
+    update: {},
   });
-
   return paystackPlanCode;
 }
 
@@ -167,9 +136,10 @@ export async function createSubscription(params: {
   });
 }
 
-/** Verifies the `x-paystack-signature` header against the raw request body. */
+/**
+ * Verifies the `x-paystack-signature` header against the raw request body —
+ * in constant time, through the shared client (ROADMAP 10.5).
+ */
 export function verifyWebhookSignature(rawBody: string, signature: string | null): boolean {
-  if (!signature) return false;
-  const hash = crypto.createHmac('sha512', secretKey()).update(rawBody).digest('hex');
-  return hash === signature;
+  return verifyPaystackSignature(rawBody, signature);
 }

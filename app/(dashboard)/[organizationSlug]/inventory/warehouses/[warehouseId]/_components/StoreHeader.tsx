@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { PageTabs, type PageTab } from '@/components/layout/page-tabs';
 import { SwitchRoot } from '@/components/ui/switch';
 import { setWarehouseSellsOnline, type StoreDetail, type WarehouseRow } from '@/features/inventory/actions';
+import { formatStorePlace, hasStorePlace } from '@/features/inventory/store-place';
 import { StoreDialog } from '../../_components/StoreDialog';
 
 /* Orders are only offered to someone who may see sales — the tab would
@@ -43,12 +44,16 @@ export function StoreHeader({
   const [editOpen, setEditOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const closed = store.status !== 'ACTIVE';
+  const hasPlace = hasStorePlace(store);
+  const place = [formatStorePlace(store), store.location].filter(Boolean).join(' · ');
 
   // The dialog edits a store as the list shows it; itemCount is only its subtitle there.
   const asRow: WarehouseRow = {
     id: store.id,
     name: store.name,
     location: store.location,
+    state: store.state,
+    city: store.city,
     status: store.status,
     sellsOnline: store.sellsOnline,
     itemCount: store.productCount,
@@ -82,15 +87,56 @@ export function StoreHeader({
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">{store.name}</h1>
               <Badge variant={closed ? 'muted' : 'success'}>{closed ? 'Closed' : 'Open'}</Badge>
-              {store.sellsOnline && !closed && (
+              {store.sellsOnline && !closed && store.suppliesOnline && (
                 <Badge variant="info">
                   <Globe className="size-3" /> Sells online
                 </Badge>
               )}
             </div>
             <p className="mt-0.5 truncate text-sm text-muted-foreground">
-              {store.location ?? 'What this store holds, and what needs attention here.'}
+              {place || 'What this store holds, and what needs attention here.'}
             </p>
+            {/* Delivery is priced from a store's place (Phase 9), so an online
+                store without one is asked for it; one that isn't online yet is
+                told why the switch is off. */}
+            {!hasPlace && !closed && (
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                {store.sellsOnline && <Badge variant="warning">Needs a location</Badge>}
+                <span>
+                  {store.sellsOnline
+                    ? 'Add the city and state this store is in — delivery will be priced from here.'
+                    : 'Add the city and state this store is in before it can sell online.'}
+                </span>
+                {canEdit && store.canWorkHere && (
+                  <button
+                    type="button"
+                    onClick={() => setEditOpen(true)}
+                    className="rounded-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Add location
+                  </button>
+                )}
+              </p>
+            )}
+            {/* Switched on, but its stock is left out: another store can
+                deliver and this one can't (Phase 9.2). */}
+            {store.sellsOnline && !closed && !store.suppliesOnline && (
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <Badge variant="warning">Not selling yet</Badge>
+                <span>Its stock isn’t offered online until it has a way to send orders.</span>
+                <Link href="/settings/delivery" className="rounded-sm font-medium text-primary hover:underline">
+                  Set up delivery
+                </Link>
+              </p>
+            )}
+            {store.deliveryNeedsReview && (
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <span>Delivery prices from this store were copied from another store’s and need checking.</span>
+                <Link href="/settings/delivery" className="rounded-sm font-medium text-primary hover:underline">
+                  Check prices
+                </Link>
+              </p>
+            )}
             {/* Hiding the buttons without saying why reads as a bug (AGENTS §7). */}
             {!store.canWorkHere && (
               <p className="mt-1 text-xs text-muted-foreground">
@@ -104,7 +150,7 @@ export function StoreHeader({
               <span className="text-xs font-medium text-foreground">Sells online</span>
               <SwitchRoot
                 checked={store.sellsOnline}
-                disabled={!canEdit || busy || (closed && !store.sellsOnline)}
+                disabled={!canEdit || busy || (!store.sellsOnline && (closed || !hasPlace))}
                 onCheckedChange={(value) => void toggleOnline(value)}
                 aria-label={`${store.name} sells online`}
               />

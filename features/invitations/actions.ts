@@ -16,6 +16,7 @@ import { sendInvitationEmail } from '@/lib/email';
 import { updateCurrentOrganization } from '@/lib/session';
 import { getAdminUrl, getMarketingUrl } from '@/lib/tenant/urls';
 import { z } from 'zod';
+import { markEmailVerified } from '@/lib/email-verification';
 
 type ActionResult<T = void> =
   | { success: true; data: T }
@@ -255,6 +256,11 @@ export async function acceptInvitation(token: string): Promise<ActionResult> {
           data: { status: 'ACCEPTED' },
         }),
       ]);
+    }
+
+    // The invitation reached this address, so it's confirmed (ROADMAP 12.5).
+    if (session.user.email && session.user.email.toLowerCase() === invitation.email.toLowerCase()) {
+      await markEmailVerified(session.user.id);
     }
 
     await createAuditLog({

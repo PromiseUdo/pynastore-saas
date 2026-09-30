@@ -1,8 +1,8 @@
 /*
  * /checkout/confirmation?t=…
  *
- * Also where Squad returns the shopper after paying (via
- * /api/payments/squad/callback). An unpaid order gets a "Pay now" here.
+ * Also where Paystack returns the shopper after paying (via
+ * /api/payments/paystack/callback). An unpaid order gets a "Pay now" here.
  *
  * Its own route rather than a fourth state of the checkout page, for one
  * concrete reason: the checkout navigates here with `router.replace`, so the
@@ -61,7 +61,7 @@ export default async function ConfirmationPage({
 
   if (!row || !token) return <NoOrder />;
 
-  /* The shopper usually arrives straight from Squad. Ask Squad about any
+  /* The shopper usually arrives straight from Paystack. Ask Paystack about any
    * payment still open before reading, so the page shows the real state even
    * if the callback's own check failed or the webhook hasn't landed yet. */
   if (row.paymentStatus === 'AWAITING_PAYMENT') {

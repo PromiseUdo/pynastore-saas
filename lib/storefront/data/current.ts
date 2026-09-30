@@ -19,6 +19,7 @@ import type { StoreScope } from '../types';
 import { emptyCatalogue, type Catalogue } from './catalogue';
 import { loadCatalogueFromDb } from './from-prisma';
 import { fixtureCatalogue } from './from-fixtures';
+import { getStorefrontOpening } from '../opening';
 
 export class StorefrontTenantError extends Error {
   constructor() {
@@ -57,7 +58,10 @@ async function slugFromRequest(): Promise<string | null> {
 
 /** Per-request memo, keyed by slug: one DB read serves the whole render. */
 const load = cache(async (organizationSlug: string): Promise<Catalogue> => {
-  const catalogue = await loadCatalogueFromDb(organizationSlug);
+  // A shop that isn't open yet lists nothing — except to its own team, who
+  // may preview it (ROADMAP 12.5, ../opening.ts).
+  const opening = await getStorefrontOpening(organizationSlug);
+  const catalogue = opening.open || opening.previewer ? await loadCatalogueFromDb(organizationSlug) : null;
   // An unknown or suspended store reads as empty rather than as an error, so
   // an API call with a stale slug returns nothing instead of a 500.
   return catalogue ?? emptyCatalogue(organizationSlug);

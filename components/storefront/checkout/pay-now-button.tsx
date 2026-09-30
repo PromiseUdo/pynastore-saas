@@ -1,11 +1,11 @@
 'use client';
 
 /*
- * "Pay now" — opens a fresh Squad payment for an order that isn't paid yet.
+ * "Pay now" — opens a fresh Paystack payment for an order that isn't paid yet.
  *
  * The server decides whether the order can still be paid and makes a new
- * attempt (Squad won't reuse a reference); this button only asks, shows that
- * it's asking, and follows the answer to Squad's page — or, in the phone app,
+ * attempt (Paystack won't reuse a reference); this button only asks, shows that
+ * it's asking, and follows the answer to Paystack's page — or, in the phone app,
  * opens it in the in-app browser (lib/storefront/payments/open-payment-page.ts).
  *
  * Two ways to name the order: the confirmation token (confirmation page, any
@@ -27,7 +27,7 @@ export function PayNowButton({
 }: {
   target: Target;
   label: string;
-  /** where the phone app lands once the shopper is back from Squad */
+  /** where the phone app lands once the shopper is back from Paystack */
   confirmationPath: string;
 }) {
   const [pending, setPending] = useState(false);

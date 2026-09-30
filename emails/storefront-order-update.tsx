@@ -47,6 +47,8 @@ export type StorefrontOrderUpdateEmailProps = {
   total: string;
   lines: { name: string; quantity: number; total: string }[];
   deliveryLabel: string;
+  /** a bag from more than one store: each parcel, e.g. "From Lagos: Interstate" (ROADMAP Phase 9.5) */
+  parcels?: string[];
   address: string[];
   /** a cancelled order that had been paid for */
   wasPaid?: boolean;
@@ -217,6 +219,11 @@ export function StorefrontOrderUpdateEmail(props: StorefrontOrderUpdateEmailProp
               <>
                 <Hr style={hr} />
                 <Text style={label}>{props.deliveryLabel} to</Text>
+                {props.parcels && props.parcels.length > 1 && (
+                  <Text style={addressLine}>
+                    {`Comes in ${props.parcels.length} parcels — ${props.parcels.join('; ')}.`}
+                  </Text>
+                )}
                 {props.address.map((part) => (
                   <Text key={part} style={addressLine}>
                     {part}

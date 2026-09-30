@@ -51,6 +51,7 @@ import {
   type SocialAccountRow,
   type SocialConnectionStatus,
 } from '@/lib/social/types';
+import { PLATFORM_NAME } from '@/lib/brand';
 
 const STATUS_VARIANTS: Record<SocialConnectionStatus, 'success' | 'warning' | 'destructive' | 'muted'> = {
   ACTIVE: 'success',
@@ -172,7 +173,7 @@ export function SocialPageClient({
             title="No social accounts connected"
             description={
               canManage
-                ? 'Connect your store’s Facebook Page and Instagram professional account so you can post your products to them. You sign in with your own Facebook account — MansaaS never asks for a password or an app key.'
+                ? `Connect your store’s Facebook Page and Instagram professional account so you can post your products to them. You sign in with your own Facebook account — ${PLATFORM_NAME} never asks for a password or an app key.`
                 : 'Nobody has connected a Facebook Page or Instagram account to this store yet. Ask an owner or admin to set it up.'
             }
             action={connectButton || undefined}
@@ -273,7 +274,7 @@ export function SocialPageClient({
           <AlertDialogHeader>
             <AlertDialogTitle>Disconnect {disconnecting?.accountName}?</AlertDialogTitle>
             <AlertDialogDescription>
-              MansaaS will stop posting to this account and will forget its access. Posts you already published stay
+              {PLATFORM_NAME} will stop posting to this account and will forget its access. Posts you already published stay
               on {disconnecting ? PLATFORM_LABELS[disconnecting.platform] : 'the platform'}.
               {disconnecting?.platform === 'FACEBOOK_PAGE' &&
                 ' Any Instagram account linked to this Page is disconnected too, because it posts through the Page.'}{' '}

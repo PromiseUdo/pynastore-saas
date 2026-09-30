@@ -32,11 +32,11 @@ function RegisterForm() {
   return (
     <div className="p-8">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold tracking-tight">Create account</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{inviteToken ? 'Create your account' : 'Start your free trial'}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {inviteToken
             ? 'Create an account to accept your invitation'
-            : `Set up your ${PLATFORM_NAME} account in seconds`}
+            : `Create your ${PLATFORM_NAME} account, then set up your shop. No card needed.`}
         </p>
       </div>
 
@@ -71,19 +71,19 @@ function RegisterForm() {
             id="name"
             name="name"
             type="text"
-            placeholder="Jane Smith"
+            placeholder="Ada Okafor"
             autoComplete="name"
             required
           />
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="email">Work email</Label>
+          <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             name="email"
             type="email"
-            placeholder="jane@company.com"
+            placeholder="ada@yourshop.com"
             autoComplete="email"
             required
           />

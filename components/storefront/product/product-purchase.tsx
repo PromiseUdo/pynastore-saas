@@ -45,6 +45,8 @@ import {
   selectedPrice,
   type Selection,
 } from '@/lib/storefront/variant-selection';
+import { DeliverToEstimate } from './deliver-to-estimate';
+import type { DeliverySummary } from '@/lib/storefront/store-claims';
 
 /** Below this, we say how few are left — above it, saying so is just theatre. */
 const LOW_STOCK = 8;
@@ -52,11 +54,14 @@ const LOW_STOCK = 8;
 export function ProductPurchase({
   product,
   deliveryPanel,
+  deliverySummary = null,
   sizeGuideHref = null,
 }: {
   product: Product;
   /** server-rendered delivery block */
   deliveryPanel?: React.ReactNode;
+  /** the store's cheapest delivery anywhere — null when it delivers nowhere (lib/storefront/store-claims.ts) */
+  deliverySummary?: DeliverySummary | null;
   /** the merchant's published size guide, when there is one */
   sizeGuideHref?: string | null;
 }) {
@@ -283,6 +288,18 @@ export function ProductPurchase({
             </ul>
           )}
 
+          {/* Where it would ship from, and what that costs, for where the
+            * shopper is (ROADMAP Phase 9.8) — for the chosen variant, or one
+            * that's in stock until the picker is complete. Only for a store
+            * that delivers somewhere. */}
+          {deliverySummary && (
+            <DeliverToEstimate
+              productId={product.id}
+              variantId={variant?.id ?? product.variants.find((v) => v.stock > 0)?.id ?? null}
+              currency={product.currency}
+              summary={deliverySummary}
+            />
+          )}
           {deliveryPanel}
         </div>
       </div>
