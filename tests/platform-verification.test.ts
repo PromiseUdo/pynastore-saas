@@ -26,6 +26,7 @@ vi.mock('@/lib/email', () => ({
 const paystack = vi.hoisted(() => ({ created: [] as { businessName: string; metadata: Record<string, string> }[] }));
 vi.mock('@/lib/payments/paystack', () => ({
   isPaystackConfigured: () => true,
+  paystackKeyMode: () => 'test' as const,
   PaystackError: class PaystackError extends Error {
     constructor(message: string, readonly httpStatus: number) {
       super(message);

@@ -198,7 +198,12 @@ export default async function StorefrontRootLayout({
       }
       className={`${display.variable} min-h-screen bg-background text-foreground`}
     >
-      <StorefrontAnalytics gaId={look.analytics.gaId} metaPixelId={look.analytics.metaPixelId} nonce={nonce} />
+      {/* Not inside the mobile app (13.9): a merchant's Google Analytics or Meta
+          Pixel there is "tracking" under Apple's rules, which the app would have
+          to ask permission for and declare. The website keeps them. */}
+      {!isMobileRuntime && (
+        <StorefrontAnalytics gaId={look.analytics.gaId} metaPixelId={look.analytics.metaPixelId} nonce={nonce} />
+      )}
       <StorefrontProviders
         org={{ slug: organization.slug, name: organization.name, logoUrl: organization.logoUrl }}
         isMobileRuntime={isMobileRuntime}

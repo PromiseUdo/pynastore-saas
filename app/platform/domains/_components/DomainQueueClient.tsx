@@ -52,7 +52,7 @@ export function DomainQueueClient({ data, tab }: { data: DomainQueuePage; tab: Q
       </div>
 
       <div className="space-y-4">
-        <div className="border-b">
+        <div className="border-b pb-2.5">
           <PageTabs tabs={tabs} current={tab} param="tab" />
         </div>
         {data.rows.length === 0 ? (

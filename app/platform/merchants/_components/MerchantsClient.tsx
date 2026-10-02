@@ -47,14 +47,15 @@ export function MerchantsClient({
     { key: 'all', label: `All (${formatNumber(data.counts.all)})` },
     { key: 'active', label: `Active (${formatNumber(data.counts.active)})` },
     { key: 'suspended', label: `Suspended (${formatNumber(data.counts.suspended)})` },
+    { key: 'closed', label: `Closed (${formatNumber(data.counts.closed)})` },
   ];
   const filtered = Boolean(q) || plan !== 'all';
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 border-b lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-col gap-3 border-b pb-2.5 lg:flex-row lg:items-end lg:justify-between">
         <PageTabs tabs={tabs} current={status} param="status" />
-        <div className="flex flex-wrap items-center gap-2 pb-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <SelectRoot value={plan} onValueChange={(v) => go({ plan: v === 'all' ? null : v, page: null })}>
             <SelectTrigger aria-label="Plan" className="w-44">
               <SelectValue />
@@ -120,11 +121,13 @@ export function MerchantsClient({
         ) : (
           <EmptyState
             icon={Building2}
-            title={status === 'suspended' ? 'No suspended workspaces' : 'No merchants yet'}
+            title={status === 'suspended' ? 'No suspended workspaces' : status === 'closed' ? 'No closed workspaces' : 'No merchants yet'}
             description={
               status === 'suspended'
                 ? 'Workspaces you suspend appear here, so you can find them to restore.'
-                : 'A merchant appears here as soon as they create a workspace.'
+                : status === 'closed'
+                  ? 'Workspaces their owners close appear here, and can be reopened for 30 days.'
+                  : 'A merchant appears here as soon as they create a workspace.'
             }
           />
         )
@@ -162,6 +165,7 @@ export function MerchantsClient({
                             {row.name}
                           </Link>
                           {row.status === 'SUSPENDED' && <Badge variant="destructive">Suspended</Badge>}
+                          {row.status === 'DELETED' && <Badge variant="cancelled">Closed</Badge>}
                         </div>
                         <span className="block text-xs text-muted-foreground">
                           {row.slug}

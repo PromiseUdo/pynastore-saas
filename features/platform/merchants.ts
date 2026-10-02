@@ -30,6 +30,8 @@ import { sendWorkspaceSuspensionEmail } from '@/lib/email';
 import { platformSupportEmail } from '@/lib/platform-contact';
 import { getAdminUrl } from '@/lib/tenant/urls';
 import { forgetOrgStatus } from '@/lib/tenant/org-status';
+import { erasedAt, restorableUntil } from '@/lib/data-rights/policy';
+import { restoreClosedWorkspace, WorkspaceClosureError } from '@/lib/data-rights/workspace';
 import type { VerificationStatus } from '@/lib/payments/payment-setup';
 import { setupProgressFor } from '@/lib/onboarding/setup-guide';
 import type { SetupProgress } from '@/lib/onboarding/setup-steps';
@@ -51,14 +53,14 @@ function setupOf(p: SetupProgress | undefined): MerchantSetup {
 
 export type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
 
-export type MerchantStatusFilter = 'all' | 'active' | 'suspended';
+export type MerchantStatusFilter = 'all' | 'active' | 'suspended' | 'closed';
 export type MerchantPlanFilter = 'all' | AccessState;
 
 export interface MerchantRow {
   id: string;
   name: string;
   slug: string;
-  status: 'ACTIVE' | 'SUSPENDED';
+  status: 'ACTIVE' | 'SUSPENDED' | 'DELETED';
   createdAt: Date;
   ownerEmail: string | null;
   planName: string | null;
@@ -76,7 +78,7 @@ export interface MerchantPage {
   total: number;
   page: number;
   pageSize: number;
-  counts: { all: number; active: number; suspended: number };
+  counts: { all: number; active: number; suspended: number; closed: number };
 }
 
 export interface MerchantDetail {
@@ -84,10 +86,12 @@ export interface MerchantDetail {
     id: string;
     name: string;
     slug: string;
-    status: 'ACTIVE' | 'SUSPENDED';
+    status: 'ACTIVE' | 'SUSPENDED' | 'DELETED';
     createdAt: Date;
     suspendedAt: Date | null;
     suspensionReason: string | null;
+    /** closed by its owner (13.8): when, why, whether it can still be restored, and when it's erased */
+    closure: { closedAt: Date; reason: string | null; restorableUntil: Date | null; purged: boolean; erasedAt: Date } | null;
     customStoreDomain: string | null;
     supportEmail: string | null;
     supportPhone: string | null;
@@ -199,8 +203,15 @@ export async function listMerchants(params: {
           ],
         }
       : {};
+    // "All" is the workspaces still trading; a closed one is only under Closed.
     const statusWhere =
-      status === 'active' ? { status: 'ACTIVE' as const } : status === 'suspended' ? { status: 'SUSPENDED' as const } : { status: { in: ['ACTIVE', 'SUSPENDED'] as ('ACTIVE' | 'SUSPENDED')[] } };
+      status === 'active'
+        ? { status: 'ACTIVE' as const }
+        : status === 'suspended'
+          ? { status: 'SUSPENDED' as const }
+          : status === 'closed'
+            ? { status: 'DELETED' as const }
+            : { status: { in: ['ACTIVE', 'SUSPENDED'] as ('ACTIVE' | 'SUSPENDED')[] } };
 
     const [orgs, grouped, { graceDays }] = await Promise.all([
       prisma.organization.findMany({
@@ -216,7 +227,7 @@ export async function listMerchants(params: {
           paymentAccount: { select: { verificationStatus: true } },
         },
       }),
-      prisma.organization.groupBy({ by: ['status'], where: { status: { in: ['ACTIVE', 'SUSPENDED'] }, ...search }, _count: { _all: true } }),
+      prisma.organization.groupBy({ by: ['status'], where: search, _count: { _all: true } }),
       getBillingSettings(),
     ]);
 
@@ -238,6 +249,7 @@ export async function listMerchants(params: {
 
     const active = grouped.find((g) => g.status === 'ACTIVE')?._count._all ?? 0;
     const suspended = grouped.find((g) => g.status === 'SUSPENDED')?._count._all ?? 0;
+    const closed = grouped.find((g) => g.status === 'DELETED')?._count._all ?? 0;
 
     return {
       success: true,
@@ -248,7 +260,7 @@ export async function listMerchants(params: {
             id: o.id,
             name: o.name,
             slug: o.slug,
-            status: o.status as 'ACTIVE' | 'SUSPENDED',
+            status: o.status as 'ACTIVE' | 'SUSPENDED' | 'DELETED',
             createdAt: o.createdAt,
             ownerEmail: owners.find((m) => m.organizationId === o.id)?.user.email ?? null,
             planName: o.subscription?.plan?.name ?? null,
@@ -263,7 +275,7 @@ export async function listMerchants(params: {
         total: withState.length,
         page,
         pageSize: PAGE_SIZE,
-        counts: { all: active + suspended, active, suspended },
+        counts: { all: active + suspended, active, suspended, closed },
       },
     };
   } catch (error) {
@@ -276,7 +288,7 @@ export async function getMerchant(organizationId: string): Promise<ActionResult<
     await requirePlatformStaff();
     const now = new Date();
     const org = await prisma.organization.findFirst({
-      where: { id: organizationId, status: { in: ['ACTIVE', 'SUSPENDED'] } },
+      where: { id: organizationId },
       select: {
         id: true,
         name: true,
@@ -285,6 +297,9 @@ export async function getMerchant(organizationId: string): Promise<ActionResult<
         createdAt: true,
         suspendedAt: true,
         suspensionReason: true,
+        closedAt: true,
+        closureReason: true,
+        closedDataPurgedAt: true,
         customStoreDomain: true,
         supportEmail: true,
         supportPhone: true,
@@ -344,10 +359,19 @@ export async function getMerchant(organizationId: string): Promise<ActionResult<
           id: org.id,
           name: org.name,
           slug: org.slug,
-          status: org.status as 'ACTIVE' | 'SUSPENDED',
+          status: org.status as 'ACTIVE' | 'SUSPENDED' | 'DELETED',
           createdAt: org.createdAt,
           suspendedAt: org.suspendedAt,
           suspensionReason: org.suspensionReason,
+          closure: org.closedAt
+            ? {
+                closedAt: org.closedAt,
+                reason: org.closureReason,
+                restorableUntil: org.closedDataPurgedAt || now >= restorableUntil(org.closedAt) ? null : restorableUntil(org.closedAt),
+                purged: Boolean(org.closedDataPurgedAt),
+                erasedAt: erasedAt(org.closedAt),
+              }
+            : null,
           customStoreDomain: org.customStoreDomain,
           supportEmail: org.supportEmail,
           supportPhone: org.supportPhone,
@@ -505,5 +529,17 @@ export async function restoreOrganization(organizationId: string): Promise<Actio
     return { success: true, data: undefined };
   } catch (error) {
     return denied(error, 'We couldn’t restore this workspace');
+  }
+}
+
+/** Undo a workspace's closing, within the grace period (ROADMAP 13.8). */
+export async function reopenClosedOrganization(organizationId: string): Promise<ActionResult> {
+  try {
+    const staff = await requirePlatformStaff();
+    await restoreClosedWorkspace(organizationId, staff.userId);
+    return { success: true, data: undefined };
+  } catch (error) {
+    if (error instanceof WorkspaceClosureError) return { success: false, error: error.message };
+    return denied(error, 'We couldn’t reopen this workspace');
   }
 }

@@ -54,6 +54,8 @@ export interface CustomerDetail {
   /** set when this record has an online account they can sign in with */
   hasAccount: boolean;
   lastLoginAt: string | null;
+  /** the customer deleted their online account (ROADMAP 13.8) */
+  accountDeletedAt: string | null;
 
   metrics: {
     orderCount: number;
@@ -108,6 +110,7 @@ export async function getCustomerDetail(customerId: string): Promise<ActionResul
         notes: true,
         marketingConsent: true,
         consentUpdatedAt: true,
+        accountDeletedAt: true,
         createdAt: true,
         passwordHash: true,
         lastLoginAt: true,
@@ -226,6 +229,7 @@ export async function getCustomerDetail(customerId: string): Promise<ActionResul
         createdAt: customer.createdAt.toISOString(),
         hasAccount: Boolean(customer.passwordHash) || Boolean(customer.lastLoginAt),
         lastLoginAt: customer.lastLoginAt?.toISOString() ?? null,
+        accountDeletedAt: customer.accountDeletedAt?.toISOString() ?? null,
 
         metrics: {
           orderCount: counted.length,
@@ -343,11 +347,14 @@ export async function setMarketingConsent(customerId: string, consented: boolean
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.CUSTOMER_EDIT);
 
+    // Someone who deleted their account asked to be left alone: marketing can't be switched back on for them.
     const updated = await prisma.customer.updateMany({
-      where: { id: customerId, organizationId: ctx.organization.id },
+      where: { id: customerId, organizationId: ctx.organization.id, ...(consented ? { accountDeletedAt: null } : {}) },
       data: { marketingConsent: consented, consentUpdatedAt: new Date() },
     });
-    if (updated.count === 0) return { success: false, error: 'Customer not found' };
+    if (updated.count === 0) {
+      return { success: false, error: consented ? 'This customer deleted their account, so they can’t be marked as agreeing to marketing.' : 'Customer not found' };
+    }
 
     await createAuditLog({
       organizationId: ctx.organization.id,

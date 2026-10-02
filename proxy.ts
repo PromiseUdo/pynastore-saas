@@ -118,6 +118,15 @@ const routeRequest = auth(async function proxy(req: NextRequest & { auth: any })
     // reached.
     if (req.method === 'GET' && pathname === '/' && session?.user?.id) {
       let orgSlug: string | undefined = session.currentOrgSlug;
+      // The workspace the session remembers may have been closed since (13.8);
+      // sending them back to it would bounce straight back here, forever. Read
+      // fresh, not through getOrgRouting's cache: this proxy bundle keeps its
+      // own copy of that cache, which the closing action can't clear, and
+      // "closed a moment ago" is exactly the case that matters here.
+      if (orgSlug) {
+        const remembered = await prisma.organization.findUnique({ where: { slug: orgSlug }, select: { status: true } });
+        if (remembered?.status !== 'ACTIVE' && remembered?.status !== 'SUSPENDED') orgSlug = undefined;
+      }
       if (!orgSlug) {
         // An active workspace first; failing that a suspended one, which
         // explains itself — never onboarding, which would start a new shop.
@@ -309,7 +318,27 @@ const routeRequest = auth(async function proxy(req: NextRequest & { auth: any })
  * NextResponse.next() — and the policy goes on the response. Redirects carry
  * it too; it does nothing there, and there's no reason to special-case them.
  */
+/*
+ * Next.js answers a server action's redirect by fetching the target page from
+ * itself. Under `next dev` / `next start` it fetches from its own address
+ * (__NEXT_PRIVATE_ORIGIN, e.g. http://localhost:3000), and Node's fetch
+ * replaces the Host header with that — so without this, a storefront
+ * "Sign in" that redirects to /account rendered the PLATFORM's home page
+ * under the shop's address. The original host still travels in
+ * x-forwarded-host, so a request whose Host is this machine's own loopback
+ * address takes it from there. Only ever true for such internal fetches: no
+ * real visitor reaches a tenant as bare "localhost", and on Vercel the Host
+ * is never a loopback address.
+ */
+const LOOPBACK = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+function restoreForwardedHost(req: NextRequest) {
+  const host = req.headers.get('host') ?? '';
+  const forwarded = req.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+  if (LOOPBACK.test(host) && forwarded && !LOOPBACK.test(forwarded)) req.headers.set('host', forwarded);
+}
+
 export default async function proxy(req: NextRequest, event: NextFetchEvent) {
+  restoreForwardedHost(req);
   const mode = cspMode();
   if (mode === 'off') return routeRequest(req, event as never);
 

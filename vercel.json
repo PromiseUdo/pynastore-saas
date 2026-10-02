@@ -1,7 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
-    { "path": "/api/cron/domain-lifecycle", "schedule": "0 7 * * *" },
-    { "path": "/api/cron/onboarding-reminders", "schedule": "0 8 * * *" }
+    {
+      "path": "/api/cron/domain-lifecycle",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/onboarding-reminders",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/data-retention",
+      "schedule": "0 3 * * *"
+    }
   ]
 }

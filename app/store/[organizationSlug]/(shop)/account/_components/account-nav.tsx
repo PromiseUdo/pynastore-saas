@@ -19,7 +19,7 @@
  * a phone it renders under the content instead (see <SignOutButton />).
  */
 import Link from 'next/link';
-import { LayoutGrid, LogOut, MapPin, Package, UserRound } from 'lucide-react';
+import { LayoutGrid, LogOut, MapPin, Package, ShieldCheck, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePublicPathname } from '@/lib/storefront/use-public-pathname';
 import { signOutAction } from '@/features/shop-account/actions';
@@ -29,6 +29,7 @@ const ITEMS = [
   { href: '/account/orders', label: 'Orders', icon: Package },
   { href: '/account/addresses', label: 'Addresses', icon: MapPin },
   { href: '/account/profile', label: 'Profile', icon: UserRound },
+  { href: '/account/privacy', label: 'Your data', icon: ShieldCheck },
 ];
 
 export function AccountNav() {

@@ -47,6 +47,12 @@ export function paystackConfigProblem(): string | null {
   return null;
 }
 
+/** The mode the configured secret key belongs to, or null when there's no usable key. */
+export function paystackKeyMode(): 'live' | 'test' | null {
+  const key = process.env.PAYSTACK_SECRET_KEY ?? '';
+  return key.startsWith('sk_live_') ? 'live' : key.startsWith('sk_test_') ? 'test' : null;
+}
+
 function secretKey(): string {
   const problem = paystackConfigProblem();
   if (problem) throw new PaystackError(problem, 0);

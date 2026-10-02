@@ -24,7 +24,7 @@ import {
 import { Table, TableBody, TableCell, TableColumnHeader, TableHead, TableRow, TableWrapper } from '@/components/ui/table';
 import { formatDate, formatMoney, formatNumber, formatRelativeTime } from '@/lib/format';
 import { CYCLES, type BillingCycleKey } from '@/lib/billing/plans';
-import { restoreOrganization, suspendOrganization, type MerchantDetail } from '@/features/platform/merchants';
+import { reopenClosedOrganization, restoreOrganization, suspendOrganization, type MerchantDetail } from '@/features/platform/merchants';
 import { VERIFICATION_LABEL, VERIFICATION_VARIANT } from '../../../verification/labels';
 import { PLAN_STATE_LABEL, PLAN_STATE_VARIANT } from '../../labels';
 
@@ -56,9 +56,11 @@ export function MerchantDetailClient({
   const router = useRouter();
   const { organization: org, plan, figures } = data;
   const suspended = org.status === 'SUSPENDED';
+  const closed = org.status === 'DELETED';
+  const closure = org.closure;
   const now = new Date();
 
-  const [dialog, setDialog] = React.useState<'suspend' | 'restore' | null>(null);
+  const [dialog, setDialog] = React.useState<'suspend' | 'restore' | 'reopen' | null>(null);
   const [reason, setReason] = React.useState('');
   const [reasonError, setReasonError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState(false);
@@ -95,6 +97,19 @@ export function MerchantDetailClient({
     router.refresh();
   }
 
+  async function reopen() {
+    setPending(true);
+    const result = await reopenClosedOrganization(org.id);
+    setPending(false);
+    setDialog(null);
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success('Reopened — the dashboard and the shop are back. They’ll need to choose a plan and reconnect social accounts.');
+    router.refresh();
+  }
+
   const nextDate =
     plan.state === 'trial' && plan.trialEndsAt
       ? `Trial ends ${formatDate(plan.trialEndsAt)}`
@@ -113,7 +128,7 @@ export function MerchantDetailClient({
         <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">{org.name}</h1>
-            <Badge variant={suspended ? 'destructive' : 'success'}>{suspended ? 'Suspended' : 'Active'}</Badge>
+            <Badge variant={closed ? 'cancelled' : suspended ? 'destructive' : 'success'}>{closed ? 'Closed' : suspended ? 'Suspended' : 'Active'}</Badge>
             <Badge variant={PLAN_STATE_VARIANT[plan.state]}>{PLAN_STATE_LABEL[plan.state]}</Badge>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -122,7 +137,14 @@ export function MerchantDetailClient({
                 Payment details
               </Link>
             )}
-            {suspended ? (
+            {closed ? (
+              closure?.restorableUntil && (
+                <Button size="sm" onClick={() => setDialog('reopen')}>
+                  <ShieldCheck className="size-3.5" aria-hidden />
+                  Reopen
+                </Button>
+              )
+            ) : suspended ? (
               <Button size="sm" onClick={() => setDialog('restore')}>
                 <ShieldCheck className="size-3.5" aria-hidden />
                 Restore
@@ -136,13 +158,36 @@ export function MerchantDetailClient({
           </div>
         </div>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {suspended
+          {closed
+            ? 'Closed by its owner — the dashboard and the shop are offline for good.'
+            : suspended
             ? 'Suspended — the dashboard is closed and the shop is offline. Restore to reopen both as they were.'
             : 'Active — the owner and team can sign in, and the shop is open if their plan allows.'}
         </p>
       </div>
 
       <div className="space-y-6 px-4 py-6 sm:px-6">
+        {closed && closure && (
+          <div className="rounded-lg border bg-muted/40 p-4 text-sm">
+            <p className="font-medium text-foreground">
+              Closed by its owner {formatRelativeTime(closure.closedAt, now)} ({formatDate(closure.closedAt)})
+            </p>
+            {closure.reason && (
+              <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
+                <span className="font-medium text-foreground">Their reason: </span>
+                {closure.reason}
+              </p>
+            )}
+            <p className="mt-1 text-muted-foreground">
+              {closure.restorableUntil
+                ? `Can be reopened until ${formatDate(closure.restorableUntil)}; after that its files, store content, staff access and customer details are deleted.`
+                : closure.purged
+                  ? 'Its files, store content, staff access and customer details have been deleted; only business records remain.'
+                  : 'Past the reopening window; its data is deleted at the next nightly run.'}{' '}
+              Everything is erased on {formatDate(closure.erasedAt)}.
+            </p>
+          </div>
+        )}
         {suspended && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <p className="font-medium text-foreground">
@@ -430,6 +475,31 @@ export function MerchantDetailClient({
             >
               {pending && <Loader2 className="size-3.5 animate-spin" />}
               Restore workspace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialogRoot>
+
+      <AlertDialogRoot open={dialog === 'reopen'} onOpenChange={(open) => !pending && setDialog(open ? 'reopen' : null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reopen {org.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Only do this at the owner’s request. The dashboard and the shop come back with everything in them; the owner
+              will need to choose a plan again and reconnect any social accounts.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={pending}
+              onClick={(e) => {
+                e.preventDefault();
+                void reopen();
+              }}
+            >
+              {pending && <Loader2 className="size-3.5 animate-spin" />}
+              Reopen workspace
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

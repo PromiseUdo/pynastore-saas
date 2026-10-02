@@ -46,6 +46,7 @@
  *
  * Money: the order stores major units; providers take minor units (kobo).
  */
+import { subaccountMatchesMode } from '@/lib/payments/subaccounts';
 import { randomBytes } from 'crypto';
 import { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -188,10 +189,11 @@ export async function startOrderPayment(input: {
     getOnlinePaymentReadiness(input.organizationId),
     prisma.merchantPaymentAccount.findUnique({
       where: { organizationId: input.organizationId },
-      select: { paystackSubaccountCode: true },
+      select: { paystackSubaccountCode: true, paystackSubaccountMode: true },
     }),
   ]);
-  const subaccountCode = account?.paystackSubaccountCode;
+  // Never a subaccount from the other Paystack mode (13.9) — readiness says so too; this is the belt.
+  const subaccountCode = account && subaccountMatchesMode(account) ? account.paystackSubaccountCode : null;
   if (!readiness.ready || !subaccountCode) {
     console.warn(`[payments] ${order.reference}: the shop can't take online payments (${readiness.blocker ?? 'no subaccount'}).`);
     return { ok: false, reason: 'unavailable' };

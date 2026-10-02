@@ -86,6 +86,19 @@ export async function routePaystackEvent(event: string, data: Record<string, unk
   return 'ignored';
 }
 
+/**
+ * The last event Paystack delivered, and from which mode — what the console's
+ * go-live checklist reads to show the webhook URL is set and live (13.9).
+ * Best effort: losing this note must never fail a webhook.
+ */
+export const LAST_WEBHOOK_KEY = 'paystack.lastWebhook';
+async function noteWebhookArrived(event: string, data: Record<string, unknown>) {
+  const value = JSON.stringify({ at: new Date().toISOString(), event, mode: typeof data.domain === 'string' ? data.domain : null });
+  await prisma.platformSetting
+    .upsert({ where: { key: LAST_WEBHOOK_KEY }, create: { key: LAST_WEBHOOK_KEY, value }, update: { value } })
+    .catch(() => {});
+}
+
 export async function handlePaystackWebhook(req: Request): Promise<NextResponse> {
   const rawBody = await req.text();
 
@@ -107,6 +120,7 @@ export async function handlePaystackWebhook(req: Request): Promise<NextResponse>
   try {
     await routePaystackEvent(event, data);
     await webhookSucceeded('paystack');
+    await noteWebhookArrived(event, data);
   } catch (error) {
     /* Still answered 200: Paystack would otherwise retry for up to 72 hours
      * an event we may have half-applied. The failure is recorded and staff

@@ -133,6 +133,19 @@ model Organization {
   suspensionReason String?
 
   /**
+   * Closed by its owner (ROADMAP 13.8, lib/data-rights/workspace.ts) — status
+   * DELETED from that moment: the admin and the storefront are gone, the
+   * plan stops. Staff can restore it for CLOSURE_GRACE_DAYS; after that the
+   * personal data and store content are deleted (closedDataPurgedAt), and
+   * the business records the law requires follow FINANCIAL_RETENTION_YEARS
+   * after closing, when the whole workspace is erased. docs/DATA-RIGHTS.md.
+   */
+  closedAt           DateTime?
+  closedById         String?
+  closureReason      String?
+  closedDataPurgedAt DateTime?
+
+  /**
    * Onboarding (ROADMAP 12.5). A new shop starts NOT open: the storefront
    * says "Opening soon", lists nothing, is left out of search engines and
    * takes no orders, until the merchant opens it from the setup guide once
@@ -1265,6 +1278,15 @@ model Customer {
   mergedIntoId String?
   mergedAt     DateTime?
 
+  /**
+   * The shopper deleted their account (ROADMAP 13.8): sign-in, addresses,
+   * wishlist, reviews and questions are gone, contact details cleared,
+   * marketing off. The name stays only while past orders and invoices must
+   * be kept; `anonymizedAt` is when that ran out and it was replaced too.
+   */
+  accountDeletedAt DateTime?
+  anonymizedAt     DateTime?
+
   // ── Storefront account (null for customers staff typed in) ──────────────
   passwordHash    String? // null for Google-only accounts and staff-created records
   emailVerifiedAt DateTime? // set when Google vouches for the address
@@ -1607,6 +1629,9 @@ model Order {
    */
   transferDetails Json?
 
+  /** The contact and delivery details were erased once the retention period ran out (ROADMAP 13.8). */
+  anonymizedAt DateTime?
+
   organization    Organization           @relation(fields: [organizationId], references: [id])
   /**
    * RESTRICT, stated rather than left to Prisma's default (SET NULL for an
@@ -1850,6 +1875,13 @@ model MerchantPaymentAccount {
 
   setupStatus            MerchantPaymentSetupStatus @default(NOT_STARTED)
   paystackSubaccountCode String?                    @unique
+  /**
+   * Which Paystack mode created the subaccount — "test" or "live" (ROADMAP
+   * 13.9). Test and live are separate worlds at Paystack: a subaccount made
+   * with a test key doesn't exist for a live one. A subaccount from the other
+   * mode is never charged through; it's replaced (lib/payments/subaccounts.ts).
+   */
+  paystackSubaccountMode String?
   /**
    * Why the last attempt to create or check the subaccount failed, in words
    * for platform staff. Null once it succeeds.
@@ -3042,12 +3074,17 @@ model BillingPlanCode {
    */
   amount           Int
   paystackPlanCode String       @unique
+  /**
+   * "test" or "live" — the Paystack mode the plan was created in (ROADMAP
+   * 13.9). A test plan doesn't exist for a live key, so each mode gets its own.
+   */
+  mode             String       @default("test")
 
   plan BillingPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
-  @@unique([planId, billingCycle, amount])
+  @@unique([planId, billingCycle, amount, mode])
   @@map("billing_plan_codes")
 }
 

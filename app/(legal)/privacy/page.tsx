@@ -13,6 +13,7 @@
  */
 import type { Metadata } from 'next';
 import { PLATFORM_DOMAIN, PLATFORM_NAME, PLATFORM_OPERATOR, PLATFORM_OPERATOR_REGISTRATION } from '@/lib/brand';
+import { CLOSURE_GRACE_DAYS, FINANCIAL_RETENTION_YEARS } from '@/lib/data-rights/policy';
 import Link from 'next/link';
 import {
   LegalContact,
@@ -29,7 +30,7 @@ export const metadata: Metadata = {
   alternates: { canonical: `https://${PLATFORM_DOMAIN}/privacy` },
 };
 
-const UPDATED = '20 September 2026';
+const UPDATED = '1 October 2026';
 
 export default function PrivacyPolicyPage() {
   return (
@@ -350,10 +351,27 @@ export default function PrivacyPolicyPage() {
         <p>
           We keep information for as long as the account or record it belongs to exists, because the product
           is a business record system: a merchant’s stock history, orders and invoices are exactly the things
-          they need to be able to look back on.
+          they need to be able to look back on. The exceptions, and what happens when something is deleted:
         </p>
         <LegalList>
-          <li>Account, organization and business records: kept while the account is open.</li>
+          <li>
+            <strong className="font-medium text-foreground">Business records</strong> — orders, invoices, quotes,
+            payments, refunds and returns — are kept for {FINANCIAL_RETENTION_YEARS} years, because the law requires
+            businesses to keep records of their sales for that long, even after a shopper deletes their account or a
+            merchant closes their store.
+          </li>
+          <li>
+            <strong className="font-medium text-foreground">A deleted shopper account.</strong> Removed straight away:
+            the sign-in, saved addresses, wishlist, reviews, questions, marketing consent and contact details on the
+            store’s customer record. The name and delivery details written on past orders and invoices stay until
+            those records are {FINANCIAL_RETENTION_YEARS} years old, then they are removed too.
+          </li>
+          <li>
+            <strong className="font-medium text-foreground">A closed store.</strong> It goes offline at once and can be
+            restored on request for {CLOSURE_GRACE_DAYS} days. After that we delete its files and photos, store pages,
+            staff access, payout details and every shopper’s account and contact details; its business records are
+            kept until {FINANCIAL_RETENTION_YEARS} years after closing, and then the whole store is erased.
+          </li>
           <li>
             Short-lived items expire on their own — password reset tokens, email-change confirmations,
             invitations, the parked list of social accounts between authorization and selection, and
@@ -364,9 +382,8 @@ export default function PrivacyPolicyPage() {
             token is erased at the moment of disconnection.
           </li>
           <li>
-            When we delete on request, we remove the information from our live systems. Copies may persist
-            for a short time in routine backups, and we keep what we must for legal, tax or accounting
-            reasons.
+            Deleted information leaves our live systems at once. Our encrypted nightly backups keep it for up to
+            30 days after that, then it is gone from them too.
           </li>
         </LegalList>
       </LegalSection>
@@ -436,11 +453,16 @@ export default function PrivacyPolicyPage() {
             the stored token and asks Meta to revoke access.
           </li>
           <li>
-            <strong className="font-medium text-foreground">Deletion.</strong> {PLATFORM_NAME} does not yet offer a
-            self-service button to delete a {PLATFORM_NAME} account, an organization or a shopper account. To ask for
-            deletion, email <LegalContact /> from the address on the account, saying what you want deleted.
-            We will verify that you own the account, act on the request, and confirm when it is done. Where a
-            merchant asks us to delete their organization, that removes the store’s records with it.
+            <strong className="font-medium text-foreground">A copy of your data.</strong> A shopper can download
+            everything a store holds about their account from “Your data” in their store account. A store owner can
+            download the store’s customers, products, orders and invoices from Settings → Your data.
+          </li>
+          <li>
+            <strong className="font-medium text-foreground">Deletion.</strong> A shopper can delete their account from
+            “Your data” in their store account, and a store owner can close their store from Settings → Your data —
+            section 8 says exactly what each removes and what the law requires us to keep. To delete a {PLATFORM_NAME}{' '}
+            sign-in itself, email <LegalContact /> from the address on the account; we will verify that you own it, act
+            on the request, and confirm when it is done.
           </li>
           <li>
             <strong className="font-medium text-foreground">Withdrawing consent.</strong> Where we rely on

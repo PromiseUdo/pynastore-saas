@@ -85,7 +85,10 @@ export function PaymentsClient({ data }: { data: PaymentPage }) {
 
   return (
     <div className="space-y-4">
-      <div className="border-b">
+      {/* pb-2.5 is what PageTabs' `-mb-2.5` pulls back, so the active tab's
+          underline lands ON this border rather than below it — the same
+          cancellation PageToolbar does on the errors page. */}
+      <div className="border-b pb-2.5">
         <PageTabs tabs={tabs} current={data.tab} param="tab" />
       </div>
       <p className="text-xs text-muted-foreground">{EXPLAIN[data.tab]}</p>

@@ -17,6 +17,7 @@ import { indexPendingImages, queueUnindexedImages } from '@/lib/storefront/visua
 import { purgeExpiredQueries } from '@/lib/storefront/visual-search/vector-store';
 import { runDomainLifecycle } from '@/lib/domains/lifecycle';
 import { runOnboardingReminders } from '@/lib/onboarding/reminders';
+import { runDataRetention } from '@/lib/data-rights/retention';
 
 export interface CronJob {
   title: string;
@@ -100,6 +101,24 @@ export const CRON_JOBS = {
       [`${plural(n(r, 'sent'), 'reminder', 'reminders')} sent`, n(r, 'failed') ? `${n(r, 'failed')} couldn’t be sent` : null]
         .filter(Boolean)
         .join(' · '),
+  },
+  'data-retention': {
+    title: 'Data retention',
+    description:
+      'Carries out the retention rules: clears closed shops after 30 days, erases them after 6 years, and removes deleted shoppers’ details from records past 6 years. Without it, data is kept longer than the privacy policy says.',
+    schedule: 'Daily at 4am Lagos time',
+    everyMinutes: 24 * 60,
+    run: () => runDataRetention(),
+    describe: (r) =>
+      [
+        n(r, 'workspacesPurged') ? `${plural(n(r, 'workspacesPurged'), 'closed shop', 'closed shops')} cleared` : null,
+        n(r, 'workspacesErased') ? `${plural(n(r, 'workspacesErased'), 'shop', 'shops')} erased` : null,
+        n(r, 'ordersAnonymized') ? `${plural(n(r, 'ordersAnonymized'), 'order', 'orders')} anonymised` : null,
+        n(r, 'customersAnonymized') ? `${plural(n(r, 'customersAnonymized'), 'customer', 'customers')} anonymised` : null,
+        n(r, 'failed') ? `${n(r, 'failed')} failed` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || 'Nothing due',
   },
 } satisfies Record<string, CronJob>;
 

@@ -172,3 +172,34 @@ export async function destroyAsset(publicId: string, { type }: { type?: 'private
     console.error('[cloudinary] destroy failed', publicId, err);
   }
 }
+
+/**
+ * Delete every file a workspace ever uploaded — its whole `mansaas/{orgId}/`
+ * folder, public images and private verification documents alike (ROADMAP
+ * 13.8, when a closed workspace is purged). Uses Cloudinary's Admin API,
+ * which deletes by prefix up to 1,000 at a time. Returns how many were
+ * deleted; throws if Cloudinary refuses, so the purge can try again later.
+ */
+export async function destroyOrganizationAssets(organizationId: string): Promise<number> {
+  const config = getCloudinaryConfig();
+  const prefix = `mansaas/${organizationId}/`;
+  const auth = `Basic ${Buffer.from(`${config.apiKey}:${config.apiSecret}`).toString('base64')}`;
+  let deleted = 0;
+  for (const resourceType of ['image', 'raw', 'video'] as const) {
+    for (const type of ['upload', 'private', 'authenticated'] as const) {
+      let cursor: string | undefined;
+      do {
+        const params = new URLSearchParams({ prefix, ...(cursor ? { next_cursor: cursor } : {}) });
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${config.cloudName}/resources/${resourceType}/${type}?${params}`, {
+          method: 'DELETE',
+          headers: { Authorization: auth },
+        });
+        if (!res.ok) throw new Error(`Cloudinary refused to delete ${resourceType}/${type} under ${prefix} (${res.status})`);
+        const body = (await res.json()) as { deleted?: Record<string, string>; next_cursor?: string; partial?: boolean };
+        deleted += Object.values(body.deleted ?? {}).filter((v) => v === 'deleted').length;
+        cursor = body.partial ? body.next_cursor : undefined;
+      } while (cursor);
+    }
+  }
+  return deleted;
+}

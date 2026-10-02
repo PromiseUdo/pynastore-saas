@@ -13,7 +13,7 @@ import { MerchantsClient } from './_components/MerchantsClient';
 
 export const metadata: Metadata = { title: 'Merchants' };
 
-const STATUSES: MerchantStatusFilter[] = ['all', 'active', 'suspended'];
+const STATUSES: MerchantStatusFilter[] = ['all', 'active', 'suspended', 'closed'];
 const PLANS: MerchantPlanFilter[] = ['all', 'active', 'trial', 'grace', 'lapsed', 'none'];
 
 type Props = { searchParams: Promise<{ status?: string; plan?: string; q?: string; page?: string }> };

@@ -1344,8 +1344,15 @@ still separates development from production (docs/DATABASE.md).
 
 **13.7, CI (whole suite on its own database, every push), is done (2026-10-01).**
 
-**START HERE: Phase 13 — production hardening (next 13.8; 13.5 is after
-launch)** before the first live merchant.
+**13.8, data rights (download, delete, close, 6-year retention enforced daily),
+is done (2026-10-01).**
+
+**13.9's code is done (2026-10-01): go-live checklist, mode-aware payouts and
+billing plans, the social-key script, no tracking in the app. The outside
+steps are the owner's — docs/GO-LIVE.md.**
+
+**START HERE: the owner works through docs/GO-LIVE.md (and 10.10 with
+counsel); then Phase 14. 13.5 is after launch.**
 
 **In order:**
 
@@ -4210,19 +4217,91 @@ never showed.
     `.env.ci`, the local `.env` set aside: all green.
   - **Not done:** CI doesn't block a Vercel deploy. Require the check on
     `master` if the GitHub plan allows.
-- **13.8 Data rights (NDPA).** A shopper can delete their account and download
-  their data. A merchant can close their workspace, with a stated retention period
-  for orders and invoices they are legally required to keep. What `DELETED` means
-  is written down and enforced.
-- **13.9 Outside approvals and live keys.**
-  - Meta App Review (Advanced Access for the permissions in `.env.example`)
-    before merchants outside the testers can connect.
-  - Paystack live key, `PAYSTACK_MODE=live`, and the webhook URL
-    `/api/payments/paystack/webhook` set in the dashboard (10.11). Squad is
-    retired (10.9).
-  - `EMAIL_FROM` and the sending domain verified in Resend.
-  - `SOCIAL_TOKEN_KEY` set, not derived from `AUTH_SECRET`.
-  - App Store and Play Store listings and privacy forms for the mobile app.
+- **13.8 Data rights (NDPA) — DONE (2026-10-01).** Decided 2026-10-01:
+  - business records are kept **6 years**;
+  - a deleted shopper is erased except what the law needs;
+  - a closed workspace has a **30-day** undo.
+
+  The numbers live in `lib/data-rights/policy.ts`, pending counsel with 10.10.
+  As shipped (`docs/DATA-RIGHTS.md`):
+  - **Shoppers:** store account → "Your data".
+    - **Download:** `/account/export`, JSON.
+    - **Delete:** confirmed by password, or by typing the email for Google-only
+      accounts. It removes sign-in, sessions, addresses, wishlist, reviews,
+      questions, votes, notes and tags, marketing consent, and the contact
+      details on the customer record.
+    - **What stays:** orders and invoices keep their name and delivery
+      details until 6 years old.
+    - **No records at all:** the customer is deleted outright.
+    - **Merchant side:** the customer page says the account was deleted, and
+      marketing can't be switched back on.
+  - **Merchants:** Settings → Your data (Owner only).
+    - **Download:** customers, products, orders and invoices as CSV.
+    - **Close the workspace:** type its name to confirm. This is what
+      `DELETED` means, step by step:
+      - **day 0:** offline everywhere, Paystack subscription disabled
+        (alerted if that fails), custom domain stopped, social tokens
+        destroyed, Owners emailed the dates;
+      - **days 0–30:** staff can reopen it (console → Merchants → Closed);
+      - **day 30:** files (the whole Cloudinary folder), store content,
+        staff access, payout and verification records, and all shopper
+        account and contact data deleted; business records kept;
+      - **year 6:** `eraseOrganization` deletes everything.
+  - **`eraseOrganization`** walks Postgres's own foreign-key graph, so it
+    needs no hand-kept table list. Proven in `tests/data-rights.test.ts`:
+    zero rows of the store left in any table, another full store
+    identical, users intact.
+  - **Daily `data-retention` job** (vercel.json, 03:00 UTC) runs the purge,
+    the erasure and the 6-year anonymisation of deleted shoppers' orders. A
+    running shop's own records are never touched.
+  - **The privacy page** (sections 8 and 11, updated 1 October 2026) now
+    states exactly this, instead of "no self-service deletion".
+  - **Found and fixed while testing in a real browser:**
+    - **Storefront sign-in showed the platform's home page.** Under `next
+      dev`/`next start`, a storefront sign-in (and any server-action
+      redirect) rendered the platform's home page under the shop's address:
+      Next fetches the redirect target from `localhost`, and Node's fetch
+      drops the Host. `proxy.ts` now takes `x-forwarded-host` when the Host
+      is loopback. Vercel was most likely unaffected.
+    - **A closed workspace looped redirects.** The home redirect now reads
+      the remembered workspace's status fresh, since the proxy's status
+      cache can't be cleared by the closing action.
+- **13.9 Outside approvals and live keys — CODE DONE (2026-10-01); the
+  outside steps are the owner's, in `docs/GO-LIVE.md`.** What the code needed
+  for a safe switch to live, and how to track the rest:
+  - **Console → Go-live checklist** (`/platform/launch`, `lib/ops/go-live.ts`):
+    - **What it checks** on the server, never showing a secret: Paystack key
+      and mode, the webhook (the last event Paystack delivered and its
+      mode), payout accounts, the sending address, `SOCIAL_TOKEN_KEY`, the
+      Meta settings and redirect URI, `AUTH_SECRET`, `DIRECT_URL`,
+      `CRON_SECRET`, `PLATFORM_ADMIN_EMAIL` and Cloudinary;
+    - **What it lists to confirm by hand:** Meta review, the Resend domain,
+      a real payment, both store listings and counsel.
+  - **Payout subaccounts are mode-aware.** A test-mode subaccount doesn't
+    exist for a live key. `MerchantPaymentAccount.paystackSubaccountMode` is
+    recorded; one from the other mode is never charged through (readiness
+    and checkout both check), never synced (that would wrongly switch the
+    shop off), and is replaced on the next provision. A legacy code with no
+    mode counts as test. Staff move them all with one button on the
+    checklist.
+  - **Billing plan codes are mode-aware too** (`BillingPlanCode.mode`).
+    Without it, the first live subscription would have reused a test plan,
+    and recurring billing would have failed silently after the first
+    payment.
+  - **`scripts/derive-social-token-key.mjs`** prints the key `AUTH_SECRET`
+    derives today, so `SOCIAL_TOKEN_KEY` can be set without disconnecting
+    anyone. A test proves a token sealed before the switch still opens
+    after it, with `AUTH_SECRET` rotated.
+  - **No tracking in the mobile app.** Merchants' Google Analytics and Meta
+    Pixel tags no longer load in the app; the website keeps them. So the
+    App Store and Play answers can truthfully say "no tracking", and the app
+    needs no tracking-permission prompt.
+  - **`docs/GO-LIVE.md`** covers, step by step: Resend domain and DNS, the
+    social key, Meta App Review (settings, business verification, the six
+    permissions, a recording script, the live-mode toggle), Paystack
+    activation and live keys, the payout move and a real payment, tidying up
+    test mode, both store listings with the privacy answers, and a final
+    check.
 
 ## Phase 14 — Running the business day to day — TODO
 

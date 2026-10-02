@@ -332,9 +332,11 @@ export function CustomerDetailClient({
               />
             ))}
             <p className="border-t pt-2 text-xs text-muted-foreground">
-              {customer.hasAccount
-                ? `Has an online account${customer.lastLoginAt ? ` · last signed in ${formatRelativeTime(customer.lastLoginAt, now)}` : ''}`
-                : 'No online account — added by your team'}
+              {customer.accountDeletedAt
+                ? `Deleted their online account on ${formatDate(customer.accountDeletedAt)}. Their contact details were removed at their request; past orders and invoices are kept as the law requires.`
+                : customer.hasAccount
+                  ? `Has an online account${customer.lastLoginAt ? ` · last signed in ${formatRelativeTime(customer.lastLoginAt, now)}` : ''}`
+                  : 'No online account — added by your team'}
             </p>
           </section>
 
@@ -351,7 +353,7 @@ export function CustomerDetailClient({
               </span>
               <SwitchRoot
                 checked={customer.marketingConsent}
-                disabled={!canManage}
+                disabled={!canManage || Boolean(customer.accountDeletedAt)}
                 onCheckedChange={toggleConsent}
                 aria-label="Agreed to marketing"
               />

@@ -11,6 +11,8 @@ const paystack = vi.hoisted(() => ({
   fetches: 0,
   /** what the next createSubaccount does */
   next: 'ok' as 'ok' | 'refuse' | 'timeout' | 'timeout-after-creating',
+  /** the mode the server's key is in (13.9) */
+  mode: 'test' as 'test' | 'live',
   delayMs: 0,
 }));
 
@@ -31,6 +33,7 @@ vi.mock('@/lib/payments/paystack', () => {
   return {
     PaystackError,
     isPaystackConfigured: () => true,
+    paystackKeyMode: () => paystack.mode,
     createSubaccount: async (input: { metadata: Record<string, string> } & Record<string, unknown>) => {
       if (paystack.delayMs) await new Promise((r) => setTimeout(r, paystack.delayMs));
       paystack.creates.push(input);
@@ -206,5 +209,50 @@ describe('keeping our copy in line with Paystack', () => {
     paystack.subs.delete(code);
     await syncSubaccount(orgId, { force: true });
     expect(await account(orgId)).toMatchObject({ setupStatus: 'DISABLED', setupError: expect.stringMatching(/no longer knows/) });
+  });
+});
+
+describe('going live (13.9)', () => {
+  it('never uses a test-mode subaccount once the key is live, and replaces it with a live one', async () => {
+    paystack.mode = 'test';
+    const orgId = await verifiedMerchant('GoingLive');
+    const first = await provisionSubaccount(orgId, null);
+    const testCode = first.outcome === 'created' ? first.code : '';
+    expect(await account(orgId)).toMatchObject({ paystackSubaccountCode: testCode, paystackSubaccountMode: 'test', setupStatus: 'ACTIVE' });
+    expect((await getOnlinePaymentReadiness(orgId)).ready).toBe(true);
+
+    // The live key goes in. The test subaccount doesn't exist for it.
+    paystack.mode = 'live';
+    try {
+      expect(await getOnlinePaymentReadiness(orgId)).toMatchObject({ ready: false, blocker: 'payouts_not_ready' });
+      const fetches = paystack.fetches;
+      await syncSubaccount(orgId, { force: true });
+      expect(paystack.fetches).toBe(fetches); // not asked about with the wrong key
+      expect((await account(orgId)).setupStatus).toBe('ACTIVE'); // …so not wrongly switched off either
+
+      const moved = await provisionSubaccount(orgId, null);
+      expect(moved.outcome).toBe('created');
+      const liveCode = moved.outcome === 'created' ? moved.code : '';
+      expect(liveCode).not.toBe(testCode);
+      expect(await account(orgId)).toMatchObject({ paystackSubaccountCode: liveCode, paystackSubaccountMode: 'live', setupStatus: 'ACTIVE' });
+      expect((await getOnlinePaymentReadiness(orgId)).ready).toBe(true);
+      expect(await prisma.auditLog.count({ where: { organizationId: orgId, action: 'platform.payouts.subaccount_replaced' } })).toBe(1);
+
+      // Asking again changes nothing.
+      expect((await provisionSubaccount(orgId, null)).outcome).toBe('already-set-up');
+    } finally {
+      paystack.mode = 'test';
+    }
+  });
+
+  it('treats a subaccount recorded before modes were tracked as a test one', async () => {
+    const orgId = await verifiedMerchant('Legacy', { paystackSubaccountCode: `ACCT_legacy_${suffix}`, setupStatus: 'ACTIVE' });
+    expect((await getOnlinePaymentReadiness(orgId)).ready).toBe(true);
+    paystack.mode = 'live';
+    try {
+      expect((await getOnlinePaymentReadiness(orgId)).ready).toBe(false);
+    } finally {
+      paystack.mode = 'test';
+    }
   });
 });

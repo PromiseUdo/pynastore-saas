@@ -8,14 +8,13 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { PLATFORM_NAME } from '@/lib/brand';
 import { Wordmark } from '@/components/marketing/wordmark';
 import { getBillingSettings } from '@/lib/settings';
 import { planByKey } from '@/lib/billing/catalogue';
 import { CreateShopForm } from './CreateShopForm';
 import { VerifyEmailGate } from './VerifyEmailGate';
 
-export const metadata: Metadata = { title: `Create your shop · ${PLATFORM_NAME}` };
+export const metadata: Metadata = { title: 'Create your shop' }; // the root layout adds the platform name
 
 export default async function OnboardingPage() {
   const session = await auth();

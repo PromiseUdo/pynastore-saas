@@ -29,8 +29,19 @@ import {
   fetchSubaccount,
   findSubaccountsByMetadata,
   isPaystackConfigured,
+  paystackKeyMode,
   type PaystackSubaccount,
 } from './paystack';
+
+/**
+ * Whether a recorded subaccount belongs to the mode the server's key is in
+ * now (13.9). A subaccount recorded before modes were tracked counts as
+ * "test": live payments had never been switched on then.
+ */
+export function subaccountMatchesMode(account: { paystackSubaccountCode: string | null; paystackSubaccountMode: string | null }): boolean {
+  if (!account.paystackSubaccountCode) return false;
+  return (account.paystackSubaccountMode ?? 'test') === paystackKeyMode();
+}
 
 /** A claim older than this is a request that died; it may be taken over. */
 const STALE_CLAIM_MS = 5 * 60 * 1000;
@@ -67,6 +78,7 @@ async function recordResult(
     where: { organizationId },
     data: {
       paystackSubaccountCode: sub.code,
+      paystackSubaccountMode: paystackKeyMode(),
       setupStatus: sub.active ? 'ACTIVE' : 'DISABLED',
       setupError: sub.active ? null : 'Paystack has this subaccount switched off.',
       paystackIsVerified: sub.isVerified,
@@ -90,6 +102,7 @@ export async function provisionSubaccount(
       verificationStatus: true,
       setupStatus: true,
       paystackSubaccountCode: true,
+      paystackSubaccountMode: true,
       businessName: true,
       settlementBankCode: true,
       settlementAccountNumber: true,
@@ -101,8 +114,25 @@ export async function provisionSubaccount(
     },
   });
   if (!account || account.verificationStatus !== 'VERIFIED') return { outcome: 'not-eligible' };
-  if (account.paystackSubaccountCode) {
+  if (account.paystackSubaccountCode && subaccountMatchesMode(account)) {
     return { outcome: 'already-set-up', code: account.paystackSubaccountCode };
+  }
+  if (account.paystackSubaccountCode) {
+    // Made in the other mode (test, before go-live): it doesn't exist for this
+    // key. Set it aside and make a new one; the old code stays in the audit log.
+    await prisma.merchantPaymentAccount.update({
+      where: { organizationId },
+      data: { paystackSubaccountCode: null, paystackSubaccountMode: null, paystackIsVerified: false, setupStatus: 'NOT_STARTED', setupError: null },
+    });
+    await createAuditLog({
+      organizationId,
+      userId: actorUserId,
+      action: 'platform.payouts.subaccount_replaced',
+      entityType: 'MerchantPaymentAccount',
+      entityId: organizationId,
+      metadata: { previousCode: account.paystackSubaccountCode, previousMode: account.paystackSubaccountMode ?? 'test', mode: paystackKeyMode() },
+    });
+    account.setupStatus = 'NOT_STARTED';
   }
   if (!isPaystackConfigured()) {
     await prisma.merchantPaymentAccount.update({
@@ -205,10 +235,12 @@ export async function provisionSubaccount(
 export async function syncSubaccount(organizationId: string, { force = false }: { force?: boolean } = {}): Promise<void> {
   const account = await prisma.merchantPaymentAccount.findUnique({
     where: { organizationId },
-    select: { paystackSubaccountCode: true, paystackSyncedAt: true, setupStatus: true },
+    select: { paystackSubaccountCode: true, paystackSubaccountMode: true, paystackSyncedAt: true, setupStatus: true },
   });
   const code = account?.paystackSubaccountCode;
   if (!code || !isPaystackConfigured()) return;
+  // Asking the live API about a test subaccount would read as "gone" and switch the shop off.
+  if (!subaccountMatchesMode(account)) return;
   if (!force && account.paystackSyncedAt && Date.now() - account.paystackSyncedAt.getTime() < SYNC_TTL_MS) return;
 
   try {

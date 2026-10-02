@@ -7,6 +7,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import { onlinePaymentReadiness, type OnlinePaymentBlocker } from './payment-setup';
+import { subaccountMatchesMode } from './subaccounts';
 
 export async function getOnlinePaymentReadiness(
   organizationId: string,
@@ -15,9 +16,14 @@ export async function getOnlinePaymentReadiness(
     where: { id: organizationId },
     select: {
       status: true,
-      paymentAccount: { select: { verificationStatus: true, setupStatus: true } },
+      paymentAccount: { select: { verificationStatus: true, setupStatus: true, paystackSubaccountCode: true, paystackSubaccountMode: true } },
     },
   });
   if (!organization) return { ready: false, blocker: 'suspended' };
-  return onlinePaymentReadiness({ account: organization.paymentAccount, organizationStatus: organization.status });
+  const account = organization.paymentAccount;
+  return onlinePaymentReadiness({
+    // A subaccount from the other Paystack mode isn't set up, whatever its status says (13.9).
+    account: account && { ...account, setupStatus: account.setupStatus === 'ACTIVE' && !subaccountMatchesMode(account) ? 'NOT_STARTED' : account.setupStatus },
+    organizationStatus: organization.status,
+  });
 }

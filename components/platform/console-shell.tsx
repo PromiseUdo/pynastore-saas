@@ -13,7 +13,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, LogOut, Menu, ShieldCheck, BadgeCheck, Building2, CreditCard, Globe, Tags, SlidersHorizontal, Timer, Bug } from 'lucide-react';
+import { LayoutDashboard, LogOut, Menu, ShieldCheck, BadgeCheck, Building2, CreditCard, Globe, Tags, SlidersHorizontal, Timer, Bug, Rocket } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { SheetContent, SheetRoot, SheetTitle } from '@/components/ui/sheet';
@@ -23,7 +23,12 @@ type NavItem = { title: string; href: string; icon: React.ElementType };
 type NavGroup = { label?: string; items: NavItem[] };
 
 const NAV: NavGroup[] = [
-  { items: [{ title: 'Overview', href: '/platform', icon: LayoutDashboard }] },
+  {
+    items: [
+      { title: 'Overview', href: '/platform', icon: LayoutDashboard },
+      { title: 'Go-live checklist', href: '/platform/launch', icon: Rocket },
+    ],
+  },
   {
     label: 'Merchants',
     items: [

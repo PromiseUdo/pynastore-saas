@@ -6,7 +6,7 @@
  * client in lib/payments/paystack.ts.
  */
 import { prisma } from '@/lib/prisma';
-import { paystackFetch, verifyPaystackSignature } from '@/lib/payments/paystack';
+import { paystackFetch, paystackKeyMode, verifyPaystackSignature } from '@/lib/payments/paystack';
 import { PLATFORM_NAME } from '@/lib/brand';
 import { CYCLES, type BillingCycleKey } from '@/lib/billing/plans';
 
@@ -29,8 +29,10 @@ export async function ensurePaystackPlan(input: {
   amount: number;
 }): Promise<string> {
   const amount = toKobo(input.amount);
+  // Test and live are separate at Paystack: a plan made with the test key doesn't exist for the live one (13.9).
+  const mode = paystackKeyMode() ?? 'test';
   const existing = await prisma.billingPlanCode.findUnique({
-    where: { planId_billingCycle_amount: { planId: input.planId, billingCycle: input.billingCycle, amount } },
+    where: { planId_billingCycle_amount_mode: { planId: input.planId, billingCycle: input.billingCycle, amount, mode } },
   });
   if (existing) return existing.paystackPlanCode;
 
@@ -47,8 +49,8 @@ export async function ensurePaystackPlan(input: {
 
   const paystackPlanCode = created.data.plan_code;
   await prisma.billingPlanCode.upsert({
-    where: { planId_billingCycle_amount: { planId: input.planId, billingCycle: input.billingCycle, amount } },
-    create: { planId: input.planId, billingCycle: input.billingCycle, amount, paystackPlanCode },
+    where: { planId_billingCycle_amount_mode: { planId: input.planId, billingCycle: input.billingCycle, amount, mode } },
+    create: { planId: input.planId, billingCycle: input.billingCycle, amount, mode, paystackPlanCode },
     update: {},
   });
   return paystackPlanCode;

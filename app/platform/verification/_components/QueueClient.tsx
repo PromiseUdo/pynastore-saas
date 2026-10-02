@@ -42,11 +42,11 @@ export function QueueClient({ data, status, q }: { data: QueuePage; status: Queu
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 border-b sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 border-b pb-2.5 sm:flex-row sm:items-end sm:justify-between">
         <PageTabs tabs={tabs} current={status} param="status" />
         <form
           role="search"
-          className="flex gap-2 pb-2.5"
+          className="flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             go({ q: query.trim() || null, page: null });
