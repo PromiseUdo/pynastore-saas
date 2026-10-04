@@ -82,7 +82,7 @@ export function StepShell({
                * on its own reads like a link forward. The accessible name
                * says which direction it goes. */
               aria-label={backLabel ? `Back to ${backLabel}` : 'Back'}
-              className="inline-flex h-12 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex h-12 items-center gap-1.5 rounded-[var(--sf-radius-button,999px)] px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ArrowLeft className="size-4" aria-hidden />
               {backLabel ?? 'Back'}
@@ -94,7 +94,7 @@ export function StepShell({
             onClick={onNext}
             disabled={busy}
             aria-busy={busy || undefined}
-            className="inline-flex h-12 min-w-[10rem] flex-1 items-center justify-center gap-2 rounded-full bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:flex-none"
+            className="inline-flex h-12 min-w-[10rem] flex-1 items-center justify-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70 sm:flex-none"
           >
             {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
             {nextLabel}

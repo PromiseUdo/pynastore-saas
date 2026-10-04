@@ -18,7 +18,9 @@ import {
   getFeaturedCategories,
   getStorePages,
   getStorefrontLook,
+  getRequestDesign,
 } from '@/lib/storefront/catalog';
+import { arrangeFooter } from '@/lib/storefront/design/footer';
 import { CampaignBar } from '@/components/storefront/marketing/campaign-bar';
 import { CampaignModal } from '@/components/storefront/marketing/campaign-modal';
 import { getStoreCheckoutConfig } from '@/lib/storefront/checkout/store-config';
@@ -34,7 +36,7 @@ export default async function ShopLayout({
   params: Promise<{ organizationSlug: string }>;
 }) {
   const { organizationSlug } = await params;
-  const [navItems, departments, pages, delivery, checkout, announcements, look] = await Promise.all([
+  const [navItems, departments, pages, delivery, checkout, announcements, look, { design }] = await Promise.all([
     getNavItems({ organizationSlug }),
     getFeaturedCategories({ organizationSlug }),
     getStorePages({ organizationSlug }),
@@ -42,6 +44,7 @@ export default async function ShopLayout({
     getStoreCheckoutConfig({ organizationSlug }),
     getCampaignAnnouncements({ organizationSlug }),
     getStorefrontLook({ organizationSlug }),
+    getRequestDesign({ organizationSlug }),
   ]);
 
   /* At most one of each, newest campaign first: two bars stacked above the
@@ -56,9 +59,11 @@ export default async function ShopLayout({
    * exist. Anything without a real destination is simply not offered — see
    * the note in components/storefront/layout/site-footer.tsx. The Help and
    * About columns are the merchant's published store pages, and appear only
-   * when there is at least one to put in them. */
-  const footerColumns: FooterColumn[] = [
-    {
+   * when there is at least one to put in them. Which columns show, in what
+   * order, and a column of the merchant's own links, are the shop's design
+   * (15.5, lib/storefront/design/footer.ts). */
+  const footerColumns: FooterColumn[] = arrangeFooter(design.footer, {
+    shop: {
       title: 'Shop',
       links: [
         { label: 'All products', href: '/products' },
@@ -69,7 +74,7 @@ export default async function ShopLayout({
         })),
       ],
     },
-    {
+    account: {
       title: 'Your account',
       links: [
         { label: 'Track your order', href: '/track-order' },
@@ -78,9 +83,9 @@ export default async function ShopLayout({
         { label: 'Sign in', href: '/account/sign-in' },
       ],
     },
-  ];
-  if (pageLinks.help.length) footerColumns.push({ title: 'Help', links: pageLinks.help });
-  if (pageLinks.about.length) footerColumns.push({ title: 'About us', links: pageLinks.about });
+    help: pageLinks.help.length ? { title: 'Help', links: pageLinks.help } : null,
+    about: pageLinks.about.length ? { title: 'About us', links: pageLinks.about } : null,
+  });
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -91,9 +96,14 @@ export default async function ShopLayout({
       {/* With the merchant's own slides on the homepage there is no
         * discovery hero, so this header carries the only search box and
         * shows it straight away. */}
-      <SiteHeader navItems={navItems} heroHasSearch={look.hero.length === 0} />
+      <SiteHeader navItems={navItems} heroHasSearch={look.hero.length === 0} layout={design.header.layout} />
       <main className="flex-1 pb-16 lg:pb-0">{children}</main>
-      <SiteFooter columns={footerColumns} paymentNote={paymentHeadline(checkout.paymentMethods)} />
+      <SiteFooter
+        columns={footerColumns}
+        paymentNote={paymentHeadline(checkout.paymentMethods)}
+        contact={look.contact}
+        social={look.social}
+      />
       <MobileTabBar />
       {modal && <CampaignModal announcement={modal} />}
     </div>

@@ -52,7 +52,7 @@ export function NoResults({
             <Link
               href={withoutFilters.href}
               scroll={false}
-              className="h-11 rounded-full bg-brand px-5 text-sm font-semibold leading-[2.75rem] text-primary-foreground transition-colors hover:bg-brand-hover"
+              className="h-11 rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold leading-[2.75rem] text-primary-foreground transition-colors hover:bg-brand-hover"
             >
               Clear filters ({withoutFilters.total})
             </Link>
@@ -61,7 +61,7 @@ export function NoResults({
             <Link
               href={broaderQuery.href}
               scroll={false}
-              className="h-11 rounded-full border px-5 text-sm font-semibold leading-[2.75rem] transition-colors hover:border-brand hover:text-brand"
+              className="h-11 rounded-[var(--sf-radius-button,999px)] border px-5 text-sm font-semibold leading-[2.75rem] transition-colors hover:border-brand hover:text-brand"
             >
               Search “{broaderQuery.term}” instead ({broaderQuery.total})
             </Link>
@@ -102,7 +102,7 @@ export function NoResults({
               <Link
                 key={category.id}
                 href={categoryHref(category.path)}
-                className="rounded-full border px-4 py-2 text-sm transition-colors hover:border-brand hover:text-brand"
+                className="rounded-[var(--sf-radius-button,999px)] border px-4 py-2 text-sm transition-colors hover:border-brand hover:text-brand"
               >
                 {category.name}
               </Link>

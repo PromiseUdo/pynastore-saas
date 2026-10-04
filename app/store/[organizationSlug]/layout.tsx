@@ -10,11 +10,11 @@
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { Fraunces } from 'next/font/google';
+import { Fraunces, Nunito, Playfair_Display } from 'next/font/google';
 import { prisma } from '@/lib/prisma';
 import { StorefrontProviders } from '@/components/storefront/providers';
 import { StorefrontAnalytics } from '@/components/storefront/layout/storefront-analytics';
-import { getStorefrontLook } from '@/lib/storefront/catalog';
+import { getRequestDesign, getStorefrontLook } from '@/lib/storefront/catalog';
 import { parseTheme, themeCookieName } from '@/lib/storefront/theme';
 import { getShopper } from '@/lib/storefront/account/session';
 import { listWishlist } from '@/lib/storefront/account/wishlist';
@@ -25,6 +25,7 @@ import { storefrontIsOpen } from '@/lib/billing/workspace-access';
 import { getStorefrontOpening } from '@/lib/storefront/opening';
 import './storefront.css';
 import { storefrontUrlFor } from '@/lib/domains/storefront-url';
+import { cloudinaryImage } from '@/lib/cloudinary/url';
 
 /*
  * Display face for the storefront only. Fraunces is a variable "soft serif":
@@ -40,6 +41,29 @@ const display = Fraunces({
   display: 'swap',
   variable: '--font-sf-display',
 });
+
+/*
+ * The other heading faces a shop's design may choose (ROADMAP 15.1 —
+ * lib/storefront/design/looks.ts). Declared here so they're self-hosted like
+ * Fraunces, but NOT preloaded: declaring a face only defines it, and the
+ * browser downloads one only when a heading actually uses it — so a shop
+ * pays for its own font and no other. Fraunces stays preloaded because
+ * Classic is what most shops show. Modern uses the app's Geist, already
+ * loaded by the root layout.
+ */
+const elegant = Playfair_Display({
+  subsets: ['latin'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-sf-elegant',
+});
+const friendly = Nunito({
+  subsets: ['latin'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-sf-friendly',
+});
+const fontVariables = `${display.variable} ${elegant.variable} ${friendly.variable}`;
 
 export async function generateMetadata({
   params,
@@ -67,12 +91,21 @@ export async function generateMetadata({
    * search listing. Pages that know more set their own. */
   const description = org.storefrontTagline?.trim() || `Shop online at ${org.name}.`;
   const image = org.storefrontSocialImageUrl ?? org.logoUrl ?? null;
+  /* The shop's logo in the browser tab (15.0), shrunk by Cloudinary rather
+   * than downloaded at full size. Without a logo the browser keeps its own. */
+  const icons = org.logoUrl
+    ? {
+        icon: cloudinaryImage(org.logoUrl, { width: 64, height: 64, crop: 'fit' }),
+        apple: cloudinaryImage(org.logoUrl, { width: 180, height: 180, crop: 'fit' }),
+      }
+    : null;
 
   return {
     metadataBase: new URL((await storefrontUrlFor(organizationSlug))),
     title: { default: `${org.name} — Online Store`, template: `%s · ${org.name}` },
     description,
     alternates: { canonical: '/' },
+    ...(icons ? { icons } : {}),
     openGraph: {
       type: 'website',
       siteName: org.name,
@@ -123,7 +156,7 @@ export default async function StorefrontRootLayout({
     return (
       <div
         data-storefront
-        className={`${display.variable} flex min-h-screen items-center justify-center bg-background px-4 text-foreground`}
+        className={`${fontVariables} flex min-h-screen items-center justify-center bg-background px-4 text-foreground`}
       >
         <main className="max-w-md text-center">
           {organization.logoUrl ? (
@@ -177,26 +210,36 @@ export default async function StorefrontRootLayout({
       .map((id) => ({ productId: id, slug: bySlug.get(id)! }));
   }
 
-  // Theme is server-rendered from a cookie — see lib/storefront/theme.ts.
-  // Cream (light) is the default, so only 'dark' needs an attribute.
-  const theme = parseTheme((await cookies()).get(themeCookieName(organization.slug))?.value);
-
   const privacyPage = pageOfKind(await getStorePages({ organizationSlug: organization.slug }), 'PRIVACY');
   const look = await getStorefrontLook({ organizationSlug: organization.slug });
+  const cookieStore = await cookies();
+
+  /* The shop's design (15.1). A member previewing their draft carries a
+   * signed preview cookie; it is honoured only after re-checking, now, that
+   * they're still on this shop's team with `storefront.design`. Everyone
+   * else — including anyone holding a stale or foreign cookie — gets the
+   * published design. The homepage reads the same decision for its sections. */
+  const { resolved: design, isDraft } = await getRequestDesign({ organizationSlug: organization.slug });
+
+  // Theme is server-rendered from a cookie — see lib/storefront/theme.ts. The
+  // shopper's own choice wins; without one, the design's default.
+  // Cream (light) is represented by the absence of the attribute.
+  const theme = parseTheme(
+    cookieStore.get(themeCookieName(organization.slug))?.value,
+    design.darkByDefault ? 'dark' : 'light',
+  );
 
   return (
     <div
       data-storefront
       data-sf-theme={theme === 'dark' ? 'dark' : undefined}
-      /* The merchant's brand colour, set as the token every `bg-brand` and
-       * `text-brand` in the storefront already reads. Absent, the storefront
-       * keeps its own — nothing is chosen on their behalf. */
-      style={
-        look.accent
-          ? ({ '--brand': look.accent, '--brand-hover': look.accent } as React.CSSProperties)
-          : undefined
-      }
-      className={`${display.variable} min-h-screen bg-background text-foreground`}
+      /* The look, corners, headings font and card style (storefront.css),
+       * and the merchant's brand colour as the `--merchant-brand*` tokens the
+       * palettes fall back from. Every value is from a fixed list or a
+       * checked colour — lib/storefront/design/tokens.ts. */
+      {...design.attributes}
+      style={Object.keys(design.style).length ? (design.style as React.CSSProperties) : undefined}
+      className={`${fontVariables} min-h-screen bg-background text-foreground`}
     >
       {/* Not inside the mobile app (13.9): a merchant's Google Analytics or Meta
           Pixel there is "tracking" under Apple's rules, which the app would have
@@ -220,6 +263,18 @@ export default async function StorefrontRootLayout({
         }
       >
         <WishlistSync serverItems={savedItems} />
+        {isDraft && (
+          <div
+            role="status"
+            className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-foreground px-4 py-2 text-center text-xs text-background"
+          >
+            <span>Draft preview — only you can see this look. Shoppers still see your published one.</span>
+            {/* A plain link: leaving needs a request so the cookie can be cleared. */}
+            <a href="/design-preview?exit=1" className="font-semibold underline underline-offset-2">
+              Exit preview
+            </a>
+          </div>
+        )}
         {!opening.open && (
           <div role="status" className="sticky top-0 z-50 bg-foreground px-4 py-2 text-center text-xs text-background">
             Preview — your shop is closed, so only your team can see this and nothing can be ordered. Open it from

@@ -32,8 +32,13 @@ export function themeCookieName(orgSlug: string): string {
   return `sf-theme-${orgSlug}`;
 }
 
-export function parseTheme(value: string | undefined): SfTheme {
-  return value === 'dark' ? 'dark' : DEFAULT_SF_THEME;
+/**
+ * The shopper's own choice when they've made one; otherwise the merchant's
+ * default (ROADMAP 15.0), otherwise light. A merchant's default never
+ * overrides a shopper's cookie.
+ */
+export function parseTheme(value: string | undefined, merchantDefault: SfTheme = DEFAULT_SF_THEME): SfTheme {
+  return value === 'dark' || value === 'light' ? value : merchantDefault;
 }
 
 /** One year, site-wide. Not sensitive, and it must survive a browser restart. */

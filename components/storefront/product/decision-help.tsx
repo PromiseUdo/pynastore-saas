@@ -64,7 +64,7 @@ export function DecisionHelp({
             <li key={shortcut.id} className="shrink-0">
               <Tag
                 href={shortcut.href}
-                className="inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-full border bg-card px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
+                className="inline-flex h-11 items-center gap-2 whitespace-nowrap rounded-[var(--sf-radius-button,999px)] border bg-card px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
               >
                 <Icon aria-hidden className="size-4 text-teal" />
                 {shortcut.label}

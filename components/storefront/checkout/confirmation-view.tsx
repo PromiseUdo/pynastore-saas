@@ -96,7 +96,7 @@ export function ConfirmationView({
           {subtitle()}
         </p>
 
-        <p className="mt-5 inline-flex items-baseline gap-2 rounded-full border bg-card px-4 py-2">
+        <p className="mt-5 inline-flex items-baseline gap-2 rounded-[var(--sf-radius-button,999px)] border bg-card px-4 py-2">
           <span className="text-xs uppercase tracking-wide text-muted-foreground">Order</span>
           <span className="font-semibold tabular-nums">{order.reference}</span>
         </p>
@@ -268,7 +268,7 @@ export function ConfirmationView({
           </p>
           <Link
             href={`/account/register?next=${encodeURIComponent('/account/orders')}`}
-            className="mt-4 inline-flex h-11 items-center rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
+            className="mt-4 inline-flex h-11 items-center rounded-[var(--sf-radius-button,999px)] border border-border px-5 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
           >
             Create an account
           </Link>
@@ -300,14 +300,14 @@ export function ConfirmationView({
         {signedIn && (
           <Link
             href={`/account/orders/${order.reference}`}
-            className="inline-flex h-12 items-center rounded-full border px-7 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
+            className="inline-flex h-12 items-center rounded-[var(--sf-radius-button,999px)] border px-7 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
           >
             View this order
           </Link>
         )}
         <Link
           href="/products"
-          className="inline-flex h-12 items-center rounded-full bg-brand px-7 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+          className="inline-flex h-12 items-center rounded-[var(--sf-radius-button,999px)] bg-brand px-7 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
         >
           Continue shopping
         </Link>
@@ -337,13 +337,13 @@ export function NoOrder() {
       <div className="mt-7 flex flex-wrap justify-center gap-3">
         <Link
           href="/track-order"
-          className="inline-flex h-11 items-center rounded-full bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+          className="inline-flex h-11 items-center rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
         >
           Track an order
         </Link>
         <Link
           href="/products"
-          className="inline-flex h-11 items-center rounded-full border px-6 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
+          className="inline-flex h-11 items-center rounded-[var(--sf-radius-button,999px)] border px-6 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
         >
           Continue shopping
         </Link>

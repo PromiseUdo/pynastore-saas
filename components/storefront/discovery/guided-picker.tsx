@@ -188,7 +188,7 @@ export function GuidedPicker({
         {step > 0 && (
           <button
             onClick={() => submit(band)}
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+            className="inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
           >
             <Check className="size-4" />
             Show me options

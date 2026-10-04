@@ -375,7 +375,8 @@ announcement (a bar or a pop-up, in the merchant's words and colours) now
 covers "tell customers about the sale", and a second banner system would be a
 second place to say the same thing. Font choice is also out — a type token
 set is a design-system decision, not a settings field, and the storefront's
-Fraunces/Geist pairing is load-bearing.
+Fraunces/Geist pairing is load-bearing. (Revisited in **Phase 15**: fonts come
+as part of a curated look, never as a free font picker.)
 
 `robots.ts` is deliberately a route handler, not Next's file convention: that
 one only registers at the root of `app/`, and every storefront lives under
@@ -1353,6 +1354,11 @@ steps are the owner's — docs/GO-LIVE.md.**
 
 **START HERE: the owner works through docs/GO-LIVE.md (and 10.10 with
 counsel); then Phase 14. 13.5 is after launch.**
+
+**Phase 15 (storefront customisation) was agreed 2026-10-02.** 15.0 goes
+before the first live merchant — it removes a false "10% off" promise and a
+newsletter form that saves nothing from every storefront. 15.1 onward runs
+alongside Phase 14, in order.
 
 **In order:**
 
@@ -4375,6 +4381,585 @@ API (12.4).
 
 ---
 
+## Phase 15 — Make my store look like me (storefront customisation) — DONE (2026-10-02)
+
+Agreed 2026-10-02, from a "visual storefront builder" proposal checked against
+the code and cut down. **The principle: fewer decisions, each making a bigger
+and safer difference.** Two clicks (a look and a colour) give a shop its own
+identity; nothing lets a merchant break their store, invent content or add
+code. This is a curated set of choices, not a website builder.
+
+**The gap.** Phase 6 gave merchants slides, a brand colour, SEO and tracking,
+but every shop is still the same page: one font pairing, one button shape, one
+card, and a homepage whose sections, order and headings are fixed in
+`app/store/[organizationSlug]/(shop)/page.tsx`. Some of those fixed words are
+claims the app can't back ("Fresh in this week across every department"), and
+the newsletter is fake (below).
+
+**What exists and is reused, not rebuilt:**
+- **Tokens.** The whole storefront is themed by `[data-storefront]` variables
+  in `storefront.css` (`--brand`, `--radius`, `--font-sf-display`; button
+  shapes in one rule). One token layer moves every surface.
+- **One product card.** `components/storefront/product/product-card.tsx` is
+  shared by grids, carousels, search, image search, recommendations and the
+  wishlist, so a card style is a token/variant there, not a new component.
+- **Sources.** Sections read products only through `lib/storefront/catalog.ts`
+  and `recommendProducts` (`lib/storefront/recommendations/service.ts`). The
+  builder names a source; it never ranks or picks products itself.
+- **Team preview.** `lib/storefront/opening.ts` already lets an active member
+  see a closed shop on the storefront host (the session cookie is on the root
+  domain). Draft preview uses the same check. A custom domain doesn't get the
+  cookie, so preview always runs on `shop-{slug}`.
+- **Destination picker** (slides, campaign announcements) for every section
+  button, so no link can point at a page the shop hasn't got.
+- **Campaign announcements** stay the one way to shout about a sale. There is
+  no separate "promo banner" section.
+
+**Decisions taken (2026-10-02):**
+- **One look, then a colour.** The merchant picks one of five looks —
+  **Classic** (today's storefront), **Minimal**, **Editorial**, **Bold**,
+  **Playful** — and the look sets every token: fonts, type scale, spacing,
+  grid density, corners, buttons, cards, image treatment. Then their brand
+  colour (`storefrontAccent`, unchanged, still wins over the look's own). A
+  collapsed **Fine-tune** offers three overrides at most: corners, font
+  pairing, product card. There are no separate layout, typography, button or
+  image-treatment pickers: six independent choices is ~10,000 combinations,
+  most of them clashing, all of them needing testing.
+- **No mobile area and no mobile layouts.** Each section variant decides its
+  own small-screen behaviour. The preview has a desktop/tablet/phone toggle.
+- **Classic is the absence of a design.** A shop with no saved design gets a
+  Classic configuration built on the fly by a pure function from what it
+  already has (slides, accent, featured categories). No data migration, no
+  backfill, nothing written until the merchant saves: on the day this ships
+  every shop looks exactly as it did the day before.
+- **Draft and Publish cover design, not content.** The look, colour,
+  fine-tune, which homepage sections show and in what order, section
+  variants, header and footer layout wait for Publish. Products, slides,
+  store pages, categories, collections and campaigns save immediately, as
+  today. One sentence for merchants: "Design changes wait for Publish."
+- **Sections redefined.** Testimonials → **"What customers say"**, published
+  verified reviews only (AGENTS: never invent a merchant's content). Custom
+  content → **Image + text**, the merchant's own picture, heading, paragraph
+  and button, no HTML. Video waits for an upload path (merchant media is
+  uploaded, never linked). Promo banner → campaign announcements.
+- **Newsletter removed**, not rebuilt (15.0).
+- **Where it lives.** A full-page editor, **Online store → Customize**, in
+  the sidebar, replacing the look-and-slides half of Settings → Storefront.
+  Tagline, share image and tracking stay in Settings (they're listing and
+  measurement, not design).
+- **Its own permission, `storefront.design`**, to edit and publish the
+  design, so a marketer can change the look without full settings access.
+  Reading the editor needs it too; `settings.edit` no longer covers slides.
+  Owner resolves to it automatically (`lib/organization.ts`); run
+  `prisma/sync-system-role-permissions.ts` so stored Owner/Admin roles get it;
+  other existing custom roles don't have it until someone grants it in
+  Settings → Roles.
+- **Not built, on purpose:** custom CSS, raw HTML, scripts, pixel or
+  free-form positioning, separate component trees per look, an AI designer.
+  Starting templates come from the `businessType` asked at onboarding, which
+  is "suggest a look" without AI.
+
+### 15.0 Honest defaults and quick wins — DONE (2026-10-02)
+
+Small, and **before the first live merchant**: the first item was a false
+claim on every storefront.
+
+**As shipped:**
+- Newsletter gone: `newsletter-band.tsx` and `newsletter-signup.tsx` deleted,
+  the band off the homepage, the form out of the footer, the unused
+  `newsletterDismissed` UI state removed.
+- Claims removed from fixed copy: "Trending right now / Ordered by what's
+  actually selling" → "Popular right now"; "Fresh in this week" gone; the
+  category band's "**Eight** departments" (whatever the count) and the
+  promises band's "no hoops … if something isn't right" (shown even with no
+  returns window) reworded to claim nothing.
+- `Organization.storefrontSocialLinks` (JSON, platform → https URL) and
+  `storefrontDarkByDefault` (migration `20261002120000_storefront_social_links`).
+- `lib/storefront/social-links.ts` (pure): per-platform host allow-list,
+  `@handle`/bare-name → link for Instagram, TikTok and X, WhatsApp from a
+  phone number (0801… → 234…) or a wa.me link, credentials and fragments
+  dropped. Checked on save (field errors in Settings → General, nothing saved
+  if any fails) and again on the way out (`readSocialLinks`).
+- `StorefrontLook` gained `contact`, `social`, `darkByDefault`; the footer's
+  brand column shows contact (mailto/tel links) and a "follow" row of text
+  links (lucide 1.16 has no brand icons), each only when set.
+- "Open in dark mode" switch in Settings → Storefront. `parseTheme(cookie,
+  merchantDefault)`: a shopper's `light` or `dark` cookie always wins.
+- Favicon and apple-touch icon from the logo through Cloudinary (64/180px);
+  no logo, no icon tag.
+- Tests: `lib/storefront/social-links.test.ts` (12: forms accepted, wrong
+  host/`javascript:`/bare domain refused, WhatsApp numbers, read-side
+  filtering, theme precedence) and 7 more in `tests/storefront-appearance.test.ts`
+  (shown only when set, a bad link saves nothing, cleared to null, stored bad
+  link dropped on read, permission, tenancy, dark default untouched by other
+  saves).
+
+**As planned:**
+
+- **Remove the newsletter.** `components/storefront/layout/newsletter-signup.tsx`
+  is a dummy that thanks the shopper ("check your inbox to confirm") and saves
+  nothing, and `newsletter-band.tsx` promises "10% off your first order" that
+  no discount gives. Remove the band from the homepage and the form from
+  `site-footer.tsx`, and delete both components.
+- **Replace the fixed claim headings** on the homepage bands with ones that
+  are true for any shop ("New arrivals", "Popular right now") until 15.2 lets
+  the merchant write their own.
+- **Social links** on `Organization`: Instagram, Facebook, TikTok, X,
+  YouTube, WhatsApp, LinkedIn. Validated per platform (a URL on that
+  platform's host; WhatsApp as a phone number), stored only when set, shown
+  in the footer only when set. Edited in Settings → General beside contact.
+- **Contact in the footer.** The support email, phone and address already
+  collected in Settings → General, shown where filled in.
+- **Favicon** from the logo by default; no separate upload until a merchant
+  asks.
+- **Merchant default light/dark.** Used only when the shopper has no
+  `sf-theme-{slug}` cookie; a shopper's own choice always wins. Light and
+  dark only — "follow the device" can't be server-rendered without a flash.
+
+### 15.1 Looks, with draft and publish — DONE (2026-10-02)
+
+**As shipped:**
+- **Online store → Customize** (`/online-store/customize`, sidebar "Online
+  store"), two URL tabs: **Look** and **Front page slides**. Settings →
+  Storefront keeps only the tagline, share picture and tracking, plus a
+  pointer to Customize. Everything on the new page needs the new
+  **`storefront.design`** permission ("Online store" in Settings → Roles);
+  slides moved to `features/storefront/slides.ts` under it (their audit
+  action names are unchanged, so history reads on). **Run
+  `npx tsx prisma/sync-system-role-permissions.ts`** after deploying so stored
+  Owner/Admin roles get it; custom roles need it granted.
+- **`StorefrontDesign`** (one row per org: `draft`, `published`,
+  `draftSavedAt`/`ById`, `publishedAt`/`ById`; migration
+  `20261002140000_storefront_design`). The version lives INSIDE each JSON
+  document (`version: 1`), so draft and published can be upgraded
+  independently; `parseDesign` runs upgrades then a strict zod schema
+  (unknown keys refused) and returns null for anything unreadable, which
+  renders Classic. No row = Classic from `storefrontAccent` +
+  `storefrontDarkByDefault` (now read-only legacy columns).
+- **Publish** (`publishDesign(draftSavedAt)`) is one conditional
+  `updateMany` keyed on the draft the merchant saw: a draft re-saved in
+  another tab is refused ("reload"), never published unseen. Clears the
+  draft; audited `storefront.design.published` with the choices. Discard is
+  audited too; draft saves are not (no shopper sees a draft).
+- **Looks** in `lib/storefront/design/looks.ts` (names, defaults, the light
+  background each colour is checked against) and `storefront.css` (palettes
+  for light mode only — dark mode is the one shared dark palette in every
+  look; rhythm per look). Fine-tune is `data-sf-corners|fonts|cards`.
+  **Corners** reach ~130 existing `rounded-*` classes without edits:
+  Tailwind compiles rounded-md/xl/2xl from `--radius` (+ fixed offsets) and
+  rounded-3xl from `--radius-3xl`, so those are re-pointed; Square sets
+  `--radius` below zero on purpose. The handful of `rounded-[Nrem]` became
+  `calc(Nrem*var(--sf-radius-scale,1))`, so Classic is pixel-identical.
+  **Cards**: `sf-card`, `sf-card-media`, `sf-card-add` hooks on the one
+  ProductCard; Minimal hides the add button, Framed boxes the card.
+  **Fonts**: Playfair Display and Nunito via `next/font` with
+  `preload: false` (verified: only Geist, Geist Mono and Fraunces are
+  preloaded); Modern uses Geist. Body text stays Geist in every look.
+- **Colour** (`lib/storefront/design/colour.ts`): refused unless white or
+  near-black text reaches 4.5:1 on it AND it reaches 3:1 on the look's
+  background; the refusal offers the nearest darker shade that passes
+  ("Use #… instead"). Text on it is chosen automatically. **Dark mode uses
+  the nearest LIGHTER shade that reaches 3:1 on the dark background** — the
+  first draft dropped the merchant colour in dark mode, which would have
+  hidden most real brand reds and blues. All of it reaches the page only as
+  `--merchant-brand*` custom properties that each palette falls back from
+  (`lib/storefront/design/tokens.ts`).
+- **Preview** is a signed link, not the login cookie, because a shop with
+  its own domain is 308'd there and the root-domain session never arrives:
+  `createDesignPreviewLink` → `{store}/design-preview?token=…` (HMAC over
+  AUTH_SECRET with its own purpose string, bound to member + shop, 1 hour)
+  → httpOnly cookie on that host → `/`. The root layout re-checks the member
+  (active, this shop, Owner or `storefront.design`) on every request before
+  rendering the draft, with a "Draft preview — Exit preview" bar. Verified
+  against a running build: member sees the draft, shopper the published
+  look, the cookie does nothing on another shop, a forged link sets nothing.
+- **Editor**: five look cards (a sketch in the look's own palette, drawn
+  from looks.ts data), colour picker + hex box checked as you type, dark
+  switch, Fine-tune folded away (each "The look's own (…)" by default);
+  sticky bar with Undo changes / Save draft / Preview / Publish (Publish
+  saves unsaved edits first), Discard draft behind an AlertDialog,
+  unsaved-changes warning. The Preview tab is opened on the click, before
+  any await, so pop-up blockers allow it.
+- Closing a workspace purges its design (`lib/data-rights/workspace.ts`).
+- Tests: `lib/storefront/design/design.test.ts` (15: contrast, text on
+  colour, dark shade, suggestion passes, every look's own colour passes,
+  strict parse/unknown version/extra keys, Classic from legacy, tokens) and
+  `tests/storefront-design.test.ts` (12: Classic with nothing written,
+  draft invisible until published, atomic publish + audit, stale draft
+  refused, discard leaves live alone, rules refused, unreadable stored
+  design renders Classic, `storefront.design` required — settings.edit
+  isn't enough, preview link and member re-check incl. suspended member and
+  other shop, forged/expired tokens, tenancy).
+
+**Not done in 15.1, on purpose:** per-look dark palettes (one shared dark),
+a heading type scale per look (fonts, palette, corners, cards and rhythm
+carry the difference), the side-by-side iframe preview (15.3).
+
+**As planned:**
+
+- **`StorefrontDesign`**, one row per organization: `draft` and `published`
+  JSON, `version`, `publishedAt`, `publishedById`. Both validated by one zod
+  schema (`lib/storefront/design/schema.ts`), versioned explicitly — a later
+  shape is a new version with a tested upgrade function, never shape-sniffing.
+  An invalid or unknown stored value renders Classic rather than failing.
+- **Publish is one update** that copies a validated draft into `published`,
+  with an audit entry (`storefront.design.published`). Nothing is partly
+  published. Validation re-checks every referenced id against the org.
+- **Looks as token sets** in `storefront.css`, keyed by `data-sf-look` on the
+  storefront root. Classic is today's values, unchanged.
+- **Fonts** via `next/font`, about four pairings, `preload: false` for every
+  face but the default, so a shop downloads only its own.
+- **Contrast.** Text on brand-coloured surfaces is computed from the colour,
+  and a colour that can't reach 4.5:1 either way is refused with a reason.
+- **The editor (Appearance tab):** looks as visual cards rendered with the
+  real tokens, colour, collapsed Fine-tune; Save draft, Preview, Publish;
+  unsaved-changes warning; "Discard draft" behind an `AlertDialog`.
+- **Preview** opens the storefront in a new tab with a "Draft — not live"
+  banner, for active members with `storefront.design` only.
+
+### 15.2 A homepage made of sections — DONE (2026-10-02)
+
+**As shipped:**
+- **Sections live in the design** (draft/published, so arranging the front
+  page will wait for Publish like the rest of the design). The design
+  document is now **v2**: `sections` (null = the Classic front page), with
+  the first real upgrade step, v1 → v2 (`sections: null`). No migration —
+  it's inside the JSON.
+- `lib/storefront/sections/schema.ts` (pure, for the 15.3 editor): a strict
+  discriminated union of the nine section types the page already had —
+  hero, shopping-missions, recommended, recently-viewed, products
+  (variant carousel|grid, title, source), price-explorer,
+  deal-of-the-day, category-showcase, service-features. List rules: the
+  hero is always first and enabled (it mounts the discovery tools and the
+  assistant, and the mission/budget tiles publish to it), one hero, unique
+  ids, at most 24. `classicSections()` is today's page in today's order.
+- **Sources**: bestselling, newest, tag, collection, category, brand —
+  resolved by `getSectionProducts` in `catalog.ts` (the seam), so a band
+  can only show what the shop sells. Bestselling/newest reuse the exact
+  picks the homepage always made (same fallback, same sizes). Personalised
+  and recently viewed are their own section types, since the
+  Recommendation Service and the browser decide those. A deleted, hidden,
+  emptied or foreign reference returns null and the section is left out.
+- **The registry**: `components/storefront/home/homepage-sections.tsx` —
+  one `define('type', { load, render })` per type; `satisfies
+  Record<SectionType, unknown>` makes a missing entry a compile error.
+  Shared reads (currency, price bands, look, tree) are fetched once per
+  page. Two passes so "Recommended for you" excludes what the product bands
+  already show, as before. The page itself is 10 lines.
+- **One design decision per request**: `getRequestDesign` (catalog.ts →
+  `lib/storefront/design/request.ts`, React-cached) is read by both the root
+  layout and the homepage, so a preview can't show a draft look with
+  published sections or the reverse.
+- **Acceptance, done for real**: the built app rendered three seeded shops
+  before and after the change — visible HTML identical (0 differing lines
+  of ~1,090 after stripping scripts, nonces and chunk hashes), and the
+  recommendations' exclude list identical. A published arrangement
+  (reordered, a tag band, a deleted-collection band, a hidden band) renders
+  as configured with the dead band silently absent.
+- Tests: `lib/storefront/sections/sections.test.ts` (10: Classic order and
+  validity, hero rules, duplicates, limit, unknown types/extra keys/bad
+  variants, sources, v1→v2 upgrade, invalid sections drop the design) and
+  `tests/storefront-sections.test.ts` (9, real catalogue: legacy bands pick
+  the same products, each source and its link, hidden/empty/deleted/foreign
+  give no band, published vs draft sections, broken stored sections →
+  Classic).
+
+**As planned:**
+
+No visible change: it moves the homepage onto the structure 15.3 edits.
+
+- **Section registry** (`lib/storefront/sections/`): per type its name,
+  allowed variants, zod settings schema, default, and server renderer. The
+  homepage maps the configured list through the registry — no switch in the
+  page.
+- **Sources:** collection, category, brand, tag, bestselling, newest, for
+  you, recently viewed — each a call into `catalog.ts` or
+  `recommendProducts`. A deleted or hidden reference drops the section (or
+  the item), never errors.
+- **Classic, rebuilt as sections,** renders the same page as today: the
+  acceptance test.
+- The discovery hero/strip and the assistant behave as in Phase 6 whatever
+  the section order.
+
+### 15.3 The homepage editor — DONE (2026-10-02)
+
+**As shipped:**
+- **Online store → Customize** now has three URL tabs: **Look**, **Front
+  page**, **Slides**. All three stay mounted (closed ones hidden), and each
+  editor resets its baseline on *when* something was saved, not on object
+  identity — so switching tabs never throws away unsaved edits, and a save
+  on one tab doesn't wipe unsaved edits on the other.
+- **Front page tab** (`HomepageEditor.tsx`): the section list with show/hide
+  switch, up/down buttons (drag-and-drop as a shortcut only), inline edit
+  of a product band (heading, "Products from" — best sellers, newest, a
+  tag, a collection, a category path, a brand — and Scrolling row/Grid),
+  "Add a section" (a product band, or any one-of section not on the page),
+  Remove and "Start over" (back to Classic) behind AlertDialogs. The top
+  section shows "Always first" and has no controls. Save draft / Publish /
+  Undo changes in a sticky bar; Publish saves first.
+- **One draft, two owners.** `saveHomepageDraft(sections)` replaces only the
+  sections, starting from the draft, else what's live, else Classic; the
+  Look tab's `saveDesignDraft` now sends no sections and the server keeps
+  whatever is saved. Publish still puts the whole draft live in one update.
+- **References are checked** on save and again on publish
+  (`checkReferences`): every collection, category and brand a band names
+  must be this shop's and visible. A collection hidden after the draft was
+  saved blocks the publish with the band's name ("“Picks” shows a
+  collection that no longer exists or is hidden").
+- **Side-by-side preview** (`PreviewPane.tsx`, large screens; smaller ones
+  get "Preview in a new tab"): the real storefront in an iframe at true
+  desktop (1280) / tablet (820) / phone (390) width, scaled to fit; a fresh
+  signed link on open, after every save, and on Refresh; says so when there
+  are unsaved changes. Only loads while the tab is open.
+- **Framing, narrowly** (`lib/security/csp.ts`, `proxy.ts`,
+  `next.config.ts`): an admin page may frame only its own shop's platform
+  storefront origin (`frame-src`); a storefront request is framable only
+  while a design preview is open — the `/design-preview` link or a page
+  carrying the preview cookie — and only by that shop's own admin origin
+  (`frame-ancestors`). Everything else keeps `frame-ancestors 'none'` and
+  `X-Frame-Options: DENY` (now a `missing`-conditioned header rule, since
+  XFO can't name an origin). The frame always uses the PLATFORM address
+  (`createDesignPreviewLink({ frame: true })`), and the proxy no longer
+  308s a preview request on it to the shop's custom domain — the admin's
+  session and the frame rules only work there. Gotcha found on a live
+  build: the proxy runs again on its own rewrite
+  (`/store/{slug}/design-preview`), so the preview-path test matches both
+  forms.
+- **Verified on a running build**: admin `frame-src` = its own storefront
+  only; preview link → 303 + cookie + `frame-ancestors` = that admin, no
+  XFO; a page with the cookie → 200 on the platform address, same
+  ancestors; without it → 308 to the custom domain with XFO DENY; another
+  shop → `frame-ancestors 'none'`. **Not verified in a real browser**: the
+  editor screens themselves and the iframe rendering (no browser in the
+  build environment) — worth one click-through before relying on it.
+- Tests: `lib/security/csp.test.ts` (+1: frames nothing unless given one
+  origin) and `tests/storefront-design.test.ts` (+7: front page and look
+  save independently, an arrangement starts from the live look, foreign /
+  hidden / missing references refused, publish refused after a collection
+  is hidden, list rules, permission, the frame link uses the platform
+  address even with a custom domain).
+
+**As planned:**
+
+- A list of sections: show/hide, move up/down buttons (drag as a shortcut,
+  never the only way), edit heading and subheading, choose the source, add
+  from a short menu, remove behind an `AlertDialog`.
+- **Side-by-side preview**: the real storefront in an iframe at
+  desktop/tablet/phone widths. This needs a narrow CSP exception — today
+  `frame-ancestors 'none'` (`lib/security/csp.ts`) and `X-Frame-Options:
+  DENY` (`next.config.ts`) forbid all framing. Only the draft-preview route,
+  and only the org's own admin host as ancestor.
+
+### 15.4 Section variants and new sections — DONE (2026-10-02)
+
+**As shipped:**
+- **Layouts**: hero `full` (words over the picture, as before) | `split`
+  (words beside the picture, on the slide's aligned side, in theme colours
+  — no wash, light/dark text no longer applies); product band `carousel` |
+  `grid` | `feature` (one large product beside the next four,
+  `product-feature.tsx`); categories `tiles` (as before) | `circles` |
+  `list` (names only, for shops without category pictures).
+- **New sections**: **Image and text** (heading required, up to 600
+  characters of plain text with line breaks kept, optional picture —
+  Cloudinary URL in the schema, uploaded by THIS shop checked on save and
+  publish via `isOrgAsset` — picture left/right, optional button with both
+  halves, linked only to a page on the shop through the same destination
+  picker as slides; nothing pre-written, a new one starts with an empty
+  heading); **Brands** (`getBrandShowcase`: only brands with something on
+  sale, alphabetical, name when there's no logo); **What customers say**
+  (`getStoreReviews`: recent PUBLISHED 4- and 5-star reviews of products
+  the shop still sells, newest first, with the product — and the section
+  says "Recent 4- and 5-star reviews from customers whose orders were
+  delivered", so it never implies every review is glowing; hidden with
+  none).
+- **No design version bump.** New fields on existing section types carry a
+  `.default()` equal to how they rendered before (`variant: 'full'`,
+  `'tiles'`), so every stored document still parses and looks the same —
+  rule written into `lib/storefront/sections/schema.ts`. Verified on a
+  running build: both seeded Classic homepages identical to the 15.2
+  baseline (0 differing lines).
+- **Editor**: an Edit button on the hero (slide layout — explains it only
+  applies with slides), product bands (+ "One large, then a grid"),
+  categories (layout) and image-and-text (heading, words with a character
+  count, picture uploader, picture side, button words + "Goes to" picker);
+  list summaries say each layout; save blocks on a missing heading, a
+  half-button or an upload still running.
+- A showcase shop using every new layout and section was rendered on a
+  running build and each appeared as configured, with a disabled section
+  absent.
+- Tests: `sections.test.ts` (+6: old documents get the old layouts, unknown
+  layouts refused, image-and-text plain values only, button only to a shop
+  page with both halves — `//evil`, `https:`, `javascript:` refused —
+  picture only from the image host, brands/reviews) ·
+  `storefront-sections.test.ts` (+3: reviews — only published ≥4 of this
+  shop with the product; hidden, 3-star and foreign excluded; empty shop
+  → none; brands only with products on sale) · `storefront-design.test.ts`
+  (+2: own upload saved, another shop's refused).
+
+**Not built, on purpose:** video (no upload path yet), testimonials typed
+by the merchant (only verified reviews), a merchant-chosen minimum rating
+(fixed at 4 and stated on the page), deleting an image-and-text picture
+from Cloudinary when it's replaced in a draft (the draft may not be
+published; orphans are left rather than risking a live picture).
+
+**As planned:**
+
+- Hero: full image, split. Products: grid, carousel, one large plus a grid.
+  Categories: tiles, circles, list.
+- New: **Image + text**, **Brands**, **What customers say** (published
+  verified reviews; hidden when there are none).
+
+### 15.5 Header and footer — DONE (2026-10-02)
+
+**As shipped:**
+- **In the design**, so they wait for Publish with everything else:
+  `header: { layout: 'standard' | 'centered' | 'search' }` (default
+  standard) and `footer: { columns } | null` (null = the Classic footer).
+  Added inside v2 with defaults equal to the old header/footer — older
+  documents parse and look the same, no version bump.
+- **Header layouts** (`site-header.tsx`, one set of controls in the same
+  order in every layout): **standard** (as before, markup unchanged apart
+  from a `data-sf-header-layout` attribute); **centred** (name or logo in
+  the middle, menu + search button on the left, bag and account on the
+  right; search through the overlay); **large search** (the search box is
+  shown from the first pixel on every page, and phones get their own
+  full-width search row).
+- **Footer** (`lib/storefront/design/footer.ts`, pure `arrangeFooter`):
+  the four worked-out columns — Shop, Your account, Help, About us — can
+  be reordered or hidden but are still built from the shop's own data and
+  never retyped; Help and About only exist when a page for them is
+  published, whatever the setting. Plus **one column of the merchant's
+  own**: a heading and up to 6 links, each to a page on the shop through
+  the destination picker (`shopPath` in the schema — `//`, `https:`,
+  `javascript:` refused). The name, contact details and social links stay
+  first and are edited in Settings → General.
+- **Customize** gained a fourth tab, **Header & footer** (`ChromeEditor`):
+  header layouts as cards, the footer columns with show/hide and
+  earlier/later buttons, "Add your own column", its heading and links
+  editor, Remove behind an AlertDialog, and the same side-by-side preview,
+  Save draft / Publish bar and unsaved-edit protection as the other tabs.
+  `saveChromeDraft` saves only header + footer; the Look tab's save now
+  keeps sections, header and footer as saved (`sameLook` compares only the
+  look).
+- **Verified on a running build**: both Classic shops identical to the
+  15.2 baseline except the new attribute; a centred shop rendered its
+  footer as About us · Good to know (its own links) · Shop, with the
+  account column hidden and Help absent for want of a published page, and
+  the contact column still first; a large-search shop showed the desktop
+  box from the start on the homepage and its phone row.
+- Tests: `lib/storefront/design/footer.test.ts` (8: Classic order, the
+  shop's order and hiding, Help/About only with pages, own column placement
+  and rules, old documents get the old header/footer, header layouts,
+  footer refusals, `sameLook`) and `tests/storefront-design.test.ts` (+3:
+  header/footer saved independently of look and front page, live on
+  publish, off-shop link and permission refused).
+
+**As planned:**
+
+- Three header layouts: standard, centred logo, large search.
+- Footer columns reordered or hidden, plus one column of the merchant's own
+  links (destination picker). Derived content (payment note, page links,
+  contact, social) stays the default and is never retyped.
+
+### 15.6 Starting looks — DONE (2026-10-02)
+
+**As shipped:**
+- `lib/storefront/design/starting-looks.ts` (pure): four starting looks —
+  **Fashion and beauty** (Editorial, centred header, split hero, New
+  arrivals as a feature band, category tiles, popular, for you, reviews),
+  **Electronics and gadgets** (Bold, large search, deal of the day, best
+  sellers grid, category circles, brands, just in, budget, reviews),
+  **Groceries and everyday** (Playful, large search, category circles,
+  deal, On offer from the `sale` tag, popular grid, missions) and
+  **Classic** (the standard front page). Every business type asked at
+  sign-up maps to one (beauty → fashion, health → grocery, home/books/other
+  → Classic); unknown or none → Classic.
+- **No invented content.** A starting look holds only choices from the
+  editor's fixed lists and bands that name a source; no image-and-text
+  (that's the merchant's words), and a band with nothing in it isn't shown.
+- **Applying one** (`applyStartingLookToDraft`, Look tab → "Start from a
+  ready-made look", the business's own marked "Suggested for your shop",
+  confirmed in an AlertDialog): replaces the DRAFT's look, front page and
+  header and clears Fine-tune; keeps the brand colour, light/dark, footer
+  and slides. A kept colour that wouldn't stand out on the new look is set
+  aside and the merchant is told which, rather than the apply failing.
+  Live shop untouched until Publish. The Look tab takes the new baseline
+  even over unsaved edits there (the merchant confirmed the replacement).
+- **New shops** start on the suggested look: `bootstrapOrganization`
+  writes it as the PUBLISHED design in the same transaction (the shop is
+  closed until the merchant opens it, so nobody sees it early). Classic
+  writes nothing — no design is Classic.
+- Bug caught by its own test: the business-type lookup used `in`, so
+  `"__proto__"` matched an inherited property; now `Object.hasOwn`, like
+  `isBusinessType`.
+- **Verified on a running build**: a shop on each non-Classic starting look
+  rendered its look, header layout and sections in order, with sections
+  whose source was empty (reviews) absent.
+- Tests: `starting-looks.test.ts` (7: each is a valid design, what it
+  brings and clears, what it keeps, no merchant words, Classic is the
+  standard page, every business type has one, unknown/none/`__proto__` →
+  Classic) · `storefront-design.test.ts` (+4: suggestion from the business
+  type, applied to the draft only keeping colour/dark/footer, an unsuitable
+  colour set aside and named, unknown id and permission refused) ·
+  `onboarding.test.ts` (a new fashion shop is created with the Editorial
+  starting look published, no draft).
+
+**As planned:**
+
+- A look plus a section set per business type (fashion, electronics,
+  grocery, general). Applied to the draft, previewed, then published. A new
+  shop starts with the one for the `businessType` it gave at onboarding.
+
+**Follow-up (2026-10-03): which starting look is in use.** The design now
+records `startingLook` (set when one is applied, and for new shops at
+creation; kept by every tab's save). `startingLookStatus` (pure) compares
+what a starting look decides — look, Fine-tune, header, front page, never
+colour/dark/footer — with that record, key-order independently, and says
+whether it's been changed since; a design with no record is matched
+against all of them (so a standard shop reads as Classic, a hand-arranged
+one as "your own design"). The Look tab shows "On your shop now: …" and
+"In your draft: …", outlines the card in use, badges it "On your shop" /
+"In your draft" (with "· changed"), and its button reads "In use"
+(disabled), "Reset to this look" or "Start from this". Seen in a real
+browser: signed in headlessly with puppeteer and screenshotted the section.
+Tests: +6 status cases, plus the record surviving a Look save and being
+set on new shops.
+
+### 15.7 Looks that look different — DONE (2026-10-02)
+
+Found by rendering every look in a real browser (puppeteer + Chrome against
+a running build): the looks worked, but read as too alike. Three fixes:
+
+- **Corners reach every pill-shaped control.** 135 `rounded-full` pills in
+  69 storefront files — buttons, chips, search bars, "View all", status
+  labels — now use `rounded-[var(--sf-radius-button,999px)]`, so Square and
+  Soft looks are square/soft throughout. True circles (icon buttons, dots)
+  and the tiny count badges stay round.
+- **Each look has its own dark palette** (Minimal graphite, Editorial
+  espresso with a terracotta accent, Bold true black with a lighter blue,
+  Playful deep plum with lavender); before, dark mode was Classic's for
+  every look. Product tiles stay light. `LookInfo.darkBackground` per look:
+  a merchant colour is lifted against THAT look's dark background. All
+  default pairs AA (body text 15:1+, muted 7:1+).
+- **Minimal and Editorial are distinct from Classic**: Minimal crisp white
+  with cool greys and lighter, tighter headings (600, −0.035em); Editorial
+  warm paper (#f3ede2), ink-brown text, an oxblood accent (#8a3324) as its
+  own colour, lighter serif headings (500).
+- **Classic is untouched**: its screenshots are byte-identical before and
+  after, light and dark.
+
+**Later, only if merchants ask:** a navigation builder (category-derived
+menus stay the default), video, AI-suggested changes that produce validated
+configuration for the merchant to approve, community sections. The registry
+leaves room for each.
+
+**Tests, every part:** tenant isolation on read, write, preview and publish;
+`storefront.design` on every action; invalid configuration refused on save and
+rendered as Classic if stored; publish atomic and audited; Classic matches
+today's output; contrast refusal; `npm run test:local` and `next build`.
+
+---
+
 ## Sequencing
 
 **Phase 2 before Phases 4 and 7.** If walk-in sales land on `Order` with a `channel`
@@ -4430,6 +5015,11 @@ reasoning behind it.
   (shared rate limits) are required the moment there is more than one instance.
 - **14 after launch,** in the order merchants ask for it. 14.1 (tax) and 14.2
   (import) are the likeliest first.
+- **Phase 15 in order.** 15.0 before the first live merchant (it removes
+  false claims). 15.1 builds the draft/publish record every later part saves
+  into; 15.2 must render today's homepage unchanged before 15.3 lets anyone
+  edit it; 15.4–15.6 each add to the registry and the editor and can swap
+  places.
 
 ## Smaller cleanups — DONE (2026-09-25)
 

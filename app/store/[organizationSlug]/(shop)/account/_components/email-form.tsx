@@ -77,7 +77,7 @@ export function EmailForm({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="h-11 rounded-full border border-border bg-card px-5 text-sm font-medium transition-colors hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-11 rounded-[var(--sf-radius-button,999px)] border border-border bg-card px-5 text-sm font-medium transition-colors hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {pendingEmail ? 'Use a different email' : 'Change email'}
         </button>
@@ -123,7 +123,7 @@ export function EmailForm({
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="h-12 rounded-full px-5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="h-12 rounded-[var(--sf-radius-button,999px)] px-5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           Cancel
         </button>

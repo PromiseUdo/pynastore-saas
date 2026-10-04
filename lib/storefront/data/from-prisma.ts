@@ -40,7 +40,7 @@ import type {
 import { urlKey } from '../product-helpers';
 import { normalizeVariantOptions, PRODUCT_TAGS, type VariantOption } from '@/features/inventory/product-rules';
 import { NO_RATING } from '../reviews/rules';
-import { listPublishedReviews, ratingSummaries } from '../reviews/read';
+import { listPublishedReviews, listRecentStoreReviews, ratingSummaries } from '../reviews/read';
 import { listAnsweredQuestions } from '../questions/read';
 import { buildCatalogue, emptyCatalogue, type Catalogue, type CompanionRule } from './catalogue';
 import { boughtTogetherFromDb } from './bought-together';
@@ -466,6 +466,7 @@ export async function loadCatalogueFromDb(organizationSlug: string): Promise<Cat
     /* Read on demand, and only ever the published ones — hidden reviews are
      * off the storefront entirely, including out of the average above. */
     reviewsFor: (productId) => listPublishedReviews(organizationId, productId),
+    recentReviews: (opts) => listRecentStoreReviews(organizationId, opts),
     /* Only the ones the merchant answered: a question waiting in their inbox
      * is not store content, and an unanswered question on a product page is
      * an objection nobody replied to. */

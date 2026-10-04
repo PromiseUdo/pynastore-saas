@@ -72,7 +72,7 @@ export function EditorialHero({
         <div className="order-2 lg:order-1">
           {/* `key` restarts the rise animation on each slide change. */}
           <div key={slide.id} className="sf-rise">
-            <p className="inline-flex items-center gap-2 rounded-full bg-teal-soft px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-teal">
+            <p className="inline-flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-teal-soft px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-teal">
               <span aria-hidden className="size-1.5 rounded-full bg-teal" />
               {slide.eyebrow}
             </p>
@@ -89,14 +89,14 @@ export function EditorialHero({
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <Link
               href={slide.ctaHref}
-              className="group inline-flex h-13 items-center gap-2.5 rounded-full bg-brand px-8 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+              className="group inline-flex h-13 items-center gap-2.5 rounded-[var(--sf-radius-button,999px)] bg-brand px-8 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
             >
               {slide.ctaLabel}
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
               href="/products"
-              className="inline-flex h-13 items-center rounded-full border border-border px-7 text-sm font-semibold transition-colors hover:border-brand"
+              className="inline-flex h-13 items-center rounded-[var(--sf-radius-button,999px)] border border-border px-7 text-sm font-semibold transition-colors hover:border-brand"
             >
               Browse everything
             </Link>
@@ -146,7 +146,7 @@ export function EditorialHero({
             className="absolute -bottom-8 -left-8 hidden size-40 rounded-full bg-teal-soft lg:block"
           />
 
-          <div className="relative aspect-[4/3] overflow-hidden rounded-[2rem] bg-tile lg:aspect-[5/4] lg:rounded-[2.5rem]">
+          <div className="relative aspect-[4/3] overflow-hidden rounded-[calc(2rem*var(--sf-radius-scale,1))] bg-tile lg:aspect-[5/4] lg:rounded-[calc(2.5rem*var(--sf-radius-scale,1))]">
             {slides.map((s, i) => (
               <Image
                 key={s.id}

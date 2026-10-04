@@ -21,7 +21,7 @@ export default function AccountError({ error, reset }: { error: Error & { digest
         </p>
         <button
           onClick={reset}
-          className="mt-5 inline-flex h-11 items-center gap-2 rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+          className="mt-5 inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
         >
           <RotateCcw className="size-4" aria-hidden />
           Try again

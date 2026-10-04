@@ -42,7 +42,7 @@ export function CollectionHero({
   }
 
   return (
-    <header className="overflow-hidden rounded-2xl border bg-card sm:rounded-[1.5rem]">
+    <header className="overflow-hidden rounded-2xl border bg-card sm:rounded-[calc(1.5rem*var(--sf-radius-scale,1))]">
       {/* Image above the words on a phone, beside them from lg — stacking the
         * other way would push the copy (and the count) below the fold. On a
         * phone the image is a banner strip (5:2, not 16:9) and the paragraph

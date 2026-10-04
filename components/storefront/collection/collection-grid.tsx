@@ -23,7 +23,7 @@ export function CollectionGrid({ collections }: { collections: CollectionSummary
       {collections.map((collection, i) => (
         <li key={collection.id}>
           <Link href={collectionHref(collection.slug)} className="group block">
-            <span className="relative block aspect-[4/3] overflow-hidden rounded-[1.25rem] bg-tile">
+            <span className="relative block aspect-[4/3] overflow-hidden rounded-[calc(1.25rem*var(--sf-radius-scale,1))] bg-tile">
               {/* The merchant's own card image, or failing that a product
                 * genuinely in the collection — never a stand-in from
                 * elsewhere. A collection with neither shows the tile colour. */}
@@ -41,7 +41,7 @@ export function CollectionGrid({ collections }: { collections: CollectionSummary
                 aria-hidden
                 className="absolute inset-0 bg-brand/0 transition-colors duration-300 group-hover:bg-brand/10"
               />
-              <span className="absolute bottom-3 left-3 rounded-full bg-[color:var(--elevated)]/95 px-3 py-1 text-xs font-semibold">
+              <span className="absolute bottom-3 left-3 rounded-[var(--sf-radius-button,999px)] bg-[color:var(--elevated)]/95 px-3 py-1 text-xs font-semibold">
                 {collection.productCount.toLocaleString()}{' '}
                 {collection.productCount === 1 ? 'product' : 'products'}
               </span>

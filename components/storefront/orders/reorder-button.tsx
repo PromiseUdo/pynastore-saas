@@ -82,7 +82,7 @@ export function ReorderButton({ order }: { order: StorefrontOrder }) {
       type="button"
       onClick={buyAgain}
       disabled={busy}
-      className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-medium transition-colors hover:border-brand hover:text-brand disabled:opacity-60"
+      className="inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border bg-card px-5 text-sm font-medium transition-colors hover:border-brand hover:text-brand disabled:opacity-60"
     >
       <RotateCcw className="size-4" aria-hidden />
       {busy ? 'Adding…' : 'Buy it again'}

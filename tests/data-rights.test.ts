@@ -262,7 +262,7 @@ describe('closing a workspace', () => {
     expect(cloudinary.purged).toEqual([a.orgId]);
 
     const after = await rowsOf(a.orgId);
-    for (const gone of ['product_images', 'store_pages', 'storefront_hero_slides', 'social_posts', 'social_connections', 'memberships', 'invitations', 'merchant_bank_accounts', 'product_reviews', 'product_questions', 'customer_oauth_accounts']) {
+    for (const gone of ['product_images', 'store_pages', 'storefront_hero_slides', 'storefront_designs', 'social_posts', 'social_connections', 'memberships', 'invitations', 'merchant_bank_accounts', 'product_reviews', 'product_questions', 'customer_oauth_accounts']) {
       expect(after[gone], gone).toBeUndefined();
     }
     for (const kept of ['orders', 'invoices', 'payments', 'quotes', 'inventory_items', 'warehouses', 'stock_movements', 'customers']) {

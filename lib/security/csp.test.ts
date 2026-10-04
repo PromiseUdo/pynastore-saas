@@ -17,6 +17,20 @@ describe('the policy', () => {
     expect(p['report-uri']).toEqual(['/api/csp-report']);
   });
 
+  it('frames nothing and is framed by nothing, unless given exactly one origin for the designer preview', () => {
+    const plain = parse(buildCsp(base));
+    expect(plain['frame-src']).toEqual(["'none'"]);
+    expect(plain['frame-ancestors']).toEqual(["'none'"]);
+
+    const admin = parse(buildCsp({ ...base, frameSrc: ['https://shop-ada.getnotely.io'] }));
+    expect(admin['frame-src']).toEqual(['https://shop-ada.getnotely.io']);
+    expect(admin['frame-ancestors']).toEqual(["'none'"]);
+
+    const preview = parse(buildCsp({ ...base, storefront: true, frameAncestors: ['https://ada.getnotely.io'] }));
+    expect(preview['frame-ancestors']).toEqual(['https://ada.getnotely.io']);
+    expect(preview['frame-src']).toEqual(["'none'"]);
+  });
+
   it('allows merchant uploads to Cloudinary, and sign-in and payment redirects after a form', () => {
     const p = parse(buildCsp(base));
     expect(p['connect-src']).toContain('https://api.cloudinary.com');

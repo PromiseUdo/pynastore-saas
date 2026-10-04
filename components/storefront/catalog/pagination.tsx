@@ -44,7 +44,7 @@ export function Pagination({
   if (pageCount <= 1) return null;
 
   const base =
-    'flex h-11 min-w-11 items-center justify-center rounded-full border px-3 text-sm transition-colors sm:h-10 sm:min-w-10';
+    'flex h-11 min-w-11 items-center justify-center rounded-[var(--sf-radius-button,999px)] border px-3 text-sm transition-colors sm:h-10 sm:min-w-10';
 
   return (
     <nav aria-label="Pagination" className="flex items-center justify-center gap-2 sm:flex-wrap">

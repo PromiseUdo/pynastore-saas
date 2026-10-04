@@ -31,8 +31,24 @@ import { prisma } from '@/lib/prisma';
 import { resolveHostname, isLocalHostname } from '@/lib/tenant/resolveHostname';
 import { resolveTenant, resolveTenantBySlug } from '@/lib/tenant/resolveTenant';
 import { getOrgRouting } from '@/lib/tenant/org-status';
-import { getAdminUrl, getMarketingUrl } from '@/lib/tenant/urls';
+import { getAdminUrl, getMarketingUrl, getStorefrontUrl } from '@/lib/tenant/urls';
 import { buildCsp, cspMode, makeNonce } from '@/lib/security/csp';
+import { PREVIEW_COOKIE } from '@/lib/storefront/design/preview-cookie';
+
+/*
+ * A design-preview request on a shop's PLATFORM address (ROADMAP 15.3): the
+ * link from Online store → Customize, or a page carrying the preview cookie
+ * it sets. Only on the platform address — that is where the admin's
+ * side-by-side preview frame points, because the admin's own session and
+ * the frame rules both work there. The cookie grants nothing by itself; the
+ * storefront re-checks the member on every page.
+ */
+function isDesignPreview(req: NextRequest, hostInfo: { siteType: string; isCustomDomain: boolean }): boolean {
+  if (hostInfo.siteType !== 'storefront' || hostInfo.isCustomDomain) return false;
+  // The proxy also sees its own rewrite (/store/{slug}/design-preview) on a second pass.
+  return PREVIEW_PATH.test(req.nextUrl.pathname) || req.cookies.has(PREVIEW_COOKIE);
+}
+const PREVIEW_PATH = /^(\/store\/[^/]+)?\/design-preview$/;
 
 const { auth } = NextAuth(authConfig);
 
@@ -261,7 +277,15 @@ const routeRequest = auth(async function proxy(req: NextRequest & { auth: any })
     return NextResponse.redirect(`https://${tenant.redirectHost}${pathname}${req.nextUrl.search}`, 308);
   }
   const routing = tenant.status ? null : await getOrgRouting(tenant.orgSlug);
-  if (tenant.siteType === 'storefront' && !hostInfo.isCustomDomain && routing?.customStoreDomain) {
+  /* …except a design preview, which stays on the platform address so it can
+   * sit inside the admin's preview frame (15.3). Only a browser that opened
+   * a preview has the cookie; search engines never see the exception. */
+  if (
+    tenant.siteType === 'storefront' &&
+    !hostInfo.isCustomDomain &&
+    routing?.customStoreDomain &&
+    !isDesignPreview(req, hostInfo)
+  ) {
     const publicPath = pathname === internalPrefix || pathname.startsWith(`${internalPrefix}/`) ? pathname.slice(internalPrefix.length) || '/' : pathname;
     return NextResponse.redirect(`https://${routing.customStoreDomain}${publicPath}${req.nextUrl.search}`, 308);
   }
@@ -344,11 +368,16 @@ export default async function proxy(req: NextRequest, event: NextFetchEvent) {
 
   const hostInfo = resolveHostname(req.headers.get('host'));
   const nonce = makeNonce();
+  const slug = hostInfo.isCustomDomain ? null : hostInfo.subdomain;
   const policy = buildCsp({
     nonce,
     storefront: hostInfo.siteType === 'storefront' || hostInfo.siteType === 'mobile' || hostInfo.isCustomDomain,
     dev: process.env.NODE_ENV === 'development',
     https: req.headers.get('x-forwarded-proto') === 'https' || req.nextUrl.protocol === 'https:',
+    // A shop's admin may frame its own storefront — the designer's preview (15.3).
+    frameSrc: hostInfo.siteType === 'admin' && slug ? [new URL(getStorefrontUrl(slug)).origin] : undefined,
+    // …and that storefront, only mid-preview, may be framed by that admin and nothing else.
+    frameAncestors: slug && isDesignPreview(req, hostInfo) ? [new URL(getAdminUrl(slug)).origin] : undefined,
   });
   req.headers.set('x-nonce', nonce);
   req.headers.set('content-security-policy', policy);

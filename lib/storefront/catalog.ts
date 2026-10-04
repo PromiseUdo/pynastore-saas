@@ -46,11 +46,16 @@ import { deliveryOverview } from './delivery/quote';
 import { onlinePaymentsReady } from './checkout/store-config';
 import { loadLiveAnnouncements } from './data/announcements';
 import { loadStorefrontLook, type StorefrontLook } from './data/appearance';
+import { loadStorefrontDesign, type StorefrontDesignView } from './data/design';
+import { designForRequest } from './design/request';
+import { categoryHref } from './nav-types';
+import type { SectionSource } from './sections/schema';
 import type { Announcement } from '@/lib/marketing/announcement';
 
 export type { PublishedStorePage } from './data/pages';
 export type { StorePageLink } from './pages/rules';
 export type { StorefrontLook } from './data/appearance';
+export type { StorefrontDesignView } from './data/design';
 
 export {
   specValueId,
@@ -687,6 +692,103 @@ export async function getCollectionSummaries(
 
 /* ---------------- homepage ---------------- */
 
+/** A review for the front page, with the product it is about. */
+export interface StoreReview extends Review {
+  product: { name: string; slug: string };
+}
+
+/**
+ * "What customers say" (ROADMAP 15.4): recent published reviews of 4 or 5
+ * stars, newest first, each with the product it is about. Only reviews of
+ * products this shop still sells — a review of a withdrawn product would
+ * link nowhere. Every one was written by a shopper whose order was
+ * delivered; nothing is written for the merchant, and the section says it
+ * shows the recent good ones rather than implying they are all of them.
+ */
+export async function getStoreReviews(scope?: StoreScope, limit = 6): Promise<StoreReview[]> {
+  const cat = await getCatalogue(scope);
+  const recent = await cat.recentReviews({ minRating: STORE_REVIEW_MIN_RATING, limit: limit * 3 });
+  return recent
+    .filter((review) => cat.productById.has(review.productId))
+    .slice(0, limit)
+    .map((review) => {
+      const product = cat.productById.get(review.productId)!;
+      return { ...review, product: { name: product.name, slug: product.slug } };
+    });
+}
+export const STORE_REVIEW_MIN_RATING = 4;
+
+/**
+ * The shop's brands for the front page (15.4): only those with something on
+ * sale right now, so a logo never leads to an empty page. Alphabetical — no
+ * ranking is implied.
+ */
+export async function getBrandShowcase(scope?: StoreScope): Promise<(Brand & { productCount: number })[]> {
+  const cat = await getCatalogue(scope);
+  const counts = new Map<string, number>();
+  for (const product of cat.products) {
+    if (product.brandId) counts.set(product.brandId, (counts.get(product.brandId) ?? 0) + 1);
+  }
+  return cat.brands
+    .filter((brand) => counts.has(brand.id))
+    .map((brand) => ({ ...brand, productCount: counts.get(brand.id)! }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * The products a front-page band shows, and where its "View all" goes
+ * (ROADMAP 15.2). A band only NAMES its source; the picking happens here,
+ * with the same rules as everywhere else in the catalogue — so a band can't
+ * show a product the shop wouldn't sell, or one from another store.
+ *
+ * Null when the source can't be shown: a collection, category or brand that
+ * was deleted, hidden or emptied. The section then simply isn't on the page;
+ * a stale reference never breaks it.
+ */
+export async function getSectionProducts(
+  source: SectionSource,
+  scope?: StoreScope,
+  limit = 8,
+): Promise<{ products: Product[]; href: string } | null> {
+  const found = async (params: ListProductsParams, href: string) => {
+    const { items } = await listProducts({ ...params, store: scope, perPage: limit });
+    return items.length ? { products: items, href } : null;
+  };
+
+  switch (source.kind) {
+    /* The two the front page always had — exactly as it worked out its
+     * "Popular" and "New arrivals" bands, falling back to the cross-category
+     * best sellers so a thin shop never shows an empty band. */
+    case 'bestselling':
+    case 'newest': {
+      const sections = await getHomepageSections(scope);
+      const key = source.kind === 'bestselling' ? 'bestsellers' : 'new';
+      const products = sections.collections.find((c) => c.key === key)?.products ?? sections.recommended;
+      if (!products.length) return null;
+      // Not trimmed to `limit`: the bands already hold what they always showed.
+      return { products, href: `/products?sort=${source.kind}` };
+    }
+    case 'tag':
+      return found({ tag: source.tag }, `/products?tag=${encodeURIComponent(source.tag)}`);
+    case 'collection': {
+      const collection = (await getCatalogue(scope)).collections.find((c) => c.id === source.id);
+      if (!collection) return null;
+      return found({ ...collectionQuery(collection), sort: collection.sort }, `/collections/${collection.slug}`);
+    }
+    case 'category': {
+      const category = await getCategoryById(source.id, scope);
+      if (!category) return null;
+      return found({ categoryPath: category.path }, categoryHref(category.path));
+    }
+    case 'brand': {
+      const brand = await getBrandById(source.id, scope);
+      if (!brand) return null;
+      return found({ brandSlugs: [brand.slug] }, `/products?brand=${encodeURIComponent(brand.slug)}`);
+    }
+  }
+}
+
+
 /**
  * The homepage's merchandised bands, every one derived from what the
  * merchant actually published: the tags they set, the categories they
@@ -811,6 +913,27 @@ async function serviceFeatures(
  */
 export async function getStorefrontLook(scope?: StoreScope): Promise<StorefrontLook> {
   return loadStorefrontLook(await resolveStoreSlug(scope));
+}
+
+/**
+ * The shop's look, fonts, corners, cards and brand colour (ROADMAP 15.1).
+ * `draft: true` only once the caller has checked the viewer may preview it —
+ * this function doesn't, and must never be handed a shopper's say-so.
+ */
+export async function getStorefrontDesign(
+  scope?: StoreScope,
+  { draft = false }: { draft?: boolean } = {},
+): Promise<StorefrontDesignView> {
+  return loadStorefrontDesign(await resolveStoreSlug(scope), draft ? 'draft' : 'published');
+}
+
+/**
+ * The design this request renders with: the published one, or — only for a
+ * team member previewing — the draft. One decision per request, shared by the
+ * layout and the homepage (lib/storefront/design/request.ts).
+ */
+export async function getRequestDesign(scope?: StoreScope): Promise<StorefrontDesignView> {
+  return designForRequest(await resolveStoreSlug(scope));
 }
 
 /* ---------------- campaign announcements ---------------- */

@@ -157,8 +157,8 @@ export function CampaignModal({ announcement }: { announcement: Announcement }) 
               }
               className={
                 tinted
-                  ? 'mt-5 inline-flex h-11 w-full items-center justify-center rounded-full px-5 text-sm font-semibold transition-opacity hover:opacity-90'
-                  : 'mt-5 inline-flex h-11 w-full items-center justify-center rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90'
+                  ? 'mt-5 inline-flex h-11 w-full items-center justify-center rounded-[var(--sf-radius-button,999px)] px-5 text-sm font-semibold transition-opacity hover:opacity-90'
+                  : 'mt-5 inline-flex h-11 w-full items-center justify-center rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90'
               }
             >
               {announcement.cta.label}

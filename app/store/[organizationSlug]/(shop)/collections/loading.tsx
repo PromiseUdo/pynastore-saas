@@ -9,7 +9,7 @@ export default function Loading() {
       <div className="mt-8 grid gap-x-5 gap-y-8 sm:grid-cols-2 lg:grid-cols-3" aria-hidden>
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i}>
-            <div className="aspect-[4/3] animate-pulse rounded-[1.25rem] bg-muted" />
+            <div className="aspect-[4/3] animate-pulse rounded-[calc(1.25rem*var(--sf-radius-scale,1))] bg-muted" />
             <div className="mt-4 h-5 w-2/3 animate-pulse rounded bg-muted" />
             <div className="mt-2 h-4 w-full animate-pulse rounded bg-muted" />
           </div>

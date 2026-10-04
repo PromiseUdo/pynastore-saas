@@ -62,7 +62,7 @@ function ReviewBlock({
         type="button"
         onClick={() => onEdit(step)}
         aria-label={`Edit ${title.toLowerCase()}`}
-        className="shrink-0 rounded-full px-2 py-1 text-sm font-semibold text-brand transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="shrink-0 rounded-[var(--sf-radius-button,999px)] px-2 py-1 text-sm font-semibold text-brand transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         Edit
       </button>

@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useStorefront } from '@/lib/storefront/context';
+import { Mail, MapPin, Phone } from 'lucide-react';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
-import { NewsletterSignup } from './newsletter-signup';
+import type { SocialPlatform } from '@/lib/storefront/social-links';
 
 /*
  * WHAT THIS FOOTER MAY LINK TO.
@@ -20,19 +21,34 @@ import { NewsletterSignup } from './newsletter-signup';
  * merchant's words and often their legal position, and the template copy
  * that used to fill them made promises about delivery, returns and payment
  * that nothing in the app enforced.
+ *
+ * The brand column is how to reach the shop: the contact details and social
+ * profiles the merchant entered in Settings → General, each shown only when
+ * filled in (ROADMAP 15.0). There is no newsletter sign-up — the one that sat
+ * here saved nothing, and promised a discount no merchant had offered.
  */
 export interface FooterColumn {
   title: string;
   links: { label: string; href: string }[];
 }
 
+export interface FooterContact {
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+}
+
 export function SiteFooter({
   columns,
   paymentNote = null,
+  contact = { email: null, phone: null, address: null },
+  social = [],
 }: {
   columns: FooterColumn[];
   /** how this store's checkout takes payment (lib/storefront/store-claims.ts); null says nothing */
   paymentNote?: string | null;
+  contact?: FooterContact;
+  social?: { platform: SocialPlatform; label: string; url: string }[];
 }) {
   const { org } = useStorefront();
   const year = new Date().getFullYear();
@@ -42,7 +58,52 @@ export function SiteFooter({
       <div className="sf-container grid gap-10 py-12 lg:grid-cols-[1.4fr_2fr]">
         <div className="max-w-sm">
           <p className="font-display text-lg font-semibold">{org.name}</p>
-          <NewsletterSignup className="mt-5" />
+
+          {(contact.email || contact.phone || contact.address) && (
+            <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+              {contact.email && (
+                <li className="flex items-center gap-2">
+                  <Mail className="size-4 shrink-0" aria-hidden />
+                  <a href={`mailto:${contact.email}`} className="break-all transition-colors hover:text-foreground">
+                    {contact.email}
+                  </a>
+                </li>
+              )}
+              {contact.phone && (
+                <li className="flex items-center gap-2">
+                  <Phone className="size-4 shrink-0" aria-hidden />
+                  <a href={`tel:${contact.phone.replace(/[^\d+]/g, '')}`} className="transition-colors hover:text-foreground">
+                    {contact.phone}
+                  </a>
+                </li>
+              )}
+              {contact.address && (
+                <li className="flex items-start gap-2">
+                  <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  <span className="whitespace-pre-line">{contact.address}</span>
+                </li>
+              )}
+            </ul>
+          )}
+
+          {social.length > 0 && (
+            <nav aria-label={`${org.name} on social media`} className="mt-5">
+              <ul className="flex flex-wrap gap-2">
+                {social.map((link) => (
+                  <li key={link.platform}>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-8 items-center rounded-[var(--sf-radius-button,999px)] border bg-card px-3 text-xs font-medium transition-colors hover:border-brand hover:text-brand"
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
         </div>
 
         {/* desktop columns */}

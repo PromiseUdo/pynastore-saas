@@ -17,6 +17,7 @@ import {
   type OrganizationFieldErrors,
   type OrganizationSettings,
 } from '@/features/settings/organization';
+import { SOCIAL_PLATFORMS, SOCIAL_PLATFORM_INFO, type SocialPlatform } from '@/lib/storefront/social-links';
 
 type Currency = { code: string; label: string };
 
@@ -37,6 +38,7 @@ export function GeneralSettingsClient({
   const [supportEmail, setSupportEmail] = React.useState(settings.supportEmail ?? '');
   const [supportPhone, setSupportPhone] = React.useState(settings.supportPhone ?? '');
   const [businessAddress, setBusinessAddress] = React.useState(settings.businessAddress ?? '');
+  const [socialLinks, setSocialLinks] = React.useState<Record<SocialPlatform, string>>(settings.socialLinks);
   const [logo, setLogo] = React.useState<UploadedImage[]>(
     settings.logoUrl && settings.logoPublicId
       ? [{ url: settings.logoUrl, publicId: settings.logoPublicId }]
@@ -64,6 +66,7 @@ export function GeneralSettingsClient({
       supportEmail,
       supportPhone,
       businessAddress,
+      socialLinks,
     });
     setPending(false);
 
@@ -81,7 +84,7 @@ export function GeneralSettingsClient({
     <form onSubmit={onSubmit}>
       <PageHeader
         title="General"
-        description="Your business name, logo and contact details."
+        description="Your business name, logo, contact details and social media."
         actions={
           canManage ? (
             <Button type="submit" size="sm" disabled={pending || uploading}>
@@ -118,7 +121,7 @@ export function GeneralSettingsClient({
           <Field>
             <Label>Logo</Label>
             <FieldDescription>
-              Shown in the sidebar and on what you send out. A square image works best.
+              Shown in the sidebar, on your online shop and its browser tab, and on what you send out. A square image works best.
             </FieldDescription>
             <ImageUploader
               purpose="organization"
@@ -200,6 +203,33 @@ export function GeneralSettingsClient({
             />
             {fieldErrors.businessAddress && <FieldError>{fieldErrors.businessAddress}</FieldError>}
           </Field>
+        </FormSection>
+
+        <FormSection
+          title="Social media"
+          description="Shown in your online shop's footer. Leave blank any you don't use."
+        >
+          <FormGrid>
+            {SOCIAL_PLATFORMS.map((platform) => {
+              const info = SOCIAL_PLATFORM_INFO[platform];
+              const problem = fieldErrors[`social.${platform}`];
+              return (
+                <Field key={platform}>
+                  <Label htmlFor={`social-${platform}`}>{info.label}</Label>
+                  <Input
+                    id={`social-${platform}`}
+                    value={socialLinks[platform]}
+                    onChange={(e) => setSocialLinks((links) => ({ ...links, [platform]: e.target.value }))}
+                    disabled={!canManage}
+                    aria-invalid={Boolean(problem)}
+                    placeholder={info.placeholder}
+                    inputMode={platform === 'whatsapp' ? 'tel' : 'url'}
+                  />
+                  {problem && <FieldError>{problem}</FieldError>}
+                </Field>
+              );
+            })}
+          </FormGrid>
         </FormSection>
 
         <FormSection title="Elsewhere" description="Settings that belong to another page.">

@@ -28,9 +28,10 @@ export function ServiceFeatures({
   return (
     <section className="sf-container sf-section">
       <SectionHeader
-        eyebrow="The promise"
-        title="Shopping here should be easy"
-        subtitle="No surprises at checkout, no hoops to jump through if something isn’t right."
+        /* The heading promises nothing of its own: each tile below restates
+          * something this store's settings actually enforce, and a shop with
+          * no returns window must not be framed as hassle-free returns. */
+        title="Shopping here"
         align="center"
       />
 

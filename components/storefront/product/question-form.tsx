@@ -84,7 +84,7 @@ export function QuestionForm({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="mt-3 inline-flex h-10 items-center gap-2 rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="mt-3 inline-flex h-10 items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           <MessageCirclePlus aria-hidden className="size-4" />
           Ask a question
@@ -146,7 +146,7 @@ export function QuestionForm({
         <button
           type="submit"
           disabled={submitting}
-          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:flex-none"
+          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:flex-none"
         >
           {submitting && <Loader2 aria-hidden className="size-4 animate-spin" />}
           {submitting ? 'Sending…' : 'Send question'}
@@ -154,7 +154,7 @@ export function QuestionForm({
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="inline-flex h-12 items-center justify-center rounded-full border px-6 text-sm font-semibold transition-colors hover:bg-secondary"
+          className="inline-flex h-12 items-center justify-center rounded-[var(--sf-radius-button,999px)] border px-6 text-sm font-semibold transition-colors hover:bg-secondary"
         >
           Cancel
         </button>

@@ -188,7 +188,7 @@ export function ProductGallery({
         {count > 1 && (
           <p
             aria-live="polite"
-            className="pointer-events-none absolute bottom-3 right-0 rounded-full bg-[#001822]/70 px-3 py-1 text-xs font-semibold text-white sm:right-[calc(50%-18rem+0.75rem)]"
+            className="pointer-events-none absolute bottom-3 right-0 rounded-[var(--sf-radius-button,999px)] bg-[#001822]/70 px-3 py-1 text-xs font-semibold text-white sm:right-[calc(50%-18rem+0.75rem)]"
           >
             {safeIndex + 1} / {count}
           </p>

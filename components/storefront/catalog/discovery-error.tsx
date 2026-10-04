@@ -37,13 +37,13 @@ export function DiscoveryError({
           <button
             type="button"
             onClick={reset}
-            className="h-11 rounded-full bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+            className="h-11 rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
           >
             Try again
           </button>
           <Link
             href="/"
-            className="h-11 rounded-full border px-6 text-sm font-semibold leading-[2.75rem] transition-colors hover:border-brand hover:text-brand"
+            className="h-11 rounded-[var(--sf-radius-button,999px)] border px-6 text-sm font-semibold leading-[2.75rem] transition-colors hover:border-brand hover:text-brand"
           >
             Back to store
           </Link>

@@ -191,7 +191,7 @@ export function AddressForm({
         </div>
         <Link
           href="/account/addresses"
-          className="flex h-12 items-center rounded-full px-5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="flex h-12 items-center rounded-[var(--sf-radius-button,999px)] px-5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           Cancel
         </Link>

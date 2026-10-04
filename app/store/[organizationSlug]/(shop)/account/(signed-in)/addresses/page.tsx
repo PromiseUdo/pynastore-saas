@@ -37,7 +37,7 @@ export default async function AddressesPage() {
         </p>
         <Link
           href="/account/addresses/new"
-          className="mt-5 inline-flex h-12 items-center gap-2 rounded-full bg-brand px-6 text-base font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+          className="mt-5 inline-flex h-12 items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-base font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
         >
           <Plus className="size-4" aria-hidden />
           Add an address
@@ -57,7 +57,7 @@ export default async function AddressesPage() {
         {addresses.length < MAX_ADDRESSES && (
           <Link
             href="/account/addresses/new"
-            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
+            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border bg-card px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
           >
             <Plus className="size-4" aria-hidden />
             Add an address

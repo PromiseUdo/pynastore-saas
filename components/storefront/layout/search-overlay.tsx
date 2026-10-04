@@ -114,7 +114,7 @@ export function SearchOverlay() {
                     <button
                       key={t}
                       onClick={() => setQ(t)}
-                      className="rounded-full border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+                      className="rounded-[var(--sf-radius-button,999px)] border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
                     >
                       {t}
                     </button>

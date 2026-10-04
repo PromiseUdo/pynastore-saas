@@ -110,7 +110,7 @@ export function HeaderSearch({ className }: { className?: string }) {
       <form
         onSubmit={submit}
         role="search"
-        className="flex items-center gap-2 rounded-full border border-border bg-card pl-4 pr-1.5 transition-colors focus-within:border-brand"
+        className="flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border bg-card pl-4 pr-1.5 transition-colors focus-within:border-brand"
       >
         <Search aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <input
@@ -166,7 +166,7 @@ export function HeaderSearch({ className }: { className?: string }) {
                     key={t}
                     type="button"
                     onClick={() => setQ(t)}
-                    className="rounded-full border px-3 py-1.5 text-sm transition-colors hover:border-brand hover:text-brand"
+                    className="rounded-[var(--sf-radius-button,999px)] border px-3 py-1.5 text-sm transition-colors hover:border-brand hover:text-brand"
                   >
                     {t}
                   </button>
@@ -216,7 +216,7 @@ export function HeaderSearch({ className }: { className?: string }) {
                       key={c.id}
                       href={categoryHref(c.path)}
                       onClick={() => setOpen(false)}
-                      className="rounded-full bg-secondary px-3 py-1 text-xs transition-colors hover:text-brand"
+                      className="rounded-[var(--sf-radius-button,999px)] bg-secondary px-3 py-1 text-xs transition-colors hover:text-brand"
                     >
                       in {c.name}
                     </Link>
@@ -226,7 +226,7 @@ export function HeaderSearch({ className }: { className?: string }) {
                       key={b.id}
                       href={`/search?q=${encodeURIComponent(b.name)}`}
                       onClick={() => setOpen(false)}
-                      className="rounded-full bg-secondary px-3 py-1 text-xs transition-colors hover:text-brand"
+                      className="rounded-[var(--sf-radius-button,999px)] bg-secondary px-3 py-1 text-xs transition-colors hover:text-brand"
                     >
                       {b.name}
                     </Link>

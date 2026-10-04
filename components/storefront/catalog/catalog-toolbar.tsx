@@ -55,7 +55,7 @@ export function CatalogToolbar({
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
-          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand sm:h-10 sm:flex-none lg:hidden"
+          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-[var(--sf-radius-button,999px)] border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand sm:h-10 sm:flex-none lg:hidden"
         >
           <SlidersHorizontal className="size-4" />
           Filters
@@ -77,7 +77,7 @@ export function CatalogToolbar({
             go(buildHref(pathname, patchCriteria(criteria, { sort: e.target.value as SortKey }), optionIndex))
           }
           className={cn(
-            'h-11 min-w-0 flex-1 cursor-pointer truncate rounded-full border bg-card pl-4 pr-8 text-sm font-medium outline-none transition-colors focus:border-brand sm:h-10 sm:flex-none',
+            'h-11 min-w-0 flex-1 cursor-pointer truncate rounded-[var(--sf-radius-button,999px)] border bg-card pl-4 pr-8 text-sm font-medium outline-none transition-colors focus:border-brand sm:h-10 sm:flex-none',
             pending && 'opacity-60',
           )}
         >

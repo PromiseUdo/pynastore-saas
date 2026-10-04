@@ -231,14 +231,14 @@ function PlaceForm({
       <div className="flex gap-2">
         <button
           type="submit"
-          className="h-10 rounded-full bg-foreground px-4 text-sm font-semibold text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-10 rounded-[var(--sf-radius-button,999px)] bg-foreground px-4 text-sm font-semibold text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Save
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="h-10 rounded-full border px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-10 rounded-[var(--sf-radius-button,999px)] border px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Cancel
         </button>

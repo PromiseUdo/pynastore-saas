@@ -78,7 +78,7 @@ export function VisualMatchHeader({
           {attributes.map((attribute) => (
             <span
               key={`${attribute.kind}:${attribute.value}`}
-              className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-xs font-medium"
+              className="inline-flex items-center gap-1.5 rounded-[var(--sf-radius-button,999px)] bg-secondary px-3 py-1 text-xs font-medium"
             >
               {attribute.kind === 'colour' && (
                 <span aria-hidden className="text-muted-foreground">

@@ -70,7 +70,7 @@ export function QuickViewModal() {
       {/* Scrolls inside itself on a short phone screen instead of running
         * off the bottom with the Add button out of reach. */}
       <DialogContent
-        className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-2xl p-0 sm:rounded-[1.5rem]"
+        className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-3xl overflow-y-auto rounded-2xl p-0 sm:rounded-[calc(1.5rem*var(--sf-radius-scale,1))]"
         aria-describedby={undefined}
       >
         <DialogTitle className="sr-only">{product ? product.name : 'Product quick view'}</DialogTitle>
@@ -147,7 +147,7 @@ function QuickViewBody({ product, onClose }: { product: Product; onClose: () => 
             />
           )}
           {pct != null && (
-            <span className="absolute left-3 top-3 rounded-full bg-highlight px-3 py-1 text-xs font-bold text-highlight-foreground">
+            <span className="absolute left-3 top-3 rounded-[var(--sf-radius-button,999px)] bg-highlight px-3 py-1 text-xs font-bold text-highlight-foreground">
               −{pct}%
             </span>
           )}
@@ -201,7 +201,7 @@ function QuickViewBody({ product, onClose }: { product: Product; onClose: () => 
               <span className="text-base text-muted-foreground line-through">
                 {formatMoney(compareAt, product.currency)}
               </span>
-              <span className="rounded-full bg-sale/15 px-2.5 py-1 text-xs font-bold text-sale">
+              <span className="rounded-[var(--sf-radius-button,999px)] bg-sale/15 px-2.5 py-1 text-xs font-bold text-sale">
                 {pct}% off
               </span>
             </>
@@ -237,7 +237,7 @@ function QuickViewBody({ product, onClose }: { product: Product; onClose: () => 
             onClick={onAdd}
             disabled={!addable && !missing.length}
             className={cn(
-              'h-12 min-w-0 flex-1 rounded-full bg-brand px-4 text-sm font-semibold text-primary-foreground',
+              'h-12 min-w-0 flex-1 rounded-[var(--sf-radius-button,999px)] bg-brand px-4 text-sm font-semibold text-primary-foreground',
               'transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-muted',
               'disabled:text-muted-foreground',
             )}

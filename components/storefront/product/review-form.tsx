@@ -79,7 +79,7 @@ export function ReviewForm({
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="inline-flex h-10 items-center gap-2 rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="inline-flex h-10 items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <PenLine aria-hidden className="size-4" />
             {own ? 'Edit your review' : 'Write a review'}
@@ -91,7 +91,7 @@ export function ReviewForm({
               <button
                 type="submit"
                 disabled={removing}
-                className="inline-flex h-10 items-center gap-2 rounded-full border px-5 text-sm font-semibold transition-colors hover:bg-secondary disabled:opacity-60"
+                className="inline-flex h-10 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border px-5 text-sm font-semibold transition-colors hover:bg-secondary disabled:opacity-60"
               >
                 {removing ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Trash2 aria-hidden className="size-4" />}
                 Remove
@@ -198,7 +198,7 @@ export function ReviewForm({
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:flex-none"
+          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60 sm:flex-none"
         >
           {pending && <Loader2 aria-hidden className="size-4 animate-spin" />}
           {pending ? 'Posting…' : own ? 'Update review' : 'Post review'}
@@ -206,7 +206,7 @@ export function ReviewForm({
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="inline-flex h-12 items-center justify-center rounded-full border px-6 text-sm font-semibold transition-colors hover:bg-secondary"
+          className="inline-flex h-12 items-center justify-center rounded-[var(--sf-radius-button,999px)] border px-6 text-sm font-semibold transition-colors hover:bg-secondary"
         >
           Cancel
         </button>

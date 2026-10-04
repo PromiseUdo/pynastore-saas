@@ -29,7 +29,7 @@ export function ActiveFilters({
           key={filter.id}
           href={filter.removeHref}
           scroll={false}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-brand/40 bg-brand/5 py-1.5 pl-3 pr-2 text-xs font-medium transition-colors hover:bg-brand/10"
+          className="flex shrink-0 items-center gap-1.5 rounded-[var(--sf-radius-button,999px)] border border-brand/40 bg-brand/5 py-1.5 pl-3 pr-2 text-xs font-medium transition-colors hover:bg-brand/10"
         >
           {filter.label}
           <X aria-hidden className="size-3.5 text-muted-foreground" />

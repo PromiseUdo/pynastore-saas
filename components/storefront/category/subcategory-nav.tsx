@@ -77,7 +77,7 @@ export function SubcategoryNav({
             <Link
               href={categoryHref(category.path)}
               // 44px tall: a chip rail is tapped far more often than clicked.
-              className="flex h-11 items-center gap-2 whitespace-nowrap rounded-full border px-4 text-sm transition-colors hover:border-brand hover:text-brand"
+              className="flex h-11 items-center gap-2 whitespace-nowrap rounded-[var(--sf-radius-button,999px)] border px-4 text-sm transition-colors hover:border-brand hover:text-brand"
             >
               {category.name}
               <span className="text-xs text-muted-foreground">{category.productCount}</span>

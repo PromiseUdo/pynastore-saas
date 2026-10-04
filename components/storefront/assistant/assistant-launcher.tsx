@@ -69,11 +69,11 @@ export function AssistantLauncher({
          * custom properties above, adds the home-indicator inset and animates
          * between them. */
         floating &&
-          'sf-assistant-fab fixed right-4 z-30 h-12 rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-foreground/15 hover:bg-brand-hover lg:right-6',
+          'sf-assistant-fab fixed right-4 z-30 h-12 rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-foreground/15 hover:bg-brand-hover lg:right-6',
         variant === 'chip' &&
-          'h-11 whitespace-nowrap rounded-full border bg-card px-4 text-sm hover:border-brand hover:text-brand',
+          'h-11 whitespace-nowrap rounded-[var(--sf-radius-button,999px)] border bg-card px-4 text-sm hover:border-brand hover:text-brand',
         variant === 'button' &&
-          'h-11 rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground hover:bg-brand-hover',
+          'h-11 rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground hover:bg-brand-hover',
         variant === 'link' && 'text-sm underline underline-offset-4 hover:text-brand',
         className,
       )}

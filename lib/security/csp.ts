@@ -13,6 +13,13 @@
  * the only third-party origins a shop can bring in, and the tags still load
  * only when an id is set (components/storefront/layout/storefront-analytics).
  *
+ * FRAMING (ROADMAP 15.3). Nothing may frame our pages and our pages frame
+ * nothing — with one pair of exceptions for the storefront designer: a
+ * shop's admin may frame that shop's storefront (`frameSrc`), and that
+ * storefront, only while a design preview is open, may be framed by that
+ * shop's admin (`frameAncestors`). Both are a single origin, decided in
+ * proxy.ts from the host — never a wildcard, never another shop.
+ *
  * CSP_MODE: "enforce" (default) blocks and reports; "report" only reports —
  * the switch to flip if a live page breaks; "off" sends no policy.
  * Violations are reported to /api/csp-report, into the error log.
@@ -56,8 +63,19 @@ const ANALYTICS = {
  */
 const FORM_TARGETS = ['https://accounts.google.com', 'https://www.facebook.com', 'https://checkout.paystack.com'];
 
-export function buildCsp(options: { nonce: string; storefront: boolean; dev: boolean; https: boolean }): string {
+export function buildCsp(options: {
+  nonce: string;
+  storefront: boolean;
+  dev: boolean;
+  https: boolean;
+  /** origins this page may frame — only a shop's admin, for its own storefront */
+  frameSrc?: string[];
+  /** origins that may frame this page — only a storefront in design preview, for its own admin */
+  frameAncestors?: string[];
+}): string {
   const { nonce, storefront, dev, https } = options;
+  const frameSrc = options.frameSrc?.length ? options.frameSrc : ["'none'"];
+  const frameAncestors = options.frameAncestors?.length ? options.frameAncestors : ["'none'"];
   const directives: Record<string, string[]> = {
     'default-src': ["'self'"],
     'script-src': [
@@ -77,11 +95,11 @@ export function buildCsp(options: { nonce: string; storefront: boolean; dev: boo
     'media-src': ["'self'", 'blob:', CLOUDINARY_IMAGES],
     'worker-src': ["'self'", 'blob:'],
     'manifest-src': ["'self'"],
-    'frame-src': ["'none'"],
+    'frame-src': frameSrc,
     'object-src': ["'none'"],
     'base-uri': ["'self'"],
     'form-action': ["'self'", ...FORM_TARGETS],
-    'frame-ancestors': ["'none'"],
+    'frame-ancestors': frameAncestors,
     'report-uri': ['/api/csp-report'],
   };
   const policy = Object.entries(directives).map(([name, values]) => `${name} ${values.join(' ')}`);

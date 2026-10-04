@@ -24,13 +24,13 @@ export function EmptyCheckout() {
       <div className="mt-7 flex flex-wrap justify-center gap-3">
         <Link
           href="/products"
-          className="inline-flex h-11 items-center rounded-full bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+          className="inline-flex h-11 items-center rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
         >
           Start shopping
         </Link>
         <Link
           href="/cart"
-          className="inline-flex h-11 items-center rounded-full border px-6 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
+          className="inline-flex h-11 items-center rounded-[var(--sf-radius-button,999px)] border px-6 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
         >
           View your bag
         </Link>

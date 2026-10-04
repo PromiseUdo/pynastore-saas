@@ -5,6 +5,8 @@ import { startWorkspaceSubscription } from '@/lib/billing/trial';
 import { getBillingSettings } from '@/lib/settings';
 import { toShopAddress } from './shop-address';
 import type { BusinessType, SalesChannels } from './business';
+import { applyStartingLook, startingLookFor } from '@/lib/storefront/design/starting-looks';
+import { classicDesign } from '@/lib/storefront/design/schema';
 
 /** The shop's first store, created with it (ROADMAP 12.5) — a place is required. */
 export interface FirstStore {
@@ -57,6 +59,21 @@ export async function bootstrapOrganization({
         salesChannels: salesChannels ?? null,
       },
     });
+
+    /* 1b. The starting look for what they sell (ROADMAP 15.6), already
+     * published: the shop isn't open yet, so nobody sees it until the
+     * merchant opens it — and when they do, it suits them. "General" is the
+     * Classic look, which is what no design means, so nothing is written. */
+    const startingLook = startingLookFor(businessType);
+    if (startingLook !== 'general') {
+      await tx.storefrontDesign.create({
+        data: {
+          organizationId: org.id,
+          published: applyStartingLook(startingLook, classicDesign({ accent: null, darkByDefault: false })),
+          publishedAt: new Date(),
+        },
+      });
+    }
 
     // 2. Create all system roles for this org
     const createdRoles: Record<string, string> = {}; // roleName -> roleId

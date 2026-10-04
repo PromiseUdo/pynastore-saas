@@ -88,7 +88,7 @@ export function DiscoveryResults({
                   {state.result.recognised.map((r) => (
                     <li
                       key={`${r.kind}-${r.label}`}
-                      className="rounded-full bg-teal-soft px-2.5 py-1 text-xs font-medium text-teal"
+                      className="rounded-[var(--sf-radius-button,999px)] bg-teal-soft px-2.5 py-1 text-xs font-medium text-teal"
                     >
                       {r.label}
                     </li>

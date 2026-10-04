@@ -140,7 +140,7 @@ export function AssistantPanel() {
                 <button
                   type="button"
                   onClick={() => ask(prompt)}
-                  className="inline-flex h-10 items-center rounded-full border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
+                  className="inline-flex h-10 items-center rounded-[var(--sf-radius-button,999px)] border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
                 >
                   {prompt}
                 </button>
@@ -167,7 +167,7 @@ export function AssistantPanel() {
             autoComplete="off"
             maxLength={500}
             /* 16px minimum stops iOS zooming the viewport on focus. */
-            className="h-12 min-w-0 flex-1 rounded-full border bg-card px-4 text-base outline-none transition-colors focus:border-brand sm:text-[0.9375rem]"
+            className="h-12 min-w-0 flex-1 rounded-[var(--sf-radius-button,999px)] border bg-card px-4 text-base outline-none transition-colors focus:border-brand sm:text-[0.9375rem]"
           />
           <button
             type="submit"

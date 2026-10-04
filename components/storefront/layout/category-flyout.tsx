@@ -68,7 +68,7 @@ export function CategoryFlyout({
               key={col.id}
               href={col.href}
               onClick={onNavigate}
-              className="rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:border-brand hover:text-brand"
+              className="rounded-[var(--sf-radius-button,999px)] border px-3 py-1 text-xs font-medium transition-colors hover:border-brand hover:text-brand"
             >
               {col.name}
             </Link>

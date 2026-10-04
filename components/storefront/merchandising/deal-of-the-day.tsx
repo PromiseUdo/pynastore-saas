@@ -24,7 +24,7 @@ export function DealOfTheDay({ product, endsAt }: { product: Product; endsAt: st
       <div className="sf-container">
         <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
           <div>
-            <p className="inline-flex items-center gap-2 rounded-full bg-highlight-foreground/10 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em]">
+            <p className="inline-flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-highlight-foreground/10 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em]">
               <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-highlight-foreground" />
               Deal of the day
             </p>
@@ -44,7 +44,7 @@ export function DealOfTheDay({ product, endsAt }: { product: Product; endsAt: st
                   <span className="text-xl text-highlight-foreground/55 line-through">
                     {formatMoney(product.compareAtPrice!, product.currency)}
                   </span>
-                  <span className="rounded-full bg-highlight-foreground px-3 py-1 text-sm font-bold text-highlight">
+                  <span className="rounded-[var(--sf-radius-button,999px)] bg-highlight-foreground px-3 py-1 text-sm font-bold text-highlight">
                     Save {pct}%
                   </span>
                 </>
@@ -60,7 +60,7 @@ export function DealOfTheDay({ product, endsAt }: { product: Product; endsAt: st
 
             <Link
               href={href}
-              className="group mt-9 inline-flex h-13 items-center gap-2.5 rounded-full bg-highlight-foreground px-8 text-sm font-semibold text-highlight transition-opacity hover:opacity-90"
+              className="group mt-9 inline-flex h-13 items-center gap-2.5 rounded-[var(--sf-radius-button,999px)] bg-highlight-foreground px-8 text-sm font-semibold text-highlight transition-opacity hover:opacity-90"
             >
               Shop this deal
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
@@ -68,7 +68,7 @@ export function DealOfTheDay({ product, endsAt }: { product: Product; endsAt: st
           </div>
 
           <Link href={href} className="group relative block">
-            <div className="relative aspect-square overflow-hidden rounded-[2rem] bg-tile lg:rounded-[2.5rem]">
+            <div className="relative aspect-square overflow-hidden rounded-[calc(2rem*var(--sf-radius-scale,1))] bg-tile lg:rounded-[calc(2.5rem*var(--sf-radius-scale,1))]">
               <ProductImage
                 src={product.images[0]?.url ?? null}
                 name={product.name}

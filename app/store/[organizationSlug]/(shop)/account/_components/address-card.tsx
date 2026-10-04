@@ -37,7 +37,7 @@ export function AddressCard({ address }: { address: Address }) {
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-sm font-semibold">{address.fullName}</h3>
         {address.isDefault && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-[var(--sf-radius-button,999px)] bg-secondary px-2.5 py-1 text-xs font-medium">
             <Star className="size-3 fill-current text-brand" aria-hidden />
             Default
           </span>
@@ -56,7 +56,7 @@ export function AddressCard({ address }: { address: Address }) {
       <div className="mt-4 flex flex-wrap items-center gap-2 pt-1">
         <Link
           href={`/account/addresses/${address.id}`}
-          className="h-10 rounded-full border border-border px-4 text-sm font-medium leading-10 transition-colors hover:border-brand hover:text-brand"
+          className="h-10 rounded-[var(--sf-radius-button,999px)] border border-border px-4 text-sm font-medium leading-10 transition-colors hover:border-brand hover:text-brand"
         >
           Edit
         </Link>
@@ -66,7 +66,7 @@ export function AddressCard({ address }: { address: Address }) {
             <input type="hidden" name="id" value={address.id} />
             <button
               type="submit"
-              className="h-10 rounded-full border border-border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
+              className="h-10 rounded-[var(--sf-radius-button,999px)] border border-border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
             >
               Make default
             </button>

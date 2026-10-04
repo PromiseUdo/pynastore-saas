@@ -125,6 +125,8 @@ const ACTIONS = [
   'settings.domain.disconnected',
   'settings.storefront.opened',
   'settings.storefront.closed',
+  'storefront.design.published',
+  'storefront.design.draft_discarded',
   'platform.organization.restored',
   'settings.pickup_location.delete',
   'settings.delivery.consolidation_updated',

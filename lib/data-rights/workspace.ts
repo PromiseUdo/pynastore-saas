@@ -194,6 +194,7 @@ export async function purgeClosedWorkspace(organizationId: string, now: Date = n
       await tx.socialConnection.deleteMany({ where });
       await tx.storePage.deleteMany({ where });
       await tx.storefrontHeroSlide.deleteMany({ where });
+      await tx.storefrontDesign.deleteMany({ where });
       await tx.productImage.deleteMany({ where }); // embeddings cascade
       await tx.visualSearchQuery.deleteMany({ where });
       await tx.onboardingEmail.deleteMany({ where });

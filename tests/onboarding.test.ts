@@ -150,6 +150,11 @@ describe('create your shop', () => {
     expect(org.subscription?.status).toBe('TRIALING');
     expect(org.onboardingEmails.map((e) => e.kind)).toEqual(['welcome']);
     expect(mail[0].subject).toMatch(/Welcome/);
+
+    // The starting look for a fashion shop, already published — nobody sees it until the shop opens (15.6).
+    const design = await prisma.storefrontDesign.findUnique({ where: { organizationId: org.id } });
+    expect(design?.published).toMatchObject({ look: 'editorial', header: { layout: 'centered' }, startingLook: 'fashion' });
+    expect(design?.draft).toBeNull();
   });
 
   it('creates nothing at all when a later step fails', async () => {

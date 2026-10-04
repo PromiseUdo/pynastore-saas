@@ -80,8 +80,11 @@ export function ProductCard({
   };
 
   return (
-    <article className={cn('group/card flex h-full flex-col', className)}>
-      <div className="relative overflow-hidden rounded-2xl bg-tile">
+    /* `sf-card*` hooks let the shop's chosen card style (standard, minimal,
+     * framed — ROADMAP 15.1) restyle every card from storefront.css, so
+     * there is one card component, not one per look. */
+    <article className={cn('sf-card group/card flex h-full flex-col', className)}>
+      <div className="sf-card-media relative overflow-hidden rounded-2xl bg-tile">
         <Link href={href} aria-label={product.name} className="block">
           <span className="relative block aspect-square">
             <ProductImage
@@ -201,7 +204,7 @@ export function ProductCard({
                   ? `Choose options for ${product.name}`
                   : `Add ${product.name} to bag`
             }
-            className="mt-3 h-11 w-full rounded-full border border-brand bg-transparent text-sm font-semibold text-brand transition-colors hover:bg-brand hover:text-primary-foreground disabled:cursor-not-allowed disabled:border-border disabled:text-muted-foreground disabled:hover:bg-transparent"
+            className="sf-card-add mt-3 h-11 w-full rounded-[var(--sf-radius-button,999px)] border border-brand bg-transparent text-sm font-semibold text-brand transition-colors hover:bg-brand hover:text-primary-foreground disabled:cursor-not-allowed disabled:border-border disabled:text-muted-foreground disabled:hover:bg-transparent"
           >
             {soldOut ? 'Sold out' : needsOptions ? 'Choose options' : 'Add to bag'}
           </button>

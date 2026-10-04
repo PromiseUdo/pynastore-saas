@@ -62,7 +62,7 @@ export function PayNowButton({
       onClick={pay}
       disabled={pending}
       aria-busy={pending}
-      className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-brand px-7 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-70"
+      className="inline-flex h-12 items-center justify-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-7 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-70"
     >
       {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Lock className="size-4" aria-hidden />}
       {pending ? 'Opening secure payment…' : label}

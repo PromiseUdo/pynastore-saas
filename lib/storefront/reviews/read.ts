@@ -69,6 +69,25 @@ export async function listPublishedReviews(organizationId: string, productId: st
 }
 
 /**
+ * The store's most recent published reviews at or above a rating, newest
+ * first — for the front page's "What customers say" (ROADMAP 15.4). Only
+ * PUBLISHED ones: a review the merchant hid stays off here too. The caller
+ * says, on the page, that these are the recent good ones.
+ */
+export async function listRecentStoreReviews(
+  organizationId: string,
+  { minRating, limit }: { minRating: number; limit: number },
+): Promise<Review[]> {
+  const rows = await prisma.productReview.findMany({
+    where: { organizationId, status: 'PUBLISHED', rating: { gte: minRating } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+    take: limit,
+    select: PUBLIC_SELECT,
+  });
+  return rows.map(toReview);
+}
+
+/**
  * Every product's rating summary for one store, in a single grouped query.
  *
  * The catalogue loads all of them at once (../data/from-prisma.ts): a store

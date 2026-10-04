@@ -124,7 +124,7 @@ export function DiscoveryHero({
   return (
     <section className="sf-container pb-2 pt-6 lg:pb-6 lg:pt-14">
       <div className="mx-auto max-w-3xl text-center">
-        {/* <p className="inline-flex items-center gap-2 rounded-full bg-teal-soft px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-teal">
+        {/* <p className="inline-flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-teal-soft px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-teal">
           <Sparkles aria-hidden className="size-3.5" />
           Shop by describing it
         </p> */}
@@ -143,7 +143,7 @@ export function DiscoveryHero({
           <label htmlFor="sf-discovery-input" className="sr-only">
             Search products, or describe what you need
           </label>
-          <div className="flex items-center gap-2 rounded-full border border-border bg-card p-1.5 pl-5 shadow-sm shadow-foreground/5 transition-colors focus-within:border-brand">
+          <div className="flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border bg-card p-1.5 pl-5 shadow-sm shadow-foreground/5 transition-colors focus-within:border-brand">
             <Search
               aria-hidden
               className="size-5 shrink-0 text-muted-foreground"
@@ -163,7 +163,7 @@ export function DiscoveryHero({
              * thing a visitor would see. Submitting empty is a no-op. */}
             <button
               type="submit"
-              className="flex h-12 shrink-0 items-center gap-2 rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover sm:px-7"
+              className="flex h-12 shrink-0 items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover sm:px-7"
             >
               {state.status === 'loading' && mode === 'search' ? (
                 <Loader2 aria-hidden className="size-4 animate-spin" />
@@ -210,7 +210,7 @@ export function DiscoveryHero({
                     setQ(ex);
                     void run({ q: ex }, `“${ex}”`);
                   }}
-                  className="rounded-full border border-border px-3 py-1 text-xs font-medium transition-colors hover:border-brand hover:text-foreground"
+                  className="rounded-[var(--sf-radius-button,999px)] border border-border px-3 py-1 text-xs font-medium transition-colors hover:border-brand hover:text-foreground"
                 >
                   {ex}
                 </button>
@@ -264,7 +264,7 @@ function SecondaryAction({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-semibold transition-colors',
+        'inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border px-5 text-sm font-semibold transition-colors',
         active
           ? 'border-brand bg-brand text-primary-foreground'
           : 'border-border hover:border-brand',

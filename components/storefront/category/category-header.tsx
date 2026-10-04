@@ -31,7 +31,7 @@ export function CategoryHeader({
 
   if (category.level === 0) {
     return (
-      <header className="relative overflow-hidden rounded-[1.5rem] bg-tile">
+      <header className="relative overflow-hidden rounded-[calc(1.5rem*var(--sf-radius-scale,1))] bg-tile">
         <div className="absolute inset-0">
           {category.imageUrl && (
             <Image src={category.imageUrl} alt="" fill priority sizes="100vw" className="object-cover" />

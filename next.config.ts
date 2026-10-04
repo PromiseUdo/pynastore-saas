@@ -61,8 +61,6 @@ const nextConfig: NextConfig = {
           // HTTPS only, for two years, on every subdomain (each shop is one).
           // Not "preload": that's a promise to browsers that is slow to take back.
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
-          // Never inside someone else's frame (clickjacking); CSP frame-ancestors says the same to newer browsers.
-          { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           // Other sites learn only which site sent a visitor, never the page — paths can hold tokens.
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
@@ -72,6 +70,23 @@ const nextConfig: NextConfig = {
           // Our pages don't share a window with pages from other sites; sign-in and payment are redirects, not popups.
           { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
         ],
+      },
+      {
+        /*
+         * Never inside someone else's frame (clickjacking); CSP frame-ancestors
+         * says the same to newer browsers. The one exception is a storefront
+         * design preview (ROADMAP 15.3) — the preview link (?token=) and the
+         * pages carrying the preview cookie it sets — which the shop's own
+         * admin shows in a frame. X-Frame-Options can't name an origin, so it
+         * is left off there and CSP frame-ancestors, set per request in
+         * proxy.ts to that one admin origin, does the job.
+         */
+        source: '/:path*',
+        missing: [
+          { type: 'cookie', key: 'sf-design-preview' },
+          { type: 'query', key: 'token' },
+        ],
+        headers: [{ key: 'X-Frame-Options', value: 'DENY' }],
       },
     ];
   },

@@ -26,13 +26,13 @@ export default function ProductError({ error, reset }: { error: Error & { digest
           <button
             type="button"
             onClick={reset}
-            className="h-11 rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+            className="h-11 rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
           >
             Try again
           </button>
           <Link
             href="/products"
-            className="h-11 rounded-full border px-5 text-sm font-semibold leading-[2.75rem] transition-colors hover:border-brand hover:text-brand"
+            className="h-11 rounded-[var(--sf-radius-button,999px)] border px-5 text-sm font-semibold leading-[2.75rem] transition-colors hover:border-brand hover:text-brand"
           >
             Browse all products
           </Link>

@@ -35,7 +35,7 @@ export function ConfirmEmailForm({ token }: { token: string }) {
         </p>
         <Link
           href="/account"
-          className="inline-flex h-12 items-center rounded-full bg-brand px-6 text-base font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+          className="inline-flex h-12 items-center rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-base font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
         >
           Go to your account
         </Link>

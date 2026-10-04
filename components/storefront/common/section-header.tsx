@@ -56,7 +56,7 @@ export function SectionHeader({
           {href && (
             <Link
               href={href}
-              className="group inline-flex h-11 items-center gap-2 rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:border-brand"
+              className="group inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border px-5 text-sm font-semibold transition-colors hover:border-brand"
             >
               {linkLabel}
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />

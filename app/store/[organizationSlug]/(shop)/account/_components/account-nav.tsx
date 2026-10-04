@@ -48,7 +48,7 @@ export function AccountNav() {
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex h-11 items-center gap-2.5 rounded-full border px-4 text-sm font-medium transition-colors lg:w-full lg:rounded-xl',
+                  'flex h-11 items-center gap-2.5 rounded-[var(--sf-radius-button,999px)] border px-4 text-sm font-medium transition-colors lg:w-full lg:rounded-xl',
                   active
                     ? 'border-brand bg-brand text-primary-foreground'
                     : 'border-border bg-card text-foreground hover:border-brand hover:text-brand',
@@ -79,7 +79,7 @@ export function SignOutButton() {
     <form action={signOutAction}>
       <button
         type="submit"
-        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-border bg-card px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive lg:justify-start lg:rounded-xl"
+        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-[var(--sf-radius-button,999px)] border border-border bg-card px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive lg:justify-start lg:rounded-xl"
       >
         <LogOut className="size-4" aria-hidden />
         Sign out

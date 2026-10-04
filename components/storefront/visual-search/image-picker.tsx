@@ -257,7 +257,7 @@ export function ImagePicker({
                   type="button"
                   onClick={() => void search()}
                   disabled={busy === 'searching'}
-                  className="inline-flex h-11 items-center gap-2 rounded-full bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-70"
+                  className="inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-70"
                 >
                   {busy === 'searching' ? (
                     <Loader2 aria-hidden className="size-4 animate-spin" />
@@ -269,7 +269,7 @@ export function ImagePicker({
                 <button
                   type="button"
                   onClick={() => fileInput.current?.click()}
-                  className="inline-flex h-11 items-center gap-2 rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:border-brand"
+                  className="inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border px-5 text-sm font-semibold transition-colors hover:border-brand"
                 >
                   <RefreshCw aria-hidden className="size-4" />
                   Change image
@@ -277,7 +277,7 @@ export function ImagePicker({
                 <button
                   type="button"
                   onClick={remove}
-                  className="inline-flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                  className="inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] px-4 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <X aria-hidden className="size-4" />
                   Remove
@@ -290,7 +290,7 @@ export function ImagePicker({
                 type="button"
                 onClick={() => fileInput.current?.click()}
                 disabled={busy === 'reading'}
-                className="inline-flex h-11 items-center gap-2 rounded-full bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-70"
+                className="inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-70"
               >
                 <Upload aria-hidden className="size-4" />
                 Upload image
@@ -301,7 +301,7 @@ export function ImagePicker({
                 type="button"
                 onClick={() => cameraInput.current?.click()}
                 disabled={busy === 'reading'}
-                className="inline-flex h-11 items-center gap-2 rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:border-brand disabled:opacity-70"
+                className="inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border px-5 text-sm font-semibold transition-colors hover:border-brand disabled:opacity-70"
               >
                 <Camera aria-hidden className="size-4" />
                 Take a photo

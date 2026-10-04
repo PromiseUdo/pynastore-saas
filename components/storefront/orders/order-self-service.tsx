@@ -36,9 +36,9 @@ import { formatDate, formatMoney } from '@/lib/storefront/format';
 import type { StorefrontOrder } from '@/lib/storefront/orders/types';
 
 const SECONDARY =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border bg-card px-5 text-sm font-semibold transition-colors hover:bg-secondary disabled:opacity-60';
+  'inline-flex h-11 items-center justify-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border bg-card px-5 text-sm font-semibold transition-colors hover:bg-secondary disabled:opacity-60';
 const PRIMARY =
-  'inline-flex h-12 items-center justify-center gap-2 rounded-full bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-70';
+  'inline-flex h-12 items-center justify-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-70';
 
 export function OrderSelfService({
   order,
@@ -145,7 +145,7 @@ function CancelOrderButton({ order }: { order: StorefrontOrder }) {
             onClick={confirm}
             disabled={pending}
             aria-busy={pending}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-destructive px-5 text-sm font-semibold text-white transition-colors hover:bg-destructive/90 disabled:opacity-70"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-destructive px-5 text-sm font-semibold text-white transition-colors hover:bg-destructive/90 disabled:opacity-70"
           >
             {pending && <Loader2 className="size-4 animate-spin" aria-hidden />}
             Cancel order
@@ -295,7 +295,7 @@ function ReturnItemsButton({ order, remaining }: { order: StorefrontOrder; remai
               type="button"
               onClick={() => setOpen(false)}
               disabled={pending}
-              className="h-12 rounded-full px-5 text-sm font-medium text-muted-foreground hover:text-foreground"
+              className="h-12 rounded-[var(--sf-radius-button,999px)] px-5 text-sm font-medium text-muted-foreground hover:text-foreground"
             >
               Not now
             </button>

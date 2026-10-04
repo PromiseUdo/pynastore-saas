@@ -32,7 +32,7 @@ export function ReviewList({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="mt-6 h-11 w-full rounded-full border text-sm font-semibold transition-colors hover:border-brand hover:text-brand sm:w-auto sm:px-6"
+          className="mt-6 h-11 w-full rounded-[var(--sf-radius-button,999px)] border text-sm font-semibold transition-colors hover:border-brand hover:text-brand sm:w-auto sm:px-6"
         >
           Show {hidden} more {hidden === 1 ? 'review' : 'reviews'}
         </button>

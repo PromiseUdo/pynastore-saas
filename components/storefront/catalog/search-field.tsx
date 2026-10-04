@@ -145,7 +145,7 @@ export function SearchField({
       <form
         onSubmit={submit}
         role="search"
-        className="flex items-center gap-2 rounded-full border-2 border-border bg-card pl-4 pr-1 transition-colors focus-within:border-brand sm:pr-1.5"
+        className="flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] border-2 border-border bg-card pl-4 pr-1 transition-colors focus-within:border-brand sm:pr-1.5"
       >
         <Search aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <input
@@ -183,7 +183,7 @@ export function SearchField({
         )}
         <button
           type="submit"
-          className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-brand px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+          className="flex h-10 shrink-0 items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
         >
           {loading ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
           <span className="hidden sm:inline">Search</span>

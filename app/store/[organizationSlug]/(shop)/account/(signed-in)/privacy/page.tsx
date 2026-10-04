@@ -29,7 +29,7 @@ export default async function PrivacyPage() {
         <a
           href="/account/export"
           download
-          className="inline-flex h-12 items-center justify-center rounded-full border border-border px-6 text-base font-semibold transition-colors hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="inline-flex h-12 items-center justify-center rounded-[var(--sf-radius-button,999px)] border border-border px-6 text-base font-semibold transition-colors hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Download my data
         </a>

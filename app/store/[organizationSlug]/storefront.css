@@ -15,8 +15,15 @@
  * navy — same hue family, inverted). The theme is server-rendered from a
  * cookie, see lib/storefront/theme.ts.
  *
- * `--brand` is the per-tenant hook: a branded mobile build or a merchant theme
- * setting only has to override that one value.
+ * `--brand` is the per-tenant hook. A merchant's colour arrives as
+ * `--merchant-brand` (+ `-hover`, `-fg`, and `-dark*` when it reads on the
+ * dark background), set on the root by lib/storefront/design/tokens.ts; each
+ * palette below reads it with its own colour as the fallback.
+ *
+ * LOOKS (ROADMAP 15.1). The bare blocks below are CLASSIC — today's
+ * storefront, unchanged. The other looks, and the corner, font and card
+ * choices, are `data-sf-*` attributes on the same root, styled at the end of
+ * this file. They only re-point tokens; no component knows which look it's in.
  *
  * NOTE: the `@theme` mapping for these tokens (--color-brand, --color-ink,
  * --color-highlight, …) lives in app/globals.css, NOT here. This file is
@@ -39,10 +46,10 @@
   /* Primary is the ink, not the yellow: a solid dark button on cream reads
    * as confident and premium, and it leaves the yellow free to mean
    * "something good is happening here" wherever it appears. */
-  --brand: oklch(0.195 0.038 227);
-  --brand-hover: oklch(0.285 0.046 222);
+  --brand: var(--merchant-brand, oklch(0.195 0.038 227));
+  --brand-hover: var(--merchant-brand-hover, oklch(0.285 0.046 222));
   --primary: var(--brand);
-  --primary-foreground: oklch(0.97 0.018 95);
+  --primary-foreground: var(--merchant-brand-fg, oklch(0.97 0.018 95));
 
   /* the delight accent */
   --highlight: oklch(0.894 0.176 96);      /* #ffda29                       */
@@ -79,6 +86,17 @@
 
   --radius: 1rem;
 
+  /* ── shape, type and rhythm (overridden by the data-sf-* choices) ──── */
+  --sf-radius-button: 999px;
+  /* multiplies the few hand-sized radii (rounded-[1.75rem] …) */
+  --sf-radius-scale: 1;
+  --sf-display-font: var(--font-sf-display), Georgia, 'Times New Roman', serif;
+  --sf-display-weight: 600;
+  --sf-display-tracking: -0.015em;
+  --sf-display-variation: 'SOFT' 30, 'WONK' 1;
+  --sf-section-y: 2.5rem;
+  --sf-section-y-lg: 3.5rem;
+
   color: var(--foreground);
   background-color: var(--background);
   /* Warm, slightly open text colour rendering on the cream ground. */
@@ -96,10 +114,10 @@
 
   /* On ink, the yellow becomes the primary — it's the only thing with
    * enough life to carry a call to action against this background. */
-  --brand: oklch(0.894 0.176 96);
-  --brand-hover: oklch(0.845 0.17 94);
+  --brand: var(--merchant-brand-dark, oklch(0.894 0.176 96));
+  --brand-hover: var(--merchant-brand-dark-hover, oklch(0.845 0.17 94));
   --primary: var(--brand);
-  --primary-foreground: oklch(0.185 0.036 227);
+  --primary-foreground: var(--merchant-brand-dark-fg, oklch(0.185 0.036 227));
 
   --highlight: oklch(0.894 0.176 96);
   --highlight-foreground: oklch(0.185 0.036 227);
@@ -139,10 +157,10 @@
 [data-storefront] .font-display,
 [data-storefront] h1,
 [data-storefront] h2 {
-  font-family: var(--font-sf-display), Georgia, 'Times New Roman', serif;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  font-variation-settings: 'SOFT' 30, 'WONK' 1;
+  font-family: var(--sf-display-font);
+  font-weight: var(--sf-display-weight);
+  letter-spacing: var(--sf-display-tracking);
+  font-variation-settings: var(--sf-display-variation);
 }
 
 /* h3 stays in the sans — sub-headings this small in a serif get muddy. */
@@ -154,18 +172,18 @@
 [data-storefront] [data-slot='button'][data-size='default'] {
   height: 2.75rem;
   padding-inline: 1.25rem;
-  border-radius: 999px;
+  border-radius: var(--sf-radius-button);
 }
 [data-storefront] [data-slot='button'][data-size='lg'] {
   height: 3.25rem;
   padding-inline: 2rem;
   font-size: 0.95rem;
-  border-radius: 999px;
+  border-radius: var(--sf-radius-button);
 }
 [data-storefront] [data-slot='button'][data-size='sm'] {
   height: 2.25rem;
   padding-inline: 0.875rem;
-  border-radius: 999px;
+  border-radius: var(--sf-radius-button);
 }
 
 /* ── layout helpers ──────────────────────────────────────────────────── */
@@ -192,15 +210,15 @@
  * Kept deliberately modest because adjacent bands BOTH apply it: the gap a
  * reader actually sees between two cream sections is double this. */
 .sf-section {
-  padding-block: 2.5rem;
+  padding-block: var(--sf-section-y, 2.5rem);
 }
 @media (min-width: 1024px) {
   .sf-section {
-    padding-block: 3.5rem;
+    padding-block: var(--sf-section-y-lg, 3.5rem);
   }
 }
 
-/* Full-bleed colour bands (the deal slab, the trust block, the newsletter)
+/* Full-bleed colour bands (the deal slab, the trust block)
  * carry their own, larger padding: they have no neighbour contributing to the
  * gap, and a colour block needs more air inside it than a cream one. */
 .sf-band {
@@ -390,4 +408,330 @@
   .sf-marquee span[aria-hidden='true'] {
     display: none;
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   LOOKS AND FINE-TUNE (ROADMAP 15.1)
+
+   Set on the storefront root from the shop's published design (or, for its
+   own team, a draft being previewed). Classic is the absence of an override.
+
+   Light palettes are `:not([data-sf-theme='dark'])`; each look also has
+   its own dark palette below, so a shopper in dark mode still sees the
+   look the merchant chose. Each palette's `--brand` falls
+   back to the look's own colour; the hex values are mirrored in
+   lib/storefront/design/looks.ts, which checks a merchant's colour against
+   the background.
+   ════════════════════════════════════════════════════════════════════════ */
+
+[data-storefront][data-sf-look='minimal']:not([data-sf-theme='dark']) {
+  /* Crisp white and cool greys — no warmth, no colour of its own. */
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --brand: var(--merchant-brand, #0a0a0a);
+  --brand-hover: var(--merchant-brand-hover, #2c2c2e);
+  --primary-foreground: var(--merchant-brand-fg, #ffffff);
+  --secondary: #f5f5f7;
+  --secondary-foreground: #1d1d1f;
+  --muted: #f5f5f7;
+  --muted-foreground: #6e6e73;
+  --accent: #f0f0f2;
+  --accent-foreground: #0a0a0a;
+  --border: #e5e5ea;
+  --input: #d9d9de;
+  --ring: #0a0a0a;
+  --bar: #0a0a0a;
+  --tile: #f5f5f7;
+  --elevated: #ffffff;
+  --teal: #1d1d1f;
+  --teal-soft: #f0f0f2;
+  --price: #0a0a0a;
+}
+
+[data-storefront][data-sf-look='editorial']:not([data-sf-theme='dark']) {
+  /* Warm paper and ink, with a deep oxblood accent — a printed magazine. */
+  --background: #f3ede2;
+  --foreground: #231a14;
+  --card: #faf6ee;
+  --card-foreground: #231a14;
+  --popover: #faf6ee;
+  --popover-foreground: #231a14;
+  --brand: var(--merchant-brand, #8a3324);
+  --brand-hover: var(--merchant-brand-hover, #722a1e);
+  --primary-foreground: var(--merchant-brand-fg, #ffffff);
+  --secondary: #ebe3d4;
+  --secondary-foreground: #2e231b;
+  --muted: #ebe3d4;
+  --muted-foreground: #6b5d4f;
+  --accent: #e6dccb;
+  --accent-foreground: #231a14;
+  --border: #ddd2bf;
+  --input: #d3c6b0;
+  --ring: #8a3324;
+  --bar: #231a14;
+  --tile: #ebe3d4;
+  --elevated: #faf6ee;
+  --teal: #8a3324;
+  --teal-soft: #f0e2d6;
+  --price: #231a14;
+}
+
+[data-storefront][data-sf-look='bold']:not([data-sf-theme='dark']) {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --brand: var(--merchant-brand, #2341e0);
+  --brand-hover: var(--merchant-brand-hover, #1b33b3);
+  --primary-foreground: var(--merchant-brand-fg, #ffffff);
+  --secondary: #f1f1f1;
+  --secondary-foreground: #0a0a0a;
+  --muted: #f1f1f1;
+  --muted-foreground: #4a4a4a;
+  --accent: #ececec;
+  --accent-foreground: #0a0a0a;
+  --border: #d4d4d4;
+  --input: #c4c4c4;
+  --ring: #0a0a0a;
+  --bar: #0a0a0a;
+  --tile: #f1f1f1;
+  --elevated: #ffffff;
+  --teal: #0a0a0a;
+  --teal-soft: #eef0ff;
+  --price: #0a0a0a;
+}
+
+[data-storefront][data-sf-look='playful']:not([data-sf-theme='dark']) {
+  --background: #fff8f1;
+  --foreground: #2b2140;
+  --card: #ffffff;
+  --card-foreground: #2b2140;
+  --popover: #ffffff;
+  --popover-foreground: #2b2140;
+  --brand: var(--merchant-brand, #7c3aed);
+  --brand-hover: var(--merchant-brand-hover, #6d28d9);
+  --primary-foreground: var(--merchant-brand-fg, #ffffff);
+  --secondary: #fbeee2;
+  --secondary-foreground: #2b2140;
+  --muted: #fbeee2;
+  --muted-foreground: #6b5f7a;
+  --accent: #f8e6d6;
+  --accent-foreground: #2b2140;
+  --border: #f0dfcf;
+  --input: #f0dfcf;
+  --ring: #7c3aed;
+  --bar: #2b2140;
+  --tile: #fdeee0;
+  --elevated: #ffffff;
+  --teal: #0f766e;
+  --teal-soft: #dff3ef;
+  --price: #2b2140;
+}
+
+/* ── Dark mode, per look ────────────────────────────────────────────────
+   Each look keeps its character at night: Minimal goes neutral graphite,
+   Editorial a warm espresso, Bold true black, Playful a deep plum. Product
+   picture tiles stay light so photos read the same in both themes. The
+   merchant's colour arrives as `--merchant-brand-dark` — already lifted to
+   stand out on that look's dark background (lib/storefront/design/tokens.ts);
+   each fallback here is the look's own dark accent. All pairs are WCAG AA:
+   body text 15:1 or better, muted text 7:1 or better. */
+[data-storefront][data-sf-look='minimal'][data-sf-theme='dark'] {
+  --background: #0f0f10;
+  --foreground: #f2f2f2;
+  --card: #18181a;
+  --card-foreground: #f2f2f2;
+  --popover: #18181a;
+  --popover-foreground: #f2f2f2;
+  --brand: var(--merchant-brand-dark, #f5f5f7);
+  --brand-hover: var(--merchant-brand-dark-hover, #d8d8dc);
+  --primary-foreground: var(--merchant-brand-dark-fg, #111111);
+  --secondary: #1f1f22;
+  --secondary-foreground: #f2f2f2;
+  --muted: #1f1f22;
+  --muted-foreground: #a1a1a6;
+  --accent: #26262a;
+  --accent-foreground: #f2f2f2;
+  --border: #2c2c30;
+  --input: #3a3a3f;
+  --ring: #f5f5f7;
+  --bar: #000000;
+  --tile: #f5f5f7;
+  --elevated: #1c1c1f;
+  --teal: #d1d1d6;
+  --teal-soft: #26262a;
+  --price: #f2f2f2;
+}
+
+[data-storefront][data-sf-look='editorial'][data-sf-theme='dark'] {
+  --background: #17130f;
+  --foreground: #efe8dc;
+  --card: #211b16;
+  --card-foreground: #efe8dc;
+  --popover: #211b16;
+  --popover-foreground: #efe8dc;
+  --brand: var(--merchant-brand-dark, #e0a882);
+  --brand-hover: var(--merchant-brand-dark-hover, #d08f66);
+  --primary-foreground: var(--merchant-brand-dark-fg, #111111);
+  --secondary: #2a231d;
+  --secondary-foreground: #efe8dc;
+  --muted: #2a231d;
+  --muted-foreground: #b3a896;
+  --accent: #30281f;
+  --accent-foreground: #efe8dc;
+  --border: #3a3128;
+  --input: #4a3f33;
+  --ring: #e0a882;
+  --bar: #0f0c09;
+  --tile: #efe8dc;
+  --elevated: #261f19;
+  --teal: #e0a882;
+  --teal-soft: #30281f;
+  --price: #efe8dc;
+}
+
+[data-storefront][data-sf-look='bold'][data-sf-theme='dark'] {
+  --background: #0a0a0a;
+  --foreground: #ffffff;
+  --card: #141414;
+  --card-foreground: #ffffff;
+  --popover: #141414;
+  --popover-foreground: #ffffff;
+  --brand: var(--merchant-brand-dark, #7f95ff);
+  --brand-hover: var(--merchant-brand-dark-hover, #9aabff);
+  --primary-foreground: var(--merchant-brand-dark-fg, #0a0a0a);
+  --secondary: #1c1c1c;
+  --secondary-foreground: #ffffff;
+  --muted: #1c1c1c;
+  --muted-foreground: #a3a3a3;
+  --accent: #222222;
+  --accent-foreground: #ffffff;
+  --border: #333333;
+  --input: #444444;
+  --ring: #ffffff;
+  --bar: #000000;
+  --tile: #f1f1f1;
+  --elevated: #1a1a1a;
+  --teal: #ffffff;
+  --teal-soft: #1b2350;
+  --price: #ffffff;
+}
+
+[data-storefront][data-sf-look='playful'][data-sf-theme='dark'] {
+  --background: #1c1528;
+  --foreground: #f5efff;
+  --card: #261d36;
+  --card-foreground: #f5efff;
+  --popover: #261d36;
+  --popover-foreground: #f5efff;
+  --brand: var(--merchant-brand-dark, #b794f6);
+  --brand-hover: var(--merchant-brand-dark-hover, #c9adf8);
+  --primary-foreground: var(--merchant-brand-dark-fg, #1c1528);
+  --secondary: #2e2440;
+  --secondary-foreground: #f5efff;
+  --muted: #2e2440;
+  --muted-foreground: #bdb2d4;
+  --accent: #33284a;
+  --accent-foreground: #f5efff;
+  --border: #3a2f4f;
+  --input: #4a3d63;
+  --ring: #b794f6;
+  --bar: #140f1d;
+  --tile: #fdeee0;
+  --elevated: #2b2140;
+  --teal: #5eead4;
+  --teal-soft: #183a36;
+  --price: #f5efff;
+}
+
+/* Headings with the look's own voice: Minimal's are lighter and tighter,
+   Editorial's a touch lighter so the serif's contrast shows. Only when the
+   look's own font is in use — a Fine-tuned font keeps its own weight. */
+[data-storefront][data-sf-look='minimal'][data-sf-fonts='modern'] {
+  --sf-display-weight: 600;
+  --sf-display-tracking: -0.035em;
+}
+[data-storefront][data-sf-look='editorial'][data-sf-fonts='elegant'] {
+  --sf-display-weight: 500;
+  --sf-display-tracking: -0.005em;
+}
+
+/* Rhythm: airier for the quiet looks, tighter for Bold. */
+[data-storefront][data-sf-look='minimal'],
+[data-storefront][data-sf-look='editorial'] {
+  --sf-section-y: 3.25rem;
+  --sf-section-y-lg: 5rem;
+}
+[data-storefront][data-sf-look='bold'] {
+  --sf-section-y: 2rem;
+  --sf-section-y-lg: 3rem;
+}
+
+/* ── Headings font ─────────────────────────────────────────────────────
+   Body text stays in the app sans in every look: legibility first. Only the
+   display face changes. Each face is loaded by the storefront layout with
+   preload off (except Classic), so a shop downloads only the one it uses. */
+[data-storefront][data-sf-fonts='modern'] {
+  --sf-display-font: var(--font-geist-sans), system-ui, sans-serif;
+  --sf-display-weight: 700;
+  --sf-display-tracking: -0.03em;
+  --sf-display-variation: normal;
+}
+[data-storefront][data-sf-fonts='elegant'] {
+  --sf-display-font: var(--font-sf-elegant), Georgia, 'Times New Roman', serif;
+  --sf-display-weight: 600;
+  --sf-display-tracking: -0.01em;
+  --sf-display-variation: normal;
+}
+[data-storefront][data-sf-fonts='friendly'] {
+  --sf-display-font: var(--font-sf-friendly), system-ui, sans-serif;
+  --sf-display-weight: 800;
+  --sf-display-tracking: -0.01em;
+  --sf-display-variation: normal;
+}
+
+/* ── Corners ───────────────────────────────────────────────────────────
+   Tailwind builds rounded-md/-xl/-2xl from --radius plus fixed offsets
+   (+4px, +8px), and rounded-3xl from --radius-3xl, so re-pointing those two
+   reshapes ~all the storefront's rounded corners at once. "Square" sets
+   --radius below zero on purpose: the small sizes become invalid and fall
+   back to no rounding, and the largest land on ~2px. */
+[data-storefront][data-sf-corners='soft'] {
+  --radius: 0.375rem;
+  --radius-3xl: 1rem;
+  --sf-radius-button: 0.5rem;
+  --sf-radius-scale: 0.45;
+}
+[data-storefront][data-sf-corners='square'] {
+  --radius: -0.375rem;
+  --radius-3xl: 0.125rem;
+  --sf-radius-button: 0.125rem;
+  --sf-radius-scale: 0.08;
+}
+
+/* ── Product cards ─────────────────────────────────────────────────────
+   Hooks on components/storefront/product/product-card.tsx. Standard is the
+   card as it is. */
+[data-storefront][data-sf-cards='minimal'] .sf-card-media {
+  background-color: transparent;
+}
+/* Just picture, name and price: the add button goes, the product page is
+   one tap away (the whole picture and name are links). */
+[data-storefront][data-sf-cards='minimal'] .sf-card-add {
+  display: none;
+}
+[data-storefront][data-sf-cards='framed'] .sf-card {
+  border: 1px solid var(--border);
+  background-color: var(--card);
+  border-radius: calc(var(--radius) + 8px);
+  padding: 0.625rem 0.625rem 0.875rem;
+}
+[data-storefront][data-sf-cards='framed'] .sf-card-media {
+  border-radius: var(--radius);
 }

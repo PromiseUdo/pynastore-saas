@@ -103,7 +103,7 @@ export function CatalogView({
             <Link
               key={child.id}
               href={categoryHref(child.path)}
-              className="shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-colors hover:border-brand hover:text-brand"
+              className="shrink-0 whitespace-nowrap rounded-[var(--sf-radius-button,999px)] border px-4 py-2 text-sm transition-colors hover:border-brand hover:text-brand"
             >
               {child.name}
             </Link>

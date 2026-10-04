@@ -18,10 +18,16 @@
  */
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@/lib/generated/prisma/client';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { destroyAsset, isOrgAsset } from '@/lib/cloudinary/sign';
+import {
+  normalizeSocialLinks,
+  socialLinksForForm,
+  type SocialPlatform,
+} from '@/lib/storefront/social-links';
 
 export type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
 
@@ -34,10 +40,12 @@ export interface OrganizationSettings {
   supportEmail: string | null;
   supportPhone: string | null;
   businessAddress: string | null;
+  /** each platform's link as stored, or '' — see lib/storefront/social-links.ts */
+  socialLinks: Record<SocialPlatform, string>;
 }
 
 export type OrganizationFieldErrors = Partial<
-  Record<'name' | 'supportEmail' | 'supportPhone' | 'businessAddress', string>
+  Record<'name' | 'supportEmail' | 'supportPhone' | 'businessAddress' | `social.${SocialPlatform}`, string>
 >;
 
 const OrganizationSchema = z.object({
@@ -56,6 +64,8 @@ const OrganizationSchema = z.object({
     .optional(),
   supportPhone: z.string().trim().max(32, 'Keep the phone number under 32 characters').optional(),
   businessAddress: z.string().trim().max(300, 'Keep the address under 300 characters').optional(),
+  /** what the merchant typed per platform; normalised after parsing */
+  socialLinks: z.record(z.string(), z.string().max(400)).optional(),
 });
 
 export type OrganizationInput = z.input<typeof OrganizationSchema>;
@@ -84,11 +94,13 @@ export async function getOrganizationSettings(): Promise<ActionResult<Organizati
         supportEmail: true,
         supportPhone: true,
         businessAddress: true,
+        storefrontSocialLinks: true,
       },
     });
     if (!org) return { success: false, error: 'We couldn’t load your business details' };
 
-    return { success: true, data: org };
+    const { storefrontSocialLinks, ...rest } = org;
+    return { success: true, data: { ...rest, socialLinks: socialLinksForForm(storefrontSocialLinks) } };
   } catch (error) {
     return failure(error, 'We couldn’t load your business details');
   }
@@ -113,6 +125,15 @@ export async function saveOrganizationSettings(
     }
     const data = parsed.data;
 
+    const social = normalizeSocialLinks(data.socialLinks ?? {});
+    if (!social.ok) {
+      const fieldErrors: OrganizationFieldErrors = {};
+      for (const [platform, message] of Object.entries(social.errors)) {
+        fieldErrors[`social.${platform as SocialPlatform}`] = message;
+      }
+      return { success: false, error: 'Check the highlighted fields', fieldErrors };
+    }
+
     /* An image reference from the browser is only trusted once it is shown to
      * live in this org's own Cloudinary folder. */
     if (data.logo && !isOrgAsset(data.logo, organizationId)) {
@@ -136,6 +157,8 @@ export async function saveOrganizationSettings(
         supportEmail: data.supportEmail?.trim() || null,
         supportPhone: data.supportPhone?.trim() || null,
         businessAddress: data.businessAddress?.trim() || null,
+        // An empty object would read as "set, but nothing" — store null instead.
+        storefrontSocialLinks: Object.keys(social.links).length ? social.links : Prisma.DbNull,
       },
     });
 
@@ -154,6 +177,7 @@ export async function saveOrganizationSettings(
       metadata: {
         name: data.name,
         logoChanged: (current?.logoPublicId ?? null) !== logoPublicId,
+        socialLinks: Object.keys(social.links),
       },
     });
 

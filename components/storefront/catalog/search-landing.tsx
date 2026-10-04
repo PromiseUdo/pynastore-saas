@@ -35,7 +35,7 @@ export function SearchLanding({
               <Link
                 key={term}
                 href={`/search?q=${encodeURIComponent(term)}`}
-                className="flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors hover:border-brand hover:text-brand"
+                className="flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] border px-4 py-2 text-sm transition-colors hover:border-brand hover:text-brand"
               >
                 <Search aria-hidden className="size-3.5 text-muted-foreground" />
                 {term}

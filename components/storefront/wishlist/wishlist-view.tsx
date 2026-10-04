@@ -91,7 +91,7 @@ export function WishlistView() {
         </p>
         <Link
           href="/products"
-          className="mt-6 inline-flex h-12 items-center rounded-full bg-brand px-7 text-base font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+          className="mt-6 inline-flex h-12 items-center rounded-[var(--sf-radius-button,999px)] bg-brand px-7 text-base font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
         >
           Start browsing
         </Link>

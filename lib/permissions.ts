@@ -59,6 +59,9 @@ export const PERMISSIONS = {
   // ─── Social commerce ─────────────────────────────────────
   SOCIAL_VIEW: 'social.view',
   SOCIAL_MANAGE: 'social.manage',
+  // ─── Online store ────────────────────────────────────────
+  /** Change the online store's look and front page, and publish it (ROADMAP 15.1). */
+  STOREFRONT_DESIGN: 'storefront.design',
 
   // ─── Staff / Settings ────────────────────────────────────
   STAFF_VIEW: 'staff.view',

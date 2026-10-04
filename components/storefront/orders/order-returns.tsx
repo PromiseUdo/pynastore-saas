@@ -44,7 +44,7 @@ export function OrderReturns({
         {order.returns.map((r) => (
           <li key={r.id} className="rounded-2xl border p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className={cn('rounded-full px-3 py-1 text-xs font-semibold', TONE[r.status])}>
+              <span className={cn('rounded-[var(--sf-radius-button,999px)] px-3 py-1 text-xs font-semibold', TONE[r.status])}>
                 {RETURN_STATUS_LABEL[r.status]}
               </span>
               <span className="text-xs text-muted-foreground">Asked {formatDate(r.requestedAt, locale)}</span>
@@ -108,7 +108,7 @@ function WithdrawButton({ returnId }: { returnId: string }) {
       onClick={withdraw}
       disabled={pending}
       aria-busy={pending}
-      className="mt-3 inline-flex h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-60"
+      className="mt-3 inline-flex h-9 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border px-4 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-60"
     >
       {pending && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
       Withdraw request

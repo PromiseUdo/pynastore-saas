@@ -86,12 +86,12 @@ export default async function AccountOverviewPage() {
       <AccountCard title="How you sign in">
         <div className="flex flex-wrap gap-2">
           {methods.google && (
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3.5 py-1.5 text-sm">
+            <span className="inline-flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border bg-secondary/60 px-3.5 py-1.5 text-sm">
               <GoogleMark /> Google
             </span>
           )}
           {methods.hasPassword && (
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3.5 py-1.5 text-sm">
+            <span className="inline-flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border bg-secondary/60 px-3.5 py-1.5 text-sm">
               <KeyRound className="size-4 text-muted-foreground" aria-hidden /> Email and password
             </span>
           )}
@@ -126,7 +126,7 @@ export default async function AccountOverviewPage() {
             </p>
             <Link
               href="/account/addresses/new"
-              className="mt-4 inline-flex h-11 items-center rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+              className="mt-4 inline-flex h-11 items-center rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
             >
               Add an address
             </Link>

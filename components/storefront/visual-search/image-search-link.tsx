@@ -32,7 +32,7 @@ export function ImageSearchLink({
   onNavigate?: () => void;
 }) {
   const styles = {
-    pill: 'inline-flex h-11 items-center gap-2 rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:border-brand',
+    pill: 'inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border px-5 text-sm font-semibold transition-colors hover:border-brand',
     row: 'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent',
     quiet:
       'inline-flex items-center gap-1.5 text-sm font-semibold text-brand underline-offset-4 hover:underline',

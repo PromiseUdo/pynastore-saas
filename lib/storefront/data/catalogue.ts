@@ -61,6 +61,9 @@ export interface Catalogue {
    */
   reviewsFor: (productId: string) => Promise<Review[]>;
 
+  /** the store's recent published reviews at or above a rating, newest first (15.4) */
+  recentReviews: (opts: { minRating: number; limit: number }) => Promise<Review[]>;
+
   /**
    * The published questions and answers of one product, newest first.
    *
@@ -97,6 +100,8 @@ export interface CataloguePartsInput {
   collections: Collection[];
   /** defaults to "this store has none", which is what an empty store has */
   reviewsFor?: (productId: string) => Promise<Review[]>;
+  /** defaults to "no reviews", which is what a new store has */
+  recentReviews?: (opts: { minRating: number; limit: number }) => Promise<Review[]>;
   /** defaults to "nothing answered yet", which is what a new store has */
   questionsFor?: (productId: string) => Promise<ProductQuestion[]>;
   /** category id → its companion rule; categories without one are absent */
@@ -194,6 +199,7 @@ export function buildCatalogue(parts: CataloguePartsInput): Catalogue {
     facetableSpecs: facetableSpecsOf(products),
     hasRatings: products.some((p) => p.rating.count > 0),
     reviewsFor: parts.reviewsFor ?? (async () => []),
+    recentReviews: parts.recentReviews ?? (async () => []),
     questionsFor: parts.questionsFor ?? (async () => []),
     companionsFor: (categoryId) => companionsLookup(categoryId),
     boughtTogether: parts.boughtTogether ?? (async () => []),

@@ -46,7 +46,7 @@ export default async function CollectionsPage({ params }: Props) {
           </p>
           <Link
             href="/products"
-            className="mt-5 inline-flex h-11 items-center rounded-full bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+            className="mt-5 inline-flex h-11 items-center rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
           >
             Browse all products
           </Link>

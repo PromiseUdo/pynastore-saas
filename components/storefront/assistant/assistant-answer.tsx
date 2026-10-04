@@ -91,7 +91,7 @@ export function AssistantAnswer({
               <Link
                 key={action.id}
                 href={action.href as Route}
-                className="inline-flex h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
+                className="inline-flex h-10 items-center gap-1.5 rounded-[var(--sf-radius-button,999px)] border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
               >
                 {action.label}
                 <ArrowUpRight aria-hidden className="size-3.5" />
@@ -208,7 +208,7 @@ function ChipButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-10 items-center rounded-full border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand focus-visible:border-brand"
+      className="inline-flex h-10 items-center rounded-[var(--sf-radius-button,999px)] border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand focus-visible:border-brand"
     >
       {children}
     </button>

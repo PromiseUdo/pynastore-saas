@@ -22,7 +22,7 @@ export function OrderStatusPill({ status, className }: { status: OrderStatus; cl
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold',
+        'inline-flex items-center rounded-[var(--sf-radius-button,999px)] px-3 py-1 text-xs font-semibold',
         STATUS_TONE[status],
         className,
       )}
@@ -37,7 +37,7 @@ export function PaymentStatusPill({ status }: { status: OrderPaymentStatus }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium',
+        'inline-flex items-center rounded-[var(--sf-radius-button,999px)] border px-3 py-1 text-xs font-medium',
         settled ? 'border-success/40 text-foreground' : 'border-border text-muted-foreground',
       )}
     >

@@ -15,6 +15,7 @@ import {
   Megaphone,
   Share2,
   ArrowUpCircle,
+  Store,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
@@ -101,6 +102,7 @@ const navGroups: NavGroup[] = [
        * they live at /procurement/suppliers and /settings/members. A
        * business-wide Reports hub is Phase 7 in docs/ROADMAP.md; it goes back
        * in when the page exists, not before. */
+      { title: 'Online store', href: '/online-store/customize', icon: Store },
       { title: 'Marketing', href: '/marketing/campaigns', icon: Megaphone },
       { title: 'Social', href: '/social', icon: Share2 },
     ],

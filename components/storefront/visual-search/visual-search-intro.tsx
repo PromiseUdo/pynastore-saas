@@ -44,7 +44,7 @@ export function VisualSearchIntro({
               <li key={category.id}>
                 <Link
                   href={categoryHref(category.path)}
-                  className="inline-flex h-10 items-center rounded-full border border-border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
+                  className="inline-flex h-10 items-center rounded-[var(--sf-radius-button,999px)] border border-border px-4 text-sm font-medium transition-colors hover:border-brand hover:text-brand"
                 >
                   {category.name}
                 </Link>

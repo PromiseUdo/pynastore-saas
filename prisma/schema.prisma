@@ -215,6 +215,20 @@ model Organization {
   analyticsGaId        String?
   analyticsMetaPixelId String?
 
+  /**
+   * The shop's own social profiles, for the storefront footer (ROADMAP
+   * 15.0): { instagram?, facebook?, tiktok?, x?, youtube?, whatsapp?,
+   * linkedin? } → https URL. Validated in and out by
+   * lib/storefront/social-links.ts; only what is set is shown.
+   */
+  storefrontSocialLinks Json?
+
+  /**
+   * Whether the storefront opens dark for a shopper who hasn't chosen.
+   * A shopper's own choice (the sf-theme-{slug} cookie) always wins.
+   */
+  storefrontDarkByDefault Boolean @default(false)
+
   // Paid-tier custom domains (e.g. dashboard.acme.com, acme.com). Null unless
   // the org has provisioned + verified DNS for that domain.
   customAdminDomain String? @unique
@@ -281,6 +295,7 @@ model Organization {
   productImageEmbeddings ProductImageEmbedding[]
   visualSearchQueries    VisualSearchQuery[]
   heroSlides             StorefrontHeroSlide[]
+  storefrontDesign       StorefrontDesign?
   campaigns              Campaign[]
   campaignPrices         CampaignPrice[]
   quotes                 Quote[]
@@ -3885,6 +3900,39 @@ model StorefrontHeroSlide {
 
   @@index([organizationId, sortOrder])
   @@map("storefront_hero_slides")
+}
+
+/**
+ * The shop's chosen look (ROADMAP 15.1): one row per organization, holding
+ * what shoppers see (`published`) and what the merchant is trying out
+ * (`draft`). Both are a versioned JSON document validated by
+ * lib/storefront/design/schema.ts — never markup, never CSS.
+ *
+ * No row, or no `published`, means Classic: today's storefront, built from
+ * the older storefrontAccent / storefrontDarkByDefault columns. Nothing is
+ * backfilled; a row appears the first time a merchant saves a draft.
+ *
+ * Publishing copies the draft into `published` in ONE update, so a shop is
+ * never half-changed. Content (slides, pages, products) is not in here: it
+ * still saves live. Only design waits for Publish.
+ */
+model StorefrontDesign {
+  organizationId String @id
+
+  draft            Json?
+  /** set on every draft save; publish names the one it saw, so nobody publishes a draft changed under them */
+  draftSavedAt     DateTime?
+  draftSavedById   String?
+  published        Json?
+  publishedAt      DateTime?
+  publishedById    String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("storefront_designs")
 }
 
 /**

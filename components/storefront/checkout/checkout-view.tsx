@@ -457,7 +457,7 @@ export function CheckoutView({
         </p>
         <Link
           href="/cart"
-          className="mt-6 inline-flex h-11 items-center rounded-full border px-6 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
+          className="mt-6 inline-flex h-11 items-center rounded-[var(--sf-radius-button,999px)] border px-6 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
         >
           Back to your bag
         </Link>

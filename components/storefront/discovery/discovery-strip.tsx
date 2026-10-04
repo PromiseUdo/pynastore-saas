@@ -91,7 +91,7 @@ export function DiscoveryStrip({
           onClick={() => setGuiding((open) => !open)}
           aria-expanded={guiding}
           className={cn(
-            'inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border px-4 text-sm font-semibold transition-colors sm:flex-none sm:px-5',
+            'inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[var(--sf-radius-button,999px)] border px-4 text-sm font-semibold transition-colors sm:flex-none sm:px-5',
             guiding
               ? 'border-brand text-brand'
               : 'border-border hover:border-brand hover:text-brand',

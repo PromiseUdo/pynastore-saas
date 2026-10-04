@@ -34,7 +34,7 @@ export function AccountNotFound({
       <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted-foreground">{description}</p>
       <Link
         href={backHref}
-        className="mt-5 inline-flex h-11 items-center rounded-full border border-border px-5 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
+        className="mt-5 inline-flex h-11 items-center rounded-[var(--sf-radius-button,999px)] border border-border px-5 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
       >
         {backLabel}
       </Link>

@@ -81,7 +81,7 @@ export function ReviewHelpfulButton({
         disabled={pending}
         aria-pressed={mine}
         className={cn(
-          'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 transition-colors hover:bg-secondary disabled:opacity-60',
+          'inline-flex h-8 items-center gap-1.5 rounded-[var(--sf-radius-button,999px)] border px-3 transition-colors hover:bg-secondary disabled:opacity-60',
           mine && 'border-brand text-brand',
         )}
       >

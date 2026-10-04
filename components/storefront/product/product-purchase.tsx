@@ -144,12 +144,12 @@ export function ProductPurchase({
           badge={
             <>
               {pct != null && (
-                <span className="rounded-full bg-highlight px-3 py-1 text-xs font-bold text-highlight-foreground">
+                <span className="rounded-[var(--sf-radius-button,999px)] bg-highlight px-3 py-1 text-xs font-bold text-highlight-foreground">
                   −{pct}%
                 </span>
               )}
               {hydrated && !product.inStock && (
-                <span className="rounded-full bg-muted-foreground px-3 py-1 text-xs font-bold text-background">
+                <span className="rounded-[var(--sf-radius-button,999px)] bg-muted-foreground px-3 py-1 text-xs font-bold text-background">
                   Sold out
                 </span>
               )}
@@ -195,7 +195,7 @@ export function ProductPurchase({
                 <span className="text-lg text-muted-foreground line-through">
                   {formatMoney(compareAt, product.currency)}
                 </span>
-                <span className="rounded-full bg-sale/15 px-2.5 py-1 text-xs font-bold text-sale">
+                <span className="rounded-[var(--sf-radius-button,999px)] bg-sale/15 px-2.5 py-1 text-xs font-bold text-sale">
                   {pct}% off
                 </span>
               </>
@@ -236,7 +236,7 @@ export function ProductPurchase({
               disabled={!addable || adding}
               data-pdp-add
               className={cn(
-                'h-12 min-w-0 flex-1 rounded-full bg-brand px-4 text-sm font-semibold text-primary-foreground sm:px-6',
+                'h-12 min-w-0 flex-1 rounded-[var(--sf-radius-button,999px)] bg-brand px-4 text-sm font-semibold text-primary-foreground sm:px-6',
                 'transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-muted',
                 'disabled:text-muted-foreground',
               )}
@@ -265,7 +265,7 @@ export function ProductPurchase({
               onClick={onWishlist}
               aria-pressed={hydrated && wishlisted}
               className={cn(
-                'inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border px-4 text-sm font-semibold transition-colors',
+                'inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[var(--sf-radius-button,999px)] border px-4 text-sm font-semibold transition-colors',
                 hydrated && wishlisted
                   ? 'border-brand text-brand'
                   : 'hover:border-brand hover:text-brand',
@@ -381,7 +381,7 @@ function StickyBuyBar({
         type="button"
         onClick={onAdd}
         disabled={!addable && !needsOptions}
-        className="h-12 shrink-0 rounded-full bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:bg-muted disabled:text-muted-foreground"
+        className="h-12 shrink-0 rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:bg-muted disabled:text-muted-foreground"
       >
         {needsOptions ? 'Select options' : stock <= 0 ? 'Out of stock' : 'Add to bag'}
       </button>

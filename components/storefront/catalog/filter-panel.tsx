@@ -114,7 +114,7 @@ export function FilterPanel({
                         apply({ optionValueIds: toggleInList(criteria.optionValueIds, bucket.value) })
                       }
                       className={cn(
-                        'flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs transition-colors',
+                        'flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] border py-1 pl-1 pr-3 text-xs transition-colors',
                         active ? 'border-brand bg-brand/5 font-semibold' : 'hover:border-foreground/30',
                       )}
                     >
@@ -281,7 +281,7 @@ function PriceSection({
                   )
                 }
                 className={cn(
-                  'rounded-full border px-3 py-1.5 text-xs transition-colors',
+                  'rounded-[var(--sf-radius-button,999px)] border px-3 py-1.5 text-xs transition-colors',
                   active
                     ? 'border-brand bg-brand text-primary-foreground'
                     : 'hover:border-foreground/30',
