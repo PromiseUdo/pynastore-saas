@@ -27,6 +27,8 @@ import { getStoreCheckoutConfig } from '@/lib/storefront/checkout/store-config';
 import { deliveryHeadline, paymentHeadline } from '@/lib/storefront/store-claims';
 import { footerPageLinks } from '@/lib/storefront/pages/rules';
 import type { FooterColumn } from '@/components/storefront/layout/site-footer';
+import { GetAppBanner } from '@/components/storefront/layout/get-app-banner';
+import { getStoreAppListing } from '@/lib/mobile/listing';
 
 export default async function ShopLayout({
   children,
@@ -36,7 +38,7 @@ export default async function ShopLayout({
   params: Promise<{ organizationSlug: string }>;
 }) {
   const { organizationSlug } = await params;
-  const [navItems, departments, pages, delivery, checkout, announcements, look, { design }] = await Promise.all([
+  const [navItems, departments, pages, delivery, checkout, announcements, look, { design }, appListing] = await Promise.all([
     getNavItems({ organizationSlug }),
     getFeaturedCategories({ organizationSlug }),
     getStorePages({ organizationSlug }),
@@ -45,6 +47,8 @@ export default async function ShopLayout({
     getCampaignAnnouncements({ organizationSlug }),
     getStorefrontLook({ organizationSlug }),
     getRequestDesign({ organizationSlug }),
+    // The store's own app, when it is listed somewhere (ROADMAP 16.4).
+    getStoreAppListing({ organizationSlug }),
   ]);
 
   /* At most one of each, newest campaign first: two bars stacked above the
@@ -91,6 +95,7 @@ export default async function ShopLayout({
     <div className="flex min-h-screen flex-col">
       {/* Above everything, because a sale notice under the header is a sale
         * notice nobody reads. */}
+      {appListing && <GetAppBanner listing={appListing} />}
       {bar && <CampaignBar announcement={bar} />}
       <UtilityBar deliveryNote={deliveryHeadline(delivery.options)} />
       {/* With the merchant's own slides on the homepage there is no
@@ -103,6 +108,7 @@ export default async function ShopLayout({
         paymentNote={paymentHeadline(checkout.paymentMethods)}
         contact={look.contact}
         social={look.social}
+        appHref={appListing ? '/app' : null}
       />
       <MobileTabBar />
       {modal && <CampaignModal announcement={modal} />}

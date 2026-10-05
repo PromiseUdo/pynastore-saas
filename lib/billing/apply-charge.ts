@@ -12,6 +12,7 @@ import { ensurePaystackPlan, createSubscription, disableSubscription, type Payst
 import { notifyPendingDomainOrder } from '@/lib/domains/notify';
 import { claimShopDomain } from '@/lib/domains/shop-domain';
 import { periodEnd, type BillingCycleKey } from '@/lib/billing/plans';
+import { applyMobileAppPayment } from '@/lib/mobile/orders';
 
 export async function applySuccessfulCharge(data: PaystackChargeData): Promise<void> {
   const existing = await prisma.billingTransaction.findUnique({
@@ -116,6 +117,9 @@ export async function applySuccessfulCharge(data: PaystackChargeData): Promise<v
       data: { status: 'SUCCESS', rawPayload: data as any },
     });
   }
+
+  // A store's own app (ROADMAP 16.2): the setup fee or a year's renewal.
+  await applyMobileAppPayment(existing.id);
 
   // A paid domain order joins the staff queue now (11.5): the 24-hour promise
   // runs from here. A new registration becomes the shop's (pending) domain.

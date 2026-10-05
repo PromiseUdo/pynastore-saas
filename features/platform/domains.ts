@@ -13,6 +13,7 @@
  * Each decision is recorded on the MERCHANT's activity log (like the
  * verification queue), and the merchant is emailed.
  */
+import { ownerEmails as ownerAndPaymentsEmails } from '@/lib/org-owners';
 import { prisma } from '@/lib/prisma';
 import { requirePlatformStaff } from '@/lib/platform-staff';
 import { createAuditLog } from '@/lib/audit';
@@ -301,16 +302,6 @@ export async function setDomainStep(
   }
 }
 
-async function ownerEmails(organizationId: string): Promise<string[]> {
-  const [owners, account] = await Promise.all([
-    prisma.membership.findMany({
-      where: { organizationId, status: 'ACTIVE', role: { isSystem: true, name: SYSTEM_ROLES.OWNER.name } },
-      select: { user: { select: { email: true } } },
-    }),
-    prisma.merchantPaymentAccount.findUnique({ where: { organizationId }, select: { contactEmail: true } }),
-  ]);
-  return [...new Set([...owners.map((o) => o.user.email), ...(account?.contactEmail ? [account.contactEmail] : [])])];
-}
 
 /** Every step done: the shop routes to the domain (or the renewal is recorded), and the merchant is told. */
 export async function markDomainLive(orderId: string): Promise<ActionResult> {
@@ -344,7 +335,7 @@ export async function markDomainLive(orderId: string): Promise<ActionResult> {
       metadata: { domain: o.domain, expiresAt: o.expiresAt?.toISOString() ?? null },
     });
     await sendPlatformNoticeEmail({
-      to: await ownerEmails(o.organizationId),
+      to: await ownerAndPaymentsEmails(o.organizationId, { includePaymentsContact: true }),
       ...domainLiveEmail({
         shopName: o.organization.name,
         host: shopDomain.canonicalHost,
@@ -389,7 +380,7 @@ export async function markDomainFailed(orderId: string, reason: string): Promise
       metadata: { domain: o.domain, reason: why },
     });
     await sendPlatformNoticeEmail({
-      to: await ownerEmails(o.organizationId),
+      to: await ownerAndPaymentsEmails(o.organizationId, { includePaymentsContact: true }),
       ...domainFailedEmail({
         shopName: o.organization.name,
         domain: o.domain ?? 'your domain',

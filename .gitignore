@@ -59,3 +59,7 @@ next-env.d.ts
 .capacitor-cli-*
 capacitor.settings.gradle
 *.apk
+# store-app build kit (ROADMAP 16.3): signing keys and app files never belong in git
+*.keystore
+*.jks
+*.aab

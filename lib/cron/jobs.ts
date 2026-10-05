@@ -18,6 +18,7 @@ import { purgeExpiredQueries } from '@/lib/storefront/visual-search/vector-store
 import { runDomainLifecycle } from '@/lib/domains/lifecycle';
 import { runOnboardingReminders } from '@/lib/onboarding/reminders';
 import { runDataRetention } from '@/lib/data-rights/retention';
+import { runMobileAppRenewals } from '@/lib/mobile/renewals';
 
 export interface CronJob {
   title: string;
@@ -90,6 +91,23 @@ export const CRON_JOBS = {
         .filter(Boolean)
         .join(' · '),
   },
+  'mobile-app-renewals': {
+    title: 'Store app renewals',
+    description:
+      'Reminds merchants before their store app’s paid year ends, starts the grace period when it ends unpaid, and switches the app off when the grace runs out. Without it, apps keep working unpaid and nobody is reminded.',
+    schedule: 'Daily at 8:30am Lagos time',
+    everyMinutes: 24 * 60,
+    run: () => runMobileAppRenewals(),
+    describe: (r) =>
+      [
+        `${plural(n(r, 'reminders'), 'reminder', 'reminders')} sent`,
+        n(r, 'inGrace') ? `${plural(n(r, 'inGrace'), 'app', 'apps')} into grace` : null,
+        n(r, 'lapsed') ? `${plural(n(r, 'lapsed'), 'app', 'apps')} switched off` : null,
+        n(r, 'failed') ? `${n(r, 'failed')} failed` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+  },
   'onboarding-reminders': {
     title: 'Setup and trial reminders',
     description:
@@ -115,6 +133,7 @@ export const CRON_JOBS = {
         n(r, 'workspacesErased') ? `${plural(n(r, 'workspacesErased'), 'shop', 'shops')} erased` : null,
         n(r, 'ordersAnonymized') ? `${plural(n(r, 'ordersAnonymized'), 'order', 'orders')} anonymised` : null,
         n(r, 'customersAnonymized') ? `${plural(n(r, 'customersAnonymized'), 'customer', 'customers')} anonymised` : null,
+        n(r, 'pushWatchesRemoved') ? `${plural(n(r, 'pushWatchesRemoved'), 'order notification', 'order notifications')} ended` : null,
         n(r, 'failed') ? `${n(r, 'failed')} failed` : null,
       ]
         .filter(Boolean)

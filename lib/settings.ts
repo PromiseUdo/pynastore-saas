@@ -100,3 +100,49 @@ export async function setBillingSetting(key: 'trialDays' | 'trialPlanKey' | 'gra
     update: { value: String(value) },
   });
 }
+
+/* ---------------- a store's own phone app (ROADMAP 16.2) ---------------- */
+
+/*
+ * Set by platform staff in Billing settings. A fee left unset means the
+ * add-on isn't on sale: merchants see that it's coming, and nothing can be
+ * paid. The setup fee includes the first year; each later year is the
+ * yearly fee. After a year runs out, the app keeps working for the grace
+ * days, then shows "no longer available" until it's renewed.
+ */
+const MOBILE_APP_SETUP_FEE_KEY = 'mobile_app_setup_fee';
+const MOBILE_APP_YEARLY_FEE_KEY = 'mobile_app_yearly_fee';
+const MOBILE_APP_GRACE_DAYS_KEY = 'mobile_app_grace_days';
+
+export const DEFAULT_MOBILE_APP_GRACE_DAYS = 14;
+
+export interface MobileAppPricing {
+  /** NGN, or null when not on sale */
+  setupFee: number | null;
+  yearlyFee: number | null;
+  graceDays: number;
+}
+
+function naira(value: string | undefined): number | null {
+  if (value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+export async function getMobileAppPricing(): Promise<MobileAppPricing> {
+  const rows = await prisma.platformSetting.findMany({
+    where: { key: { in: [MOBILE_APP_SETUP_FEE_KEY, MOBILE_APP_YEARLY_FEE_KEY, MOBILE_APP_GRACE_DAYS_KEY] } },
+  });
+  const value = (key: string) => rows.find((r) => r.key === key)?.value;
+  return {
+    setupFee: naira(value(MOBILE_APP_SETUP_FEE_KEY)),
+    yearlyFee: naira(value(MOBILE_APP_YEARLY_FEE_KEY)),
+    graceDays: wholeDays(value(MOBILE_APP_GRACE_DAYS_KEY), DEFAULT_MOBILE_APP_GRACE_DAYS),
+  };
+}
+
+export const MOBILE_APP_SETTING_KEYS = {
+  mobileAppSetupFee: MOBILE_APP_SETUP_FEE_KEY,
+  mobileAppYearlyFee: MOBILE_APP_YEARLY_FEE_KEY,
+  mobileAppGraceDays: MOBILE_APP_GRACE_DAYS_KEY,
+} as const;

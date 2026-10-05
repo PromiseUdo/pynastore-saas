@@ -1,6 +1,7 @@
 /*
  * Platform console → Billing settings (ROADMAP 11.7): the free trial, the
- * grace period, and the dollar-to-naira rate for domain prices.
+ * grace period, the dollar-to-naira rate for domain prices, and store-app
+ * prices (ROADMAP 16.2).
  */
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -21,7 +22,7 @@ export default async function ConsoleBillingSettingsPage() {
     <>
       <PageHeader
         title="Billing settings"
-        description="The free trial new merchants get, how long a shop stays open after its plan ends, and the exchange rate for domain prices."
+        description="The free trial new merchants get, how long a shop stays open after its plan ends, the exchange rate for domain prices, and what store apps cost."
       />
       <PageBody>
         <BillingSettingsForm settings={result.data} />

@@ -139,6 +139,8 @@ export async function startOrderPayment(input: {
   returnPath: string;
   /** started inside the phone app — see the callback route */
   nativeApp?: boolean;
+  /** that app's URL scheme (its app id), checked by the caller (ROADMAP 16.1) */
+  nativeAppScheme?: string | null;
 }): Promise<StartPaymentResult> {
   if (!isPaystackConfigured()) {
     console.error('[payments] PAYSTACK_SECRET_KEY is not set; cannot start a payment.');
@@ -213,6 +215,7 @@ export async function startOrderPayment(input: {
       currency: order.currency,
       returnUrl,
       nativeApp: Boolean(input.nativeApp),
+      nativeAppScheme: input.nativeApp ? (input.nativeAppScheme ?? null) : null,
     },
     select: { id: true },
   });
@@ -493,10 +496,10 @@ export async function getOrderPaymentState(orderId: string): Promise<OrderPaymen
 /** Where to send the shopper back to, once the provider returns them. */
 export async function paymentReturn(
   reference: string,
-): Promise<{ returnUrl: string; nativeApp: boolean } | null> {
+): Promise<{ returnUrl: string; nativeApp: boolean; nativeAppScheme: string | null } | null> {
   const attempt = await prisma.orderPayment.findUnique({
     where: { reference },
-    select: { returnUrl: true, nativeApp: true },
+    select: { returnUrl: true, nativeApp: true, nativeAppScheme: true },
   });
   return attempt ?? null;
 }

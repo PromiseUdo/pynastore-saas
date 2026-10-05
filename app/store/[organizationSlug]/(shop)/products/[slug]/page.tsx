@@ -135,6 +135,7 @@ export default async function ProductDetailPage({ params }: Props) {
         deliveryPanel={<ProductDelivery delivery={delivery} requiresPrepayment={product.requiresPrepayment} />}
         deliverySummary={deliverySummary(delivery.options)}
         sizeGuideHref={sizeGuide?.href ?? null}
+        shareUrl={await storefrontUrlFor(organizationSlug, `/products/${product.slug}`)}
       />
 
       {/*

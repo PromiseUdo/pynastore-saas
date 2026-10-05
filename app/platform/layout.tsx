@@ -17,6 +17,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { ConsoleShell } from '@/components/platform/console-shell';
 import { pendingVerificationCount } from '@/features/platform/overview';
 import { waitingDomainCount } from '@/features/platform/domains';
+import { appsToBuildCount } from '@/features/platform/mobile-apps';
 import { paymentAttentionCount } from '@/features/platform/payments';
 import { jobsAttentionCount } from '@/features/platform/jobs';
 import { errorsAttentionCount } from '@/features/platform/errors';
@@ -30,9 +31,10 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   const staff = await getPlatformStaff();
   if (!staff) notFound();
 
-  const [pending, domains, payments, jobs, errors] = await Promise.all([
+  const [pending, domains, apps, payments, jobs, errors] = await Promise.all([
     pendingVerificationCount(),
     waitingDomainCount(),
+    appsToBuildCount(),
     paymentAttentionCount(),
     jobsAttentionCount(),
     errorsAttentionCount(),
@@ -42,7 +44,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
     <>
       <ConsoleShell
         staff={{ name: staff.name, email: staff.email }}
-        counts={{ '/platform/verification': pending, '/platform/domains': domains, '/platform/payments': payments, '/platform/jobs': jobs, '/platform/errors': errors }}
+        counts={{ '/platform/verification': pending, '/platform/domains': domains, '/platform/mobile-apps': apps, '/platform/payments': payments, '/platform/jobs': jobs, '/platform/errors': errors }}
         platformName={PLATFORM_NAME}
       >
         {children}

@@ -16,6 +16,8 @@ const CAN_UPLOAD: Record<UploadPurpose, PermissionKey[]> = {
   campaigns: [PERMISSIONS.SALES_DISCOUNT_MANAGE],
   /** Hero slides and the shop's share image. */
   storefront: [PERMISSIONS.SETTINGS_EDIT],
+  /** The store's own app icon (ROADMAP 16.2). */
+  'mobile-app': [PERMISSIONS.SETTINGS_EDIT],
 };
 
 /** Short-lived signed parameters for one direct browser → Cloudinary upload. */

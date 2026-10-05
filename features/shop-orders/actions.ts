@@ -23,6 +23,8 @@ import { currentStoreSlug, getShopper } from '@/lib/storefront/account/session';
 import { placeOrder, resolveLines, type OrderLineRequest, type PlaceOrderFailure } from '@/lib/storefront/orders/create';
 import { findOrderByReferenceAndEmail } from '@/lib/storefront/orders/read';
 import { startOrderPayment } from '@/lib/storefront/checkout/payment-service';
+import { deepLinkSchemeFor } from '@/lib/mobile/store-apps';
+import { watchOrder } from '@/lib/mobile/push/watch';
 import { prisma } from '@/lib/prisma';
 import { quoteDelivery } from '@/lib/storefront/delivery/quote';
 import type { ParcelOffer } from '@/lib/storefront/delivery/plan';
@@ -138,6 +140,7 @@ export async function placeOrderAction(
       origin,
       returnPath: confirmationPath,
       nativeApp: Boolean(request.nativeApp),
+      nativeAppScheme: await nativeAppScheme(Boolean(request.nativeApp)),
     });
     paymentUrl = started.ok ? started.checkoutUrl : null;
   } else {
@@ -157,6 +160,16 @@ export async function placeOrderAction(
     paymentUrl,
     confirmationPath,
   };
+}
+
+/**
+ * Which app to hand the shopper back to after Paystack (ROADMAP 16.1): the
+ * one this request came from, by its user-agent marker — a store's own app
+ * or the shared one. Null on the web.
+ */
+async function nativeAppScheme(nativeApp: boolean): Promise<string | null> {
+  if (!nativeApp) return null;
+  return deepLinkSchemeFor((await headers()).get('user-agent'));
 }
 
 export type PayForOrderResult = { ok: true; paymentUrl: string } | { ok: false; message: string };
@@ -191,6 +204,7 @@ async function payFor(
     origin,
     returnPath: confirmationPathFor(pathPrefix, order.confirmationToken),
     nativeApp,
+    nativeAppScheme: await nativeAppScheme(nativeApp),
   });
 
   return started.ok
@@ -428,4 +442,32 @@ export async function findOrderAction(input: {
     String(input.reference ?? ''),
     String(input.email ?? ''),
   );
+}
+
+/**
+ * "Turn on notifications" for this order, inside a store's own app
+ * (ROADMAP 16.4). The store comes from the page, the app and phone from the
+ * user agent, and the order from its confirmation token — the device token is
+ * the only thing the app supplies (lib/mobile/push/watch.ts).
+ */
+export async function watchOrderUpdatesAction(
+  confirmationToken: string,
+  deviceToken: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const slug = await currentStoreSlug();
+  if (!slug) return { ok: false, message: 'We couldn’t reach the store. Please try again.' };
+
+  if (!(await checkRateLimit(`push-watch:${slug}:${await clientIp()}`, 20, 10 * 60 * 1000))) {
+    return { ok: false, message: 'Too many attempts. Please wait a moment and try again.' };
+  }
+
+  const result = await watchOrder({
+    organizationSlug: slug,
+    confirmationToken: String(confirmationToken ?? '').trim(),
+    deviceToken: String(deviceToken ?? ''),
+    userAgent: (await headers()).get('user-agent'),
+  });
+  return result === 'watching'
+    ? { ok: true }
+    : { ok: false, message: 'We couldn’t turn on notifications for this order just now.' };
 }

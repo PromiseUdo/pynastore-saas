@@ -13,10 +13,12 @@
  *   - toggle a `.keyboard-open` class so layouts can react to the keyboard
  *   - Android hardware back button → history back, or exit at the root
  *   - stamp `<html data-native="ios|android">` for CSS hooks
+ *   - a tapped order notification opens that order (store apps with push)
  */
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { isNativePlatform, getPlatform } from '@/lib/platform';
+import { userAgentHasPush } from '@/lib/mobile/app-config';
 
 export function NativeShell() {
   const router = useRouter();
@@ -102,6 +104,25 @@ export function NativeShell() {
 
     return () => handle?.remove();
   }, [pathname, router]);
+
+  // Tapping an order notification opens that order (ROADMAP 16.4). Only in a
+  // build with push; the plugin holds a tap that launched the app until this
+  // listener is added.
+  useEffect(() => {
+    if (!isNativePlatform() || !userAgentHasPush(navigator.userAgent)) return;
+    let handle: { remove: () => Promise<void> } | undefined;
+
+    (async () => {
+      const { PushNotifications } = await import('@capacitor/push-notifications');
+      handle = await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
+        const path = (notification.data as { path?: unknown } | undefined)?.path;
+        // Only a page of a store on this origin — never a URL from outside.
+        if (typeof path === 'string' && /^\/s\/[a-z0-9-]+\/[^/]/.test(path)) router.push(path);
+      });
+    })();
+
+    return () => void handle?.remove();
+  }, [router]);
 
   return null;
 }

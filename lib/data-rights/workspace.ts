@@ -28,6 +28,7 @@
  *  Year 6 — eraseOrganization (./erase.ts, the same job): everything left is
  *    erased, down to the organization itself.
  */
+import { ownerEmails } from '@/lib/org-owners';
 import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
 import { disableSubscription } from '@/lib/billing/paystack';
@@ -49,13 +50,6 @@ export class WorkspaceClosureError extends Error {
   }
 }
 
-async function ownerEmails(organizationId: string): Promise<string[]> {
-  const owners = await prisma.membership.findMany({
-    where: { organizationId, status: 'ACTIVE', role: { isSystem: true, name: 'Owner' } },
-    select: { user: { select: { email: true } } },
-  });
-  return owners.map((o) => o.user.email);
-}
 
 /**
  * Close a workspace. `confirmName` must match its name exactly — the check the
@@ -198,6 +192,8 @@ export async function purgeClosedWorkspace(organizationId: string, now: Date = n
       await tx.productImage.deleteMany({ where }); // embeddings cascade
       await tx.visualSearchQuery.deleteMany({ where });
       await tx.onboardingEmail.deleteMany({ where });
+      await tx.pushDevice.deleteMany({ where }); // order notifications cascade (16.4)
+      await tx.mobileApp.deleteMany({ where }); // the sealed APNs key goes with it
       await tx.merchantPaymentAccount.deleteMany({ where }); // verification documents cascade
       await tx.merchantVerificationDocument.deleteMany({ where });
       await tx.merchantBankAccount.deleteMany({ where });

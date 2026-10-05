@@ -13,11 +13,14 @@
  *   choosing a plan.
  * - The grace period applies to subscriptions that lapse after the change —
  *   each lapse fixes its own deadline when it's recorded (12.1).
+ * - A store's own app (ROADMAP 16.2): the setup fee (the first year
+ *   included), the yearly fee, and the app's own grace days. A blank fee
+ *   takes the add-on off sale; what merchants already paid is unchanged.
  */
 import { prisma } from '@/lib/prisma';
 import { requirePlatformStaff } from '@/lib/platform-staff';
 import { writePlatformAudit } from '@/lib/platform-audit';
-import { getBillingSettings, getUsdToNgnRate } from '@/lib/settings';
+import { getBillingSettings, getMobileAppPricing, getUsdToNgnRate, MOBILE_APP_SETTING_KEYS } from '@/lib/settings';
 
 export type ActionResult<T = void> =
   | { success: true; data: T }
@@ -29,6 +32,10 @@ export interface BillingSettingsInput {
   trialPlanId: string;
   graceDays: number;
   usdToNgnRate: number;
+  /** NGN; null = the add-on isn't on sale */
+  mobileAppSetupFee: number | null;
+  mobileAppYearlyFee: number | null;
+  mobileAppGraceDays: number;
 }
 
 export interface ConsoleBillingSettings extends BillingSettingsInput {
@@ -38,7 +45,13 @@ export interface ConsoleBillingSettings extends BillingSettingsInput {
   trialPlanMissing: boolean;
 }
 
-const KEYS = { trialDays: 'trial_days', trialPlanKey: 'trial_plan_key', graceDays: 'grace_days', usdToNgnRate: 'usd_to_ngn_rate' };
+const KEYS = {
+  trialDays: 'trial_days',
+  trialPlanKey: 'trial_plan_key',
+  graceDays: 'grace_days',
+  usdToNgnRate: 'usd_to_ngn_rate',
+  ...MOBILE_APP_SETTING_KEYS,
+};
 
 function denied(error: unknown, fallback: string): { success: false; error: string } {
   if (error instanceof Error && error.name === 'PlatformAccessDeniedError') {
@@ -51,9 +64,10 @@ function denied(error: unknown, fallback: string): { success: false; error: stri
 export async function getConsoleBillingSettings(): Promise<ActionResult<ConsoleBillingSettings>> {
   try {
     await requirePlatformStaff();
-    const [settings, rate, plans] = await Promise.all([
+    const [settings, rate, app, plans] = await Promise.all([
       getBillingSettings(),
       getUsdToNgnRate(),
+      getMobileAppPricing(),
       prisma.billingPlan.findMany({
         where: { isOnSale: true },
         orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
@@ -68,6 +82,9 @@ export async function getConsoleBillingSettings(): Promise<ActionResult<ConsoleB
         trialPlanId: trialPlan?.id ?? '',
         graceDays: settings.graceDays,
         usdToNgnRate: rate,
+        mobileAppSetupFee: app.setupFee,
+        mobileAppYearlyFee: app.yearlyFee,
+        mobileAppGraceDays: app.graceDays,
         plans: plans.map((p) => ({ id: p.id, name: p.name })),
         trialPlanMissing: !trialPlan,
       },
@@ -93,22 +110,46 @@ export async function updateBillingSettings(input: BillingSettingsInput): Promis
       ? await prisma.billingPlan.findFirst({ where: { id: input.trialPlanId, isOnSale: true }, select: { key: true, name: true } })
       : null;
     if (!plan && input.trialDays > 0) fieldErrors.trialPlanId = 'Choose a plan that’s on sale.';
+    const fee = (n: unknown) => n === null || (typeof n === 'number' && Number.isFinite(n) && n > 0 && n <= 100_000_000);
+    if (!fee(input.mobileAppSetupFee)) fieldErrors.mobileAppSetupFee = 'Enter an amount in naira, or leave it empty.';
+    if (!fee(input.mobileAppYearlyFee)) fieldErrors.mobileAppYearlyFee = 'Enter an amount in naira, or leave it empty.';
+    if ((input.mobileAppSetupFee === null) !== (input.mobileAppYearlyFee === null)) {
+      fieldErrors.mobileAppYearlyFee = 'Set both fees to sell the add-on, or leave both empty.';
+    }
+    if (!wholeDays(input.mobileAppGraceDays)) fieldErrors.mobileAppGraceDays = 'Enter a whole number of days from 0 to 365.';
     if (Object.keys(fieldErrors).length) return { success: false, error: 'Check the highlighted fields.', fieldErrors };
 
-    const [current, rate] = await Promise.all([getBillingSettings(), getUsdToNgnRate()]);
-    const before = { trialDays: current.trialDays, trialPlanKey: current.trialPlanKey, graceDays: current.graceDays, usdToNgnRate: rate };
+    const [current, rate, app] = await Promise.all([getBillingSettings(), getUsdToNgnRate(), getMobileAppPricing()]);
+    const before = {
+      trialDays: current.trialDays,
+      trialPlanKey: current.trialPlanKey,
+      graceDays: current.graceDays,
+      usdToNgnRate: rate,
+      mobileAppSetupFee: app.setupFee,
+      mobileAppYearlyFee: app.yearlyFee,
+      mobileAppGraceDays: app.graceDays,
+    };
+    const naira = (n: number | null) => (n === null ? null : Math.round(n * 100) / 100);
     const after = {
       trialDays: input.trialDays,
       // With no trial, the plan setting is left as it was.
       trialPlanKey: plan?.key ?? current.trialPlanKey,
       graceDays: input.graceDays,
       usdToNgnRate: Math.round(input.usdToNgnRate * 100) / 100,
+      mobileAppSetupFee: naira(input.mobileAppSetupFee),
+      mobileAppYearlyFee: naira(input.mobileAppYearlyFee),
+      mobileAppGraceDays: input.mobileAppGraceDays,
     };
     const changed = (Object.keys(after) as (keyof typeof after)[]).filter((k) => before[k] !== after[k]);
     if (!changed.length) return { success: true, data: { changed: [] } };
 
     await prisma.$transaction(async (tx) => {
       for (const key of changed) {
+        // An emptied fee takes the add-on off sale.
+        if (after[key] === null) {
+          await tx.platformSetting.deleteMany({ where: { key: KEYS[key] } });
+          continue;
+        }
         await tx.platformSetting.upsert({
           where: { key: KEYS[key] },
           create: { key: KEYS[key], value: String(after[key]) },

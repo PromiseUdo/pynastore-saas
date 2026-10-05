@@ -1,5 +1,5 @@
 /*
- * GET /api/storefront/auth/google/start?slug=…&returnTo=…
+ * GET /api/storefront/auth/google/start?slug=…&returnTo=…[&app=…&challenge=…]
  *
  * Step one of shopper Google sign-in. Runs on the ROOT domain — the only
  * origin Google will redirect back to (the full reasoning is in
@@ -22,9 +22,11 @@ import {
   googleAuthUrl,
   googleConfigured,
   googleRedirectUri,
+  isValidChallenge,
   oauthOrigin,
   signState,
 } from '@/lib/storefront/account/google';
+import { isKnownAppId } from '@/lib/mobile/store-apps';
 import { randomUUID } from 'crypto';
 
 export async function GET(request: Request) {
@@ -64,8 +66,22 @@ export async function GET(request: Request) {
   const returnTo =
     storeReturnUrl(url.searchParams.get('returnTo') ?? '', store) ?? storeUrl(store, next);
 
+  /* From inside a phone app (ROADMAP 16.1) this runs in the in-app browser
+   * sheet, and the callback hands back by deep link to the app's own scheme.
+   * Only a known app gets one — a scheme named in a URL is never trusted —
+   * and only with a challenge the handoff ticket can be bound to. */
+  const app = url.searchParams.get('app');
+  const challenge = url.searchParams.get('challenge');
+  let native: { app: string; challenge: string } | null = null;
+  if (app || challenge) {
+    if (!isValidChallenge(challenge) || !(await isKnownAppId(app))) {
+      return NextResponse.redirect(storeUrl(store, '/account/sign-in?error=google'));
+    }
+    native = { app: app!, challenge };
+  }
+
   const nonce = randomUUID();
-  const state = await signState({ slug: store.slug, returnTo, next, nonce });
+  const state = await signState({ slug: store.slug, returnTo, next, nonce, ...native });
 
   const response = NextResponse.redirect(
     googleAuthUrl({

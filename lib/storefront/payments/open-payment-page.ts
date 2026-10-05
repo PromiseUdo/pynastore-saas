@@ -18,9 +18,9 @@
  * through.
  */
 import { isNativePlatform } from '@/lib/platform';
+import { parseAppDeepLink } from '@/lib/mobile/deep-link';
 
-/** Must match the URL scheme registered in ios/…/Info.plist and AndroidManifest.xml. */
-export const APP_URL_SCHEME = process.env.NEXT_PUBLIC_MOBILE_APP_SCHEME || 'com.mansaas.app';
+/** The deep link's host; its scheme is whichever app this is (ROADMAP 16.1). */
 export const PAYMENT_RETURN_HOST = 'payment-return';
 
 export function isNativeApp(): boolean {
@@ -57,7 +57,7 @@ export async function openPaymentPage(input: {
   handles.push(await Browser.addListener('browserFinished', finish));
   handles.push(
     await App.addListener('appUrlOpen', ({ url }) => {
-      if (url.startsWith(`${APP_URL_SCHEME}://${PAYMENT_RETURN_HOST}`)) finish();
+      if (parseAppDeepLink(url)?.host === PAYMENT_RETURN_HOST) finish();
     }),
   );
 

@@ -145,6 +145,8 @@ export async function deleteShopperAccount(organizationId: string, customerId: s
     await tx.productReviewVote.deleteMany({ where: { customerId } });
     await tx.productReview.deleteMany({ where: { customerId } });
     await tx.productQuestion.deleteMany({ where: { customerId } });
+    // Their phones stop hearing about their orders (ROADMAP 16.4).
+    await tx.pushOrderWatch.deleteMany({ where: { order: { customerId } } });
 
     const c = customer._count;
     if (c.orders + c.invoices + c.quotes + c.dropShipPurchaseOrders + c.mergedFrom === 0) {

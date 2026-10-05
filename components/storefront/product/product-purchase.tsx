@@ -22,6 +22,7 @@ import { Check, Heart, Loader2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RatingStars } from '@/components/storefront/common/rating-stars';
+import { ShareButton } from '@/components/storefront/common/share-button';
 import { ProductGallery } from './product-gallery';
 import { VariantPicker } from './variant-picker';
 import { QuantityStepper } from './quantity-stepper';
@@ -56,8 +57,11 @@ export function ProductPurchase({
   deliveryPanel,
   deliverySummary = null,
   sizeGuideHref = null,
+  shareUrl = null,
 }: {
   product: Product;
+  /** the product's public web address, for "Share" (never the app's own origin) */
+  shareUrl?: string | null;
   /** server-rendered delivery block */
   deliveryPanel?: React.ReactNode;
   /** the store's cheapest delivery anywhere — null when it delivers nowhere (lib/storefront/store-claims.ts) */
@@ -274,7 +278,7 @@ export function ProductPurchase({
               <Heart className={cn('size-4', hydrated && wishlisted && 'fill-current')} />
               {hydrated && wishlisted ? 'Saved' : 'Save'}
             </button>
-
+            {shareUrl && <ShareButton title={product.name} url={shareUrl} />}
           </div>
 
           {product.highlights.length > 0 && (

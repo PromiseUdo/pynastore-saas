@@ -26,7 +26,8 @@ import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 import type { NextFetchEvent, NextRequest } from 'next/server';
 import { authConfig } from '@/auth.config';
-import { getMobileApp, resolveMobileRoute } from '@/lib/mobile/app-config';
+import { APP_UNAVAILABLE_PATH, resolveMobileRoute } from '@/lib/mobile/app-config';
+import { mobileAppForUserAgent } from '@/lib/mobile/store-apps';
 import { prisma } from '@/lib/prisma';
 import { resolveHostname, isLocalHostname } from '@/lib/tenant/resolveHostname';
 import { resolveTenant, resolveTenantBySlug } from '@/lib/tenant/resolveTenant';
@@ -171,9 +172,9 @@ const routeRequest = auth(async function proxy(req: NextRequest & { auth: any })
   //        Every admin/dashboard/marketing path is blocked → store picker.
   //        Runs BEFORE the auth gate: storefront browsing is public.
   //
-  //        `mall` (default) vs `branded` behaviour is decided by
-  //        lib/mobile/app-config.ts — the single seam for the future
-  //        per-merchant branded-app tier.
+  //        Which app is asking — the shared one (mall), a store's own app
+  //        (locked to that store), or a lapsed one — comes from the app's
+  //        user-agent marker (lib/mobile/app-config.ts, ROADMAP 16.1).
   if (hostInfo.siteType === 'mobile') {
     // Redirect home on the origin the request actually arrived on — the app
     // must never leave its single origin (in dev that may be a LAN IP, not
@@ -196,16 +197,25 @@ const routeRequest = auth(async function proxy(req: NextRequest & { auth: any })
       return NextResponse.next({ request: { headers: stampStorefront(rewritten[1]) } });
     }
 
-    const route = resolveMobileRoute(pathname, getMobileApp());
+    const app = await mobileAppForUserAgent(req.headers.get('user-agent'));
+    const route = resolveMobileRoute(pathname, app);
+
+    const unavailable = (slug: string | null) => {
+      const url = new URL(APP_UNAVAILABLE_PATH, requestUrl);
+      if (slug) url.searchParams.set('store', slug);
+      return NextResponse.rewrite(url, { request: { headers: new Headers(req.headers) } });
+    };
 
     if (route.kind === 'mpath') return NextResponse.next({ request: { headers: new Headers(req.headers) } });
     if (route.kind === 'picker') return NextResponse.rewrite(new URL('/m', requestUrl), { request: { headers: new Headers(req.headers) } });
+    if (route.kind === 'unavailable') return unavailable(route.slug);
     if (route.kind === 'home') return NextResponse.redirect(mobileHome);
 
     const tenant = await resolveTenantBySlug(route.slug);
     if (!tenant) {
-      // Unknown slug. In a branded build redirecting home would loop, so
-      // fall back to the picker as an error surface.
+      // Unknown slug. A store's own app whose store is gone has nothing
+      // else to show; in the shared app the picker is the error surface.
+      if (app.mode === 'branded') return unavailable(null);
       return NextResponse.rewrite(new URL('/m', requestUrl), { request: { headers: new Headers(req.headers) } });
     }
 

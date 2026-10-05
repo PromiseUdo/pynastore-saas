@@ -24,6 +24,9 @@ import { getOrderByConfirmationToken } from '@/lib/storefront/orders/read';
 import { getOrderPaymentState, reconcileOpenAttempts } from '@/lib/storefront/checkout/payment-service';
 import { confirmationPath, storePathPrefix } from '@/lib/storefront/store-path';
 import { ConfirmationView, NoOrder } from '@/components/storefront/checkout/confirmation-view';
+import { OrderUpdatesPrompt } from '@/components/storefront/checkout/order-updates-prompt';
+import { pushReadyFor } from '@/lib/mobile/push/watch';
+import { headers } from 'next/headers';
 
 export const metadata: Metadata = {
   title: 'Your order',
@@ -78,12 +81,16 @@ export default async function ConfirmationPage({
 
   if (!order) return <NoOrder />;
 
+  // Inside a store's own app that can be reached by push (ROADMAP 16.4).
+  const pushReady = await pushReadyFor((await headers()).get('user-agent'), organizationSlug);
+
   return (
     <ConfirmationView
       order={order}
       config={config}
       signedIn={Boolean(shopper)}
       payment={{ ...payment, confirmationToken: token, confirmationPath: confirmationPath(prefix, token) }}
+      updatesPrompt={pushReady ? <OrderUpdatesPrompt confirmationToken={token} /> : null}
     />
   );
 }

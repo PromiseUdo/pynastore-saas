@@ -478,6 +478,42 @@ describe('the Paystack callback', () => {
     expect((await orderRow(order.orderId)).paymentStatus).toBe('PAID');
   });
 
+  it("hands a payment from a store's own app back to that app, not the shared one (16.1)", async () => {
+    const order = await newOrder();
+    await startOrderPayment({
+      organizationId: store.id,
+      orderId: order.orderId,
+      origin: 'http://m.app.localhost:3000',
+      returnPath: '/s/pay/checkout/confirmation?t=tok',
+      nativeApp: true,
+      nativeAppScheme: 'com.pay.shop',
+    });
+    const attempt = await prisma.orderPayment.findFirstOrThrow({ where: { orderId: order.orderId } });
+    expect(attempt.nativeAppScheme).toBe('com.pay.shop');
+    paystack.verify.set(attempt.reference, { status: 'success' });
+
+    const res = await callback(
+      new NextRequest(`http://m.app.localhost:3000/api/payments/paystack/callback?ref=${attempt.reference}`),
+    );
+    const html = await res.text();
+    expect(html).toContain(`com.pay.shop://payment-return?ref=${encodeURIComponent(attempt.reference)}`);
+    expect(html).not.toContain('com.mansaas.app://');
+  });
+
+  it('never records an app scheme for a payment from the web', async () => {
+    const order = await newOrder();
+    await startOrderPayment({
+      organizationId: store.id,
+      orderId: order.orderId,
+      origin: 'http://shop.pay.app.localhost:3000',
+      returnPath: '/checkout/confirmation?t=tok',
+      nativeApp: false,
+      nativeAppScheme: 'com.pay.shop',
+    });
+    const attempt = await prisma.orderPayment.findFirstOrThrow({ where: { orderId: order.orderId } });
+    expect(attempt.nativeAppScheme).toBeNull();
+  });
+
   it('sends an unknown reference home', async () => {
     const res = await callback(new NextRequest('http://shop.pay.app.localhost:3000/api/payments/paystack/callback?ref=nope'));
     expect(res.headers.get('location')).toBe('http://shop.pay.app.localhost:3000/');

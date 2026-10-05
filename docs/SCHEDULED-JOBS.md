@@ -10,6 +10,7 @@ address under `/api/cron/` that only answers a caller who sends
 | Index photos for search by image | `/api/cron/index-product-images` | every 15 minutes | cron-job.org (for now) |
 | Domain renewals | `/api/cron/domain-lifecycle` | daily, 07:00 UTC | Vercel Cron (`vercel.json`) |
 | Setup and trial reminders | `/api/cron/onboarding-reminders` | daily, 08:00 UTC | Vercel Cron (`vercel.json`) |
+| Store app renewals | `/api/cron/mobile-app-renewals` | daily, 07:30 UTC | Vercel Cron (`vercel.json`) |
 
 What each one does is written in `lib/cron/jobs.ts`, and is also shown on the
 console's **Scheduled jobs** page (`/platform/jobs`).

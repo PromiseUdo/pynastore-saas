@@ -1360,6 +1360,10 @@ before the first live merchant — it removes a false "10% off" promise and a
 newsletter form that saves nothing from every storefront. 15.1 onward runs
 alongside Phase 14, in order.
 
+**Phase 16 (a store's own phone app, paid add-on) was agreed 2026-10-04.**
+16.1 first (one server serving every store's app), then 16.3 (the build kit)
+so a first store's app can be tested; 16.4 and 16.2 follow.
+
 **In order:**
 
 | # | What | Why now |
@@ -4960,6 +4964,239 @@ today's output; contrast refusal; `npm run test:local` and `next build`.
 
 ---
 
+## Phase 16 — A store's own phone app (paid add-on) — DONE (2026-10-04)
+
+Agreed 2026-10-04. Some merchants will pay extra for an Android and iOS app
+of their own store, to share with their customers so they shop from the app
+instead of the website.
+
+**The split, decided 2026-10-04:**
+- **The console runs the business side**: the price, who asked and who paid,
+  where each app is, renewals.
+- **An engineer builds the apps on the terminal**, following a runbook. The
+  build is not triggered from the console, because it needs the Android SDK
+  and a Mac with Xcode, which the web host doesn't have.
+- **We deliver approval-ready apps; the merchant publishes them** under their
+  own Apple Developer and Google Play accounts. We may help, but publishing
+  is theirs. Apple's rule 4.2.6 expects an app made from a template to be
+  submitted by the business whose content it is, so the merchant's own
+  account is required anyway.
+
+**The gap (audit 2026-10-04).** The shared app (`com.mansaas.app`, the
+"mall": a store picker, every store reachable) works. `lib/mobile/app-config.ts`
+already had a `branded` mode, but it was switched by environment variables
+read by the **server** — the native app has no web code in it, it loads the
+live mobile origin — so one deployment could be locked to one store or none.
+Payments returned to the app through one fixed scheme (`com.mansaas.app://`),
+so a second app couldn't get its shoppers back. "Continue with Google"
+navigated the app's WebView to Google, which Google refuses inside embedded
+WebViews. Nothing built a per-store app (id, name, icon, signing).
+
+**Decisions taken (2026-10-04):**
+- **One deployment serves every store's app.** Each app adds
+  `MansaasApp/{appId}` to its WebView's user agent (`capacitor.config.ts`,
+  `appendUserAgent`). On the mobile origin, `proxy.ts` looks the id up in
+  `MobileApp`: a store's app is locked to that store (no picker, other
+  stores' links go home); the shared app, or no marker, is the mall. The
+  marker only narrows what a request can see — the storefront is public —
+  so a forged one gains nothing.
+- **An app's URL scheme is its app id** (`com.pynacode.shop://…`), so nothing
+  else needs storing or keeping in step. The server only ever deep-links to
+  the shared id or a registered one, never to a scheme from a request.
+- **A lapsed app shows a page, not an error.** An app can't be removed from
+  shoppers' phones, so a store whose add-on lapsed (or an unregistered build)
+  opens "This app is no longer available" with a link to the store's
+  website. Nothing else is reachable through it.
+- **Google sign-in in the app goes through the in-app browser sheet**, like
+  payments, and comes back by deep link carrying the existing one-minute
+  handoff ticket. The ticket is bound to a secret only the app's WebView
+  holds (a PKCE-style challenge, RFC 8252), so another app that registers
+  the same scheme and catches the link can't use it.
+- **Apps load the live storefront.** Products, prices and the store's look
+  change without a rebuild; a rebuild is only for a new name, icon or native
+  change — and once a year, because Google Play requires a recent target
+  Android version.
+
+### 16.1 — One server, many store apps — CODE DONE (2026-10-04); on-device check with 16.3's first build
+- `MobileApp` (one per store: `appId` unique, `name`, `status` ACTIVE or
+  LAPSED). Until 16.2 gives it screens, records are kept with
+  `npx tsx prisma/mobile-app.ts register|lapse|restore|list`.
+- `lib/mobile/app-config.ts` (pure): the user-agent marker, and the routing
+  decision for mall, store-locked and closed apps. `lib/mobile/store-apps.ts`
+  (server): which app a request comes from.
+- `proxy.ts` mobile branch uses them; a closed app is rewritten to
+  `/m/app-unavailable`.
+- Payments: `OrderPayment.nativeAppScheme` records the app a payment began
+  in; the Paystack callback deep-links back to that one.
+- Google sign-in in the app: browser sheet + deep link + challenge, through
+  the existing start → callback → handoff routes.
+- `capacitor.config.ts` reads the app id and name for a build
+  (`MOBILE_APP_ID`, `MOBILE_APP_NAME`) and appends the marker.
+- MOBILE.md and `.env.example` corrected (the old `NEXT_PUBLIC_MOBILE_APP_MODE`
+  and `_SLUG` are gone).
+- **Done 2026-10-04.** Tests: `tests/mobile-route.test.ts` (marker, routing
+  for every mode, deep-link parsing, finishing Google sign-in),
+  `tests/mobile-store-apps.test.ts` (lookup, known apps, the storefront API
+  refusing another store, Google start/callback for an app),
+  `tests/storefront-payments.test.ts` (return to the right app),
+  `handoff.test.ts` (ticket refused without its verifier). Not yet seen on a
+  phone: the sheet → deep link → WebView hops for payment and Google need the
+  first real build (16.3) to confirm on Android and iOS.
+
+### 16.2 — The business side, in the console and the dashboard — DONE (2026-10-04)
+- **Add-on pricing** edited in the console beside plans (11.7): a setup fee
+  and a yearly renewal.
+- **Merchant page, Settings → Mobile app:** app name, icon (image uploader),
+  splash colour, short description, platforms; pay through Paystack. Without
+  the add-on, the page explains it and links to `/upgrade` (AGENTS §7).
+- **`MobileApp` grows** a workflow status (Requested → Paid → Building →
+  Delivered → Live, or Lapsed), version numbers, platforms, who paid, how
+  much and when, the renewal date and the store listing links.
+- **Console queue**, like custom domains (11.5): paid requests, the settings
+  the engineer needs, Building/Delivered with the files attached, the
+  listing links. Every step in `PlatformAuditLog`.
+- **Renewal reminders** through the existing cron pattern; an unpaid renewal
+  marks the app LAPSED after grace (16.1's page takes over).
+- **Done 2026-10-04, as built:**
+  - **Prices** in Billing settings → Store apps: a setup fee that **includes
+    the first year**, a yearly fee, and the app's own grace days. Both fees
+    empty = off sale (the merchant page says it's coming).
+  - **Settings → Mobile app** (`settings.view`; details need
+    `settings.edit`, paying `billing.manage`; a paid plan, like a domain,
+    else a lock and `/upgrade`): name (≤30), icon (`mobile-app` upload,
+    ≥1024 square, checked as the store's own), colour, one line, Android
+    and/or iPhone → pay through the platform's Paystack billing
+    (`BillingTransaction`, no plan change, + `MobileAppPayment`), applied
+    exactly once in `applySuccessfulCharge`. Then the progress steps, the
+    files and next steps once delivered, store links and the "offer it on my
+    website" switch once live, renewal and payment history. An unpaid
+    request can be withdrawn.
+  - **`MobileApp` grew** `stage` (REQUESTED → PAID → BUILDING → DELIVERED →
+    LIVE; `status` ACTIVE/LAPSED stays whether it opens), the request
+    fields, stage dates, the delivered version, a download link and note,
+    `paidThrough` / `lapsedAt` / `graceEndsAt`. A suggested app id comes from
+    the handle (`com.{slug}.shop`); staff can change it until delivery.
+  - **Console → Store apps**: tabs (to build, delivered, live, not paid,
+    switched off), a nav badge for paid-and-not-started, and the order page
+    (identity, icon PNG, the kit's commands, Start building / Mark
+    delivered / Save listings, switch off/on). Steps go on the **merchant's**
+    activity log, as for domains and verification (PlatformAuditLog is for
+    decisions about no one merchant); the merchant is emailed when delivered
+    and when live, and staff when a setup fee arrives.
+  - **Renewals** (`mobile-app-renewals`, daily 07:30 UTC): reminders at 30/7/1
+    days, each once (`MobileAppReminder`); at the end, grace fixed when
+    recorded; after it, LAPSED. Renewing (from 60 days before) adds a year to
+    the later of today and the paid date, and switches a lapsed app back on.
+  - **The kit's `init`** downloads the merchant's icon and takes their colour.
+  - `ownerEmails` is now one shared helper (`lib/org-owners.ts`); three copies
+    were removed.
+
+### 16.3 — The build kit (terminal) — DONE (2026-10-04)
+- `npm run mobile:build -- --slug {slug}`: reads the store's `MobileApp`,
+  copies `android/` and `ios/` into a temporary folder (the shared projects
+  are never edited), writes the app id, bundle id, name and URL scheme
+  (Info.plist, strings.xml, build.gradle, the Xcode project), makes icons
+  and splash with `@capacitor/assets`, sets version numbers, and produces a
+  signed Android `.aab` (Play) and `.apk` (direct install) and an iOS
+  project ready to archive.
+- **Signing.** Android: one upload key per app, kept by us encrypted and
+  backed up (needed for every rebuild; Google Play App Signing holds the
+  real key, and a merchant who leaves can ask Google to reset the upload
+  key). iOS: only the merchant's own certificate can sign — the merchant
+  adds our engineer to their Apple Developer team (App Manager, with access
+  to certificates).
+- **`docs/MOBILE-BUILD.md`**: the runbook — one-time machine setup (Android
+  Studio, Xcode, Java), building, the on-device checklist before
+  delivery, the yearly rebuild.
+- **Done 2026-10-04, as built:** `npm run mobile:app -- init|check|build
+  <slug>` (`scripts/mobile/store-app.ts`). Store folders live outside the
+  repo (`MOBILE_APPS_DIR`, default `~/mansaas-store-apps/{slug}`): `app.json`
+  (id, name, version, build number, server, colours, Apple team), `logo.png`
+  (+ optional `icon.png`/`splash.png`), `signing/` (the upload key, made by
+  `init` with a random password; signing reads it from environment
+  variables, never a file in the project), `builds/{version}-{n}/` with
+  `build.json` (commit, checksums). The text edits are pure and tested
+  against the real native files (`scripts/mobile/native-project.ts`,
+  `tests/mobile-build.test.ts`), and stop the build if a Capacitor upgrade
+  reshapes a file. `check` refuses a release with a non-https or LAN
+  server, an unregistered/lapsed/mismatched app, a missing logo, or no
+  published Privacy and Terms pages. `--debug --server-url` makes an
+  unsigned debug APK against a dev machine. `namespace` stays
+  `com.mansaas.app` (the code's package); the identity is `applicationId`.
+  No Fastlane: iOS is archived in Xcode under the merchant's team (the
+  runbook), since only their certificate can sign it.
+- **Verified 2026-10-04** with a throwaway store: release `.aab` + `.apk`
+  built and signed with the store's key (`com.kitdemo.shop` 1.0.0 (1),
+  "Kit Demo", its own URL scheme and user-agent marker inside, icons from the
+  logo); the iOS copy compiles for the simulator. Not yet installed on a
+  phone — the first real store's build does that (runbook §4).
+
+### 16.4 — Approval-ready by default — DONE (2026-10-04)
+- **Native value**, so Apple doesn't reject the app as a wrapped website
+  (rule 4.2): push notifications for order updates (Firebase/APNs per app),
+  the native share sheet, a proper offline screen.
+- **What reviewers check**: in-app account deletion (already there,
+  `account/privacy`), privacy policy and terms (the merchant's store pages,
+  published before we build), a demo shopper login, no tracking (already,
+  13.9).
+- **Listing pack** handed over with the files: description, screenshots at
+  the required sizes, privacy and data-safety answers, age rating, review
+  notes.
+- **"Get our app"** banner and QR code on the merchant's website.
+- **Done 2026-10-04, as built:**
+  - **Order notifications.** `PushDevice` + `PushOrderWatch`: a phone is linked
+    only to the orders it asked about, for 60 days (purged by data retention;
+    removed with a shopper's account and a closed shop). Offered only on an
+    order's page, in a store app built with push (`MansaasPush` in the user
+    agent: always on iOS, on Android only when the build carried the Firebase
+    config, since registering without it fails) that the server can reach
+    (`pushReadyFor`). Android: ONE platform Firebase project,
+    `FIREBASE_SERVICE_ACCOUNT`, FCM HTTP v1. iPhone: straight to APNs with the
+    merchant's own key (their team owns the app), sealed on `MobileApp`
+    (`prisma/mobile-app.ts apns`). Sent beside the order email for status
+    changes the shopper didn't make (`lib/mobile/push/messages.ts`); dead
+    tokens are deleted; a tap opens the order. Kit: google-services.json →
+    POST_NOTIFICATIONS, a white status-bar icon from a transparent logo,
+    iOS `App.entitlements`.
+  - **Share** (`@capacitor/share`, the store's public web address) and an
+    **offline screen** (`server.errorPath`, stamped by the kit).
+  - **"Get our app"**: `MobileApp.appStoreId` / `onGooglePlay` /
+    `promoteOnWebsite`, recorded with `prisma/mobile-app.ts listed|unlisted|website`
+    once approved — nothing shows before. Phone banner (Android → Play; iPhone
+    Safari gets Apple's Smart App Banner from `itunes` metadata; other iPhone
+    browsers → App Store), footer link, `/app` with a QR code (`qrcode`).
+  - **Listing pack**: `npm run mobile:app -- listing <slug> [--reviewer-account]`
+    → LISTING.md (links, a DRAFT description, privacy/data-safety answers from
+    what the app collects, review notes), screenshots at the required sizes via
+    puppeteer with the app's user agent, Play icon + feature graphic.
+  - **Platform privacy policy** names the push token and Google/Apple as
+    processors (dated 4 October 2026) — for counsel with 10.10.
+  - **Fixed on the way:** in a store's own app, the storefront's slug-free
+    links (`/products/x`, `/cart`) bounced home, so nothing past the first page
+    opened. A store app now serves every path as its store. **Still open in the
+    SHARED app** (pre-existing): bare paths can't be tied to a store; to be fixed
+    with the real store picker.
+  - **Verified 2026-10-04** on a local production build: banner, `/app` + QR,
+    in-app navigation, unavailable page, listing screenshots (1290×2796,
+    2064×2752, 1080×1920), a kit build with push (permission, icon, markers,
+    entitlements; iOS simulator compile). Not yet on a real phone: a delivered
+    notification needs real Firebase/APNs credentials.
+
+**What the merchant does:** their Apple Developer ($99/yr) and Google Play
+($25 once) accounts; add our engineer to their Apple team; upload and submit.
+A new *personal* Play account must run a 12-tester, 14-day closed test before
+going public; a business account skips it but needs a D-U-N-S number. iOS
+can't be shared as a file — it's the App Store (public or unlisted).
+
+**Order:** 16.1 → 16.3 (both done) → a first store's Android `.apk` tested
+on a phone → 16.4 → 16.2. Until 16.2 exists, requests and payments are recorded by hand.
+
+**Tests:** the marker parser and routing for every mode; a store app never
+reaches another store; payment return to the right scheme; the Google
+ticket refused without its verifier; `npm run test:local` and `next build`.
+
+---
+
 ## Sequencing
 
 **Phase 2 before Phases 4 and 7.** If walk-in sales land on `Order` with a `channel`
@@ -5020,6 +5257,11 @@ reasoning behind it.
   into; 15.2 must render today's homepage unchanged before 15.3 lets anyone
   edit it; 15.4–15.6 each add to the registry and the editor and can swap
   places.
+
+- **Phase 16: 16.1 → 16.3 → 16.4 → 16.2.** 16.1 is what lets one
+  deployment serve more than one app; 16.3 needs its user-agent marker and
+  schemes. The console side (16.2) can trail, because a first app can be
+  recorded by hand.
 
 ## Smaller cleanups — DONE (2026-09-25)
 

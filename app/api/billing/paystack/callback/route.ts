@@ -21,14 +21,23 @@ export async function GET(req: NextRequest) {
 
   const transaction = await prisma.billingTransaction.findUnique({
     where: { reference },
-    select: { organizationId: true, status: true, organization: { select: { slug: true } } },
+    select: {
+      organizationId: true,
+      status: true,
+      organization: { select: { slug: true } },
+      mobileAppPayment: { select: { id: true } },
+    },
   });
 
   if (!transaction) {
     return NextResponse.redirect(getMarketingUrl('/'));
   }
 
-  const billingUrl = getAdminUrl(transaction.organization.slug, '/settings/billing');
+  // A store-app payment (ROADMAP 16.2) returns to its own page.
+  const billingUrl = getAdminUrl(
+    transaction.organization.slug,
+    transaction.mobileAppPayment ? '/settings/mobile-app' : '/settings/billing',
+  );
 
   try {
     if (transaction.status !== 'SUCCESS') {

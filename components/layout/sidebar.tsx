@@ -125,6 +125,7 @@ const navGroups: NavGroup[] = [
           { title: 'Delivery and returns', href: '/settings/delivery' },
           { title: 'Store pages', href: '/settings/pages' },
           { title: 'Domain', href: '/settings/domain' },
+          { title: 'Mobile app', href: '/settings/mobile-app' },
           { title: 'Billing', href: '/settings/billing' },
           { title: 'Your data', href: '/settings/data' },
         ],

@@ -19,7 +19,8 @@
  *   store, by design; the store travels in the page path, /s/{slug}. The
  *   request's Referer is that page, so its path is run through the proxy's
  *   own resolveMobileRoute() — the same rules that decide which store a page
- *   renders, including a branded build's locked store. A body `org` must
+ *   renders, including a store's own app's locked store (ROADMAP 16.1, by
+ *   the app's user-agent marker). A body `org` must
  *   agree with it. Only when the browser sent no Referer (a privacy setting)
  *   does the body `org` stand in, and then only if it's a store the mobile
  *   routing would serve at /s/{org} anyway.
@@ -30,7 +31,8 @@
  * In every case the store must exist and be ACTIVE. The result is a slug the
  * route then uses as its only StoreScope.
  */
-import { getMobileApp, resolveMobileRoute } from '@/lib/mobile/app-config';
+import { resolveMobileRoute } from '@/lib/mobile/app-config';
+import { mobileAppForUserAgent } from '@/lib/mobile/store-apps';
 import { resolveHostname } from '@/lib/tenant/resolveHostname';
 import { resolveTenant, resolveTenantBySlug } from '@/lib/tenant/resolveTenant';
 
@@ -70,7 +72,7 @@ export async function resolveRequestStore(request: Request, claimedOrg?: string 
 
   /* ── the mobile mall: the store is in the page's /s/{slug} path ─────── */
   if (info.siteType === 'mobile') {
-    const app = getMobileApp();
+    const app = await mobileAppForUserAgent(request.headers.get('user-agent'));
     const page = refererPath(request, host);
     const fromPage = page ? resolveMobileRoute(page, app) : null;
 
@@ -81,8 +83,8 @@ export async function resolveRequestStore(request: Request, claimedOrg?: string 
     }
 
     // No usable page (Referer stripped, or not a store page): accept the
-    // claimed store only if the mobile routing would serve it — in a branded
-    // build that's its one store and nothing else.
+    // claimed store only if the mobile routing would serve it — in a store's
+    // own app that's its one store and nothing else.
     if (!claimed) return NOT_A_STOREFRONT;
     const asRoute = resolveMobileRoute(`/s/${encodeURIComponent(claimed)}`, app);
     if (asRoute.kind !== 'storefront' || asRoute.slug !== claimed) return MISMATCH;

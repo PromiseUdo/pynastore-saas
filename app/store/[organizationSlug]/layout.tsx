@@ -12,6 +12,7 @@ import { cookies, headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { Fraunces, Nunito, Playfair_Display } from 'next/font/google';
 import { prisma } from '@/lib/prisma';
+import { getStoreAppListing } from '@/lib/mobile/listing';
 import { StorefrontProviders } from '@/components/storefront/providers';
 import { StorefrontAnalytics } from '@/components/storefront/layout/storefront-analytics';
 import { getRequestDesign, getStorefrontLook } from '@/lib/storefront/catalog';
@@ -82,6 +83,8 @@ export async function generateMetadata({
     },
   });
   if (!org) return {};
+  // Safari's own "Get the app" banner, once the store's app is in the App Store (ROADMAP 16.4).
+  const appListing = await getStoreAppListing({ organizationSlug });
   // Not open yet (12.5): the "Opening soon" page stays out of search results.
   if (!org.storefrontOpen) return { title: org.name, robots: { index: false, follow: false } };
 
@@ -105,6 +108,7 @@ export async function generateMetadata({
     title: { default: `${org.name} — Online Store`, template: `%s · ${org.name}` },
     description,
     alternates: { canonical: '/' },
+    ...(appListing?.appStoreId ? { itunes: { appId: appListing.appStoreId } } : {}),
     ...(icons ? { icons } : {}),
     openGraph: {
       type: 'website',

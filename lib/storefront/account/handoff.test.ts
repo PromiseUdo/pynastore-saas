@@ -49,6 +49,29 @@ beforeEach(() => {
   process.env.AUTH_SECRET ||= 'test-secret-for-storefront-sessions';
 });
 
+const VERIFIER = 'v'.repeat(43);
+const CHALLENGE = (await import('crypto')).createHash('sha256').update(VERIFIER).digest('base64url');
+
+describe('handoff tickets minted for a phone app (ROADMAP 16.1)', () => {
+  it('are spent only with the verifier the app kept', async () => {
+    const token = await mintHandoffToken(CLAIMS, { challenge: CHALLENGE });
+    await expect(consumeHandoffToken(token, 'acme', VERIFIER)).resolves.toEqual(CLAIMS);
+  });
+
+  it('are worthless to whoever catches the deep link without it', async () => {
+    const token = await mintHandoffToken(CLAIMS, { challenge: CHALLENGE });
+    await expect(consumeHandoffToken(token, 'acme')).resolves.toBeNull();
+    await expect(consumeHandoffToken(token, 'acme', 'w'.repeat(43))).resolves.toBeNull();
+    // ...and a wrong guess doesn't burn it for the app.
+    await expect(consumeHandoffToken(token, 'acme', VERIFIER)).resolves.toEqual(CLAIMS);
+  });
+
+  it("don't change web tickets, which need no verifier", async () => {
+    const token = await mintHandoffToken(CLAIMS);
+    await expect(consumeHandoffToken(token, 'acme', null)).resolves.toEqual(CLAIMS);
+  });
+});
+
 describe('handoff tickets', () => {
   it('can be spent once at the store it names', async () => {
     const token = await mintHandoffToken(CLAIMS);

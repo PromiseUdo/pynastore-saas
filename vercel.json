@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/data-retention",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/mobile-app-renewals",
+      "schedule": "30 7 * * *"
     }
   ]
 }

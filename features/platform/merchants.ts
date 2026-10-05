@@ -18,6 +18,7 @@
  * is fine to thousands of workspaces; past that it wants a stored state.
  * Nothing here records a lapse.
  */
+import { ownerEmails } from '@/lib/org-owners';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
@@ -443,13 +444,6 @@ const ReasonSchema = z
   .min(10, 'Say why in a sentence or two — the merchant will read it.')
   .max(1000, 'Keep the reason to 1,000 characters.');
 
-async function ownerEmails(organizationId: string): Promise<string[]> {
-  const owners = await prisma.membership.findMany({
-    where: { organizationId, status: 'ACTIVE', ...OWNER },
-    select: { user: { select: { email: true } } },
-  });
-  return owners.map((o) => o.user.email);
-}
 
 /**
  * Suspends a workspace: its admin shows the "suspended" page (with this

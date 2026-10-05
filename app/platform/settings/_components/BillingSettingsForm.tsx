@@ -25,6 +25,9 @@ export function BillingSettingsForm({ settings }: { settings: ConsoleBillingSett
       trialPlanId: settings.trialPlanId,
       graceDays: String(settings.graceDays),
       usdToNgnRate: String(settings.usdToNgnRate),
+      mobileAppSetupFee: settings.mobileAppSetupFee === null ? '' : String(settings.mobileAppSetupFee),
+      mobileAppYearlyFee: settings.mobileAppYearlyFee === null ? '' : String(settings.mobileAppYearlyFee),
+      mobileAppGraceDays: String(settings.mobileAppGraceDays),
     }),
     [settings],
   );
@@ -49,6 +52,10 @@ export function BillingSettingsForm({ settings }: { settings: ConsoleBillingSett
       trialPlanId: state.trialPlanId,
       graceDays: num(state.graceDays),
       usdToNgnRate: num(state.usdToNgnRate),
+      // Empty = the add-on isn't on sale.
+      mobileAppSetupFee: state.mobileAppSetupFee.trim() === '' ? null : num(state.mobileAppSetupFee),
+      mobileAppYearlyFee: state.mobileAppYearlyFee.trim() === '' ? null : num(state.mobileAppYearlyFee),
+      mobileAppGraceDays: num(state.mobileAppGraceDays),
     });
     setSaving(false);
     if (!result.success) {
@@ -152,6 +159,51 @@ export function BillingSettingsForm({ settings }: { settings: ConsoleBillingSett
           )}
           {err('usdToNgnRate')}
         </div>
+      </Section>
+
+      <Section
+        title="Store apps"
+        description="The add-on that gives a store its own Android and iPhone app. Leave both fees empty to keep it off sale."
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          {(
+            [
+              ['mobileAppSetupFee', 'Setup fee', 'Paid once, when the merchant asks for the app. Includes the first year.'],
+              ['mobileAppYearlyFee', 'Yearly fee', 'Each year after the first.'],
+            ] as const
+          ).map(([field, label, help]) => (
+            <div key={field} className="space-y-1.5">
+              <Label htmlFor={field}>{label}</Label>
+              <Input
+                id={field}
+                inputMode="decimal"
+                startAdornment={<span className="text-sm text-muted-foreground">₦</span>}
+                value={state[field]}
+                onChange={(e) => set(field, e.target.value)}
+                {...aria(field)}
+              />
+              <p className="text-xs text-muted-foreground">{help}</p>
+              {err(field)}
+            </div>
+          ))}
+          <div className="space-y-1.5">
+            <Label htmlFor="mobileAppGraceDays">
+              Grace days <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="mobileAppGraceDays"
+              inputMode="numeric"
+              value={state.mobileAppGraceDays}
+              onChange={(e) => set('mobileAppGraceDays', e.target.value)}
+              {...aria('mobileAppGraceDays')}
+            />
+            <p className="text-xs text-muted-foreground">After a year runs out unpaid, the app keeps working this long.</p>
+            {err('mobileAppGraceDays')}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          New prices apply to the next payment. A merchant who already paid keeps what they paid for.
+        </p>
       </Section>
 
       <div className="flex justify-end gap-2">

@@ -51,6 +51,22 @@ export interface GoogleState {
   next: string;
   /** matched against the nonce cookie on the way back */
   nonce: string;
+  /**
+   * Started inside a phone app (ROADMAP 16.1): the app's id, which is also
+   * the scheme the callback deep-links back to — checked against the known
+   * apps by `start` before it gets here.
+   */
+  app?: string;
+  /** the app's PKCE-style challenge; the handoff ticket is bound to it */
+  challenge?: string;
+}
+
+/**
+ * A challenge is the base64url SHA-256 of a verifier only the app's WebView
+ * holds (lib/storefront/account/native-google.ts): 43 characters, nothing else.
+ */
+export function isValidChallenge(value: string | null | undefined): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
 }
 
 export async function signState(state: GoogleState): Promise<string> {
@@ -74,7 +90,11 @@ export async function verifyState(token: string, nonce: string | undefined): Pro
     if (!state.slug || !state.returnTo || !state.nonce) return null;
     // The nonce ties this state to the browser that started the flow.
     if (!nonce || state.nonce !== nonce) return null;
-    return { slug: state.slug, returnTo: state.returnTo, next: state.next || '/account', nonce: state.nonce };
+    const native =
+      typeof state.app === 'string' && isValidChallenge(state.challenge)
+        ? { app: state.app, challenge: state.challenge }
+        : {};
+    return { slug: state.slug, returnTo: state.returnTo, next: state.next || '/account', nonce: state.nonce, ...native };
   } catch {
     return null;
   }

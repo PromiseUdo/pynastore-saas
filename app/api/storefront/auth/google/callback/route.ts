@@ -13,7 +13,11 @@ import { findStoreBySlug, upsertShopperFromGoogle } from '@/lib/storefront/accou
 import { storeUrl } from '@/lib/storefront/account/return-url';
 import { GOOGLE_STATE_COOKIE, exchangeGoogleCode, googleRedirectUri, verifyState } from '@/lib/storefront/account/google';
 import { mintHandoffToken } from '@/lib/storefront/account/handoff';
+import { appDeepLink, deepLinkPage } from '@/lib/mobile/deep-link-page';
 import { prisma } from '@/lib/prisma';
+
+/** The deep link's host; the app recognises it by this (ROADMAP 16.1). */
+const AUTH_RETURN_HOST = 'auth-return';
 
 /** Every failure lands the shopper back on the store's sign-in page, saying so once. */
 function failed(storeSignIn: string | null) {
@@ -37,12 +41,20 @@ export async function GET(request: Request) {
   const store = await findStoreBySlug(state.slug);
   if (!store) return failed(null);
 
+  /* Started inside a phone app: this is the in-app browser sheet, so every
+   * ending — success, cancel, failure — goes back to the app by deep link,
+   * and the app's WebView finishes the job (see the handoff below). */
+  const app = state.app ?? null;
+  const backToApp = (params: Record<string, string>) =>
+    deepLinkPage({ heading: 'Signing you in', deepLink: appDeepLink(app!, AUTH_RETURN_HOST, params) });
+
   const signInUrl = storeUrl(store, '/account/sign-in?error=google');
+  const failedHere = () => (app ? backToApp({ error: 'google' }) : failed(signInUrl));
 
   // The shopper pressed "cancel" on Google's screen, or Google said no.
   const code = url.searchParams.get('code');
   if (!code || url.searchParams.get('error')) {
-    return failed(storeUrl(store, '/account/sign-in'));
+    return app ? backToApp({}) : failed(storeUrl(store, '/account/sign-in'));
   }
 
   const identity = await exchangeGoogleCode({
@@ -50,7 +62,7 @@ export async function GET(request: Request) {
     // Byte-identical to the one `start` sent, or Google refuses the exchange.
     redirectUri: googleRedirectUri(),
   });
-  if (!identity) return failed(signInUrl);
+  if (!identity) return failedHere();
 
   let customer;
   try {
@@ -63,23 +75,30 @@ export async function GET(request: Request) {
     });
   } catch (err) {
     console.error('[storefront-auth] Google sign-in could not create the account:', err);
-    return failed(signInUrl);
+    return failedHere();
   }
 
   await prisma.customer.update({ where: { id: customer.id }, data: { lastLoginAt: new Date() } });
 
-  const ticket = await mintHandoffToken({
-    customerId: customer.id,
-    organizationId: customer.organizationId,
-    slug: store.slug,
-    sessionVersion: customer.sessionVersion,
-  });
+  const ticket = await mintHandoffToken(
+    {
+      customerId: customer.id,
+      organizationId: customer.organizationId,
+      slug: store.slug,
+      sessionVersion: customer.sessionVersion,
+    },
+    // An app's ticket is spent only with the verifier its WebView holds.
+    { challenge: state.challenge },
+  );
 
   const handoff = new URL('/api/storefront/auth/handoff', new URL(state.returnTo).origin);
   handoff.searchParams.set('token', ticket);
   handoff.searchParams.set('to', state.returnTo);
 
-  const response = NextResponse.redirect(handoff);
+  /* In the app, the session cookie must be set in the app's WebView, not in
+   * this sheet (they don't share cookies) — so the app is handed the handoff
+   * link, adds its verifier and opens it itself. */
+  const response = app ? backToApp({ to: handoff.toString() }) : NextResponse.redirect(handoff);
   // The state cookie has done its job.
   response.cookies.set(GOOGLE_STATE_COOKIE, '', { path: '/api/storefront/auth', maxAge: 0 });
   return response;

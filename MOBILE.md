@@ -52,25 +52,64 @@ Auth.js cannot be statically bundled. If a single-tenant offline catalog is ever
 wanted, gate `output` behind a `BUILD_TARGET=mobile` env check — the plumbing here
 doesn't change.
 
-### Two tiers: mall (default) and branded (future)
+### Two kinds of app: the shared one and a store's own (ROADMAP 16)
 
-`lib/mobile/app-config.ts` is the single seam between them. `proxy.ts` asks it
-`resolveMobileRoute(pathname, getMobileApp())` and turns the answer into a
-rewrite/redirect.
+One deployment serves every app. Each build appends `MansaasApp/{appId}` to its
+WebView's user agent (`capacitor.config.ts`, `appendUserAgent`). On the mobile
+origin, `proxy.ts` reads it through `lib/mobile/store-apps.ts` and routes with
+`resolveMobileRoute` (`lib/mobile/app-config.ts`):
 
-| | **mall** (default, every merchant) | **branded** (future premium add-on) |
+| | **shared app** (`com.mansaas.app`, or no marker) | **a store's own app** (registered in `MobileApp`) |
 |---|---|---|
-| Config | nothing set | `NEXT_PUBLIC_MOBILE_APP_MODE=branded` + `NEXT_PUBLIC_MOBILE_APP_SLUG={slug}` at build time |
 | `/` | store picker (`/m`) | opens straight into that store — no picker |
-| `/s/{slug}` | any tenant's storefront | only the locked tenant; other slugs → home |
-| Codebase | shared | **same shared codebase** — only the two env vars differ per build |
-| Branding (logo, colours, fonts) | per-store, resolved in `app/store/[organizationSlug]/layout.tsx` | identical mechanism — nothing extra |
+| `/s/{slug}` | any store | only its store; other slugs → home |
+| Add-on lapsed / build not registered | — | every path → "This app is no longer available" (`/m/app-unavailable`), linking to the store's website |
+| Branding (logo, colours, fonts) | per-store, from `app/store/[organizationSlug]/layout.tsx` | the same — nothing extra |
 
-**Deliberately not built yet:** the per-merchant build/publish pipeline —
-per-tenant `appId`, app icon, splash, signing, cert/provisioning management,
-automated App Store / Play submission. `capacitor.config.ts` stays
-`com.mansaas.app` / "Notely"; a branded build overrides those at generation
-time later. Priority now is the mall experience.
+The environment variables `NEXT_PUBLIC_MOBILE_APP_MODE` / `_SLUG` are gone:
+they were read by the server, so they locked a whole deployment to one store.
+
+**The app id is also the app's URL scheme** (`com.pynacode.shop://…`).
+Payments and Google sign-in deep-link back to the app a shopper is using; the
+server only deep-links to the shared id or a registered, active one.
+
+**Records** — until the platform console has screens for them (16.2):
+
+```
+npx tsx prisma/mobile-app.ts register <store-slug> <app-id> "<App name>"
+npx tsx prisma/mobile-app.ts lapse|restore <store-slug>
+npx tsx prisma/mobile-app.ts list
+```
+
+**Building a store's app:** `MOBILE_APP_ID` and `MOBILE_APP_NAME` set the id,
+name and user-agent marker in `capacitor.config.ts`. The native projects embed
+the id too (bundle id, `applicationId`, the URL scheme in `Info.plist` and
+`strings.xml`); the build kit (`npm run mobile:app`, ROADMAP 16.3) rewrites
+those in a copy — never change the committed `android/` and `ios/` projects
+for one store. The runbook is [docs/MOBILE-BUILD.md](docs/MOBILE-BUILD.md).
+
+### What a store's own app adds (ROADMAP 16.4)
+
+- **Order notifications.** Offered only on an order's page, and only in a
+  store app built with push (`MansaasPush` in its user agent) that the server
+  can reach. Android goes through the platform's Firebase project
+  (`FIREBASE_SERVICE_ACCOUNT`). iPhone goes straight to APNs with the
+  merchant's own key, sealed on `MobileApp`. A device is linked only to the
+  orders it asked about (`PushOrderWatch`), for 60 days. Sent beside the order
+  email (`lib/storefront/orders/notifications.ts` → `lib/mobile/push/send.ts`).
+  Tapping one opens the order (`components/native/native-shell.tsx`).
+- **Share** on product pages uses the phone's share sheet (`@capacitor/share`),
+  and always shares the store's public web address.
+- **Offline screen.** `server.errorPath` shows `mobile/www/offline.html`, which
+  the build kit stamps with the app's name and address.
+- **On the store's website:** "Get our app" (phone banner, footer link, `/app`
+  with a QR code) and Safari's own Smart App Banner. These appear only once a
+  listing is recorded (`lib/mobile/listing.ts`).
+- **Links inside a store app.** The storefront's links are slug-free
+  (`/products/x`). In a store's own app every such path is that store's page.
+  **In the shared app they still bounce to the picker**, since nothing tells
+  the server which store a bare path belongs to. Fixing that is part of the
+  real store picker.
 
 ### Native polish
 
@@ -103,10 +142,25 @@ to **`com.mansaas.app://payment-return`**; the app closes the sheet and opens th
 order's confirmation page, which re-checks the payment with Paystack. Closing the
 sheet by hand does the same.
 
+The deep link uses the scheme of the app the payment began in
+(`OrderPayment.nativeAppScheme`, worked out from the user-agent marker when the
+payment starts), so a store's own app gets its shoppers back, not the shared
+app. Attempts from before ROADMAP 16.1 use the shared scheme.
+
 The scheme is registered in `ios/App/App/Info.plist` (`CFBundleURLTypes`) and
 `android/app/src/main/AndroidManifest.xml` (intent filter using
-`@string/custom_url_scheme`). A branded build with a different `appId` must
-change both, and set `NEXT_PUBLIC_MOBILE_APP_SCHEME` to match.
+`@string/custom_url_scheme`). A store's app registers its own id there.
+
+### Google sign-in inside the app
+
+Google refuses sign-in inside an embedded WebView, so in the app "Continue
+with Google" opens in the same in-app browser sheet
+(`lib/storefront/account/native-google.ts`). The callback deep-links back with
+`{appId}://auth-return?to={handoff link}`; the app closes the sheet and opens
+the handoff link in its own WebView — the sheet doesn't share cookies with it,
+so that's where the session cookie must be set. The one-minute handoff ticket
+is bound to a challenge whose verifier never leaves the WebView (PKCE-style,
+RFC 8252), so another app that claims the same scheme can't use a caught link.
 
 ## Running it
 
@@ -209,3 +263,5 @@ green).
   APIs from the mobile origin they won't get tenant headers from the proxy; the API
   handlers will need to accept the slug explicitly.
 - App icons / splash images: drop source assets in and run `@capacitor/assets`.
+- A store's own app (ROADMAP 16): the console side (16.2) and approval-ready
+  extras such as push notifications (16.4).

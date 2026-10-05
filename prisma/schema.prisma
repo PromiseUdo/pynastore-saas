@@ -310,6 +310,8 @@ model Organization {
   billingTransactions BillingTransaction[]
   domainOrders        DomainOrder[]
   shopDomain          ShopDomain?
+  mobileApp           MobileApp?
+  pushDevices         PushDevice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1661,6 +1663,7 @@ model Order {
   discountCodeRef DiscountCode?          @relation(fields: [discountCodeId], references: [id], onDelete: SetNull)
   lineItems       OrderLineItem[]
   payments        OrderPayment[]
+  pushWatches     PushOrderWatch[]
   disputes        PaymentDispute[]
   allocations     OrderStockAllocation[]
   shipments       OrderShipment[]
@@ -1760,6 +1763,12 @@ model OrderPayment {
    * the callback then hands the shopper back to the app by deep link.
    */
   nativeApp       Boolean @default(false)
+  /**
+   * The URL scheme of the app it began in — the app's own id (ROADMAP 16.1),
+   * so the callback deep-links back to that app and not another store's.
+   * Null for an attempt from the web, or from before 16.1 (the shared app).
+   */
+  nativeAppScheme String?
   /**
    * e.g. 'Card', 'Transfer' — as the provider reported it.
    */
@@ -3201,6 +3210,8 @@ model BillingTransaction {
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
   plan         BillingPlan?  @relation(fields: [planId], references: [id])
   domainOrder  DomainOrder?
+  /** a payment for the store's own phone app (ROADMAP 16.2) */
+  mobileAppPayment MobileAppPayment?
 
   createdAt DateTime @default(now())
 
@@ -3474,6 +3485,197 @@ model ShopDomain {
 
   @@index([status, expiresAt])
   @@map("shop_domains")
+}
+
+/**
+ * A store's own phone app — the paid add-on (ROADMAP 16). One per store.
+ *
+ * The app adds `MansaasApp/{appId}` to its user agent; on the mobile origin
+ * proxy.ts looks the id up here and locks the app to this store. `appId` is
+ * also the app's URL scheme, so payments and Google sign-in deep-link back to
+ * it. Until 16.2 gives this screens, records are kept with
+ * `npx tsx prisma/mobile-app.ts`.
+ */
+model MobileApp {
+  id             String          @id @default(cuid())
+  organizationId String          @unique
+  /** reverse-DNS, e.g. com.pynacode.shop — permanent once published */
+  appId          String          @unique
+  /** the name under the icon */
+  name           String
+  status         MobileAppStatus @default(ACTIVE)
+
+  /**
+   * Where shoppers get it (ROADMAP 16.4). Recorded once the merchant's
+   * listing is approved — never before, so the website never points at an app
+   * nobody can download. `appStoreId` is the number in the App Store link
+   * (apps.apple.com/app/id{appStoreId}); the Play link follows from `appId`.
+   */
+  appStoreId       String?
+  onGooglePlay     Boolean @default(false)
+  /** the "Get our app" banner and page on the store's website; the merchant can turn it off */
+  promoteOnWebsite Boolean @default(true)
+
+  /**
+   * Sending push notifications to this app on iPhones (ROADMAP 16.4): the
+   * merchant's APNs key (.p8), from THEIR Apple team, since the app is theirs.
+   * The key itself is sealed (lib/social/crypto.ts) and never leaves the server.
+   * Android needs nothing here: one platform Firebase project sends to every
+   * store's Android app.
+   */
+  apnsTeamId       String?
+  apnsKeyId        String?
+  apnsKeySealed    String?
+
+  /**
+   * The order (ROADMAP 16.2). A merchant asks for an app in Settings → Mobile
+   * app and pays; staff build it, deliver the files, and record the listings.
+   * `stage` is where the work is; `status` (above) is whether the app opens.
+   */
+  stage            MobileAppStage @default(REQUESTED)
+  wantsAndroid     Boolean        @default(true)
+  wantsIos         Boolean        @default(true)
+  /** the merchant's square app icon, uploaded to Cloudinary (≥ 1024 px) */
+  iconUrl          String?
+  iconPublicId     String?
+  /** behind the icon and on the splash screen, #rrggbb */
+  backgroundColor  String?
+  /** one line for the store listings, in the merchant's words */
+  shortDescription String?
+  requestedById    String?
+
+  paidAt      DateTime?
+  buildingAt  DateTime?
+  deliveredAt DateTime?
+  liveAt      DateTime?
+  /** the latest delivered build */
+  versionName      String?
+  buildNumber      Int?
+  /** where staff put the Android files for the merchant */
+  downloadUrl      String?
+  deliveryNote     String?
+  handledById      String?
+
+  /**
+   * The add-on is paid a year at a time. Past this date the app gets the
+   * grace period from Billing settings; after it, status becomes LAPSED.
+   */
+  paidThrough DateTime?
+  lapsedAt    DateTime?
+  graceEndsAt DateTime?
+
+  payments  MobileAppPayment[]
+  reminders MobileAppReminder[]
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("mobile_apps")
+}
+
+/**
+ * A phone, in a store's own app, that asked to hear about its orders
+ * (ROADMAP 16.4). Only a device that pressed "Turn on notifications" on an
+ * order is here, and it is told about the orders it asked about — nothing
+ * else. Tokens the platform reports dead are deleted when a send fails.
+ */
+model PushDevice {
+  id             String       @id @default(cuid())
+  organizationId String
+  /** the app it's in — also which credentials send to it */
+  appId          String
+  platform       PushPlatform
+  /** FCM registration token (Android) or APNs device token (iOS) */
+  token          String
+  createdAt      DateTime     @default(now())
+  lastSeenAt     DateTime     @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  watches      PushOrderWatch[]
+
+  @@unique([appId, token])
+  @@index([organizationId])
+  @@map("push_devices")
+}
+
+/** One device asking about one order. Removed 60 days on (lib/mobile/push/watch.ts). */
+model PushOrderWatch {
+  deviceId  String
+  orderId   String
+  createdAt DateTime @default(now())
+
+  device PushDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  order  Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@id([deviceId, orderId])
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("push_order_watches")
+}
+
+enum PushPlatform {
+  ANDROID
+  IOS
+}
+
+enum MobileAppStage {
+  /** asked for, not paid yet */
+  REQUESTED
+  /** paid: waiting for staff to build it */
+  PAID
+  BUILDING
+  /** files handed to the merchant to publish */
+  DELIVERED
+  /** in the App Store and/or Google Play */
+  LIVE
+}
+
+/** The setup fee (the first year included) or a year's renewal (ROADMAP 16.2). */
+model MobileAppPayment {
+  id                   String               @id @default(cuid())
+  mobileAppId          String
+  billingTransactionId String               @unique
+  kind                 MobileAppPaymentKind
+  amount               Decimal              @db.Decimal(12, 2)
+  /** set once Paystack confirms it — the charge is applied exactly once */
+  paidAt               DateTime?
+  /** the paid-through date this payment set */
+  coversUntil          DateTime?
+  createdAt            DateTime             @default(now())
+
+  mobileApp          MobileApp          @relation(fields: [mobileAppId], references: [id], onDelete: Cascade)
+  billingTransaction BillingTransaction @relation(fields: [billingTransactionId], references: [id], onDelete: Cascade)
+
+  @@index([mobileAppId])
+  @@map("mobile_app_payments")
+}
+
+enum MobileAppPaymentKind {
+  SETUP
+  RENEWAL
+}
+
+/** A renewal reminder sent for one paid-through date — claimed before sending, so each goes once. */
+model MobileAppReminder {
+  id          String   @id @default(cuid())
+  mobileAppId String
+  /** e.g. "before_30:2027-10-04" */
+  kind        String
+  sentAt      DateTime @default(now())
+
+  mobileApp MobileApp @relation(fields: [mobileAppId], references: [id], onDelete: Cascade)
+
+  @@unique([mobileAppId, kind])
+  @@map("mobile_app_reminders")
+}
+
+enum MobileAppStatus {
+  /** opens the store */
+  ACTIVE
+  /** add-on not renewed: the app opens a "no longer available" page */
+  LAPSED
 }
 
 /** A renewal reminder sent for one expiry — claimed before sending, so each goes once (12.6). */

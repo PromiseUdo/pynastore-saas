@@ -36,6 +36,7 @@ export function ConfirmationView({
   config,
   signedIn,
   payment,
+  updatesPrompt = null,
 }: {
   order: StorefrontOrder;
   config: CheckoutConfig;
@@ -45,6 +46,8 @@ export function ConfirmationView({
     confirmationToken: string;
     confirmationPath: string;
   };
+  /** "Get updates on this order", inside a store's own app (ROADMAP 16.4) */
+  updatesPrompt?: React.ReactNode;
 }) {
   const { totals } = order;
   const paid = order.paymentStatus === 'PAID';
@@ -153,6 +156,8 @@ export function ConfirmationView({
           />
         </div>
       )}
+
+      {updatesPrompt && !cancelled && <div className="mt-4">{updatesPrompt}</div>}
 
       <section aria-labelledby="confirmation-summary" className="mt-7 rounded-2xl border bg-card p-5">
         <h2 id="confirmation-summary" className="font-display text-lg">

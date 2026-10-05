@@ -1,3 +1,5 @@
+'use client';
+
 /*
  * "Continue with Google".
  *
@@ -5,11 +7,25 @@
  * navigation to another origin, and an anchor is what a browser (and a
  * screen reader, and a middle click) already understands. `href` is built on
  * the server — see lib/storefront/account/google-link.ts.
+ *
+ * Inside the phone app the same link runs in the in-app browser sheet
+ * instead, because Google refuses sign-in inside an app's WebView — see
+ * lib/storefront/account/native-google.ts.
  */
+import { isNativePlatform } from '@/lib/platform';
+import { signInWithGoogleInApp } from '@/lib/storefront/account/native-google';
+
 export function GoogleButton({ href, label }: { href: string; label: string }) {
+  const onClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!isNativePlatform()) return;
+    event.preventDefault();
+    void signInWithGoogleInApp(href);
+  };
+
   return (
     <a
       href={href}
+      onClick={onClick}
       className="flex h-12 w-full items-center justify-center gap-2.5 rounded-xl border border-border bg-background px-4 text-base font-medium text-foreground transition-colors hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <GoogleIcon />

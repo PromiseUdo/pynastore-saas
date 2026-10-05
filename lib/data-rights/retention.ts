@@ -16,6 +16,7 @@
  * failure (Cloudinary down, say) is recorded and retried tomorrow without
  * holding up the rest.
  */
+import { purgeOldPushWatches } from '@/lib/mobile/push/watch';
 import { prisma } from '@/lib/prisma';
 import { reportCaughtError } from '@/lib/ops/errors';
 import { CLOSURE_GRACE_DAYS, retentionCutoff } from './policy';
@@ -28,6 +29,8 @@ export interface RetentionResult {
   workspacesErased: number;
   ordersAnonymized: number;
   customersAnonymized: number;
+  /** order notifications past their 60 days (ROADMAP 16.4) */
+  pushWatchesRemoved: number;
   failed: number;
 }
 
@@ -38,7 +41,7 @@ export async function runDataRetention(options: { now?: Date; only?: string[] } 
   const scope = options.only ? { id: { in: options.only } } : {};
   const orgScope = options.only ? { organizationId: { in: options.only } } : {};
   const cutoff = retentionCutoff(now);
-  const result: RetentionResult = { workspacesPurged: 0, filesDeleted: 0, workspacesErased: 0, ordersAnonymized: 0, customersAnonymized: 0, failed: 0 };
+  const result: RetentionResult = { workspacesPurged: 0, filesDeleted: 0, workspacesErased: 0, ordersAnonymized: 0, customersAnonymized: 0, pushWatchesRemoved: 0, failed: 0 };
 
   // 1. Past the grace period: keep only the business records.
   const toPurge = await prisma.organization.findMany({
@@ -109,6 +112,12 @@ export async function runDataRetention(options: { now?: Date; only?: string[] } 
     data: { name: ANONYMIZED_CUSTOMER, taxId: null, anonymizedAt: now },
   });
   result.customersAnonymized = customers.count;
+
+  // 5. Phones stop hearing about an order 60 days after asking (ROADMAP 16.4).
+  if (!options.only) {
+    const push = await purgeOldPushWatches(now);
+    result.pushWatchesRemoved = push.watches;
+  }
 
   return result;
 }

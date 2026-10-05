@@ -15,6 +15,7 @@
  * token, so it works for guests and signed-in shoppers alike, on any device.
  */
 import { prisma } from '@/lib/prisma';
+import { pushOrderUpdate } from '@/lib/mobile/push/send';
 import { sendStoreOrderAlertEmail, sendStorefrontOrderUpdateEmail } from '@/lib/email';
 import type { OrderEmailKind } from '@/emails/storefront-order-update';
 import type { StoreOrderAlertKind } from '@/emails/store-order-alert';
@@ -144,6 +145,10 @@ export async function notifyShopper(
   } catch (error) {
     console.error(`[orders] Could not email the shopper about order ${orderId} (${kind}):`, error);
   }
+
+  /* And any phone that asked, in the store's own app (ROADMAP 16.4) — even
+   * if the email failed. pushOrderUpdate never throws. */
+  await pushOrderUpdate(orderId, kind);
 }
 
 /**

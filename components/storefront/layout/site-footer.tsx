@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useStorefront } from '@/lib/storefront/context';
-import { Mail, MapPin, Phone } from 'lucide-react';
+import { Mail, MapPin, Phone, Smartphone } from 'lucide-react';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import type { SocialPlatform } from '@/lib/storefront/social-links';
 
@@ -43,14 +43,17 @@ export function SiteFooter({
   paymentNote = null,
   contact = { email: null, phone: null, address: null },
   social = [],
+  appHref = null,
 }: {
   columns: FooterColumn[];
   /** how this store's checkout takes payment (lib/storefront/store-claims.ts); null says nothing */
   paymentNote?: string | null;
   contact?: FooterContact;
   social?: { platform: SocialPlatform; label: string; url: string }[];
+  /** "Get our app", when the store's own app is listed (ROADMAP 16.4) */
+  appHref?: string | null;
 }) {
-  const { org } = useStorefront();
+  const { org, isMobileRuntime } = useStorefront();
   const year = new Date().getFullYear();
 
   return (
@@ -103,6 +106,16 @@ export function SiteFooter({
                 ))}
               </ul>
             </nav>
+          )}
+
+          {appHref && !isMobileRuntime && (
+            <Link
+              href={appHref}
+              className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-brand underline underline-offset-4"
+            >
+              <Smartphone aria-hidden className="size-4" />
+              Get our app
+            </Link>
           )}
         </div>
 

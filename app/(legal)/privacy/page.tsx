@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   alternates: { canonical: `https://${PLATFORM_DOMAIN}/privacy` },
 };
 
-const UPDATED = '1 October 2026';
+const UPDATED = '4 October 2026';
 
 export default function PrivacyPolicyPage() {
   return (
@@ -137,6 +137,12 @@ export default function PrivacyPolicyPage() {
           <li>
             Product reviews. A review can only be written by a signed-in shopper who has a delivered order
             containing that product, and merchants can hide a review but cannot write or edit one.
+          </li>
+          <li>
+            In a store’s own phone app, only if the shopper turns on notifications for an order: the
+            phone’s notification token and which orders it asked about. It is used only to send updates
+            about those orders, and is removed 60 days later, or straight away when the phone’s platform
+            reports the app was removed.
           </li>
         </LegalList>
 
@@ -301,6 +307,12 @@ export default function PrivacyPolicyPage() {
             Paystack’s hosted page and never reach {PLATFORM_NAME}; we receive the transaction reference, amount, status,
             channel and fees. For a merchant who sets up online payments, Paystack receives the business name,
             the settlement bank account and a payments contact, so it can pay them out.
+          </li>
+          <li>
+            <strong className="font-medium text-foreground">Google (Firebase Cloud Messaging) and Apple (Push
+            Notification service).</strong> Only for a shopper who turns on order notifications in a store’s own
+            phone app: deliver those notifications to the phone. They receive the phone’s notification token and
+            the notification’s text — the store’s name and the order’s reference and status.
           </li>
           <li>
             <strong className="font-medium text-foreground">Namecheap.</strong> Used when a merchant orders a

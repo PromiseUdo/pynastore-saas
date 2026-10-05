@@ -1,5 +1,5 @@
 /*
- * GET /api/storefront/auth/handoff?token=…&to=…
+ * GET /api/storefront/auth/handoff?token=…&to=…[&verifier=…]
  *
  * Runs on the STORE's origin — subdomain, custom domain, or the mobile host.
  * Spends the one-minute ticket the Google callback minted, sets the store's
@@ -57,7 +57,8 @@ export async function GET(request: Request) {
   const slug = await storeSlugForOrigin(request, to);
   if (!slug) return NextResponse.redirect(getMarketingUrl('/'));
 
-  const claims = await consumeHandoffToken(token, slug);
+  // Present only when a phone app finished Google sign-in (ROADMAP 16.1).
+  const claims = await consumeHandoffToken(token, slug, url.searchParams.get('verifier'));
   if (!claims) return NextResponse.redirect(getMarketingUrl('/'));
 
   const store = await prisma.organization.findFirst({

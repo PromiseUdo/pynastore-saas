@@ -1,0 +1,79 @@
+<!doctype html>
+<!--
+  Shown by the app when the live store can't be reached: no connection, or the
+  server answering with an error (capacitor.config.ts, server.errorPath).
+
+  The store-app build kit (ROADMAP 16.3/16.4) fills in the two placeholders
+  with the app's name and the address it loads; a build without the kit falls
+  back to a neutral name and the app's own root.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="app-name" content="__APP_NAME__" />
+    <meta name="app-server-url" content="__APP_SERVER_URL__" />
+    <title>Can't connect</title>
+    <style>
+      :root { color-scheme: light dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        text-align: center;
+        background: #ffffff;
+        color: #0b0b0c;
+      }
+      svg { width: 48px; height: 48px; opacity: 0.5; }
+      h1 { font-size: 1.125rem; font-weight: 600; margin: 0; }
+      p { font-size: 0.95rem; opacity: 0.7; margin: 0; max-width: 22rem; line-height: 1.45; }
+      button {
+        margin-top: 8px;
+        min-height: 44px;
+        padding: 10px 24px;
+        border: 0;
+        border-radius: 10px;
+        font: inherit;
+        font-weight: 600;
+        background: #0b0b0c;
+        color: #ffffff;
+      }
+      button:focus-visible { outline: 3px solid #6366f1; outline-offset: 2px; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #0b0b0c; color: #f5f5f5; }
+        button { background: #f5f5f5; color: #0b0b0c; }
+      }
+    </style>
+  </head>
+  <body>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M2 8.8a15 15 0 0 1 20 0" /><path d="M5 12.5a10 10 0 0 1 14 0" /><path d="M8.5 16a5 5 0 0 1 7 0" /><path d="M12 19.5h.01" /><path d="M3 3l18 18" />
+    </svg>
+    <h1 id="heading">Can't connect right now</h1>
+    <p>Check that your phone is online, then try again.</p>
+    <button type="button" id="retry">Try again</button>
+    <script>
+      (function () {
+        function meta(name) {
+          var el = document.querySelector('meta[name="' + name + '"]');
+          var value = el ? el.getAttribute('content') : '';
+          return value && value.indexOf('__') !== 0 ? value : '';
+        }
+        var name = meta('app-name');
+        var server = meta('app-server-url') || '/';
+        if (name) document.getElementById('heading').textContent = "Can't reach " + name + ' right now';
+        function retry() { window.location.replace(server); }
+        document.getElementById('retry').addEventListener('click', retry);
+        // Back as soon as the phone is online again.
+        window.addEventListener('online', retry);
+      })();
+    </script>
+  </body>
+</html>
