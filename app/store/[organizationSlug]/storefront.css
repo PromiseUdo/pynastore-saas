@@ -307,16 +307,37 @@
   border-radius: 3px;
 }
 
-/* The product page's sticky buy bar (phones and tablets) owns the bottom of
- * the screen while it is showing; lift the back-to-top button clear of it
- * rather than letting it sit on "Add to bag". The bar is ~4.5rem tall, and
- * in the app it sits on top of the 3.5rem tab bar. */
+/* How much of the bottom of the screen the phone's tab bar takes
+ * (components/storefront/layout/mobile-tab-bar.tsx, ROADMAP 16.5): its 3.5rem
+ * plus the home indicator under it. 0 on desktop, and on pages without the
+ * bar (checkout). Everything that floats at the bottom sits above this. */
+[data-storefront] {
+  --sf-tabbar: 0px;
+}
 @media (max-width: 1023.98px) {
-  :root[data-sticky-buy-bar='web'] .sf-back-to-top {
-    bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  [data-storefront]:has([data-sf-tabbar]) {
+    --sf-tabbar: calc(3.5rem + var(--inset-bottom));
   }
-  :root[data-sticky-buy-bar='app'] .sf-back-to-top {
-    bottom: calc(9rem + env(safe-area-inset-bottom));
+}
+
+/* Back to top: above the tab bar on a phone — or above the home indicator
+ * where there is no tab bar. */
+.sf-back-to-top {
+  bottom: calc(max(var(--sf-tabbar), var(--inset-bottom)) + 1.25rem);
+}
+@media (min-width: 1024px) {
+  .sf-back-to-top {
+    bottom: 1.5rem;
+  }
+}
+
+/* The product page's sticky buy bar (phones and tablets) owns the bottom of
+ * the screen while it is showing, above the tab bar; lift the back-to-top
+ * button clear of it rather than letting it sit on "Add to bag". The bar is
+ * ~4.5rem tall. */
+@media (max-width: 1023.98px) {
+  :root[data-sticky-buy-bar] .sf-back-to-top {
+    bottom: calc(max(var(--sf-tabbar), var(--inset-bottom)) + 5.5rem);
   }
 }
 
@@ -330,11 +351,11 @@
  * On a desktop the corner is roomy and the arrow sits at 1.5rem, so the rest
  * position is fixed there rather than following the phone's tab bar. */
 .sf-assistant-fab {
-  bottom: calc(var(--sf-fab-rest, 1.25rem) + env(safe-area-inset-bottom));
+  bottom: calc(max(var(--sf-tabbar), var(--inset-bottom)) + 1.25rem);
   transition: bottom 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 .sf-assistant-fab[data-lifted='true'] {
-  bottom: calc(var(--sf-fab-lift, 4.5rem) + env(safe-area-inset-bottom));
+  bottom: calc(max(var(--sf-tabbar), var(--inset-bottom)) + 4.5rem);
 }
 @media (min-width: 1024px) {
   .sf-assistant-fab {

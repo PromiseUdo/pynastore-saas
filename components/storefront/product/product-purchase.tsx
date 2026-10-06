@@ -372,9 +372,9 @@ function StickyBuyBar({
     <div
       className={cn(
         'fixed inset-x-0 z-20 flex items-center gap-3 border-t bg-background/95 px-5 pt-3 backdrop-blur lg:hidden',
-        // In the app the tab bar below already absorbs the home indicator.
-        isMobileRuntime ? 'pb-3' : 'pb-[max(0.75rem,env(safe-area-inset-bottom))]',
-        isMobileRuntime ? 'bottom-[3.5rem]' : 'bottom-0',
+        // On top of the phone's tab bar, which also absorbs the home indicator
+        // (--sf-tabbar, storefront.css; 0 where there's no tab bar).
+        'bottom-[var(--sf-tabbar)] pb-[max(0.75rem,calc(var(--inset-bottom)-var(--sf-tabbar)))]',
       )}
     >
       <div className="min-w-0 flex-1">

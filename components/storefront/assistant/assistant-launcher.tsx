@@ -41,33 +41,21 @@ export function AssistantLauncher({
   variant?: 'chip' | 'button' | 'link' | 'floating';
   className?: string;
 }) {
-  const { org, isMobileRuntime } = useStorefront();
+  const { org } = useStorefront();
   const openPanel = useAssistantStore((s) => s.openPanel);
   const scrolled = usePageScrolled();
 
   const floating = variant === 'floating';
-  /* In the app the tab bar owns the bottom 3.5rem of the screen; on the web
-   * there is nothing under it. The lift is one arrow (2.5rem) plus a gap. */
-  const rest = isMobileRuntime ? '5rem' : '1.25rem';
 
   return (
     <button
       type="button"
       onClick={() => openPanel(seed, org.slug)}
       data-lifted={floating && scrolled ? 'true' : undefined}
-      style={
-        floating
-          ? ({
-              '--sf-fab-rest': rest,
-              '--sf-fab-lift': `calc(${rest} + 3.25rem)`,
-            } as React.CSSProperties)
-          : undefined
-      }
       className={cn(
         'inline-flex items-center gap-2 font-medium transition-colors',
-        /* `sf-assistant-fab` owns the vertical position — it reads the two
-         * custom properties above, adds the home-indicator inset and animates
-         * between them. */
+        /* `sf-assistant-fab` owns the vertical position — above the phone's
+         * tab bar, lifted clear of the back-to-top arrow (storefront.css). */
         floating &&
           'sf-assistant-fab fixed right-4 z-30 h-12 rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground shadow-lg shadow-foreground/15 hover:bg-brand-hover lg:right-6',
         variant === 'chip' &&

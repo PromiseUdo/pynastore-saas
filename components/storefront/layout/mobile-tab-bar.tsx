@@ -28,7 +28,8 @@ export function MobileTabBar() {
   const tab = 'relative flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium';
 
   return (
-    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 flex border-t bg-background/95 backdrop-blur lg:hidden">
+    // data-sf-tabbar: what floating buttons measure their height above (storefront.css, --sf-tabbar).
+    <nav data-sf-tabbar className="safe-bottom fixed inset-x-0 bottom-0 z-30 flex border-t bg-background/95 backdrop-blur lg:hidden">
       <Link href="/" className={cn(tab, isActive('/') ? 'text-brand' : 'text-muted-foreground')}>
         <Home className="size-5" /> Home
       </Link>
