@@ -111,6 +111,15 @@ for one store. The runbook is [docs/MOBILE-BUILD.md](docs/MOBILE-BUILD.md).
   the server which store a bare path belongs to. Fixing that is part of the
   real store picker.
 
+### On a phone (ROADMAP 16.5)
+
+Every phone-width screen — the app and phone browsers — gets the app layout:
+the header is only a search box, the bottom tab bar is the navigation (Home,
+Shop, Saved, Bag, Account → `/account/menu`), and there's no footer, utility
+strip or features band. The page starts below the status bar via
+`--inset-top` (globals.css), which reads Capacitor's `--safe-area-inset-*`
+variables as well as `env()`: Android 15+ draws apps under the status bar.
+
 ### Native polish
 
 - `components/native/native-shell.tsx` (mounted once in `app/layout.tsx`): hides the

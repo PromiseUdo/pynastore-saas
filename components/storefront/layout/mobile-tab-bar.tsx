@@ -1,29 +1,27 @@
 'use client';
 
 import Link from 'next/link';
-import { Home, LayoutGrid, Search, Heart, ShoppingBag } from 'lucide-react';
+import { Home, LayoutGrid, Heart, ShoppingBag, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useStorefront, useHydrated } from '@/lib/storefront/context';
+import { useHydrated } from '@/lib/storefront/context';
 import { usePublicPathname } from '@/lib/storefront/use-public-pathname';
 import { useUIStore } from '@/lib/storefront/stores/ui-store';
 import { useCartCount } from '@/lib/storefront/stores/cart-store';
 import { useWishlistStore } from '@/lib/storefront/stores/wishlist-store';
 
 /**
- * Bottom navigation — only rendered on the dedicated mobile origin / inside
- * the Capacitor shell (see StorefrontProvider `isMobileRuntime`).
+ * Bottom navigation on every phone-width screen — the app and phone
+ * browsers alike (ROADMAP 16.5). It is the phone's whole navigation: the
+ * header there is only a search box and there is no footer, so Account is a
+ * tab, and leads to the account, the shop's own pages and the settings.
  */
 export function MobileTabBar() {
-  const { isMobileRuntime } = useStorefront();
   const pathname = usePublicPathname();
   const hydrated = useHydrated();
-  const openSearch = useUIStore((s) => s.openSearch);
   const openMenu = useUIStore((s) => s.openMenu);
   const openCart = useUIStore((s) => s.openCart);
   const cartCount = useCartCount();
   const wishCount = useWishlistStore((s) => s.items.length);
-
-  if (!isMobileRuntime) return null;
 
   const isActive = (href: string) => pathname === href;
 
@@ -36,9 +34,6 @@ export function MobileTabBar() {
       </Link>
       <button onClick={openMenu} className={cn(tab, 'text-muted-foreground')}>
         <LayoutGrid className="size-5" /> Shop
-      </button>
-      <button onClick={openSearch} className={cn(tab, 'text-muted-foreground')}>
-        <Search className="size-5" /> Search
       </button>
       <Link href="/wishlist" className={cn(tab, isActive('/wishlist') ? 'text-brand' : 'text-muted-foreground')}>
         <span className="relative">
@@ -62,6 +57,12 @@ export function MobileTabBar() {
         </span>
         Bag
       </button>
+      <Link
+        href="/account/menu"
+        className={cn(tab, pathname.startsWith('/account') ? 'text-brand' : 'text-muted-foreground')}
+      >
+        <User className="size-5" /> Account
+      </Link>
     </nav>
   );
 }

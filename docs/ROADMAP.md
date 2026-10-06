@@ -5182,6 +5182,34 @@ WebViews. Nothing built a per-store app (id, name, icon, signing).
     entitlements; iOS simulator compile). Not yet on a real phone: a delivered
     notification needs real Firebase/APNs credentials.
 
+### 16.5 — Feels like an app on a phone — DONE (2026-10-06)
+
+Asked for after testing Pynastore's first app: the status bar was hidden, and
+the app looked like the website in a frame. Decided 2026-10-06, for **every
+phone-width screen** (the app and phone browsers alike; desktop unchanged):
+- **Status bar.** Android 15+ draws apps edge to edge, under the status bar;
+  the page now starts below it (`--inset-top` in globals.css reads the
+  browser's `env()` and the `--safe-area-inset-*` variables Capacitor sets),
+  a strip in the shop's own background sits behind the clock, and the
+  header sticks just under it. The icons follow the shop's light/dark theme,
+  not the phone's (components/native/native-shell.tsx). Web-side only — no
+  app rebuild.
+- **Header = search box.** No menu, logo, search/saved/bag/account buttons
+  on phones; a phone BROWSER keeps a small logo mark (nothing else there names
+  the shop), the app doesn't (its name is under the icon).
+- **No utility strip, no footer, no "Shopping here" features band** on
+  phones; the homepage hero's heading and search box go too (the header is
+  the search), keeping Ask the assistant / Help me choose / Search by image.
+- **Bottom tab bar on every phone** (it was app-only): Home, Shop, Saved,
+  Bag, **Account** — Account replaced Search. It leads to `/account/menu`:
+  the account (or sign in / create one / track an order), the shop's
+  published pages and contact details, and dark mode. That page is also what
+  keeps a store app approvable: privacy policy, contact and account deletion
+  reachable in the app.
+- **Kept on phones:** sale announcements (Marketing), and the product
+  page's delivery details. The merchant's header/footer design (15.5) now
+  applies to desktop.
+
 **What the merchant does:** their Apple Developer ($99/yr) and Google Play
 ($25 once) accounts; add our engineer to their Apple team; upload and submit.
 A new *personal* Play account must run a 12-tester, 14-day closed test before

@@ -243,8 +243,14 @@ export default async function StorefrontRootLayout({
        * checked colour — lib/storefront/design/tokens.ts. */
       {...design.attributes}
       style={Object.keys(design.style).length ? (design.style as React.CSSProperties) : undefined}
-      className={`${fontVariables} min-h-screen bg-background text-foreground`}
+      /* pt: the page starts below the phone's status bar. 0 everywhere but an
+       * app drawn edge to edge (globals.css, --inset-top). */
+      className={`${fontVariables} min-h-screen bg-background pt-[var(--inset-top)] text-foreground`}
     >
+      {/* Behind the status bar's clock and icons, in the shop's own
+        * background, so content scrolling up never shows through them. Has no
+        * height anywhere the status bar isn't drawn over the page. */}
+      <div aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-[var(--inset-top)] bg-background" />
       {/* Not inside the mobile app (13.9): a merchant's Google Analytics or Meta
           Pixel there is "tracking" under Apple's rules, which the app would have
           to ask permission for and declare. The website keeps them. */}
@@ -270,7 +276,7 @@ export default async function StorefrontRootLayout({
         {isDraft && (
           <div
             role="status"
-            className="sticky top-0 z-50 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-foreground px-4 py-2 text-center text-xs text-background"
+            className="sticky top-[var(--inset-top)] z-50 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-foreground px-4 py-2 text-center text-xs text-background"
           >
             <span>Draft preview — only you can see this look. Shoppers still see your published one.</span>
             {/* A plain link: leaving needs a request so the cookie can be cleared. */}
@@ -280,7 +286,7 @@ export default async function StorefrontRootLayout({
           </div>
         )}
         {!opening.open && (
-          <div role="status" className="sticky top-0 z-50 bg-foreground px-4 py-2 text-center text-xs text-background">
+          <div role="status" className="sticky top-[var(--inset-top)] z-50 bg-foreground px-4 py-2 text-center text-xs text-background">
             Preview — your shop is closed, so only your team can see this and nothing can be ordered. Open it from
             Settings → Setup guide.
           </div>

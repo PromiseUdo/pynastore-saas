@@ -11,6 +11,13 @@
  *   search   — a search box always in view, full width on phones, for
  *              shops whose customers know what they want.
  *
+ * ON PHONES (ROADMAP 16.5) the header is only the search box — the bottom
+ * tab bar (mobile-tab-bar.tsx) carries Shop, Saved, Bag and Account, so the
+ * menu, wishlist, bag and account buttons would only repeat it. A phone
+ * browser keeps a small logo mark beside the box, since nothing else there
+ * names the shop; in the app the name is already under its icon. The three
+ * layouts below are the desktop header.
+ *
  * The header itself is `sticky` — that also establishes the containing block
  * for the category dropdown's `absolute` panel in <CategoryNavBar>, so no
  * separate `relative` is needed (and stacking two position utilities is
@@ -18,7 +25,7 @@
  */
 import * as React from 'react';
 import Link from 'next/link';
-import { Heart, Menu, Search, ShoppingBag, User } from 'lucide-react';
+import { Heart, Search, ShoppingBag, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStorefront, useHydrated, useShopper } from '@/lib/storefront/context';
 import { usePublicPathname } from '@/lib/storefront/use-public-pathname';
@@ -99,10 +106,9 @@ export function SiteHeader({
   heroHasSearch?: boolean;
   layout?: 'standard' | 'centered' | 'search';
 }) {
-  const { org } = useStorefront();
+  const { org, isMobileRuntime } = useStorefront();
   const shopper = useShopper();
   const hydrated = useHydrated();
-  const openMenu = useUIStore((s) => s.openMenu);
   const openSearch = useUIStore((s) => s.openSearch);
   const openCart = useUIStore((s) => s.openCart);
 
@@ -135,16 +141,6 @@ export function SiteHeader({
    */
   const pathname = usePublicPathname();
   const showInlineSearch = layout === 'search' || pathname !== '/' || heroHasSearch === false || pastHero;
-
-  const menuButton = (
-    <button
-      onClick={openMenu}
-      className="-ml-2 rounded-lg p-2 transition-colors hover:bg-accent lg:hidden"
-      aria-label="Open menu"
-    >
-      <Menu className="size-6" />
-    </button>
-  );
 
   const searchButton = (className?: string) => (
     <button
@@ -183,20 +179,31 @@ export function SiteHeader({
     </Link>
   );
 
+  /* Phones: the mark only — a long name would squeeze the search box. */
+  const phoneMark = (
+    <Link href="/" aria-label={`${org.name} home`} className="flex shrink-0 items-center">
+      {org.logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={org.logoUrl} alt="" className="h-8 w-auto max-w-20 object-contain" />
+      ) : (
+        <span
+          aria-hidden
+          className="flex size-9 items-center justify-center rounded-lg bg-brand text-lg font-black text-primary-foreground"
+        >
+          {org.name.charAt(0).toUpperCase()}
+        </span>
+      )}
+    </Link>
+  );
+
   const actions = (className: string) => (
     <div className={className}>
-      {/* Standard: the search box is inline on desktop, so phones get a
-        * button. Large search has its own row on phones. Centred keeps its
-        * search button on the left, by the menu. */}
-      {layout === 'standard' && searchButton('lg:hidden')}
       <IconAction label="Wishlist" href="/wishlist" count={hydrated ? wishCount : 0}>
         <Heart className="size-5" />
       </IconAction>
       <IconAction label="Open bag" onClick={openCart} count={cartCount}>
         <ShoppingBag className="size-5" />
       </IconAction>
-      {/* Hidden below sm: four 44px circles plus the wordmark overflow a
-        * 390px viewport. Account is reachable from the hamburger menu. */}
       {/* Signed out, this goes to sign-in rather than to a page that
         * would only bounce there — and says so, so nobody taps it
         * expecting their orders. Resolved on the server (see
@@ -204,7 +211,6 @@ export function SiteHeader({
       <IconAction
         label={shopper ? `Your account, ${shopper.firstName}` : 'Sign in'}
         href={shopper ? '/account' : '/account/sign-in'}
-        className="hidden sm:flex"
       >
         <User className="size-5" />
       </IconAction>
@@ -216,38 +222,33 @@ export function SiteHeader({
       data-sf-header
       data-sf-header-layout={layout}
       className={cn(
-        'sticky top-0 z-40 bg-background/95 backdrop-blur transition-shadow',
+        // Below the phone's status bar in an edge-to-edge app (globals.css).
+        'sticky top-[var(--inset-top)] z-40 bg-background/95 backdrop-blur transition-shadow',
         scrolled && 'shadow-sm shadow-foreground/5',
       )}
     >
+      {/* Phones: the search box, and nothing else (see the note at the top). */}
+      <div className="sf-container flex h-16 items-center gap-2.5 lg:hidden">
+        {!isMobileRuntime && phoneMark}
+        <HeaderSearch className="min-w-0 flex-1" />
+      </div>
+
       {layout === 'centered' ? (
-        <div className="sf-container grid h-18 grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            {menuButton}
-            {searchButton()}
-          </div>
+        <div className="sf-container hidden h-18 grid-cols-[1fr_auto_1fr] items-center gap-3 lg:grid">
+          <div className="flex items-center gap-1.5">{searchButton()}</div>
           {logo}
-          {actions('flex items-center justify-end gap-1.5 lg:gap-2')}
+          {actions('flex items-center justify-end gap-2')}
         </div>
       ) : (
-        <div className="sf-container flex h-18 items-center gap-3 lg:gap-8">
-          {menuButton}
+        <div className="sf-container hidden h-18 items-center gap-8 lg:flex">
           {logo}
           <HeaderSearch
             className={cn(
-              'hidden flex-1 transition-opacity duration-200 lg:block',
+              'flex-1 transition-opacity duration-200',
               showInlineSearch ? 'opacity-100' : 'pointer-events-none opacity-0',
             )}
           />
-          {actions('ml-auto flex items-center gap-1.5 lg:ml-0 lg:gap-2')}
-        </div>
-      )}
-
-      {/* Large search: the box is always in view, and on a phone it gets its
-        * own full-width row rather than hiding behind an icon. */}
-      {layout === 'search' && (
-        <div className="sf-container pb-3 lg:hidden">
-          <HeaderSearch />
+          {actions('flex items-center gap-2')}
         </div>
       )}
 

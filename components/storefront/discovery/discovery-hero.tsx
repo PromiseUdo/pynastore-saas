@@ -122,24 +122,27 @@ export function DiscoveryHero({
   };
 
   return (
-    <section className="sf-container pb-2 pt-6 lg:pb-6 lg:pt-14">
+    <section className="sf-container pb-2 pt-4 lg:pb-6 lg:pt-14">
       <div className="mx-auto max-w-3xl text-center">
+        {/* On phones (ROADMAP 16.5) the header IS the search box, so the
+          * heading and this box would only repeat it; the assistant, "help
+          * me choose" and image search below stay. */}
         {/* <p className="inline-flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-teal-soft px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-teal">
           <Sparkles aria-hidden className="size-3.5" />
           Shop by describing it
         </p> */}
 
-        <h1 className="mt-5 text-[1.875rem] leading-[1.12] sm:text-5xl lg:text-[3.5rem]">
+        <h1 className="mt-5 text-[1.875rem] leading-[1.12] max-lg:sr-only sm:text-5xl lg:text-[3.5rem]">
           What are you looking for?
         </h1>
 
-        <p className="mx-auto mt-4 max-w-lg text-[0.9375rem] leading-relaxed text-muted-foreground lg:text-base">
+        <p className="mx-auto mt-4 max-w-lg text-[0.9375rem] leading-relaxed text-muted-foreground max-lg:hidden lg:text-base">
           Describe what you need in your own words — or let {org.name} narrow it
           down for you.
         </p>
 
         {/* ── the tool ─────────────────────────────────────────────────── */}
-        <form onSubmit={onSearch} role="search" className="mt-7">
+        <form onSubmit={onSearch} role="search" className="mt-7 max-lg:hidden">
           <label htmlFor="sf-discovery-input" className="sr-only">
             Search products, or describe what you need
           </label>
@@ -176,7 +179,7 @@ export function DiscoveryHero({
         </form>
 
         {/* ── the other two ways in ────────────────────────────────────── */}
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+        <div className="flex flex-wrap items-center justify-center gap-2.5 lg:mt-4">
           <SecondaryAction
             active={false}
             onClick={askAssistant}

@@ -255,31 +255,42 @@
 /* ─────────────────────────────────────────────────
    Mobile / Capacitor native shell
    ───────────────────────────────────────────────── */
+/* The space the phone's own bars take (status bar, notch, home indicator).
+   Two sources, whichever is bigger: the browser's env() values, and the
+   --safe-area-inset-* variables Capacitor's Android shell sets (Android 15+
+   draws apps edge to edge, under the status bar, and older WebViews report 0
+   through env()). Everywhere else both are 0. */
+:root {
+  --inset-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --inset-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+  --inset-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
+  --inset-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
+}
+
 @layer utilities {
-  /* Safe-area padding helpers (notch, home indicator, rounded corners).
-     max() keeps a sane minimum on devices with zero insets. */
+  /* Safe-area padding helpers (notch, home indicator, rounded corners). */
   .safe-top {
-    padding-top: max(0px, env(safe-area-inset-top));
+    padding-top: var(--inset-top);
   }
   .safe-bottom {
-    padding-bottom: max(0px, env(safe-area-inset-bottom));
+    padding-bottom: var(--inset-bottom);
   }
   /* Additive variants: they keep the element's own padding and only add the
      inset on top of it. `safe-bottom` alone REPLACES a `p-4`/`py-3`, which on a
      desktop browser (inset = 0) leaves content flush with the edge. */
   .safe-pb-3 {
-    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(0.75rem + var(--inset-bottom));
   }
   .safe-pb-4 {
-    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(1rem + var(--inset-bottom));
   }
   .safe-y {
-    padding-top: max(0px, env(safe-area-inset-top));
-    padding-bottom: max(0px, env(safe-area-inset-bottom));
+    padding-top: var(--inset-top);
+    padding-bottom: var(--inset-bottom);
   }
   .safe-x {
-    padding-left: max(0px, env(safe-area-inset-left));
-    padding-right: max(0px, env(safe-area-inset-right));
+    padding-left: var(--inset-left);
+    padding-right: var(--inset-right);
   }
 }
 

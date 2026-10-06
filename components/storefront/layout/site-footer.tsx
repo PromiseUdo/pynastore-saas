@@ -57,7 +57,7 @@ export function SiteFooter({
   const year = new Date().getFullYear();
 
   return (
-    <footer className="mt-16 border-t bg-muted/30">
+    <footer className="mt-16 hidden border-t bg-muted/30 lg:block">
       <div className="sf-container grid gap-10 py-12 lg:grid-cols-[1.4fr_2fr]">
         <div className="max-w-sm">
           <p className="font-display text-lg font-semibold">{org.name}</p>

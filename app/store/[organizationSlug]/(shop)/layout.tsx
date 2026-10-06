@@ -97,12 +97,19 @@ export default async function ShopLayout({
         * notice nobody reads. */}
       {appListing && <GetAppBanner listing={appListing} />}
       {bar && <CampaignBar announcement={bar} />}
-      <UtilityBar deliveryNote={deliveryHeadline(delivery.options)} />
+      {/* Desktop only (ROADMAP 16.5): on a phone it sat where the status bar
+        * is, and the Account tab carries the dark-mode switch instead. */}
+      <div className="hidden lg:block">
+        <UtilityBar deliveryNote={deliveryHeadline(delivery.options)} />
+      </div>
       {/* With the merchant's own slides on the homepage there is no
         * discovery hero, so this header carries the only search box and
         * shows it straight away. */}
       <SiteHeader navItems={navItems} heroHasSearch={look.hero.length === 0} layout={design.header.layout} />
-      <main className="flex-1 pb-16 lg:pb-0">{children}</main>
+      {/* Room for the bottom tab bar and the phone's home indicator below it. */}
+      <main className="flex-1 pb-[calc(4.5rem+var(--inset-bottom))] lg:pb-0">{children}</main>
+      {/* Desktop only (ROADMAP 16.5): on a phone, the Account tab carries the
+        * shop's pages and contact details, and the app is for shopping. */}
       <SiteFooter
         columns={footerColumns}
         paymentNote={paymentHeadline(checkout.paymentMethods)}

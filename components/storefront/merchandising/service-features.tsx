@@ -5,6 +5,8 @@
  * only forms once they're considering buying. Up at the top, under the hero,
  * they're wallpaper.
  *
+ * Not shown on phones (ROADMAP 16.5).
+ *
  * Server component — nothing here is interactive, so it costs no client JS.
  */
 import { BadgeCheck, Headphones, RotateCcw, ShieldCheck, Truck } from 'lucide-react';
@@ -26,7 +28,9 @@ export function ServiceFeatures({
   if (!features.length) return null;
 
   return (
-    <section className="sf-container sf-section">
+    // Desktop only (ROADMAP 16.5): on a phone the shop is for shopping; the
+    // product page and checkout state delivery and payment where they apply.
+    <section className="sf-container sf-section max-lg:hidden">
       <SectionHeader
         /* The heading promises nothing of its own: each tile below restates
           * something this store's settings actually enforce, and a shop with

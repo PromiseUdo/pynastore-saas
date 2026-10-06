@@ -63,11 +63,30 @@ export function NativeShell() {
         }
       };
 
+      /* The icons must contrast with what is BEHIND them: the shop's own
+       * light or dark theme (which the shopper can switch, and which can
+       * differ from the phone's setting) — the phone's setting only where
+       * there is no shop on screen (the store picker). Android 15+ draws the
+       * page under the status bar, so this is what keeps the clock and
+       * signal readable (ROADMAP 16.5). */
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      applyStatusBar(mq.matches);
-      const onScheme = (e: MediaQueryListEvent) => applyStatusBar(e.matches);
-      mq.addEventListener('change', onScheme);
-      cleanups.push(() => mq.removeEventListener('change', onScheme));
+      const isDark = () => {
+        const shop = document.querySelector<HTMLElement>('[data-storefront]');
+        return shop ? shop.dataset.sfTheme === 'dark' : mq.matches;
+      };
+      let last: boolean | null = null;
+      const update = () => {
+        const dark = isDark();
+        if (dark === last) return;
+        last = dark;
+        applyStatusBar(dark);
+      };
+      update();
+      mq.addEventListener('change', update);
+      // The theme switch, and moving between pages with and without a shop.
+      const observer = new MutationObserver(update);
+      observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-sf-theme'] });
+      cleanups.push(() => mq.removeEventListener('change', update), () => observer.disconnect());
 
       const showHandle = await Keyboard.addListener('keyboardWillShow', () => {
         document.documentElement.classList.add('keyboard-open');
