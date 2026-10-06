@@ -5193,7 +5193,12 @@ phone-width screen** (the app and phone browsers alike; desktop unchanged):
   a strip in the shop's own background sits behind the clock, and the
   header sticks just under it. The icons follow the shop's light/dark theme,
   not the phone's (components/native/native-shell.tsx). Web-side only — no
-  app rebuild.
+  app rebuild. **Fixed 2026-10-06 after the first phone test:** the icons
+  were white on white — Capacitor's `Style.Dark` means LIGHT icons (it names
+  the background), and the code had it backwards. Also: on Android 15+ with
+  a WebView older than 140, Android leaves its own white gap above the page
+  instead of letting the page draw under the bar; the icons are then always
+  dark.
 - **Header = search box.** No menu, logo, search/saved/bag/account buttons
   on phones; a phone BROWSER keeps a small logo mark (nothing else there names
   the shop), the app doesn't (its name is under the icon).

@@ -55,37 +55,54 @@ export function NativeShell() {
         import('@capacitor/keyboard'),
       ]);
 
-      const applyStatusBar = (dark: boolean) => {
-        // Style.Light = light text (for dark backgrounds), Style.Dark = dark text.
-        void StatusBar.setStyle({ style: dark ? Style.Light : Style.Dark });
+      /* Capacitor names its styles after the BACKGROUND they suit, not the
+       * icons: Style.Dark = LIGHT icons for a dark background, Style.Light =
+       * DARK icons for a light one (@capacitor/status-bar definitions). */
+      const applyStatusBar = (darkBehind: boolean) => {
+        void StatusBar.show();
+        void StatusBar.setStyle({ style: darkBehind ? Style.Dark : Style.Light });
         if (platform === 'android') {
-          void StatusBar.setBackgroundColor({ color: dark ? '#0b0b0c' : '#ffffff' });
+          // Colours the bar itself on Android 14 and older; ignored from 15,
+          // where apps are drawn edge to edge.
+          void StatusBar.setBackgroundColor({ color: darkBehind ? '#0b0b0c' : '#ffffff' });
         }
       };
 
-      /* The icons must contrast with what is BEHIND them: the shop's own
-       * light or dark theme (which the shopper can switch, and which can
-       * differ from the phone's setting) — the phone's setting only where
-       * there is no shop on screen (the store picker). Android 15+ draws the
-       * page under the status bar, so this is what keeps the clock and
-       * signal readable (ROADMAP 16.5). */
+      /*
+       * The icons must contrast with what is BEHIND them (ROADMAP 16.5):
+       *
+       *  - The page draws under the bar (Android 15+ with an up-to-date
+       *    WebView: Capacitor then sets --safe-area-inset-top) or the bar is
+       *    coloured by us (Android 14 and older): behind it is the shop's own
+       *    light or dark theme, which the shopper can switch — or the phone's
+       *    setting where there is no shop on screen (the store picker).
+       *  - Android 15+ with an older WebView instead leaves its own gap above
+       *    the page, in the window's background — white — whatever the shop's
+       *    theme. Dark icons, always.
+       */
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      const isDark = () => {
+      const androidMajor = Number(navigator.userAgent.match(/Android (\d+)/)?.[1] ?? 0);
+      const pageUnderBar = () =>
+        parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-top')) > 0;
+      const darkBehind = () => {
+        if (platform === 'android' && androidMajor >= 15 && !pageUnderBar()) return false;
         const shop = document.querySelector<HTMLElement>('[data-storefront]');
         return shop ? shop.dataset.sfTheme === 'dark' : mq.matches;
       };
       let last: boolean | null = null;
       const update = () => {
-        const dark = isDark();
+        const dark = darkBehind();
         if (dark === last) return;
         last = dark;
         applyStatusBar(dark);
       };
       update();
       mq.addEventListener('change', update);
-      // The theme switch, and moving between pages with and without a shop.
+      // The theme switch, moving between pages with and without a shop, and
+      // Capacitor setting the inset variables on <html> once the page loads.
       const observer = new MutationObserver(update);
       observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-sf-theme'] });
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
       cleanups.push(() => mq.removeEventListener('change', update), () => observer.disconnect());
 
       const showHandle = await Keyboard.addListener('keyboardWillShow', () => {
