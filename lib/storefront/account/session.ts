@@ -147,7 +147,8 @@ export async function verifySessionToken(
 
 /* ---------------- cookie plumbing ---------------- */
 
-async function isSecureRequest(): Promise<boolean> {
+/** Also used for the chat guest cookie (lib/chat/identity.ts), which must match these settings. */
+export async function isSecureRequest(): Promise<boolean> {
   const host = (await headers()).get('host') ?? '';
   return !isLocalHostname(host) && process.env.NODE_ENV === 'production';
 }
@@ -240,7 +241,15 @@ const loadShopper = cache(async (slug: string, token: string): Promise<Shopper |
 export async function getShopper(): Promise<Shopper | null> {
   const slug = await currentStoreSlug();
   if (!slug) return null;
+  return getShopperForStore(slug);
+}
 
+/**
+ * The signed-in shopper of a store the caller has already established — for
+ * /api/storefront/* routes, which carry no x-org-slug header and get the
+ * store from resolveRequestStore instead. Never pass a slug from a body.
+ */
+export async function getShopperForStore(slug: string): Promise<Shopper | null> {
   const token = (await cookies()).get(sessionCookieName(slug))?.value;
   if (!token) return null;
 

@@ -21,6 +21,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
   const [session, entitlements, requestHeaders] = await Promise.all([auth(), getOrganizationEntitlements(), headers()]);
   const { plan, access } = entitlements;
   const canManageBilling = hasPermission(ctx.membership.role.permissions, PERMISSIONS.BILLING_MANAGE);
+  const canViewMessages = hasPermission(ctx.membership.role.permissions, PERMISSIONS.MESSAGES_VIEW);
 
   /* A lapsed workspace opens only billing and the orders already placed
    * (ROADMAP 12.1). The path comes from proxy.ts, which sets it for every
@@ -63,6 +64,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         planState: access.state,
       }}
       orgs={orgs}
+      canViewMessages={canViewMessages && !closed && access.state !== 'lapsed'}
       user={{
         name: session?.user?.name ?? null,
         email: session?.user?.email ?? null,

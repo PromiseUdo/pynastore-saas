@@ -24,7 +24,7 @@ export default async function PrivacyPage() {
 
       <AccountCard
         title="Download your data"
-        description="A copy of everything this store holds about your account: your details, saved addresses, wishlist, orders, reviews and questions."
+        description="A copy of everything this store holds about your account: your details, saved addresses, wishlist, orders, reviews, questions and your messages with the store."
       >
         <a
           href="/account/export"
@@ -41,7 +41,7 @@ export default async function PrivacyPage() {
           <p>Deleting your account:</p>
           <ul className="list-disc space-y-1 pl-5">
             <li>signs you out everywhere and removes your password and Google sign-in;</li>
-            <li>deletes your saved addresses, wishlist, reviews and questions;</li>
+            <li>deletes your saved addresses, wishlist, reviews, questions and your messages with the store;</li>
             <li>removes your email and phone number from the store’s customer list, and stops any marketing.</li>
           </ul>
           <p>

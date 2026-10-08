@@ -8,6 +8,7 @@ import { usePublicPathname } from '@/lib/storefront/use-public-pathname';
 import { useUIStore } from '@/lib/storefront/stores/ui-store';
 import { useCartCount } from '@/lib/storefront/stores/cart-store';
 import { useWishlistStore } from '@/lib/storefront/stores/wishlist-store';
+import { useChatUnread } from '@/components/storefront/chat/chat-config';
 
 /**
  * Bottom navigation on every phone-width screen — the app and phone
@@ -22,6 +23,8 @@ export function MobileTabBar() {
   const openCart = useUIStore((s) => s.openCart);
   const cartCount = useCartCount();
   const wishCount = useWishlistStore((s) => s.items.length);
+  // The store replied: the way to it is the Account screen, one tap away.
+  const chatUnread = useChatUnread();
 
   const isActive = (href: string) => pathname === href;
 
@@ -62,7 +65,14 @@ export function MobileTabBar() {
         href="/account/menu"
         className={cn(tab, pathname.startsWith('/account') ? 'text-brand' : 'text-muted-foreground')}
       >
-        <User className="size-5" /> Account
+        <span className="relative">
+          <User className="size-5" />
+          {hydrated && chatUnread > 0 && (
+            <span aria-hidden className="absolute -right-1 -top-0.5 size-2 rounded-full bg-brand ring-2 ring-background" />
+          )}
+        </span>
+        Account
+        {hydrated && chatUnread > 0 && <span className="sr-only"> — the store has replied to your message</span>}
       </Link>
     </nav>
   );

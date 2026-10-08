@@ -13,7 +13,7 @@
  */
 import type { Metadata } from 'next';
 import { PLATFORM_DOMAIN, PLATFORM_NAME, PLATFORM_OPERATOR, PLATFORM_OPERATOR_REGISTRATION } from '@/lib/brand';
-import { CLOSURE_GRACE_DAYS, FINANCIAL_RETENTION_YEARS } from '@/lib/data-rights/policy';
+import { CLOSURE_GRACE_DAYS, FINANCIAL_RETENTION_YEARS, GUEST_CHAT_RETENTION_MONTHS } from '@/lib/data-rights/policy';
 import Link from 'next/link';
 import {
   LegalContact,
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   alternates: { canonical: `https://${PLATFORM_DOMAIN}/privacy` },
 };
 
-const UPDATED = '4 October 2026';
+const UPDATED = '8 October 2026';
 
 export default function PrivacyPolicyPage() {
   return (
@@ -139,10 +139,17 @@ export default function PrivacyPolicyPage() {
             containing that product, and merchants can hide a review but cannot write or edit one.
           </li>
           <li>
-            In a store’s own phone app, only if the shopper turns on notifications for an order: the
-            phone’s notification token and which orders it asked about. It is used only to send updates
-            about those orders, and is removed 60 days later, or straight away when the phone’s platform
-            reports the app was removed.
+            Messages a shopper sends a store through its chat, and the store’s replies. A shopper can chat
+            without an account; they may give a name, and nothing else is asked for. The store’s staff see the
+            conversation; the shopper sees the store’s replies signed “Store team”. Merchants can turn chat off,
+            and can block a shopper from sending more.
+          </li>
+          <li>
+            In a store’s own phone app, only if the shopper turns on notifications for an order or for a
+            chat: the phone’s notification token and which orders or chat it asked about. It is used only
+            to say an order changed or that the store replied — a reply notification never contains the
+            message itself. Order notifications end 60 days later; a chat’s end when the chat is removed;
+            both end straight away when the phone’s platform reports the app was removed.
           </li>
         </LegalList>
 
@@ -344,6 +351,12 @@ export default function PrivacyPolicyPage() {
             invalidates it immediately.
           </li>
           <li>
+            <strong className="font-medium text-foreground">Chat cookie.</strong> Set only when someone sends a
+            store a message without being signed in, so their browser can find that conversation again. It is
+            scoped to that store’s hostname, holds a random key (we keep only a scrambled form of it), and lasts
+            up to 180 days. Opening the chat without sending anything sets nothing.
+          </li>
+          <li>
             <strong className="font-medium text-foreground">Preference cookies.</strong> Small cookies such
             as a store’s light/dark theme choice.
           </li>
@@ -374,15 +387,20 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <strong className="font-medium text-foreground">A deleted shopper account.</strong> Removed straight away:
-            the sign-in, saved addresses, wishlist, reviews, questions, marketing consent and contact details on the
-            store’s customer record. The name and delivery details written on past orders and invoices stay until
+            the sign-in, saved addresses, wishlist, reviews, questions, messages with the store, marketing consent and
+            contact details on the store’s customer record. The name and delivery details written on past orders and invoices stay until
             those records are {FINANCIAL_RETENTION_YEARS} years old, then they are removed too.
           </li>
           <li>
             <strong className="font-medium text-foreground">A closed store.</strong> It goes offline at once and can be
             restored on request for {CLOSURE_GRACE_DAYS} days. After that we delete its files and photos, store pages,
-            staff access, payout details and every shopper’s account and contact details; its business records are
+            staff access, payout details, every chat with shoppers, and every shopper’s account and contact details;
+            its business records are
             kept until {FINANCIAL_RETENTION_YEARS} years after closing, and then the whole store is erased.
+          </li>
+          <li>
+            <strong className="font-medium text-foreground">A guest’s chat with a store</strong> (sent without signing
+            in) is removed once nobody has written in it for {GUEST_CHAT_RETENTION_MONTHS} months.
           </li>
           <li>
             Short-lived items expire on their own — password reset tokens, email-change confirmations,
@@ -428,7 +446,8 @@ export default function PrivacyPolicyPage() {
           <li>
             <strong className="font-medium text-foreground">With the merchant whose store you use.</strong> A
             shopper’s account, orders, addresses and reviews are visible to that merchant’s staff — that is
-            how the merchant fulfils the order.
+            how the merchant fulfils the order — and so are any messages the shopper sends that store, because
+            that is who they are writing to.
           </li>
           <li>
             <strong className="font-medium text-foreground">With an integration a merchant has authorized</strong>,

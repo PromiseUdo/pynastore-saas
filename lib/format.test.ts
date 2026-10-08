@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { enumLabel, formatDate, formatMoney, formatMoneyRange, formatRelativeTime } from './format';
+import { enumLabel, formatDate, formatDateTime, formatMoney, formatMoneyRange, formatRelativeTime, formatTime } from './format';
 
 describe('format', () => {
   it('formats naira', () => {
@@ -34,5 +34,22 @@ describe('formatRelativeTime', () => {
 
   it('shows a dash for nothing', () => {
     expect(formatRelativeTime(null, now)).toBe('—');
+  });
+});
+
+describe('formatTime and formatDateTime', () => {
+  it('shows the time of day in Lagos time, whatever the server’s zone', () => {
+    // 13:41 UTC is 14:41 in Lagos (UTC+1, no daylight saving)
+    expect(formatTime('2026-05-14T13:41:00Z')).toBe('2:41 pm');
+    expect(formatDateTime('2026-05-14T13:41:00Z')).toBe('14 May 2026, 2:41 pm');
+  });
+
+  it('crosses midnight with Lagos, not UTC', () => {
+    expect(formatDateTime('2026-05-14T23:30:00Z')).toBe('15 May 2026, 12:30 am');
+  });
+
+  it('shows a dash for nothing', () => {
+    expect(formatTime(null)).toBe('—');
+    expect(formatDateTime(undefined)).toBe('—');
   });
 });

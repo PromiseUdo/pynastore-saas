@@ -10,7 +10,8 @@
  *
  *   - gone now: the sign-in (password, Google link, sessions, reset and
  *     email-change links), saved addresses, wishlist, reviews, questions and
- *     "helpful" votes, the merchant's notes and tags, marketing consent;
+ *     "helpful" votes, their chat with the store (ROADMAP 17.5), the
+ *     merchant's notes and tags, marketing consent;
  *   - contact details cleared from the customer record, so the store can't
  *     reach them through it, and the email is free to register again;
  *   - kept, for the retention period only: the orders and invoices, with the
@@ -52,6 +53,8 @@ export interface ShopperExport {
   }[];
   reviews: { product: string; rating: number; title: string; body: string; writtenAt: string }[];
   questions: { product: string; question: string; answer: string | null; askedAt: string }[];
+  /** their chat with the store (ROADMAP 17.5); the store's side is signed "Store team", as they saw it */
+  messages: { from: 'you' | 'Store team'; message: string; sentAt: string }[];
 }
 
 /** Everything the store holds about this shopper, in plain JSON they can keep. */
@@ -66,6 +69,10 @@ export async function exportShopperData(organizationId: string, customerId: stri
       orders: { include: { lineItems: true }, orderBy: { placedAt: 'asc' } },
       reviews: { include: { product: { select: { name: true } } }, orderBy: { createdAt: 'asc' } },
       questions: { include: { product: { select: { name: true } } }, orderBy: { createdAt: 'asc' } },
+      chatConversations: {
+        where: { organizationId },
+        select: { messages: { orderBy: { seq: 'asc' }, select: { sender: true, body: true, createdAt: true } } },
+      },
     },
   });
   if (!customer) return null;
@@ -114,6 +121,13 @@ export async function exportShopperData(organizationId: string, customerId: stri
     })),
     reviews: customer.reviews.map((r) => ({ product: r.product.name, rating: r.rating, title: r.title, body: r.body, writtenAt: r.createdAt.toISOString() })),
     questions: customer.questions.map((q) => ({ product: q.product.name, question: q.body, answer: q.answerBody, askedAt: q.createdAt.toISOString() })),
+    messages: customer.chatConversations.flatMap((c) =>
+      c.messages.map((m) => ({
+        from: m.sender === 'CUSTOMER' ? ('you' as const) : ('Store team' as const),
+        message: m.body,
+        sentAt: m.createdAt.toISOString(),
+      })),
+    ),
   };
 }
 
@@ -145,6 +159,8 @@ export async function deleteShopperAccount(organizationId: string, customerId: s
     await tx.productReviewVote.deleteMany({ where: { customerId } });
     await tx.productReview.deleteMany({ where: { customerId } });
     await tx.productQuestion.deleteMany({ where: { customerId } });
+    // Their chat with the store, both sides (ROADMAP 17.5); messages cascade.
+    await tx.chatConversation.deleteMany({ where: { organizationId, customerId } });
     // Their phones stop hearing about their orders (ROADMAP 16.4).
     await tx.pushOrderWatch.deleteMany({ where: { order: { customerId } } });
 

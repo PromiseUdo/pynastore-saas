@@ -40,6 +40,9 @@ model User {
   platformAuditLogs   PlatformAuditLog[]
   passwordResetTokens PasswordResetToken[]
   counterSales        Order[]
+  chatMessages        ChatMessage[]
+  resolvedChats       ChatConversation[] @relation("ChatResolvedBy")
+  blockedChats        ChatConversation[] @relation("ChatBlockedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -229,6 +232,21 @@ model Organization {
    */
   storefrontDarkByDefault Boolean @default(false)
 
+  /**
+   * Messages (ROADMAP 17): whether shoppers can message the store from the
+   * storefront. Off until the merchant turns it on — a chat button nobody
+   * answers is worse than none. The greeting is the merchant's own words,
+   * shown as an intro above the conversation; null shows fixed interface
+   * text instead, never a message we wrote for them.
+   */
+  storefrontChatEnabled  Boolean   @default(false)
+  storefrontChatGreeting String?
+  /**
+   * When anyone at the store last had Messages open (written at most once a
+   * minute). The unanswered-message email (17.4) holds off while it's recent.
+   */
+  chatInboxSeenAt        DateTime?
+
   // Paid-tier custom domains (e.g. dashboard.acme.com, acme.com). Null unless
   // the org has provisioned + verified DNS for that domain.
   customAdminDomain String? @unique
@@ -312,6 +330,10 @@ model Organization {
   shopDomain          ShopDomain?
   mobileApp           MobileApp?
   pushDevices         PushDevice[]
+
+  // Messages (ROADMAP 17)
+  chatConversations ChatConversation[]
+  chatMessages      ChatMessage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -809,6 +831,7 @@ model InventoryItem {
   reviews               ProductReview[]
   questions             ProductQuestion[]
   socialPosts           SocialPost[]
+  chatMessages          ChatMessage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1326,6 +1349,7 @@ model Customer {
   reviews                ProductReview[]
   reviewVotes            ProductReviewVote[]
   questions              ProductQuestion[]
+  chatConversations      ChatConversation[]
   mergedInto             Customer?                    @relation("CustomerMerge", fields: [mergedIntoId], references: [id])
   mergedFrom             Customer[]                   @relation("CustomerMerge")
 
@@ -3594,6 +3618,7 @@ model PushDevice {
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   watches      PushOrderWatch[]
+  chatWatches  PushChatWatch[]
 
   @@unique([appId, token])
   @@index([organizationId])
@@ -4339,4 +4364,163 @@ model CampaignPrice {
   @@unique([campaignId, inventoryItemId])
   @@index([organizationId, inventoryItemId])
   @@map("campaign_prices")
+}
+
+// ============================================================
+// MESSAGES (ROADMAP 17) — shoppers chat with the store
+// ============================================================
+
+/**
+ * One conversation per shopper per store, like a messaging-app thread: a
+ * signed-in shopper is their `customerId`, a guest is the hash of a random
+ * key kept in a cookie (lib/chat/identity.ts). A guest is never given a
+ * Customer row — that would put strangers in the customer list.
+ * Nothing is created until the first message is sent. Messages are ordered
+ * by `seq`, handed out from `lastSeq` inside the send transaction, so a
+ * client sorts and removes duplicates by number, never by clock.
+ * Read state is a high-water mark per side: unread = lastSeq − readSeq.
+ * Each side's own message moves its own mark, so a store reply leaves the
+ * store with nothing unread and the shopper with one.
+ */
+model ChatConversation {
+  id             String  @id @default(cuid())
+  organizationId String
+  customerId     String?
+  /**
+   * sha256 of the guest's cookie key; the key itself is never stored
+   */
+  guestKeyHash   String?
+  /**
+   * what a guest chose to be called, if anything
+   */
+  guestName      String?
+
+  status ChatConversationStatus @default(OPEN)
+
+  lastSeq       Int        @default(0)
+  lastMessageAt DateTime
+  lastSender    ChatSender
+  /**
+   * the start of the latest message, so the inbox list needs no join
+   */
+  lastPreview   String
+
+  staffReadSeq    Int       @default(0)
+  customerReadSeq Int       @default(0)
+  /**
+   * when the shopper last had the conversation open — the reply push (17.4)
+   * stays quiet while it's recent
+   */
+  customerSeenAt  DateTime?
+  /**
+   * set when staff were emailed about it; cleared when someone reads it, so
+   * one unanswered stretch sends one email
+   */
+  staffAlertedAt  DateTime?
+
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+  /**
+   * a blocked shopper can't send; the history stays
+   */
+  blockedAt        DateTime?
+  blockedByUserId  String?
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer?     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  resolvedBy   User?         @relation("ChatResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  blockedBy    User?         @relation("ChatBlockedBy", fields: [blockedByUserId], references: [id], onDelete: SetNull)
+  messages     ChatMessage[]
+  pushWatches  PushChatWatch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, customerId])
+  @@unique([organizationId, guestKeyHash])
+  @@index([organizationId, status, lastMessageAt])
+  @@index([organizationId, lastMessageAt])
+  @@index([customerId])
+  @@index([resolvedByUserId])
+  @@index([blockedByUserId])
+  @@map("chat_conversations")
+}
+
+/**
+ * One message. Plain text only, rendered as text. `organizationId` is
+ * repeated from the conversation so every read can name the store.
+ */
+model ChatMessage {
+  id             String     @id @default(cuid())
+  conversationId String
+  organizationId String
+  seq            Int
+  sender         ChatSender
+  /**
+   * who at the store wrote it — for the merchant only; shoppers always see
+   * "Store team"
+   */
+  staffUserId    String?
+  body           String
+  /**
+   * the product page it was sent from, if any
+   */
+  productId      String?
+  /**
+   * made by the browser, so a retried or double-clicked send saves once
+   */
+  clientId       String
+
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staffUser    User?            @relation(fields: [staffUserId], references: [id], onDelete: SetNull)
+  product      InventoryItem?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@unique([conversationId, seq])
+  @@unique([conversationId, clientId])
+  @@index([organizationId])
+  @@index([staffUserId])
+  @@index([productId])
+  @@map("chat_messages")
+}
+
+/**
+ * A phone, in a store's own app, that asked to be told when the store
+ * replies in this conversation (ROADMAP 17.4) — the chat's equivalent of
+ * PushOrderWatch. Only a shopper who pressed "Turn on notifications" in the
+ * chat (or had already allowed them) is here, and only for their own
+ * conversation. Goes when the conversation or the device does.
+ */
+model PushChatWatch {
+  deviceId       String
+  conversationId String
+  createdAt      DateTime @default(now())
+
+  device       PushDevice       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@id([deviceId, conversationId])
+  @@index([conversationId])
+  @@map("push_chat_watches")
+}
+
+enum ChatConversationStatus {
+  /**
+   * in progress; "awaiting reply" is worked out from who wrote last
+   */
+  OPEN
+  /**
+   * the store has finished with it; any new message reopens it
+   */
+  RESOLVED
+}
+
+/**
+ * Who wrote a message. SYSTEM or BOT get added when something sends them.
+ */
+enum ChatSender {
+  CUSTOMER
+  STAFF
 }

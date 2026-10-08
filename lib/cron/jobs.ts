@@ -123,7 +123,7 @@ export const CRON_JOBS = {
   'data-retention': {
     title: 'Data retention',
     description:
-      'Carries out the retention rules: clears closed shops after 30 days, erases them after 6 years, and removes deleted shoppers’ details from records past 6 years. Without it, data is kept longer than the privacy policy says.',
+      'Carries out the retention rules: clears closed shops after 30 days, erases them after 6 years, and removes deleted shoppers’ details from records past 6 years, and removes guest chats nobody has written in for a year. Without it, data is kept longer than the privacy policy says.',
     schedule: 'Daily at 4am Lagos time',
     everyMinutes: 24 * 60,
     run: () => runDataRetention(),
@@ -133,6 +133,7 @@ export const CRON_JOBS = {
         n(r, 'workspacesErased') ? `${plural(n(r, 'workspacesErased'), 'shop', 'shops')} erased` : null,
         n(r, 'ordersAnonymized') ? `${plural(n(r, 'ordersAnonymized'), 'order', 'orders')} anonymised` : null,
         n(r, 'customersAnonymized') ? `${plural(n(r, 'customersAnonymized'), 'customer', 'customers')} anonymised` : null,
+        n(r, 'guestChatsRemoved') ? `${plural(n(r, 'guestChatsRemoved'), 'old guest chat', 'old guest chats')} removed` : null,
         n(r, 'pushWatchesRemoved') ? `${plural(n(r, 'pushWatchesRemoved'), 'order notification', 'order notifications')} ended` : null,
         n(r, 'failed') ? `${n(r, 'failed')} failed` : null,
       ]

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Sidebar, SidebarProvider } from './sidebar';
 import { Header } from './header';
 import { Toaster } from '@/components/ui/toaster';
+import { InboxWatcher } from '@/components/messages/inbox-watcher';
 import type { OrgSwitcherItem } from '@/components/org-switcher';
 
 export type OrgInfo = {
@@ -30,6 +31,8 @@ type DashboardLayoutProps = {
   headerActions?: React.ReactNode;
   /** the trial / plan-ended notice, above every page (ROADMAP 12.1) */
   notice?: React.ReactNode;
+  /** holds `messages.view`: the sidebar shows the unread count (ROADMAP 17.2) */
+  canViewMessages?: boolean;
 };
 
 export function DashboardLayout({
@@ -40,11 +43,12 @@ export function DashboardLayout({
   breadcrumbs,
   headerActions,
   notice,
+  canViewMessages = false,
 }: DashboardLayoutProps) {
   return (
     <SidebarProvider>
       <div className="flex h-screen overflow-hidden">
-        <Sidebar org={org} orgs={orgs} user={user} />
+        <Sidebar org={org} orgs={orgs} user={user} showMessageCount={canViewMessages} />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <Header breadcrumbs={breadcrumbs} actions={headerActions} user={user} />
           {notice}
@@ -52,6 +56,7 @@ export function DashboardLayout({
         </div>
       </div>
       <Toaster />
+      {canViewMessages && <InboxWatcher />}
     </SidebarProvider>
   );
 }

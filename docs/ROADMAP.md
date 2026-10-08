@@ -5230,6 +5230,542 @@ ticket refused without its verifier; `npm run test:local` and `next build`.
 
 ---
 
+## Phase 17 — Messages: shoppers chat with the store — DONE (2026-10-08), except 17.6's whole-phase acceptance on a real phone
+
+Agreed 2026-10-07. Prospective merchants ask for live chat: a shopper on a
+storefront writes, the store replies from the admin, and the shopper sees the
+reply without refreshing. **People only — no AI, no bot, no automatic reply**
+in this phase. The shopping assistant (Gemini) stays a separate thing.
+
+**What already exists, and what doesn't (audit 2026-10-07):**
+- **No realtime layer.** No WebSocket, SSE, Pusher, Ably or Postgres
+  `LISTEN`. Vercel functions can't hold a WebSocket, long SSE streams burn
+  Hobby function time, there is no Redis to pass an event between instances,
+  and `LISTEN/NOTIFY` doesn't survive Neon's pooled connection.
+- **Sales → Questions is public Q&A**, not chat: signed-in shoppers ask about
+  a product and answering publishes. Chat is private. The two must never look
+  like the same thing.
+- **The storefront's bottom-right corner is taken.** The assistant's
+  `floating` launcher shares it with back-to-top (`.sf-assistant-fab`), and
+  the phone's tab bar (Home / Shop / Saved / Bag / Account) is full.
+- **Reusable:** shopper sessions (`lib/storefront/account/session.ts`),
+  `requestIdentity` and `resolveRequestStore` for storefront API routes, the
+  Postgres rate limiter, Resend email, shopper push (`lib/mobile/push`), the
+  data-retention job, and `STORE_AUTHOR` ("Store team").
+
+**Decisions taken (2026-10-07):**
+- **Polling first, behind a seam.** The database is the only source of truth.
+  The browser asks "anything after message #N?" on a timer, and only while
+  someone is looking. Every write goes through `notifyChatChanged()` in
+  `lib/chat/realtime.ts`, which does nothing today. Swapping to Pusher or Ably
+  later means filling that in and changing the client hook's transport, with
+  no UI change and a `wss:` entry in `connect-src` (`lib/security/csp.ts`).
+  **Switch when** polling becomes a top query on Neon, or merchants need
+  replies to land faster than about 3 seconds.
+- **One conversation per shopper per store**, like a WhatsApp thread. A
+  resolved conversation reopens when the shopper writes again. Nothing is
+  created until the first message is sent.
+- **Two statuses: `OPEN` and `RESOLVED`.** "Awaiting reply" is worked out from
+  who sent the last message; it isn't a stored status. There is no `ACTIVE`,
+  because nothing could decide when to switch to it.
+- **Sender is `CUSTOMER` or `STAFF`.** The staff member is recorded for the
+  merchant, but shoppers always see "Store team" (`STORE_AUTHOR`), the same as
+  Questions. `SYSTEM`/`BOT` are added when something actually sends them.
+- **Guests may chat.** Questions need sign-in, chat doesn't: a shopper
+  shouldn't need an account to ask "do you have this in 43?". A guest is a
+  random key in an httpOnly cookie named per store (like `sessionCookieName`),
+  stored hashed, set on the first send and not on opening the panel. No
+  `Customer` row is made for a guest — that would put strangers in the
+  customer list (compare `Order.customerId`). Signing in adopts the guest's
+  conversation.
+- **Off until the merchant turns it on.** A chat button nobody answers is
+  worse than none. Settings → Storefront → Chat: a switch (default off) and an
+  optional greeting **the merchant writes**. With no greeting, the panel shows
+  fixed interface text, never a message that looks like it came from the store.
+  We never show "Typically replies in minutes" or any figure we haven't
+  measured.
+- **Every plan**, like Social. No plan gate.
+- **Admin page is "Messages"**, top level in the sidebar's Business group next
+  to Social, with an unread count. Not "Inbox", so it can't be mistaken for
+  Sales → Questions. Storefront wording: "Message the store" (chat) next to
+  "Ask a question" (public).
+- **Where the chat button lives:**
+  - **Desktop (`lg` and up):** a floating "Message us" button in the
+    `.sf-assistant-fab` slot. When chat is on, the homepage assistant drops to
+    its `chip` variant, so there is only ever one floating button. Hidden on
+    the bag and checkout.
+  - **Phone (below `lg`, phone browsers and store apps alike):** no floating
+    button. On the Account tab's screen (`/account/menu`) a "Message the
+    store" row sits **directly under "Hi, {firstName}"** (signed in) or under
+    the "Account" heading and its line (signed out), with the unread count. The
+    tab bar's Account icon gets an unread dot, because the button is one tap
+    deep.
+  - **Product page, every size:** "Message the store about this" near the
+    Questions section, which sends the product along with the message.
+- **Getting noticed is part of the MVP**, because nobody sits watching a
+  dashboard: one email to staff when a conversation goes unanswered while
+  nobody has Messages open, and a push to store-app shoppers when the store
+  replies. Email/SMS/WhatsApp to guests is not in this phase.
+- **Plain text only.** Rendered as text (`whitespace-pre-wrap`), never HTML,
+  and links are not turned clickable in this phase. 1–2,000 characters after
+  trimming (matching `ANSWER_MAX`).
+
+### 17.1 — Data, rules and the seam — DONE (2026-10-07)
+
+**Built (2026-10-07).** Migration `20261007120000_chat_messages`. There are
+no pages or routes yet; those come in 17.2 and 17.3.
+- **Files:**
+  - `lib/chat/rules.ts`: pure and safe in the browser.
+  - `lib/chat/service.ts`: every read and write.
+  - `lib/chat/identity.ts`: the guest cookie and the signed-in shopper.
+  - `lib/chat/realtime.ts`: `notifyChatChanged`, a no-op for now.
+  - `lib/chat/use-chat-feed.ts`: the polling hook. It was split from
+    `realtime.ts` because a client hook can't share a file with server code.
+- **Differences from the plan below:**
+  - **Permission migration:** it inserts the two `Permission` rows, which
+    deploys don't seed, and grants them to every existing built-in Admin role.
+  - **Role defaults:** the Owner already holds every permission
+    (`lib/organization.ts`). Sales Representative does *not* get them by
+    default.
+  - **New session helper:** `getShopperForStore(slug)` in
+    `lib/storefront/account/session.ts`, for API routes, which have no
+    `x-org-slug` header.
+  - **Adopting a guest's conversation on sign-in:** the function exists
+    (`adoptGuestConversation`), but it's wired into sign-in, registration and
+    Google in 17.3, when guest cookies first get set.
+  - **Audit entries** for resolve, reopen and block are written by the 17.2
+    admin actions, not the service.
+  - **Rate limits** stay in 17.5.
+  - **Shopper sends** already re-check: chat on, shop open, billing not
+    lapsed (`storefrontIsOpen`), and not blocked. That check happens inside the
+    send transaction.
+- **Tests:**
+  - `lib/chat/rules.test.ts`: validation, state, merging, poll timing.
+  - `lib/chat/use-chat-feed.test.tsx`: timing, pausing while hidden, backoff,
+    one poll at a time.
+  - `tests/chat.test.ts`: creating, tenancy, gapless `seq` under concurrent
+    sends, a single conversation when first messages collide, retried sends,
+    paging, "Store team" only, read marks, resolve and reopen, block, search,
+    the customer panel's permissions, guest identity and adoption, and the
+    permissions in the database.
+- **Schema** (one migration):
+  - `ChatConversation`: `organizationId`, `customerId?`, `guestKeyHash?`,
+    `guestName?` (optional, ≤ 60), `status` (`OPEN`/`RESOLVED`), `lastSeq`,
+    `lastMessageAt`, `lastSender`, `lastPreview` (first ~140 characters, so the
+    list needs no join), `staffReadSeq`, `customerReadSeq`, `customerSeenAt`,
+    `staffAlertedAt?`, `resolvedAt?`/`resolvedByUserId?`,
+    `blockedAt?`/`blockedByUserId?`. Unique `(organizationId, customerId)` and
+    `(organizationId, guestKeyHash)`; index
+    `(organizationId, status, lastMessageAt)`.
+  - `ChatMessage`: `conversationId`, `organizationId` (so every `where` can
+    name the store), `seq`, `sender` (`CUSTOMER`/`STAFF`), `staffUserId?`,
+    `body`, `productId?` (the product it was sent from), `clientId`,
+    `createdAt`. Unique `(conversationId, seq)` and
+    `(conversationId, clientId)`.
+  - `Organization`: `storefrontChatEnabled` (default false),
+    `storefrontChatGreeting?`, `chatInboxSeenAt?`.
+- **Ordering:** `seq` is assigned in the send transaction by incrementing
+  `lastSeq`. Clients sort and remove duplicates by `seq`, never by time or
+  arrival order. **Double sends:** the browser generates `clientId`, so a
+  retry or double-click saves once and returns the saved row.
+- **Unread** is `lastSeq − staffReadSeq` (and the customer side alike). There
+  is no per-message `readAt` and no counting query, and read state is shared
+  across staff, which is right for a shared inbox.
+- **Permissions:** `messages.view` (see conversations, the badge) and
+  `messages.reply` (reply, resolve, reopen, block). Added to Owner and Admin
+  in the migration and seed, the way earlier permissions were. Other roles
+  get them from Roles & Permissions. Labels go in `lib/permission-labels.ts`.
+- **`lib/chat/`**, the only way in:
+  - `rules.ts`, pure: validation, limits, status and "awaiting reply"
+    derivation, unread maths, labels, and the client list merge (by `seq`,
+    then `clientId`).
+  - `service.ts`, server: every function takes `organizationId` first (from
+    `getOrganizationContext()` in the admin, `resolveRequestStore` on the
+    storefront). An id from the browser is only ever used **with** it.
+  - `identity.ts`: the guest cookie, the signed-in shopper, adopting on
+    sign-in. If the shopper already has a conversation, the guest one stays
+    separate rather than being merged.
+  - `realtime.ts`: `notifyChatChanged()` (a no-op for now) and the
+    `useChatFeed` client hook (poll, back off, pause when hidden, refetch on
+    focus/online, merge).
+
+### 17.2 — The merchant's Messages page — DONE (2026-10-08)
+
+**Built (2026-10-08).** Merchants can see and answer conversations now, but
+shoppers can't start one until 17.3 adds the storefront chat.
+- **The page:** `/messages` (`app/(dashboard)/[organizationSlug]/messages/`):
+  the list, the conversation and the customer panel.
+  - **Admin feed:** a route handler, `messages/feed/route.ts`, takes POST
+    with a JSON body only. The bundled Next docs confirm that server actions
+    are "dispatched and awaited one at a time", which is why polling doesn't
+    go through them.
+  - **Actions:** reply, resolve, reopen, block and unblock live in
+    `features/messages/actions.ts`, with activity-log entries
+    `messages.conversation.*` and a "Messages" area in the activity log.
+- **Badge, title and toast:** `components/messages/inbox-watcher.tsx` sits in
+  the dashboard layout, with a shared count in `lib/chat/inbox-client.ts`.
+  It polls every 10s, easing to 30s after a quiet minute, and stops on the
+  Messages page, which polls for itself: every 3s with a conversation open,
+  otherwise 10s.
+- **Settings → Storefront → "Chat with shoppers"** (`#chat`): the switch and
+  the greeting, saved by `saveStorefrontChat`, with activity-log entry
+  `settings.storefront.chat_updated`.
+  - **The greeting's helper text promises** that an empty greeting shows a
+    plain "Send the shop a message". 17.3 must use exactly that line.
+- **Differences from the plan below:**
+  - **Marking read:** only members with `messages.reply` mark a
+    conversation read. A view-only member looking doesn't clear the unread
+    count for whoever has to answer.
+  - **First load:** the badge's first count comes from the watcher's first
+    poll right after the page loads, not from the server render, so no
+    dashboard page pays for it.
+  - **New formatters:** `formatTime` and `formatDateTime` in `lib/format.ts`,
+    in Lagos time like `formatDate`.
+- **Tests:**
+  - `tests/messages-admin.test.ts`: the actions, permissions, tenancy, the
+    activity log, the feed (summary, after/before, read marking by
+    permission, the inbox-open mark, a missing or foreign conversation,
+    403/415), and the chat switch.
+  - `ConversationPane.test.tsx`: sending, sent, failed, retry with the same
+    `clientId`, Edit, Shift+Enter, poll merge, view-only.
+  - `inbox-watcher.test.tsx`: the title count, toasts only for new messages,
+    no polling on Messages.
+- **Not yet checked by hand in a browser.** It needs a signed-in admin on a
+  tenant host plus a conversation, so do this once 17.3 can create one.
+- **`/messages`**, following the AGENTS admin rules:
+  - **Layout:** `PageHeader` with title, line and no primary button. The
+    conversation list and the open conversation sit side by side on `lg`; a
+    customer panel joins them as a third column on `xl` and becomes a `Sheet`
+    below that. On a phone it is the list, then the conversation with a back
+    link.
+  - **The URL holds all state:** `?view=all|awaiting|resolved&q=&c=<id>&page=`.
+    Search covers the customer's name or email, the guest's name, and message
+    text, run in Postgres and scoped to the store. Paginated.
+  - **List rows:** name ("Guest" plus their name if given), preview, relative
+    time, a status `Badge`, and the unread count as a number, not only a dot.
+    The whole row is clickable and the name is a real `<Link>`.
+  - **The conversation:** the latest 50 messages first, then "Load earlier"
+    (by `seq`). Each message shows the sender ("You" / the staff member's
+    name / the customer) and its time through `formatDate`. A message sent
+    from a product page shows a small product card (name, price via
+    `formatMoney`, link) above it.
+  - **Composer:** Enter sends, Shift+Enter makes a new line. While sending,
+    the message shows greyed with "Sending…". If it fails, it shows "Not sent
+    · Try again" and keeps the text. Nothing is silently dropped.
+  - **Actions:** "Resolve" / "Reopen" (outline buttons). "Block this
+    shopper" goes through `AlertDialog`, which says what happens: they can't
+    send any more and the history stays. Resolve, reopen, block and unblock go
+    in the `AuditLog` without the message text.
+  - **The status hint:** "Awaiting your reply" / "Waiting for the customer" /
+    "Resolved — reopens if they write again".
+  - **Customer panel:**
+    - Signed-in shoppers: name; email (needs `customer.view`); order count
+      with a link to their orders (needs `sales.view`); customer since.
+    - Guests: "Guest", first message date, and the product they wrote from.
+    - Nothing else.
+  - **States:**
+    - Empty with chat off: "Turn on chat" links to Settings → Storefront.
+    - Empty with chat on: what will appear here.
+    - Filtered: "Clear filters".
+    - Error: `RouteError`, plus `loading.tsx` skeletons.
+- **How often it checks:**
+  - **The open conversation:** every 3s.
+  - **The list and the sidebar badge:** one cheap "anything changed since"
+    query every 10s.
+  - **When the tab is hidden:** both stop, and refetch the moment it is
+    shown again.
+  - **Not server actions:** the admin feed is a route handler **inside the
+    dashboard segment, not under `/api`**, so the proxy's tenant headers and
+    `getOrganizationContext()` apply. Next runs a page's server actions one
+    at a time, so polls through them would queue behind real actions.
+    Confirm against `node_modules/next/dist/docs/` before building.
+- **Badge and title:** the sidebar's "Messages" entry shows unread
+  conversations, and the browser tab title gets "(3)". A toast ("New message
+  from Ada") appears on other dashboard pages, using the same 10s check.
+- **Settings → Storefront → Chat:** the switch, the greeting (≤ 200
+  characters, with helper text), and a line explaining that replies are
+  written in Messages and that staff are emailed about messages nobody has
+  answered. Guarded by the permission that already guards that page.
+
+### 17.3 — Chat on the storefront — DONE (2026-10-08)
+
+**Built (2026-10-08).** Shoppers can message a store and see its replies
+without refreshing. **No send limits yet:** 17.5 has to land before any real
+merchant turns chat on.
+- **Code:**
+  - **Components** in `components/storefront/chat/`:
+    - `chat-config.tsx`: whether the shop takes messages, plus what the layout
+      knew.
+    - `chat-sheet.tsx`: the panel's frame, plus a check every 60s while it's
+      closed, only for someone who has a conversation.
+    - `chat-panel.tsx`.
+    - `chat-launcher.tsx`: floating, row and button versions.
+  - **State and calls:** `lib/storefront/stores/chat-store.ts` and
+    `lib/storefront/chat-client.ts`.
+  - **API:** `GET /api/storefront/chat` (`after`, `before`, `summary=1`,
+    `open=1`), `POST …/chat/messages` and `POST …/chat/read`, both JSON only.
+  - **Server helpers:** `lib/chat/storefront.ts`, with
+    `chatStoreFromRequest`, `shopperChatStatus` and `adoptGuestChatOnSignIn`.
+- **The layout** reads chat on/off and the greeting along with the store
+  record. Chat shows only when it's on **and** the shop is genuinely open; a
+  team member previewing a closed shop sees no chat.
+  - **The layout's lookup** (does this browser have a conversation, how many
+    unread) finds nothing for anyone who has never written, so their browser
+    never polls.
+- **Guest conversations follow the shopper into their account** on sign-in,
+  registration, password reset, and the handoff route, which also covers
+  Google on the web and in the app.
+  - **Known limit:** on a shared device, whoever signs in next adopts that
+    browser's guest conversation.
+- **The guest cookie is set only after every check passes**: valid message,
+  valid `clientId`, chat open. A refused message leaves no cookie behind.
+- **Requested positions are capped** at the `seq` column's maximum
+  (`parseSeq`) here and in the admin feed, so `after=2^40` returns nothing
+  instead of a server error.
+- **Entry points** as planned:
+  - **Desktop:** "Message us" in the `.sf-assistant-fab` slot, hidden on
+    /cart and /checkout.
+  - **Phone:** a row under "Hi, {firstName}" or under the "Account" heading
+    on `/account/menu`, plus a dot on the Account tab.
+  - **Product page:** "Message the store about this" beside the assistant in
+    the Questions section; it sends that product with the first message.
+  - **Homepage:** while chat is on, the floating assistant is a centred chip.
+- **The panel's own words:**
+  - The greeting, or the fixed "Send the shop a message." (as Settings
+    promises).
+  - "Replies from the store appear here."
+  - No reply-time promise; a test checks the panel never shows one.
+  - **Guests** get an optional name field and a "Sign in to keep this
+    conversation with it" link.
+- **Tests:**
+  - `tests/storefront-chat.test.ts`: newcomers, guest send and cookie, other
+    browsers, refusals without a cookie, a mismatched store, the mobile mall,
+    blocked, "Store team", summary and read, signed-in shoppers, adoption,
+    the layout status.
+  - `components/storefront/chat/chat.test.tsx`: the launchers, the panel's
+    states, the one-floating-button rule, the tab dot.
+- **Checked in a real browser (2026-10-08),** with a production build against
+  the throwaway database and puppeteer:
+  - A guest on desktop sent a message from the product page.
+  - The owner saw "(1)" in the tab title and the sidebar badge, opened
+    Messages (product card, guest panel) and replied.
+  - The shopper's open panel showed the reply as "Store team" without a
+    refresh.
+  - At phone width, the Account screen showed "The store has replied" with a
+    count, and a dot on the Account tab.
+  - There is no floating button on phones.
+  - **Polling pauses in a background tab by design.** The reply appears the
+    moment the tab is shown again.
+- **The panel:** a right-side panel on desktop and a full-height sheet on a
+  phone, built like `assistant-sheet.tsx`.
+  - **Look:** storefront tokens only (`bg-brand`, `--sf-radius-*`, follows
+    the store's look and dark mode), with no admin tokens.
+  - **Header and greeting:** "Message {store name}". The merchant's greeting,
+    if they wrote one, shows as a muted intro, not a store bubble.
+  - **Messages:** the shopper's on the right in the brand colour; "Store
+    team" on the left.
+  - **Guests:** on their first message, an optional "Your name" field. No
+    email is asked for in this phase.
+  - **Accessibility:** focus is trapped, Escape closes, new messages are
+    announced through `aria-live="polite"`, and touch targets are at least 44px.
+  - **Failed sends:** the panel says clearly that the message didn't reach
+    the store and offers "Try again" with the text kept.
+- **Entry points** as decided above: the desktop button, the phone
+  Account-screen row under the greeting plus the tab-bar dot, and the product
+  page button. All are hidden when chat is off, the shop is closed (12.5) or
+  billing has closed it. A blocked shopper sees the panel but can't send.
+- **Storefront API**, store from `resolveRequestStore`, never the body:
+  - `GET /api/storefront/chat?after=<seq>` returns the shopper's own
+    conversation only: messages after `seq` (or the latest 50) and unread
+    vendor messages.
+  - `GET /api/storefront/chat?before=<seq>` returns older messages.
+  - `POST /api/storefront/chat/messages` `{ clientId, body, productId?, guestName? }`.
+  - `POST /api/storefront/chat/read`.
+  - Any `productId` is checked against this store's catalogue before it is
+    saved.
+- **How often it checks:**
+  - **Panel open:** every 3s, easing to 10s after a minute with nothing new.
+  - **Panel closed or tab hidden:** it stops.
+  - **The unread dot:** a light check every 60s, and only if this shopper
+    has a conversation.
+  - **Rate limits:** polls never take a rate-limit bucket, because that
+    would be a database write every 3 seconds.
+
+### 17.4 — Getting noticed — DONE (2026-10-08)
+
+**Built (2026-10-08).**
+- **Staff email** (`alertStaffAboutMessage` in `lib/chat/alerts.ts`, template
+  `emails/chat-message-alert.tsx`, sent by `sendChatMessageAlertEmail`):
+  - **When:** after a shopper's message, if nobody has had Messages open for
+    2 minutes.
+  - **Once per unanswered stretch:** `staffAlertedAt` is claimed in a single
+    conditional update, so two messages arriving together send one email.
+    It's cleared when someone reads or replies.
+  - **Not sent for** a blocked shopper, or when the store wrote last.
+  - **To:** active members holding `messages.reply`, plus the Owner.
+  - **Contents:** who wrote (named, or "a guest"), the message quoted up to
+    300 characters, and "Reply in Messages" linking to `/messages?c=…`.
+- **Shopper push** (`pushStoreReply`):
+  - **Consent, as for orders:** in a store's own app, once there's a
+    conversation, the chat shows "Get a notification when the store replies"
+    (`chat-replies-prompt.tsx`). If notifications are already allowed, the
+    conversation is added quietly. "Not now" is remembered on that device.
+  - **The link:** `POST /api/storefront/chat/notify` ties the phone to the
+    shopper's own conversation through a new `PushChatWatch` table
+    (migration `20261008120000_chat_push_watches`). That works for guests
+    too.
+  - **When it's sent:** after a store reply, only for the first unread reply
+    and never while the shopper had the chat open in the last 30 seconds.
+  - **What it says:** a fixed "The store replied to your message." — never
+    the message itself.
+  - **Where it lands:** `/s/{slug}/chat`, a new storefront page that opens
+    the chat.
+  - **Shared sending:** the per-device loop is now `sendToDevices` in
+    `lib/mobile/push/send.ts`, used by order updates and chat alike, and it
+    deletes tokens the platform says are dead.
+  - **Device cleanup:** the daily job keeps devices that watch only a chat.
+- **New helper, `lib/run-after.ts`:**
+  - **Purpose:** `runAfter` is Next's `after()`, so alerts never slow a send.
+    Outside a request it runs the task straight away.
+  - **Under vitest** it queues the task for `flushAfterTasks()`, so
+    unrelated tests never send real emails.
+- **Wording:** the privacy page's notification passage now covers chat
+  replies.
+- **Tests:**
+  - `tests/chat-alerts.test.ts`:
+    - email: recipients, inbox open, one per stretch, two messages at once,
+      blocked, the length cap, sent only after the response;
+    - push consent: phone-to-own-conversation link, refusals, the route;
+    - pushes: fixed text and link, watching, a burst, not asked, a dead
+      token, after a Messages reply;
+    - device cleanup.
+  - Component tests in `components/storefront/chat/chat.test.tsx`: the
+    prompt and the `/chat` page.
+- **Staff email** (Resend, `emails/` template, sent from `after()` so the
+  shopper's send isn't slowed):
+  - **When:** a customer message arrives, nobody at the store has had
+    Messages open in the last 2 minutes (`chatInboxSeenAt`, written at most
+    once a minute by the admin poll), and `staffAlertedAt` is empty.
+  - **To:** active members with `messages.reply`.
+  - **Contents:** who wrote, a short preview, and a link to the
+    conversation.
+  - **Then:** `staffAlertedAt` is set and cleared when staff read it, so a
+    busy conversation sends one email, not one per message. Per-member email
+    preferences come with 14.3.
+- **Shopper push** for signed-in shoppers in a store's own app (Phase 16):
+  "Store team replied", only if they haven't polled in the last 30s
+  (`customerSeenAt`), and it deep-links to the chat. `lib/mobile/push/send.ts`
+  grows a general send next to `pushOrderUpdate`.
+- **Not in this phase:** emailing guests or shoppers, SMS, WhatsApp, or the
+  browser's own notifications (permission prompts aren't worth it before the
+  14.3 bell).
+
+### 17.5 — Abuse, privacy and data rights — DONE (2026-10-08)
+
+**Built (2026-10-08).** With this, chat is safe for a merchant to turn on.
+- **Send limits** (`lib/chat/limits.ts`, checked in
+  `POST /api/storefront/chat/messages`):
+  - **The limits:**
+    - per sender: 10 a minute and 60 an hour;
+    - per IP: 30 a minute and 200 an hour;
+    - new guest conversations: 5 a day from one IP;
+    - per store: 300 guest messages an hour (signed-in shoppers don't count).
+  - **Overrides:** each number can be changed by a `CHAT_*` environment
+    variable.
+  - **The answer:** a 429 with a `Retry-After` header and "You're sending
+    messages a little fast…", which the panel shows as "Not sent".
+  - **Order of checks:** the message itself is checked first, so a rejected
+    draft costs nothing. The cookie comes after, so a refused send leaves no
+    cookie behind.
+  - **What isn't limited:** polling and reading never take a bucket, and
+    staff replies aren't limited.
+  - **Found by the tests:** a guest's first message used to count under
+    their IP rather than their key, so it slipped past the per-sender
+    allowance. Now the key is made before the check (`newGuestIdentity`), and
+    the cookie is set only once the send is allowed.
+- **Data rights:**
+  - **Account deletion:** `deleteShopperAccount` deletes the shopper's
+    conversation, both sides, whether or not their orders are kept.
+  - **Download:** `exportShopperData` includes `messages`, with the store's
+    side as "Store team".
+  - **The daily job:** a new step removes guest conversations whose last
+    message is more than `GUEST_CHAT_RETENTION_MONTHS` (12) old, and the
+    job's description says so. A signed-in shopper's chat is never removed
+    there.
+  - **Closed stores:** `purgeClosedWorkspace` deletes every conversation at
+    day 30. The year-6 erasure already followed the foreign keys.
+- **Wording:**
+  - **The shopper's "Your data" page** lists their messages under both
+    download and delete.
+  - **The privacy page,** updated 8 October 2026, now names:
+    - what chat collects;
+    - the chat cookie, set only on sending;
+    - that the merchant's staff see messages;
+    - the 12-month guest rule;
+    - chats in the deleted-account and closed-store passages.
+  - **`docs/DATA-RIGHTS.md`** has a Chat section.
+- **Tests:**
+  - `tests/chat-data-rights.test.ts`;
+  - the limit cases in `tests/storefront-chat.test.ts`: the per-sender
+    limit, fresh guests per IP with no cookie on refusal, an existing
+    conversation carrying on, and the store cap applying to guests only.
+- **Rate limits** (`lib/rate-limit.ts`, on sends only):
+  - per shopper or guest: 10 a minute, 60 an hour;
+  - new guest conversations per IP: 5 a day;
+  - per store: a ceiling on guest messages an hour, so one flood can't bury
+    a merchant.
+- **Blocking** (17.2). Every send re-checks chat on, shop open, not blocked,
+  and the conversation belongs to this store and this shopper.
+- **Data rights (13.8):**
+  - deleting a shopper account deletes their conversations;
+  - "Your data" exports include their messages;
+  - the data-retention job deletes guest conversations with no message in
+    12 months.
+  - `docs/DATA-RIGHTS.md` and the platform privacy text say chat messages are
+    kept and for how long.
+- **Cookie:** the guest cookie is strictly necessary for a service the
+  shopper asked for (set only when they send), so the consent banner doesn't
+  gate it. Say so in `cookie-consent.tsx`'s list if it lists cookies.
+
+### 17.6 — Tests and done — TODO
+- **`lib/chat/rules.test.ts`:**
+  - validation: empty, whitespace and too-long messages;
+  - status and "awaiting reply" derivation, and unread maths;
+  - the merge: out-of-order and duplicate polls, and a retried `clientId`.
+- **`tests/chat.test.ts`** (Docker Postgres, `npm run test:local`):
+  - **Creating:** opening the panel creates nothing; the first message
+    creates the conversation in the right store.
+  - **Isolation:** another store's admin and another shopper can't read or
+    send to it (a miss, not a leak).
+  - **Status:** a resolved conversation reopens on a customer message.
+  - **Ordering:** `seq` is gapless when messages are sent at the same time;
+    the same `clientId` saves once.
+  - **Reading:** `after`/`before` return the right slices.
+  - **Unread:** marking read clears unread on that side only.
+  - **Guests:** a guest's conversation is adopted on sign-in.
+  - **Refusals:** blocked, chat-off and closed-shop sends are refused, and
+    rate limits apply.
+  - **Alerts:** the staff email goes once per unanswered stretch and not
+    while Messages is open.
+  - **Data rights:** account deletion and retention remove conversations.
+- **Component tests:**
+  - **The panel:** opens and closes; failed send shows "Not sent · Try
+    again"; new messages are announced.
+  - **Phone Account screen:** shows the row under the greeting, signed in
+    and out, only when chat is on.
+  - **Admin conversation view:** sending state and error state.
+- **Done when** a shopper opens chat on a storefront and sends a message; it
+  appears in Messages within a few seconds without a refresh; staff reply; the
+  shopper sees it without refreshing; closing and reopening the panel, or
+  coming back later, shows the whole conversation with the store's replies
+  marked unread; and nothing crosses between stores. Typecheck, lint, the
+  suite and `next build` pass.
+
+**Not built in this phase:** AI or automatic replies, attachments or images,
+editing or deleting messages, assigning a conversation to one staff member,
+typing indicators, read receipts shown to the shopper, emailing guests,
+SMS/WhatsApp/Instagram DMs, and analytics such as response times.
+
 ## Sequencing
 
 **Phase 2 before Phases 4 and 7.** If walk-in sales land on `Order` with a `channel`
@@ -5295,6 +5831,12 @@ reasoning behind it.
   deployment serve more than one app; 16.3 needs its user-agent marker and
   schemes. The console side (16.2) can trail, because a first app can be
   recorded by hand.
+
+- **Phase 17: 17.1 → 17.2 → 17.3 with 17.5 → 17.4.** The merchant's side
+  (with the off-by-default switch) lands first, so no storefront shows a chat
+  nobody can answer. 17.5's limits and data rights ship in the same release as
+  the storefront panel, because that is when strangers start writing. 17.4
+  can follow within days. 17.6's tests are written alongside each part.
 
 ## Smaller cleanups — DONE (2026-09-25)
 

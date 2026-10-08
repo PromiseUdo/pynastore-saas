@@ -210,6 +210,7 @@ export async function purgeClosedWorkspace(organizationId: string, now: Date = n
       await tx.productReviewVote.deleteMany({ where: customer });
       await tx.productReview.deleteMany({ where });
       await tx.productQuestion.deleteMany({ where });
+      await tx.chatConversation.deleteMany({ where }); // messages cascade (ROADMAP 17.5)
       await tx.customer.deleteMany({
         where: { organizationId, orders: { none: {} }, invoices: { none: {} }, quotes: { none: {} }, dropShipPurchaseOrders: { none: {} }, mergedFrom: { none: {} } },
       });

@@ -15,23 +15,35 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowRight, ExternalLink, Loader2, Paintbrush, Search } from 'lucide-react';
+import { ArrowRight, ExternalLink, Loader2, MessagesSquare, Paintbrush, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { SwitchRoot } from '@/components/ui/switch';
 import { Field, FieldDescription } from '@/components/ui/form-field';
 import { PageHeader, PageBody } from '@/components/layout/page-header';
 import { ImageUploader, type UploadedImage } from '@/components/media/image-uploader';
-import { saveStorefrontAppearance, type StorefrontAppearance } from '@/features/settings/storefront';
+import {
+  saveStorefrontAppearance,
+  saveStorefrontChat,
+  type StorefrontAppearance,
+  type StorefrontChatSettings,
+} from '@/features/settings/storefront';
+import { CHAT_GREETING_MAX } from '@/lib/chat/rules';
 
 export function StorefrontSettingsClient({
   appearance,
+  chat,
+  canViewMessages,
   storeUrl,
   canManage,
   canCustomize,
 }: {
   appearance: StorefrontAppearance;
+  chat: StorefrontChatSettings;
+  /** holds `messages.view`, so the Messages link will open for them */
+  canViewMessages: boolean;
   storeUrl: string;
   canManage: boolean;
   /** holds `storefront.design`, so the Customize page will open for them */
@@ -97,6 +109,8 @@ export function StorefrontSettingsClient({
             <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           </Link>
         )}
+
+        <ChatSettings chat={chat} canManage={canManage} canViewMessages={canViewMessages} />
 
         <section className="space-y-4 rounded-lg border bg-card p-4">
           <div>
@@ -190,5 +204,109 @@ export function StorefrontSettingsClient({
         </section>
       </PageBody>
     </>
+  );
+}
+
+/**
+ * Messages (ROADMAP 17): whether shoppers can message the shop. Off until
+ * the merchant turns it on — a chat nobody answers is worse than none — and
+ * the greeting is theirs to write or leave out.
+ */
+function ChatSettings({
+  chat,
+  canManage,
+  canViewMessages,
+}: {
+  chat: StorefrontChatSettings;
+  canManage: boolean;
+  canViewMessages: boolean;
+}) {
+  const router = useRouter();
+  const [enabled, setEnabled] = React.useState(chat.enabled);
+  const [greeting, setGreeting] = React.useState(chat.greeting ?? '');
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const changed = enabled !== chat.enabled || greeting.trim() !== (chat.greeting ?? '');
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    const result = await saveStorefrontChat({ enabled, greeting });
+    setSaving(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    toast.success(enabled ? 'Chat is on — shoppers can message your shop' : 'Chat is off');
+    router.refresh();
+  }
+
+  return (
+    <section id="chat" className="scroll-mt-6 space-y-4 rounded-lg border bg-card p-4">
+      <div>
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+          <MessagesSquare className="size-4" aria-hidden />
+          Chat with shoppers
+        </h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Let shoppers send your shop a message from your online store. You reply in{' '}
+          {canViewMessages ? (
+            <Link href="/messages" className="font-medium text-primary hover:underline">
+              Messages
+            </Link>
+          ) : (
+            'Messages'
+          )}
+          .
+        </p>
+      </div>
+
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Label htmlFor="chat-enabled">Let shoppers message you</Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Only turn this on if someone will answer. Shoppers see a “Message the store” button; turning it off hides it
+            but keeps every conversation.
+          </p>
+        </div>
+        <SwitchRoot
+          id="chat-enabled"
+          checked={enabled}
+          onCheckedChange={setEnabled}
+          disabled={!canManage}
+          className="mt-0.5"
+        />
+      </div>
+
+      <Field>
+        <Label htmlFor="chat-greeting">Greeting (optional)</Label>
+        <Textarea
+          id="chat-greeting"
+          value={greeting}
+          onChange={(event) => setGreeting(event.target.value)}
+          disabled={!canManage}
+          rows={2}
+          maxLength={CHAT_GREETING_MAX}
+          placeholder="e.g. Hi! Ask us about sizes, delivery or anything else — we usually reply the same day."
+        />
+        <FieldDescription>
+          Shown at the top of the chat, in your words. Leave it empty and shoppers see a plain “Send the shop a message”.
+          Only promise reply times you can keep. {CHAT_GREETING_MAX - greeting.length} characters left.
+        </FieldDescription>
+      </Field>
+
+      {error && (
+        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          {error}
+        </p>
+      )}
+
+      {canManage && (
+        <Button size="sm" onClick={save} disabled={saving || !changed}>
+          {saving && <Loader2 className="size-3.5 animate-spin" />}
+          Save chat settings
+        </Button>
+      )}
+    </section>
   );
 }

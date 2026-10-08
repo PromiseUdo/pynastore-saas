@@ -39,6 +39,7 @@ import {
 } from '@/lib/storefront/account/shopper';
 import { clearSessionCookie, setSessionCookie, currentStoreSlug } from '@/lib/storefront/account/session';
 import { safeNextPath, storeUrl } from '@/lib/storefront/account/return-url';
+import { adoptGuestChatOnSignIn } from '@/lib/chat/storefront';
 
 export type AccountFormState = {
   error?: string;
@@ -125,6 +126,8 @@ export async function signInAction(
 
   const token = await issueSessionToken(store.slug, customer);
   await setSessionCookie(store.slug, token);
+  // A guest who messaged the store first keeps that conversation (ROADMAP 17.3).
+  await adoptGuestChatOnSignIn(store, customer.id);
 
   redirect(next);
 }
@@ -182,6 +185,7 @@ export async function registerAction(
 
   const token = await issueSessionToken(store.slug, result.customer);
   await setSessionCookie(store.slug, token);
+  await adoptGuestChatOnSignIn(store, result.customer.id);
 
   redirect(next);
 }
@@ -272,6 +276,7 @@ export async function resetPasswordAction(
   // the password they set four seconds ago helps nobody.
   const token = await issueSessionToken(store.slug, result.customer);
   await setSessionCookie(store.slug, token);
+  await adoptGuestChatOnSignIn(store, result.customer.id);
 
   redirect('/account');
 }

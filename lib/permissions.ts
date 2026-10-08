@@ -59,6 +59,12 @@ export const PERMISSIONS = {
   // ─── Social commerce ─────────────────────────────────────
   SOCIAL_VIEW: 'social.view',
   SOCIAL_MANAGE: 'social.manage',
+
+  // ─── Messages ────────────────────────────────────────────
+  /** See shoppers' conversations and the unread count (ROADMAP 17). */
+  MESSAGES_VIEW: 'messages.view',
+  /** Reply to shoppers, resolve, reopen and block conversations. */
+  MESSAGES_REPLY: 'messages.reply',
   // ─── Online store ────────────────────────────────────────
   /** Change the online store's look and front page, and publish it (ROADMAP 15.1). */
   STOREFRONT_DESIGN: 'storefront.design',

@@ -124,7 +124,33 @@ One Meta app belongs to the PLATFORM (`META_APP_ID`/`META_APP_SECRET`, server-si
 
 **Say what the platform actually does.** An Instagram caption can't hold a clickable link, so we leave the product URL out rather than post a dead one; a Facebook Page post uses one image, because Meta documents single-photo publishing and we don't build on undocumented behaviour. Both are stated in the composer, not hidden.
 
-# Storefront data rules
+# Messages rules
+
+Shoppers chat privately with the store (ROADMAP Phase 17). This isn't the
+public product Q&A, which is Sales → Questions. People only: no AI, bot or
+automatic replies.
+
+- **One seam.** Every read and write goes through `lib/chat/service.ts`. Each
+  function takes `organizationId` first, from `getOrganizationContext()` or
+  `resolveRequestStore`. A shopper never names a conversation: theirs is found
+  from who they are (`lib/chat/identity.ts`).
+- **Order by `seq`, never by clock.** Clients merge with `mergeMessages`. A
+  send carries a browser-made `clientId`, so a retry saves once.
+- **Shoppers see "Store team"**, never a staff member's name.
+  `ShopperChatMessage` has no staff field.
+- **Realtime is polling for now,** behind `notifyChatChanged`
+  (`lib/chat/realtime.ts`) and `useChatFeed`. Poll through route handlers,
+  never server actions, because Next runs those one at a time.
+- **Chat is off until the merchant turns it on.** Never write the greeting
+  for them, and never show a reply-time figure we haven't measured.
+- **Alerts go through `lib/chat/alerts.ts`, after the response**
+  (`runAfter`):
+  - **Staff email:** one per unanswered stretch, and none while someone has
+    Messages open.
+  - **Shopper push:** only to phones that asked, only for the first unread
+    reply, and never with the message's words.
+
+
 
 The customer storefront reads the merchant's real records. These rules keep that safe.
 

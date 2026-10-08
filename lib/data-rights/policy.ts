@@ -14,10 +14,15 @@
  *    After that its personal data and store content are deleted; its
  *    business records follow when the retention period ends, and then the
  *    whole workspace is erased.
+ *  - A guest's chat with a store (ROADMAP 17.5) is removed once nobody has
+ *    written in it for GUEST_CHAT_RETENTION_MONTHS. A guest has no account
+ *    to delete it from, so this is how it ends. A signed-in shopper's chat
+ *    lasts as long as their account and goes when they delete it.
  */
 
 export const FINANCIAL_RETENTION_YEARS = 6;
 export const CLOSURE_GRACE_DAYS = 30;
+export const GUEST_CHAT_RETENTION_MONTHS = 12;
 
 const DAY = 86_400_000;
 
@@ -25,6 +30,13 @@ function addYears(date: Date, years: number): Date {
   const next = new Date(date);
   next.setUTCFullYear(next.getUTCFullYear() + years);
   return next;
+}
+
+/** A guest conversation last written in on or before this moment is due for removal at `now`. */
+export function guestChatCutoff(now: Date): Date {
+  const cutoff = new Date(now);
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - GUEST_CHAT_RETENTION_MONTHS);
+  return cutoff;
 }
 
 /** Records made on or before this moment are past the retention period at `now`. */

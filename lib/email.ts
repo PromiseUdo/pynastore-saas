@@ -35,6 +35,11 @@ import {
   workspaceSuspensionSubject,
   type WorkspaceSuspensionEmailProps,
 } from '@/emails/workspace-suspension';
+import {
+  ChatMessageAlertEmail,
+  chatMessageAlertSubject,
+  type ChatMessageAlertEmailProps,
+} from '@/emails/chat-message-alert';
 import { PLATFORM_NAME } from '@/lib/brand';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -199,6 +204,24 @@ export async function sendStoreOrderAlertEmail(payload: StoreOrderAlertEmailProp
     });
   } catch (err) {
     console.error('[email] Failed to send store order alert email:', err);
+  }
+}
+
+/** A shopper is waiting for a reply in Messages (ROADMAP 17.4) — sent to the store's staff. */
+export async function sendChatMessageAlertEmail(payload: ChatMessageAlertEmailProps & { to: string[] }): Promise<void> {
+  if (payload.to.length === 0) return;
+  try {
+    const from = sendFrom();
+    if (!from) return;
+    const { to, ...props } = payload;
+    await resend.emails.send({
+      from,
+      to,
+      subject: chatMessageAlertSubject(props),
+      react: ChatMessageAlertEmail(props),
+    });
+  } catch (err) {
+    console.error('[email] Failed to send chat message alert email:', err);
   }
 }
 

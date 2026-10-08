@@ -37,6 +37,20 @@ export function formatDate(value: string | Date | null | undefined): string {
   );
 }
 
+/** "2:41 pm" — the time of day, in Lagos time like every other date here. */
+export function formatTime(value: string | Date | null | undefined): string {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' }).format(
+    new Date(value),
+  );
+}
+
+/** "14 May 2026, 2:41 pm" — when the exact moment matters (a message, say). */
+export function formatDateTime(value: string | Date | null | undefined): string {
+  if (!value) return '—';
+  return `${formatDate(value)}, ${formatTime(value)}`;
+}
+
 /** "September 2026" — for a figure that covers a whole month. */
 export function formatMonth(value: string | Date | null | undefined): string {
   if (!value) return '—';

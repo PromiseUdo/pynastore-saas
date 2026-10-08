@@ -81,6 +81,9 @@ export async function watchOrder(input: {
 export async function purgeOldPushWatches(now = new Date()): Promise<{ watches: number; devices: number }> {
   const cutoff = new Date(now.getTime() - WATCH_DAYS * 86_400_000);
   const watches = await prisma.pushOrderWatch.deleteMany({ where: { createdAt: { lt: cutoff } } });
-  const devices = await prisma.pushDevice.deleteMany({ where: { lastSeenAt: { lt: cutoff }, watches: { none: {} } } });
+  // A phone that only watches a chat (ROADMAP 17.4) still has something to hear about.
+  const devices = await prisma.pushDevice.deleteMany({
+    where: { lastSeenAt: { lt: cutoff }, watches: { none: {} }, chatWatches: { none: {} } },
+  });
   return { watches: watches.count, devices: devices.count };
 }

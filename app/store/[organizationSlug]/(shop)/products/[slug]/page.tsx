@@ -32,6 +32,7 @@ import {
   type DecisionShortcut,
 } from '@/components/storefront/product/decision-help';
 import { AssistantLauncher } from '@/components/storefront/assistant/assistant-launcher';
+import { ChatLauncher } from '@/components/storefront/chat/chat-launcher';
 import { loadProductPage } from '@/lib/storefront/product-detail';
 import { getProductBySlug, getStorePages } from '@/lib/storefront/catalog';
 import { hasSizeOption, pageOfKind } from '@/lib/storefront/pages/rules';
@@ -178,14 +179,19 @@ export default async function ProductDetailPage({ params }: Props) {
           product={product}
           questions={questions.items}
           viewer={{ pending: questions.pending, signedIn: questions.signedIn }}
-          /* Two ways to ask: the form reaches the store team and its answer
-            * is published here, and the assistant answers now from this
-            * product's own listing, reviews and the store's policies. */
+          /* Three ways to ask: the form reaches the store team and its answer
+            * is published here; the assistant answers now from this
+            * product's own listing, reviews and the store's policies; and a
+            * private message reaches the store without being published
+            * (ROADMAP 17.3 — shown only when the shop takes messages). */
           ask={
-            <AssistantLauncher
-              label="Or ask the store assistant now"
-              seed={{ surface: 'product', productSlug: product.slug, productName: product.name }}
-            />
+            <div className="flex flex-wrap items-center gap-3">
+              <AssistantLauncher
+                label="Or ask the store assistant now"
+                seed={{ surface: 'product', productSlug: product.slug, productName: product.name }}
+              />
+              <ChatLauncher variant="button" product={{ id: product.id, name: product.name }} />
+            </div>
           }
         />
       </div>

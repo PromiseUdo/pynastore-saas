@@ -25,6 +25,7 @@ import { Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePageScrolled } from '@/lib/storefront/use-page-scrolled';
 import { useStorefront } from '@/lib/storefront/context';
+import { useChatConfig } from '@/components/storefront/chat/chat-config';
 import {
   useAssistantStore,
   type AssistantSeed,
@@ -44,6 +45,17 @@ export function AssistantLauncher({
   const { org } = useStorefront();
   const openPanel = useAssistantStore((s) => s.openPanel);
   const scrolled = usePageScrolled();
+  /* The corner holds one floating button. When the shop takes messages it
+   * belongs to "Message us" (ROADMAP 17.3), and this one sits in the page
+   * as a chip instead. */
+  const chatOn = useChatConfig() !== null;
+  if (variant === 'floating' && chatOn) {
+    return (
+      <div className="sf-container mt-4 flex justify-center">
+        <AssistantLauncher seed={seed} label={label} variant="chip" className={className} />
+      </div>
+    );
+  }
 
   const floating = variant === 'floating';
 

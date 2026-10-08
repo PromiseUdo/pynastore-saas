@@ -12,6 +12,9 @@ import { BackToTop } from './back-to-top';
 import { CookieConsent } from './cookie-consent';
 import { QuickViewModal } from './product/quick-view-modal';
 import { AssistantSheet } from './assistant/assistant-sheet';
+import { ChatConfigProvider, type StorefrontChatConfig } from './chat/chat-config';
+import { ChatSheet } from './chat/chat-sheet';
+import { ChatLauncher } from './chat/chat-launcher';
 import { useShoppingEventBridge } from '@/lib/storefront/use-shopping-event-bridge';
 
 /** Mounted inside the provider so the stores are namespaced before it subscribes. */
@@ -25,6 +28,7 @@ export function StorefrontProviders({
   isMobileRuntime,
   shopper,
   privacyHref = null,
+  chat = null,
   children,
 }: {
   org: StorefrontOrg;
@@ -32,6 +36,8 @@ export function StorefrontProviders({
   shopper: StorefrontShopper | null;
   /** the merchant's published privacy page, if they have one */
   privacyHref?: string | null;
+  /** Messages (ROADMAP 17.3): null when the shop doesn't take them */
+  chat?: StorefrontChatConfig | null;
   children: React.ReactNode;
 }) {
   /* Overlays portal into the themed wrapper, not <body>, or they render in
@@ -46,22 +52,29 @@ export function StorefrontProviders({
   return (
     <PortalContainerProvider container={portalContainer}>
       <StorefrontProvider org={org} isMobileRuntime={isMobileRuntime} shopper={shopper}>
-        <ShoppingEventBridge />
-        {children}
-        <Toaster
-          position="bottom-center"
-          toastOptions={{
-            classNames: {
-              toast: 'rounded-lg border bg-card text-card-foreground text-sm shadow-lg',
-            },
-          }}
-        />
-        <QuickViewModal />
-        {/* Mounted once, opened only from a contextual launcher — there is no
-         * floating chat bubble over the storefront (§16). */}
-        <AssistantSheet />
-        <BackToTop />
-        <CookieConsent privacyHref={privacyHref} />
+        <ChatConfigProvider value={chat}>
+          <ShoppingEventBridge />
+          {children}
+          <Toaster
+            position="bottom-center"
+            toastOptions={{
+              classNames: {
+                toast: 'rounded-lg border bg-card text-card-foreground text-sm shadow-lg',
+              },
+            }}
+          />
+          <QuickViewModal />
+          {/* Mounted once, opened only from a contextual launcher — the
+           * assistant has no floating bubble of its own (§16). */}
+          <AssistantSheet />
+          {/* Messages to the people at the store (ROADMAP 17.3) — a different
+           * thing from the assistant. The floating button is desktop-only; on a
+           * phone the way in is the Account screen and the product page. */}
+          <ChatSheet />
+          <ChatLauncher variant="floating" />
+          <BackToTop />
+          <CookieConsent privacyHref={privacyHref} />
+        </ChatConfigProvider>
       </StorefrontProvider>
     </PortalContainerProvider>
   );

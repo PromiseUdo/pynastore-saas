@@ -57,6 +57,10 @@ const LABELS: Record<PermissionKey, string> = {
   'social.view': 'View connected social accounts',
   'social.manage': 'Connect and disconnect social accounts',
 
+  // Messages
+  'messages.view': 'See messages from shoppers',
+  'messages.reply': 'Reply to shoppers and resolve or block conversations',
+
   // Online store
   'storefront.design': 'Customize the online store’s look and front page',
 
@@ -82,6 +86,7 @@ const MODULE_LABELS: Record<string, string> = {
   sales: 'Sales',
   customer: 'Customers',
   social: 'Social commerce',
+  messages: 'Messages',
   storefront: 'Online store',
   staff: 'Staff',
   role: 'Roles',

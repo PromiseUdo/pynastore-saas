@@ -26,6 +26,7 @@ import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { destroyAsset, isOrgAsset } from '@/lib/cloudinary/sign';
 import type { ActionResult } from '@/features/sales/shared';
+import { validateGreeting } from '@/lib/chat/rules';
 
 /* Measurement ids as the provider writes them, so a merchant can paste
  * straight from their own dashboard and be told if it looks wrong. */
@@ -49,6 +50,12 @@ const AppearanceSchema = z.object({
 
 export type AppearanceInput = z.input<typeof AppearanceSchema>;
 
+/** Messages (ROADMAP 17): whether shoppers can message the store, and its own greeting. */
+export interface StorefrontChatSettings {
+  enabled: boolean;
+  greeting: string | null;
+}
+
 export interface StorefrontAppearance {
   tagline: string | null;
   socialImageUrl: string | null;
@@ -66,7 +73,9 @@ function failure(error: unknown, fallback: string): { success: false; error: str
   return { success: false, error: fallback };
 }
 
-export async function getStorefrontAppearance(): Promise<ActionResult<{ appearance: StorefrontAppearance }>> {
+export async function getStorefrontAppearance(): Promise<
+  ActionResult<{ appearance: StorefrontAppearance; chat: StorefrontChatSettings }>
+> {
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SETTINGS_VIEW);
@@ -79,6 +88,8 @@ export async function getStorefrontAppearance(): Promise<ActionResult<{ appearan
         storefrontSocialImagePublicId: true,
         analyticsGaId: true,
         analyticsMetaPixelId: true,
+        storefrontChatEnabled: true,
+        storefrontChatGreeting: true,
       },
     });
     if (!org) return { success: false, error: 'We couldn’t load your storefront settings' };
@@ -93,6 +104,7 @@ export async function getStorefrontAppearance(): Promise<ActionResult<{ appearan
           gaId: org.analyticsGaId,
           metaPixelId: org.analyticsMetaPixelId,
         },
+        chat: { enabled: org.storefrontChatEnabled, greeting: org.storefrontChatGreeting },
       },
     };
   } catch (error) {
@@ -150,5 +162,41 @@ export async function saveStorefrontAppearance(input: AppearanceInput): Promise<
     return { success: true, data: undefined };
   } catch (error) {
     return failure(error, 'We couldn’t save your storefront settings');
+  }
+}
+
+/**
+ * Turn shoppers' messages on or off, and set the greeting. The greeting is
+ * the merchant's own words; leaving it empty shows the chat's fixed line,
+ * never one we wrote for them. Turning chat off hides it from the shop — it
+ * doesn't touch conversations already in Messages.
+ */
+export async function saveStorefrontChat(input: { enabled: boolean; greeting: string }): Promise<ActionResult> {
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.SETTINGS_EDIT);
+    const organizationId = ctx.organization.id;
+
+    const greeting = validateGreeting(input.greeting);
+    if (!greeting.ok) return { success: false, error: greeting.message };
+    const enabled = input.enabled === true;
+
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: { storefrontChatEnabled: enabled, storefrontChatGreeting: greeting.value },
+    });
+
+    await createAuditLog({
+      organizationId,
+      userId: ctx.userId,
+      action: 'settings.storefront.chat_updated',
+      entityType: 'Organization',
+      entityId: organizationId,
+      metadata: { enabled, greeting: greeting.value !== null },
+    });
+
+    return { success: true, data: undefined };
+  } catch (error) {
+    return failure(error, 'We couldn’t save your chat settings');
   }
 }

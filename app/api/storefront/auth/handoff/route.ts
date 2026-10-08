@@ -23,6 +23,7 @@ import { resolveTenant } from '@/lib/tenant/resolveTenant';
 import { prisma } from '@/lib/prisma';
 import { consumeHandoffToken } from '@/lib/storefront/account/handoff';
 import { signSessionToken, sessionCookieName, SESSION_TTL_DAYS } from '@/lib/storefront/account/session';
+import { adoptGuestChatOnSignIn } from '@/lib/chat/storefront';
 import { storeReturnUrl, storeUrl } from '@/lib/storefront/account/return-url';
 
 /**
@@ -69,6 +70,8 @@ export async function GET(request: Request) {
 
   const destination = storeReturnUrl(to, store) ?? storeUrl(store, '/account');
   const sessionToken = await signSessionToken(claims);
+  // A guest who messaged the store first keeps that conversation (ROADMAP 17.3).
+  await adoptGuestChatOnSignIn(store, claims.customerId);
 
   const response = NextResponse.redirect(destination);
   response.cookies.set(sessionCookieName(store.slug), sessionToken, {

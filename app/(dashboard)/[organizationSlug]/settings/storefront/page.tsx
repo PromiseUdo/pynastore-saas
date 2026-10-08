@@ -26,6 +26,8 @@ export default async function StorefrontSettingsPage() {
   return (
     <StorefrontSettingsClient
       appearance={result.data.appearance}
+      chat={result.data.chat}
+      canViewMessages={hasPermission(perms, PERMISSIONS.MESSAGES_VIEW)}
       storeUrl={await storefrontUrlFor(ctx.organization.slug)}
       canManage={hasPermission(perms, PERMISSIONS.SETTINGS_EDIT)}
       canCustomize={hasPermission(perms, PERMISSIONS.STOREFRONT_DESIGN)}

@@ -16,6 +16,7 @@ import {
   Share2,
   ArrowUpCircle,
   Store,
+  MessagesSquare,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,7 @@ import type { OrgInfo, UserInfo } from './dashboard-layout';
 import { OrgSwitcher, type OrgSwitcherItem } from '@/components/org-switcher';
 import { Badge } from '@/components/ui/badge';
 import { getMarketingUrl } from '@/lib/tenant/urls';
+import { useInboxStore } from '@/lib/chat/inbox-client';
 
 /* ─── Nav data ─────────────────────────────────────────────────────────── */
 
@@ -30,7 +32,9 @@ type NavItem = {
   title: string;
   href: string;
   icon: React.ElementType;
-  children?: Omit<NavItem, 'icon' | 'children'>[];
+  children?: Omit<NavItem, 'icon' | 'children' | 'count'>[];
+  /** shows a live count next to the entry */
+  count?: 'messages';
 };
 
 type NavGroup = {
@@ -103,6 +107,7 @@ const navGroups: NavGroup[] = [
        * business-wide Reports hub is Phase 7 in docs/ROADMAP.md; it goes back
        * in when the page exists, not before. */
       { title: 'Online store', href: '/online-store/customize', icon: Store },
+      { title: 'Messages', href: '/messages', icon: MessagesSquare, count: 'messages' },
       { title: 'Marketing', href: '/marketing/campaigns', icon: Megaphone },
       { title: 'Social', href: '/social', icon: Share2 },
     ],
@@ -190,7 +195,13 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 
 /* ─── Sidebar ───────────────────────────────────────────────────────────── */
 
-type SidebarProps = { org: OrgInfo; orgs: OrgSwitcherItem[]; user: UserInfo };
+type SidebarProps = {
+  org: OrgInfo;
+  orgs: OrgSwitcherItem[];
+  user: UserInfo;
+  /** the member can see messages, so Messages carries its unread count */
+  showMessageCount?: boolean;
+};
 
 export function Sidebar(props: SidebarProps) {
   const { collapsed: railCollapsed, toggle, mobileOpen, setMobileOpen } = useSidebar();
@@ -240,12 +251,14 @@ function SidebarPanel({
   org,
   orgs,
   user,
+  showMessageCount = false,
   collapsed,
   onToggle,
   className,
   mobile = false,
 }: SidebarProps & { collapsed: boolean; onToggle: () => void; className?: string; mobile?: boolean }) {
   const toggle = onToggle;
+  const unreadMessages = useInboxStore((s) => s.summary?.unreadConversations ?? 0);
   const rawPathname = usePathname();
   // proxy.ts rewrites the public "/dashboard" to an internal "/${slug}/dashboard",
   // and the bare public "/" to the internal "/${slug}/dashboard" as well.
@@ -345,11 +358,13 @@ function SidebarPanel({
                   const active =
                     pathname === href ||
                     (href !== '/dashboard' && pathname.startsWith(`${href}/`));
+                  const count = item.count === 'messages' && showMessageCount ? unreadMessages : 0;
+                  const countLabel = count > 99 ? '99+' : String(count);
                   return (
                     <li key={href}>
                       <Link
                         href={href}
-                        title={collapsed ? item.title : undefined}
+                        title={collapsed ? (count ? `${item.title} (${countLabel} unread)` : item.title) : undefined}
                         className={cn(
                           'flex h-8 items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors',
                           active
@@ -358,16 +373,27 @@ function SidebarPanel({
                           collapsed && 'justify-center px-0',
                         )}
                       >
-                        <item.icon
-                          className={cn(
-                            'size-4 shrink-0',
-                            active
-                              ? 'text-sidebar-primary'
-                              : 'text-sidebar-foreground/50',
+                        <span className="relative flex shrink-0">
+                          <item.icon
+                            className={cn(
+                              'size-4 shrink-0',
+                              active
+                                ? 'text-sidebar-primary'
+                                : 'text-sidebar-foreground/50',
+                            )}
+                          />
+                          {collapsed && count > 0 && (
+                            <span aria-hidden className="absolute -right-1 -top-1 size-2 rounded-full bg-primary ring-2 ring-sidebar" />
                           )}
-                        />
+                        </span>
                         {!collapsed && (
                           <span className="truncate">{item.title}</span>
+                        )}
+                        {!collapsed && count > 0 && (
+                          <span className="ml-auto rounded-full bg-primary px-1.5 text-[11px] font-semibold leading-4 tabular-nums text-primary-foreground">
+                            {countLabel}
+                            <span className="sr-only"> unread</span>
+                          </span>
                         )}
                       </Link>
                       {!collapsed && active && item.children && (

@@ -18,6 +18,7 @@ import { getStorePages, getStorefrontLook } from '@/lib/storefront/catalog';
 import { footerPageLinks } from '@/lib/storefront/pages/rules';
 import { ThemeToggle } from '@/components/storefront/layout/theme-toggle';
 import { SignOutButton } from '../_components/account-nav';
+import { ChatLauncher } from '@/components/storefront/chat/chat-launcher';
 
 export const metadata: Metadata = { title: 'Account', robots: { index: false, follow: false } };
 
@@ -40,6 +41,8 @@ export default async function AccountMenuPage({ params }: Props) {
         {shopper ? (
           <>
             <h1 className="font-display text-2xl font-semibold tracking-tight">Hi, {shopper.firstName}</h1>
+            {/* The phone's way into Messages (ROADMAP 17.3); nothing when the shop doesn't take them. */}
+            <ChatLauncher variant="row" />
             <Group title="Your account">
               <Row href="/account" icon={LayoutGrid}>Overview</Row>
               <Row href="/account/orders" icon={Package}>Orders</Row>
@@ -54,6 +57,7 @@ export default async function AccountMenuPage({ params }: Props) {
               <h1 className="font-display text-2xl font-semibold tracking-tight">Account</h1>
               <p className="mt-1 text-sm text-muted-foreground">Sign in to see your orders, saved addresses and details.</p>
             </div>
+            <ChatLauncher variant="row" />
             <div className="grid grid-cols-2 gap-3">
               <Link
                 href="/account/sign-in?next=%2Faccount"

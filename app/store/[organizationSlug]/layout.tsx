@@ -14,6 +14,8 @@ import { Fraunces, Nunito, Playfair_Display } from 'next/font/google';
 import { prisma } from '@/lib/prisma';
 import { getStoreAppListing } from '@/lib/mobile/listing';
 import { StorefrontProviders } from '@/components/storefront/providers';
+import { shopperChatStatus } from '@/lib/chat/storefront';
+import { pushReadyFor } from '@/lib/mobile/push/watch';
 import { StorefrontAnalytics } from '@/components/storefront/layout/storefront-analytics';
 import { getRequestDesign, getStorefrontLook } from '@/lib/storefront/catalog';
 import { parseTheme, themeCookieName } from '@/lib/storefront/theme';
@@ -138,7 +140,15 @@ export default async function StorefrontRootLayout({
 
   const organization = await prisma.organization.findFirst({
     where: { slug: organizationSlug, status: { in: ['ACTIVE', 'SUSPENDED'] } },
-    select: { id: true, name: true, slug: true, logoUrl: true, status: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      logoUrl: true,
+      status: true,
+      storefrontChatEnabled: true,
+      storefrontChatGreeting: true,
+    },
   });
   if (!organization) notFound();
 
@@ -214,6 +224,21 @@ export default async function StorefrontRootLayout({
       .map((id) => ({ productId: id, slug: bySlug.get(id)! }));
   }
 
+  /* Messages (ROADMAP 17.3): shown only when the merchant has turned it on
+   * AND the shop is really open — a team member previewing a closed shop
+   * gets no chat, since nothing they sent could be answered. The status
+   * (does this browser have a conversation, anything unread) is read only
+   * when chat is on, and only finds anything for someone who has written. */
+  const chat =
+    organization.storefrontChatEnabled && opening.open
+      ? {
+          greeting: organization.storefrontChatGreeting,
+          ...(await shopperChatStatus({ slug: organization.slug, organizationId: organization.id })),
+          // Replies can be pushed only inside this store's own app (ROADMAP 17.4).
+          pushReady: isMobileRuntime && (await pushReadyFor(requestHeaders.get('user-agent'), organization.slug)),
+        }
+      : null;
+
   const privacyPage = pageOfKind(await getStorePages({ organizationSlug: organization.slug }), 'PRIVACY');
   const look = await getStorefrontLook({ organizationSlug: organization.slug });
   const cookieStore = await cookies();
@@ -261,6 +286,7 @@ export default async function StorefrontRootLayout({
         org={{ slug: organization.slug, name: organization.name, logoUrl: organization.logoUrl }}
         isMobileRuntime={isMobileRuntime}
         privacyHref={privacyPage?.href ?? null}
+        chat={chat}
         shopper={
           shopper
             ? {
