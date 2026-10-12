@@ -4426,6 +4426,14 @@ model ChatConversation {
   blockedAt        DateTime?
   blockedByUserId  String?
 
+  /**
+   * when anything the inbox LIST shows last changed: a new message, resolve,
+   * reopen, block, unblock. Read marks and the shopper's "panel open" mark
+   * deliberately don't touch it — they move `updatedAt`, and a merchant's
+   * Messages page must not re-render every time a shopper glances at a chat.
+   */
+  listChangedAt DateTime @default(now())
+
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer     Customer?     @relation(fields: [customerId], references: [id], onDelete: Cascade)
   resolvedBy   User?         @relation("ChatResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
@@ -4440,6 +4448,7 @@ model ChatConversation {
   @@unique([organizationId, guestKeyHash])
   @@index([organizationId, status, lastMessageAt])
   @@index([organizationId, lastMessageAt])
+  @@index([organizationId, listChangedAt])
   @@index([customerId])
   @@index([resolvedByUserId])
   @@index([blockedByUserId])

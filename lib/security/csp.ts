@@ -40,6 +40,21 @@ export function makeNonce(): string {
 }
 
 const CLOUDINARY_IMAGES = 'https://res.cloudinary.com';
+
+/*
+ * Ably, for the chat's real-time hints (lib/chat/ably.ts) — added only when
+ * ABLY_API_KEY is set. Exactly the hosts ably-js 2.x contacts by default
+ * (its Defaults: primary endpoint "main" → main.realtime.ably.net for both
+ * the WebSocket and REST/token exchange; five fallback hosts; and the
+ * connectivity check it fetches before falling back). No wildcards: if the
+ * SDK's defaults change on an upgrade, this list is updated with it.
+ */
+const ABLY_PRIMARY = 'main.realtime.ably.net';
+const ABLY_FALLBACKS = ['a', 'b', 'c', 'd', 'e'].map((x) => `main.${x}.fallback.ably-realtime.com`);
+export const ABLY_CONNECT = [
+  ...[ABLY_PRIMARY, ...ABLY_FALLBACKS].flatMap((host) => [`https://${host}`, `wss://${host}`]),
+  'https://internet-up.ably-realtime.com',
+];
 const CLOUDINARY_UPLOADS = 'https://api.cloudinary.com';
 
 /* What the merchant-enabled measurement tags need (storefront only). */
@@ -72,6 +87,8 @@ export function buildCsp(options: {
   frameSrc?: string[];
   /** origins that may frame this page — only a storefront in design preview, for its own admin */
   frameAncestors?: string[];
+  /** the chat's real-time connection (Ably) is configured */
+  realtime?: boolean;
 }): string {
   const { nonce, storefront, dev, https } = options;
   const frameSrc = options.frameSrc?.length ? options.frameSrc : ["'none'"];
@@ -91,7 +108,13 @@ export function buildCsp(options: {
     'style-src': ["'self'", "'unsafe-inline'"],
     'img-src': ["'self'", 'data:', 'blob:', CLOUDINARY_IMAGES, ...(storefront ? ANALYTICS.img : [])],
     'font-src': ["'self'", 'data:'],
-    'connect-src': ["'self'", CLOUDINARY_UPLOADS, ...(storefront ? ANALYTICS.connect : []), ...(dev ? ['ws:', 'wss:'] : [])],
+    'connect-src': [
+      "'self'",
+      CLOUDINARY_UPLOADS,
+      ...(storefront ? ANALYTICS.connect : []),
+      ...(options.realtime ? ABLY_CONNECT : []),
+      ...(dev ? ['ws:', 'wss:'] : []),
+    ],
     'media-src': ["'self'", 'blob:', CLOUDINARY_IMAGES],
     'worker-src': ["'self'", 'blob:'],
     'manifest-src': ["'self'"],

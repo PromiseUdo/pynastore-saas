@@ -139,7 +139,9 @@ export function ConversationList({
 }
 
 function ConversationLink({ row, href, selected }: { row: ConversationRow; href: string; selected: boolean }) {
-  const unread = row.unread > 0;
+  /* The open conversation is on screen — its count would only be stale: read
+   * marks no longer re-render this list (listChangedAt), by design. */
+  const unread = !selected && row.unread > 0;
   const name = row.name ?? 'Guest';
   return (
     <Link

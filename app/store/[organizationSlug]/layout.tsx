@@ -16,6 +16,7 @@ import { getStoreAppListing } from '@/lib/mobile/listing';
 import { StorefrontProviders } from '@/components/storefront/providers';
 import { shopperChatStatus } from '@/lib/chat/storefront';
 import { pushReadyFor } from '@/lib/mobile/push/watch';
+import { ablyConfigured } from '@/lib/chat/ably';
 import { StorefrontAnalytics } from '@/components/storefront/layout/storefront-analytics';
 import { getRequestDesign, getStorefrontLook } from '@/lib/storefront/catalog';
 import { parseTheme, themeCookieName } from '@/lib/storefront/theme';
@@ -236,6 +237,7 @@ export default async function StorefrontRootLayout({
           ...(await shopperChatStatus({ slug: organization.slug, organizationId: organization.id })),
           // Replies can be pushed only inside this store's own app (ROADMAP 17.4).
           pushReady: isMobileRuntime && (await pushReadyFor(requestHeaders.get('user-agent'), organization.slug)),
+          realtime: ablyConfigured(),
         }
       : null;
 

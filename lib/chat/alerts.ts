@@ -26,8 +26,14 @@ import { sendToDevices, type PushTally } from '@/lib/mobile/push/send';
 
 /** Someone who had Messages open this recently is taken to be watching it. */
 export const INBOX_WATCHING_MS = 2 * 60_000;
-/** A shopper who polled the chat this recently is taken to have it open. */
-export const SHOPPER_WATCHING_MS = 30_000;
+/**
+ * A shopper who polled the chat this recently is taken to have it open. The
+ * open panel's "seen" mark is written at most every 20s (getShopperChat's
+ * throttle), and with real-time live the panel polls every 15s as a backup
+ * (SHOPPER_BACKUP_POLL_MS) — so while it's open the mark is never more than
+ * about 35s old. 45s keeps a shopper who is looking from being buzzed.
+ */
+export const SHOPPER_WATCHING_MS = 45_000;
 
 /** How much of the shopper's message the email quotes. */
 const EMAIL_QUOTE_LENGTH = 300;

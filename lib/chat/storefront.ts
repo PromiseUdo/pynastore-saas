@@ -12,7 +12,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import { resolveRequestStore } from '@/lib/storefront/request-store';
-import { adoptGuestConversation } from './service';
+import { adoptGuestConversation, STORE_CHAT_SETTINGS_SELECT, type StoreChatSettings } from './service';
 import { currentChatIdentity, currentGuestKeyHash } from './identity';
 import { unreadCount } from './rules';
 
@@ -21,18 +21,25 @@ export interface ChatStore {
   organizationId: string;
 }
 
-export type ChatStoreResult = { ok: true; store: ChatStore } | { ok: false; status: number; error: string };
+export type ChatStoreResult =
+  | { ok: true; store: ChatStore; settings: StoreChatSettings }
+  | { ok: false; status: number; error: string };
 
-/** The store a /api/storefront/chat request is for — live shops only. */
+/**
+ * The store a /api/storefront/chat request is for — live shops only — with
+ * its chat switches read in the same query, so chatAvailability needn't read
+ * the row again (pass `settings`).
+ */
 export async function chatStoreFromRequest(request: Request, claimedOrg?: string | null): Promise<ChatStoreResult> {
   const resolved = await resolveRequestStore(request, claimedOrg);
   if (!resolved.ok) return { ok: false, status: resolved.status, error: resolved.error };
   const org = await prisma.organization.findFirst({
     where: { slug: resolved.slug, status: 'ACTIVE' },
-    select: { id: true },
+    select: { id: true, ...STORE_CHAT_SETTINGS_SELECT },
   });
   if (!org) return { ok: false, status: 404, error: 'Store not found.' };
-  return { ok: true, store: { slug: resolved.slug, organizationId: org.id } };
+  const { id, ...settings } = org;
+  return { ok: true, store: { slug: resolved.slug, organizationId: id }, settings };
 }
 
 /**

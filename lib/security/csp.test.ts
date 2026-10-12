@@ -76,4 +76,27 @@ describe('nonces and the switch', () => {
     process.env.CSP_MODE = 'nonsense';
     expect(cspMode()).toBe('enforce');
   });
+
+  it('allows exactly Ably’s hosts for chat, and only when it’s configured', () => {
+    const base = { nonce: 'abc123', storefront: true, dev: false, https: true };
+    const off = parse(buildCsp(base));
+    expect(off['connect-src'].some((src: string) => src.includes('ably'))).toBe(false);
+
+    const on = parse(buildCsp({ ...base, realtime: true }));
+    expect(on['connect-src']).toEqual(
+      expect.arrayContaining([
+        'wss://main.realtime.ably.net',
+        'https://main.realtime.ably.net',
+        'wss://main.a.fallback.ably-realtime.com',
+        'https://main.e.fallback.ably-realtime.com',
+        'https://internet-up.ably-realtime.com',
+      ]),
+    );
+    // No wildcards and no bare schemes: nothing beyond those hosts.
+    const ably = on['connect-src'].filter((src: string) => src.includes('ably'));
+    expect(ably).toHaveLength(13);
+    expect(ably.some((src: string) => src.includes('*'))).toBe(false);
+    expect(on['connect-src']).not.toContain('wss:');
+  });
 });
+

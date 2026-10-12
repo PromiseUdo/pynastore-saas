@@ -30,14 +30,14 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const found = await chatStoreFromRequest(request, url.searchParams.get('org'));
   if (!found.ok) return NextResponse.json({ error: found.error }, { status: found.status, headers: NO_STORE });
-  const { store } = found;
+  const { store, settings } = found;
 
   /* ?summary=1 is the background unread check: the conversation's state,
    * no messages. */
   const after = url.searchParams.get('summary') === '1' ? MAX_SEQ : parseSeq(url.searchParams.get('after'));
   const before = parseSeq(url.searchParams.get('before'));
 
-  const [identity, availability] = await Promise.all([currentChatIdentity(store), chatAvailability(store.organizationId)]);
+  const [identity, availability] = await Promise.all([currentChatIdentity(store), chatAvailability(store.organizationId, settings)]);
   const chat = await getShopperChat(
     store.organizationId,
     identity,

@@ -22,6 +22,7 @@ import {
   listStaffMessages,
 } from '@/lib/chat/service';
 import { CONVERSATION_PAGE_SIZE, parseInboxView } from '@/lib/chat/rules';
+import { ablyConfigured } from '@/lib/chat/ably';
 import { MessagesPageClient } from './_components/MessagesPageClient';
 
 export const metadata: Metadata = { title: 'Messages' };
@@ -74,6 +75,7 @@ export default async function MessagesPage({
           : null
       }
       setup={setup}
+      realtime={ablyConfigured()}
       currency={ctx.organization.currency}
       can={{
         reply: hasPermission(perms, PERMISSIONS.MESSAGES_REPLY),

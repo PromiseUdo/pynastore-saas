@@ -28,6 +28,7 @@ import { usePublicPathname } from '@/lib/storefront/use-public-pathname';
 import { formatDate, formatTime } from '@/lib/storefront/format';
 import { useChatStore } from '@/lib/storefront/stores/chat-store';
 import { useChatFeed } from '@/lib/chat/use-chat-feed';
+import { backupInterval, useRealtimeChannel } from '@/lib/chat/realtime-client';
 import {
   CHAT_MESSAGE_MAX,
   GUEST_NAME_MAX,
@@ -55,6 +56,13 @@ type PanelMessage = Omit<ShopperChatMessage, 'seq' | 'id'> & {
 };
 
 const NEAR_BOTTOM_PX = 120;
+
+/**
+ * How often the panel still polls while real-time is live. Not just a safety
+ * net: each poll refreshes the shopper's "seen" mark, which keeps the store's
+ * reply push quiet while they're looking (SHOPPER_WATCHING_MS, 45s).
+ */
+export const SHOPPER_BACKUP_POLL_MS = 15_000;
 
 function newClientId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -114,7 +122,26 @@ export function ChatPanel() {
     return response.messages.some((m) => m.seq > before);
   }, [absorb, org.slug]);
 
-  const { status: feedStatus, pollNow } = useChatFeed({ enabled: true, poll });
+  /* Real-time hints, once there's a conversation to listen to: any event —
+   * or any sign events were missed — just asks for what's after the newest
+   * message held. While it's live, polling drops to the backup pace. */
+  const pollNowRef = React.useRef<() => void>(() => {});
+  const realtime = useRealtimeChannel({
+    enabled: Boolean(config?.realtime && conversation),
+    tokenUrl: '/api/storefront/chat/realtime-token',
+    tokenBody: { org: org.slug },
+    onEvent: () => pollNowRef.current(),
+    onCatchUp: () => pollNowRef.current(),
+  });
+
+  const { status: feedStatus, pollNow } = useChatFeed({
+    enabled: true,
+    poll,
+    ...backupInterval(realtime, SHOPPER_BACKUP_POLL_MS),
+  });
+  React.useEffect(() => {
+    pollNowRef.current = pollNow;
+  }, [pollNow]);
 
   /* ── Scrolling ───────────────────────────────────────────────────────── */
 

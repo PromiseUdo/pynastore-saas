@@ -138,9 +138,20 @@ automatic replies.
   send carries a browser-made `clientId`, so a retry saves once.
 - **Shoppers see "Store team"**, never a staff member's name.
   `ShopperChatMessage` has no staff field.
-- **Realtime is polling for now,** behind `notifyChatChanged`
-  (`lib/chat/realtime.ts`) and `useChatFeed`. Poll through route handlers,
-  never server actions, because Next runs those one at a time.
+- **Real time is a hint, the database is the truth.**
+  - **Events:** Ably events (`lib/chat/ably.ts`, published only from
+    `notifyChatChanged`) carry `{type, conversationId, seq}` and never
+    message text.
+  - **Browsers:** they get listen-only tokens for one exact channel from our
+    token routes, which pick the channel from who is asking. Never a
+    wildcard, never `publish`, and the key never reaches the browser.
+  - **Every event or reconnect** only triggers the existing "fetch after #N".
+  - **Polling stays as the backup** (`useChatFeed`), through route handlers,
+    never server actions. Next runs those one at a time.
+  - **Backup intervals** must keep `customerSeenAt` and `chatInboxSeenAt`
+    fresh enough for the push and email checks.
+  - **`listChangedAt`** is the inbox list's change signal. Read marks must
+    never move it.
 - **Chat is off until the merchant turns it on.** Never write the greeting
   for them, and never show a reply-time figure we haven't measured.
 - **Alerts go through `lib/chat/alerts.ts`, after the response**

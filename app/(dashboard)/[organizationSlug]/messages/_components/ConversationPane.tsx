@@ -50,6 +50,7 @@ import { SheetRoot, SheetContent, SheetHeader, SheetTitle, SheetDescription } fr
 import { cn } from '@/lib/utils';
 import { formatDate, formatTime } from '@/lib/format';
 import { useChatFeed } from '@/lib/chat/use-chat-feed';
+import { backupInterval } from '@/lib/chat/realtime-client';
 import { fetchFeed, type ChatProductCardView, type InboxSummaryView } from '@/lib/chat/inbox-client';
 import {
   CHAT_MESSAGE_MAX,
@@ -69,6 +70,7 @@ import {
 } from '@/features/messages/actions';
 import { CustomerPanel, ProductCard } from './CustomerPanel';
 import type { MessagesPermissions, SelectedConversation } from './MessagesPageClient';
+import { ADMIN_BACKUP_POLL_MS, useInboxRealtime } from './inbox-realtime';
 
 /** A message on screen: saved (has a seq) or still on its way. */
 type PaneMessage = Omit<StaffChatMessage, 'seq' | 'id'> & {
@@ -148,7 +150,16 @@ export function ConversationPane({
     return true;
   }, [conversation.id, can.reply, onSummary, router]);
 
-  const { status: feedStatus, pollNow } = useChatFeed({ enabled: true, poll });
+  /* The page's shared real-time connection: an event for any conversation
+   * means "fetch" — this conversation's new messages, and the inbox summary
+   * that tells the list whether it changed. Live → polling drops to backup. */
+  const realtime = useInboxRealtime();
+  const { status: feedStatus, pollNow } = useChatFeed({
+    enabled: true,
+    poll,
+    ...backupInterval(realtime.state, ADMIN_BACKUP_POLL_MS),
+  });
+  React.useEffect(() => realtime.subscribe(() => pollNow()), [realtime, pollNow]);
 
   /* ── Scrolling ───────────────────────────────────────────────────────── */
 

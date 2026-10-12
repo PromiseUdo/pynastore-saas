@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
   const found = await chatStoreFromRequest(request, typeof input.org === 'string' ? input.org : null);
   if (!found.ok) return NextResponse.json({ error: found.error }, { status: found.status, headers: NO_STORE });
-  const { store } = found;
+  const { store, settings } = found;
 
   /* Everything that would refuse the message is checked before a guest
    * cookie can be set, so a refused message leaves nothing behind. The
@@ -62,21 +62,30 @@ export async function POST(request: Request) {
   if (!isValidClientId(input.clientId)) {
     return NextResponse.json({ error: 'Your message wasn’t sent. Please try again.' }, { status: 400, headers: NO_STORE });
   }
-  if (!(await chatAvailability(store.organizationId)).open) {
+  /* Whether the store takes messages (its switches came with the store
+   * lookup; this adds the billing check) and who is writing don't depend on
+   * each other, so they're read together. Reading the identity sets nothing. */
+  const [availability, existing] = await Promise.all([
+    chatAvailability(store.organizationId, settings),
+    currentChatIdentity(store),
+  ]);
+  if (!availability.open) {
     return NextResponse.json({ error: 'This store isn’t taking messages right now.' }, { status: 409, headers: NO_STORE });
   }
 
   /* A guest's first message: make their key now, so the limits count it
    * against the same sender as everything they send later — but only set the
-   * cookie once the message is allowed. */
-  const existing = await currentChatIdentity(store);
+   * cookie once the message is allowed. Whether this starts a conversation
+   * only matters to the new-guest limit, so a signed-in shopper skips it. */
   const fresh = existing ? null : newGuestIdentity(store.slug);
   const identity = existing ?? fresh!.identity;
+  const startsConversation =
+    existing?.kind === 'customer' ? false : !existing || !(await hasShopperConversation(store.organizationId, existing));
   const allowed = await checkChatSend({
     storeSlug: store.slug,
     identity,
     ip: requestIdentity(request, store.slug).ip,
-    startsConversation: !existing || !(await hasShopperConversation(store.organizationId, existing)),
+    startsConversation,
   });
   if (!allowed.ok) {
     return NextResponse.json(
@@ -86,12 +95,13 @@ export async function POST(request: Request) {
   }
 
   if (fresh) await fresh.remember();
-  const result = await sendCustomerMessage(store.organizationId, identity, {
-    clientId: input.clientId,
-    body: input.body,
-    productId: input.productId,
-    guestName: input.guestName,
-  });
+  const result = await sendCustomerMessage(
+    store.organizationId,
+    identity,
+    { clientId: input.clientId, body: input.body, productId: input.productId, guestName: input.guestName },
+    undefined,
+    availability, // checked above in this request
+  );
 
   if (!result.ok) {
     return NextResponse.json({ error: result.message, code: result.code }, { status: STATUS[result.code], headers: NO_STORE });

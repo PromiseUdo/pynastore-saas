@@ -5761,6 +5761,76 @@ merchant turns chat on.
   marked unread; and nothing crosses between stores. Typecheck, lint, the
   suite and `next build` pass.
 
+### 17.7 — Real time (Ably) and lighter polling — CODE DONE (2026-10-12); needs ABLY_API_KEY to switch on
+
+Follows the 2026-10-12 audit of 17.1–17.5.
+
+- **Fewer refreshes.**
+  - **The cause:** the inbox's change signal was the newest `updatedAt`.
+    Read marks and the shopper's "panel open" mark move `updatedAt`, so the
+    Messages page re-rendered whenever a shopper merely had the chat open.
+  - **The fix:** a new `ChatConversation.listChangedAt` column (migration
+    `20261012120000_chat_list_changed_at`) moves only on messages, resolve,
+    reopen, block and unblock, and `inboxSummary.changedAt` reads it. The
+    open conversation's own row hides its now-stale unread count.
+  - **Checked in a browser:** 0 refreshes in 50 seconds of a shopper with the
+    chat open, and 1 refresh for a real message.
+- **Fewer queries:**
+  - `chatStoreFromRequest` reads the chat switches with the store, so
+    `chatAvailability(id, settings)` only adds the billing check.
+  - The send route runs availability and identity together, skips the
+    "has a conversation" check for signed-in shoppers (it only feeds the
+    new-guest limit), and hands its availability result to
+    `sendCustomerMessage`, which no longer checks a second time.
+  - Inside the service, availability and the product lookup run together.
+  - The admin feed runs the "Messages is open" mark, the read mark and the
+    message page together.
+  - **Unchanged:** the transaction and message order, every security,
+    billing, limit and tenancy check, and every read-mark meaning.
+- **Real time:**
+  - **Server** (`lib/chat/ably.ts`): `notifyChatChanged` publishes small
+    events, `{type, conversationId, seq, sender}` with no message text,
+    after the response (`runAfter`). Messages and status changes go to
+    `inbox:{organizationId}`; the store's messages and status changes also
+    go to `chat:{organizationId}:{conversationId}`. Read marks and retried
+    sends publish nothing.
+  - **Tokens:** `POST /api/storefront/chat/realtime-token` (the shopper's
+    own conversation, found from who they are, limited per address) and
+    `POST /messages/realtime-token` (`messages.view`, plan not lapsed).
+    Each issues a listen-only token request (`subscribe`) for one exact
+    channel, valid 1 hour, renewed through the same route. The key never
+    reaches the browser.
+  - **Browser** (`lib/chat/realtime-client.ts`): the SDK loads only when a
+    chat is open, in its own chunk. Each event, every reconnect, and any
+    re-attach without `resumed` triggers the existing fetch after the newest
+    message, so there are no duplicates and no reliance on Ably's replay.
+  - **Which screens connect:** the storefront panel (once a conversation
+    exists), and one shared connection per Messages page
+    (`inbox-realtime.tsx`). The sidebar badge and the closed-panel check stay
+    on their timers.
+- **Polling as backup:** while real time is live, the shopper panel polls
+  every 15s and the Messages page every 30s; otherwise the old 3s/10s
+  timers.
+  - **Push window widened:** the 15s poll keeps the shopper's "seen" mark
+    fresh for the reply push, so `SHOPPER_WATCHING_MS` went from 30s to 45s
+    (the mark's throttle is 20s).
+  - **Email unaffected:** the 30s poll keeps `chatInboxSeenAt` well inside
+    the email's 2 minutes.
+- **CSP:** only when `ABLY_API_KEY` is set, `connect-src` adds exactly the
+  hosts ably-js 2.29 uses: `main.realtime.ably.net`, its five fallback hosts
+  (https and wss), and `internet-up.ably-realtime.com`.
+- **Tests:**
+  - `tests/chat-realtime.test.ts`: publishing, real signed token requests,
+    and refusals;
+  - `lib/chat/realtime-client.test.tsx`: the hook against a stand-in SDK;
+  - `components/storefront/chat/chat-realtime.test.tsx`: the wiring and
+    backup intervals;
+  - the change-signal test in `tests/chat.test.ts` and the CSP test.
+- **Still to do by hand:**
+  - set `ABLY_API_KEY` and check delivery against real Ably;
+  - check a store app returning from the background on a phone;
+  - measure send time on the deployed site.
+
 **Not built in this phase:** AI or automatic replies, attachments or images,
 editing or deleting messages, assigning a conversation to one staff member,
 typing indicators, read receipts shown to the shopper, emailing guests,

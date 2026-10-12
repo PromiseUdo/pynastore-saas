@@ -20,6 +20,8 @@ export interface StorefrontChatConfig {
   unread: number;
   /** inside this store's own app, which can be reached by push (ROADMAP 17.4) */
   pushReady?: boolean;
+  /** real-time hints are set up (ABLY_API_KEY); otherwise the panel only polls */
+  realtime?: boolean;
 }
 
 const ChatConfigContext = React.createContext<StorefrontChatConfig | null>(null);

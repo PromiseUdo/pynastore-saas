@@ -512,3 +512,36 @@ describe('permissions', () => {
     expect(keys).toEqual(['messages.reply', 'messages.view']);
   });
 });
+
+describe('the inbox list’s change signal', () => {
+  it('moves for messages, resolve, reopen and block — never for read marks or the shopper looking', async () => {
+    const changed = async () => (await inboxSummary(store.id)).changedAt;
+    const tick = () => new Promise((r) => setTimeout(r, 15));
+
+    await say(asCustomer(ada), 'Hello');
+    const id = await conversationOf(asCustomer(ada));
+    let before = await changed();
+
+    await tick();
+    await markReadByStaff(store.id, id, 1);
+    await markReadByCustomer(store.id, asCustomer(ada), 1);
+    await getShopperChat(store.id, asCustomer(ada), {}, { markSeen: true, now: new Date(Date.now() + 60_000) });
+    expect(await changed()).toBe(before);
+
+    for (const step of [
+      () => sendStaffMessage(store.id, { conversationId: id, staffUserId: staffId, clientId: randomUUID(), body: 'Hi' }),
+      () => setConversationResolved(store.id, id, staffId, true),
+      () => setConversationResolved(store.id, id, staffId, false),
+      () => setConversationBlocked(store.id, id, staffId, true),
+      () => setConversationBlocked(store.id, id, staffId, false),
+      () => say(asCustomer(ada), 'Again'),
+    ]) {
+      await tick();
+      await step();
+      const now = await changed();
+      expect(now).not.toBe(before);
+      before = now;
+    }
+  });
+});
+

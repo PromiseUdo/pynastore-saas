@@ -61,15 +61,34 @@ export interface ChatAvailability {
   greeting: string | null;
 }
 
+/** The store's own chat switches, as read with the store itself (see chatStoreFromRequest). */
+export interface StoreChatSettings {
+  storefrontChatEnabled: boolean;
+  storefrontChatGreeting: string | null;
+  storefrontOpen: boolean;
+}
+
+export const STORE_CHAT_SETTINGS_SELECT = {
+  storefrontChatEnabled: true,
+  storefrontChatGreeting: true,
+  storefrontOpen: true,
+} as const;
+
 /**
  * Whether this store takes messages right now. Every shopper send re-checks
  * it; the storefront uses it to decide whether to show the chat at all.
+ *
+ * `settings`: the store's switches when the caller already read them in this
+ * request, from a live (ACTIVE) store — saves reading the same row twice.
+ * The billing check always runs.
  */
-export async function chatAvailability(organizationId: string): Promise<ChatAvailability> {
-  const org = await prisma.organization.findFirst({
-    where: { id: organizationId, status: 'ACTIVE' },
-    select: { storefrontChatEnabled: true, storefrontChatGreeting: true, storefrontOpen: true },
-  });
+export async function chatAvailability(organizationId: string, settings?: StoreChatSettings): Promise<ChatAvailability> {
+  const org =
+    settings ??
+    (await prisma.organization.findFirst({
+      where: { id: organizationId, status: 'ACTIVE' },
+      select: STORE_CHAT_SETTINGS_SELECT,
+    }));
   if (!org || !org.storefrontChatEnabled || !org.storefrontOpen) {
     return { open: false, greeting: org?.storefrontChatGreeting ?? null };
   }
@@ -209,11 +228,16 @@ export interface ShopperChat {
   hasEarlier: boolean | null;
 }
 
+/** This shopper's conversation with the store, found from who they are — never from an id they sent. */
+export async function shopperConversationId(organizationId: string, identity: ChatIdentity | null): Promise<string | null> {
+  if (!identity) return null;
+  const found = await prisma.chatConversation.findUnique({ where: whereShopper(organizationId, identity), select: { id: true } });
+  return found?.id ?? null;
+}
+
 /** Whether this shopper has a conversation with the store yet (for the new-guest limit). */
 export async function hasShopperConversation(organizationId: string, identity: ChatIdentity | null): Promise<boolean> {
-  if (!identity) return false;
-  const found = await prisma.chatConversation.findUnique({ where: whereShopper(organizationId, identity), select: { id: true } });
-  return found !== null;
+  return (await shopperConversationId(organizationId, identity)) !== null;
 }
 
 /**
@@ -273,24 +297,29 @@ export async function sendCustomerMessage(
   identity: ChatIdentity,
   input: { clientId: unknown; body: unknown; productId?: unknown; guestName?: unknown },
   now = new Date(),
+  /**
+   * The store's availability as the caller checked it moments ago in this
+   * same request (the send route does, before setting a guest cookie). Any
+   * other caller leaves it out and the check runs here.
+   */
+  checkedAvailability?: ChatAvailability,
 ): Promise<SendResult<ShopperChatMessage>> {
   const checked = validateMessage(input.body);
   if (!checked.ok) return { ok: false, code: 'invalid', message: checked.message };
   if (!isValidClientId(input.clientId)) return { ok: false, code: 'invalid', message: 'Your message wasn’t sent. Please try again.' };
   const clientId = input.clientId;
 
-  if (!(await chatAvailability(organizationId)).open) {
+  // The availability check and the product lookup don't depend on each other.
+  const [availability, product] = await Promise.all([
+    checkedAvailability ?? chatAvailability(organizationId),
+    typeof input.productId === 'string' && input.productId
+      ? prisma.inventoryItem.findFirst({ where: { id: input.productId, organizationId }, select: { id: true } })
+      : null,
+  ]);
+  if (!availability.open) {
     return { ok: false, code: 'unavailable', message: 'This store isn’t taking messages right now.' };
   }
-
-  let productId: string | null = null;
-  if (typeof input.productId === 'string' && input.productId) {
-    const product = await prisma.inventoryItem.findFirst({
-      where: { id: input.productId, organizationId },
-      select: { id: true },
-    });
-    productId = product?.id ?? null;
-  }
+  const productId = product?.id ?? null;
 
   const guestName = identity.kind === 'guest' ? normalizeGuestName(input.guestName) : null;
   const where = whereShopper(organizationId, identity);
@@ -310,6 +339,7 @@ export async function sendCustomerMessage(
           lastPreview: preview,
           customerReadSeq: 1,
           customerSeenAt: now,
+          listChangedAt: now,
         },
         update: {
           lastSeq: { increment: 1 },
@@ -320,6 +350,7 @@ export async function sendCustomerMessage(
           resolvedAt: null,
           resolvedByUserId: null,
           customerSeenAt: now,
+          listChangedAt: now,
           ...(guestName ? { guestName } : {}),
         },
         select: { id: true, lastSeq: true, blockedAt: true },
@@ -619,6 +650,7 @@ export async function sendStaffMessage(
           resolvedAt: null,
           resolvedByUserId: null,
           staffAlertedAt: null,
+          listChangedAt: now,
         },
         select: { lastSeq: true },
       });
@@ -685,8 +717,8 @@ export async function setConversationResolved(
   const { count } = await prisma.chatConversation.updateMany({
     where: { id: conversationId, organizationId },
     data: resolved
-      ? { status: 'RESOLVED', resolvedAt: now, resolvedByUserId: userId }
-      : { status: 'OPEN', resolvedAt: null, resolvedByUserId: null },
+      ? { status: 'RESOLVED', resolvedAt: now, resolvedByUserId: userId, listChangedAt: now }
+      : { status: 'OPEN', resolvedAt: null, resolvedByUserId: null, listChangedAt: now },
   });
   if (count) notifyChatChanged({ kind: 'status', organizationId, conversationId });
   return count > 0;
@@ -702,7 +734,9 @@ export async function setConversationBlocked(
 ): Promise<boolean> {
   const { count } = await prisma.chatConversation.updateMany({
     where: { id: conversationId, organizationId },
-    data: blocked ? { blockedAt: now, blockedByUserId: userId } : { blockedAt: null, blockedByUserId: null },
+    data: blocked
+      ? { blockedAt: now, blockedByUserId: userId, listChangedAt: now }
+      : { blockedAt: null, blockedByUserId: null, listChangedAt: now },
   });
   if (count) notifyChatChanged({ kind: 'status', organizationId, conversationId });
   return count > 0;
@@ -711,7 +745,10 @@ export async function setConversationBlocked(
 /**
  * What the sidebar badge and the inbox's poll need, in one round trip:
  * conversations with something unread (blocked ones never count), and when
- * anything last changed — a member's screen refetches only when that moves.
+ * the LIST last changed — a member's screen refetches only when that moves.
+ * That's `listChangedAt` (messages, resolve/reopen, block/unblock), not
+ * `updatedAt`: read marks and the shopper's "panel open" mark move
+ * `updatedAt` too, and must not re-render a merchant's Messages page.
  */
 export interface InboxSummary {
   unreadConversations: number;
@@ -727,7 +764,7 @@ export async function inboxSummary(organizationId: string): Promise<InboxSummary
   const unreadWhere = { organizationId, blockedAt: null, lastSeq: { gt: prisma.chatConversation.fields.staffReadSeq } };
   const [unreadConversations, latest, newest] = await Promise.all([
     prisma.chatConversation.count({ where: unreadWhere }),
-    prisma.chatConversation.aggregate({ where: { organizationId }, _max: { updatedAt: true } }),
+    prisma.chatConversation.aggregate({ where: { organizationId }, _max: { listChangedAt: true } }),
     prisma.chatConversation.findFirst({
       where: unreadWhere,
       orderBy: { lastMessageAt: 'desc' },
@@ -736,7 +773,7 @@ export async function inboxSummary(organizationId: string): Promise<InboxSummary
   ]);
   return {
     unreadConversations,
-    changedAt: latest._max.updatedAt?.toISOString() ?? null,
+    changedAt: latest._max.listChangedAt?.toISOString() ?? null,
     latestUnread: newest
       ? { id: newest.id, name: newest.customer?.name ?? newest.guestName ?? null, lastMessageAt: newest.lastMessageAt.toISOString() }
       : null,

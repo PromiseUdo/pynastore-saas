@@ -65,22 +65,25 @@ export async function POST(request: Request) {
   const organizationId = ctx.organization.id;
   const conversationId = typeof body.conversationId === 'string' ? body.conversationId : null;
 
-  if (body.inbox === true) await touchInboxSeen(organizationId);
-
-  let conversation: Awaited<ReturnType<typeof listStaffMessages>> | undefined;
-  if (conversationId) {
-    /* Reading is shared across the team, so only someone who can reply marks
-     * a conversation read — a view-only member looking must not clear it for
-     * the person who has to answer. */
-    const read = parseSeq(body.read);
-    if (read !== undefined && hasPermission(perms, PERMISSIONS.MESSAGES_REPLY)) {
-      await markReadByStaff(organizationId, conversationId, read);
-    }
-    const after = parseSeq(body.after);
-    const before = parseSeq(body.before);
-    conversation = await listStaffMessages(organizationId, conversationId, before !== undefined ? { before } : { after: after ?? 0 });
-    if (!conversation) return json({ summary: await inboxSummary(organizationId), missing: true });
-  }
+  /* Reading is shared across the team, so only someone who can reply marks
+   * a conversation read — a view-only member looking must not clear it for
+   * the person who has to answer. The "Messages is open" mark, the read mark
+   * and the page of messages don't depend on each other: done together. The
+   * summary waits for the read mark, since it counts unread. */
+  const read = conversationId ? parseSeq(body.read) : undefined;
+  const after = parseSeq(body.after);
+  const before = parseSeq(body.before);
+  const [, , listed] = await Promise.all([
+    body.inbox === true ? touchInboxSeen(organizationId) : null,
+    conversationId && read !== undefined && hasPermission(perms, PERMISSIONS.MESSAGES_REPLY)
+      ? markReadByStaff(organizationId, conversationId, read)
+      : null,
+    conversationId
+      ? listStaffMessages(organizationId, conversationId, before !== undefined ? { before } : { after: after ?? 0 })
+      : undefined,
+  ]);
+  const conversation = listed ?? undefined;
+  if (conversationId && !conversation) return json({ summary: await inboxSummary(organizationId), missing: true });
 
   const [summary, products] = await Promise.all([
     inboxSummary(organizationId),

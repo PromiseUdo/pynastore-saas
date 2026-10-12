@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/layout/empty-state';
 import { useChatFeed } from '@/lib/chat/use-chat-feed';
+import { backupInterval, useRealtimeChannel, type ChatEventView } from '@/lib/chat/realtime-client';
+import { ADMIN_BACKUP_POLL_MS, InboxRealtimeContext, type InboxRealtime } from './inbox-realtime';
 import { fetchFeed, useInboxStore, type ChatProductCardView, type InboxSummaryView } from '@/lib/chat/inbox-client';
 import type { InboxView, StaffChatMessage } from '@/lib/chat/rules';
 import type { ConversationRow, StaffConversation } from '@/lib/chat/service';
@@ -70,6 +72,7 @@ export function MessagesPageClient({
   selectedId,
   selected,
   setup,
+  realtime: realtimeConfigured = false,
   currency,
   can,
 }: {
@@ -82,6 +85,8 @@ export function MessagesPageClient({
   selectedId: string | null;
   selected: SelectedConversation | null;
   setup: { enabled: boolean; shopOpen: boolean };
+  /** ABLY_API_KEY is set: listen for the inbox's real-time hints */
+  realtime?: boolean;
   currency: string;
   can: MessagesPermissions;
 }) {
@@ -117,106 +122,140 @@ export function MessagesPageClient({
     [pathname, searchParams],
   );
 
+  /* One real-time connection for the page. Every event (and every "you may
+   * have missed some") goes to whoever is polling — the open conversation, or
+   * the list below — which fetches, and refreshes the list only if the
+   * inbox's change signal moved. */
+  const listeners = React.useRef(new Set<(event: ChatEventView | null) => void>());
+  const realtimeState = useRealtimeChannel({
+    enabled: realtimeConfigured,
+    tokenUrl: '/messages/realtime-token',
+    onEvent: (event) => listeners.current.forEach((listener) => listener(event)),
+    onCatchUp: () => listeners.current.forEach((listener) => listener(null)),
+  });
+  const realtimeValue = React.useMemo<InboxRealtime>(
+    () => ({
+      state: realtimeState,
+      subscribe: (listener) => {
+        listeners.current.add(listener);
+        return () => listeners.current.delete(listener);
+      },
+    }),
+    [realtimeState],
+  );
+
   // With nothing open, keep the list itself current.
   const pollInbox = React.useCallback(async () => {
     const response = await fetchFeed({ inbox: true });
     syncInbox(response.summary);
     return false;
   }, [syncInbox]);
-  useChatFeed({ enabled: !selectedId, poll: pollInbox, fastMs: 10_000, slowMs: 30_000 });
+  const { pollNow: pollInboxNow } = useChatFeed({
+    enabled: !selectedId,
+    poll: pollInbox,
+    fastMs: 10_000,
+    slowMs: 30_000,
+    ...backupInterval(realtimeState, ADMIN_BACKUP_POLL_MS),
+  });
+  React.useEffect(() => {
+    if (selectedId) return;
+    return realtimeValue.subscribe(() => pollInboxNow());
+  }, [selectedId, realtimeValue, pollInboxNow]);
 
   const filtering = view !== 'all' || query.length > 0;
   const nothingYet = total === 0 && !filtering;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <PageHeader
-        title="Messages"
-        description="Private conversations with shoppers from your online store."
-        actions={
-          can.viewSettings ? (
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/settings/storefront#chat">
-                <Settings2 className="size-3.5" />
-                Chat settings
-              </Link>
-            </Button>
-          ) : undefined
-        }
-      />
+    <InboxRealtimeContext.Provider value={realtimeValue}>
+      <div className="flex h-full min-h-0 flex-col">
+        <PageHeader
+          title="Messages"
+          description="Private conversations with shoppers from your online store."
+          actions={
+            can.viewSettings ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/settings/storefront#chat">
+                  <Settings2 className="size-3.5" />
+                  Chat settings
+                </Link>
+              </Button>
+            ) : undefined
+          }
+        />
 
-      {!nothingYet && <ChatOffNotice setup={setup} canViewSettings={can.viewSettings} />}
+        {!nothingYet && <ChatOffNotice setup={setup} canViewSettings={can.viewSettings} />}
 
-      {nothingYet ? (
-        <div className="px-6 py-10">
-          <EmptyState
-            icon={MessagesSquare}
-            title="No conversations yet"
-            description={
-              setup.enabled
-                ? 'When shoppers message your store, their conversations appear here for you to answer.'
-                : 'Turn on chat and shoppers can message your store from your online shop. Their conversations appear here.'
-            }
-            action={
-              !setup.enabled && can.viewSettings ? (
-                <Button asChild>
-                  <Link href="/settings/storefront#chat">Turn on chat</Link>
-                </Button>
-              ) : undefined
-            }
-          />
-        </div>
-      ) : (
-        <div className="grid min-h-0 flex-1 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <div className={selectedId ? 'hidden min-h-0 border-r lg:flex lg:flex-col' : 'flex min-h-0 flex-col lg:border-r'}>
-            <ConversationList
-              rows={rows}
-              total={total}
-              page={page}
-              pageSize={pageSize}
-              view={view}
-              query={query}
-              selectedId={selectedId}
-              hrefFor={hrefFor}
-              setParams={setParams}
+        {nothingYet ? (
+          <div className="px-6 py-10">
+            <EmptyState
+              icon={MessagesSquare}
+              title="No conversations yet"
+              description={
+                setup.enabled
+                  ? 'When shoppers message your store, their conversations appear here for you to answer.'
+                  : 'Turn on chat and shoppers can message your store from your online shop. Their conversations appear here.'
+              }
+              action={
+                !setup.enabled && can.viewSettings ? (
+                  <Button asChild>
+                    <Link href="/settings/storefront#chat">Turn on chat</Link>
+                  </Button>
+                ) : undefined
+              }
             />
           </div>
-          <div className={selectedId ? 'flex min-h-0 flex-col' : 'hidden min-h-0 lg:flex lg:flex-col'}>
-            {selected ? (
-              <ConversationPane
-                key={selected.conversation.id}
-                selected={selected}
-                backHref={hrefFor(null)}
-                currency={currency}
-                can={can}
-                onSummary={syncInbox}
+        ) : (
+          <div className="grid min-h-0 flex-1 lg:grid-cols-[320px_minmax(0,1fr)]">
+            <div className={selectedId ? 'hidden min-h-0 border-r lg:flex lg:flex-col' : 'flex min-h-0 flex-col lg:border-r'}>
+              <ConversationList
+                rows={rows}
+                total={total}
+                page={page}
+                pageSize={pageSize}
+                view={view}
+                query={query}
+                selectedId={selectedId}
+                hrefFor={hrefFor}
+                setParams={setParams}
               />
-            ) : selectedId ? (
-              <div className="p-6">
-                <EmptyState
-                  icon={MessagesSquare}
-                  title="That conversation isn’t here"
-                  description="It may have been removed, or the link is from another store."
-                  action={
-                    <Button variant="outline" asChild>
-                      <Link href={hrefFor(null)}>Back to messages</Link>
-                    </Button>
-                  }
+            </div>
+            <div className={selectedId ? 'flex min-h-0 flex-col' : 'hidden min-h-0 lg:flex lg:flex-col'}>
+              {selected ? (
+                <ConversationPane
+                  key={selected.conversation.id}
+                  selected={selected}
+                  backHref={hrefFor(null)}
+                  currency={currency}
+                  can={can}
+                  onSummary={syncInbox}
                 />
-              </div>
-            ) : (
-              <div className="flex flex-1 items-center justify-center p-6">
-                <EmptyState
-                  icon={MessagesSquare}
-                  title="Select a conversation"
-                  description="Choose one from the list to read it and reply to the customer."
-                />
-              </div>
-            )}
+              ) : selectedId ? (
+                <div className="p-6">
+                  <EmptyState
+                    icon={MessagesSquare}
+                    title="That conversation isn’t here"
+                    description="It may have been removed, or the link is from another store."
+                    action={
+                      <Button variant="outline" asChild>
+                        <Link href={hrefFor(null)}>Back to messages</Link>
+                      </Button>
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-1 items-center justify-center p-6">
+                  <EmptyState
+                    icon={MessagesSquare}
+                    title="Select a conversation"
+                    description="Choose one from the list to read it and reply to the customer."
+                  />
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </InboxRealtimeContext.Provider>
   );
 }
 

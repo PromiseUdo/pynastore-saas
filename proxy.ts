@@ -388,6 +388,8 @@ export default async function proxy(req: NextRequest, event: NextFetchEvent) {
     frameSrc: hostInfo.siteType === 'admin' && slug ? [new URL(getStorefrontUrl(slug)).origin] : undefined,
     // …and that storefront, only mid-preview, may be framed by that admin and nothing else.
     frameAncestors: slug && isDesignPreview(req, hostInfo) ? [new URL(getAdminUrl(slug)).origin] : undefined,
+    // The chat's real-time hints (lib/chat/ably.ts) — only when configured.
+    realtime: Boolean(process.env.ABLY_API_KEY),
   });
   req.headers.set('x-nonce', nonce);
   req.headers.set('content-security-policy', policy);
