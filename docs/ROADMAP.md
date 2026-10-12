@@ -5761,7 +5761,7 @@ merchant turns chat on.
   marked unread; and nothing crosses between stores. Typecheck, lint, the
   suite and `next build` pass.
 
-### 17.7 — Real time (Ably) and lighter polling — CODE DONE (2026-10-12); needs ABLY_API_KEY to switch on
+### 17.7 — Real time (Ably) and lighter polling — DONE (2026-10-12); live on Ably once ABLY_API_KEY is set (it is, locally and on Vercel)
 
 Follows the 2026-10-12 audit of 17.1–17.5.
 
@@ -5826,10 +5826,20 @@ Follows the 2026-10-12 audit of 17.1–17.5.
   - `components/storefront/chat/chat-realtime.test.tsx`: the wiring and
     backup intervals;
   - the change-signal test in `tests/chat.test.ts` and the CSP test.
+- **Checked against real Ably (2026-10-12):**
+  - **The key:** it publishes on `chat:*` and `inbox:*` and is refused
+    elsewhere (40160).
+  - **Tokens:** both routes answer 200, and both browsers connect to
+    `main.realtime.ably.net`.
+  - **Delivery:** store → shopper in 337–595 ms and shopper → store in
+    352–602 ms, both including simulated typing.
+  - **Backup polling while live:** 2 shopper and 1 admin poll in 31 s.
+  - **A shopper offline:** caught up 53 ms after coming back.
+  - **Ably blocked:** the reply still arrived by polling in 1.1 s.
+  - **Messages:** 0 duplicates, and the order was right.
 - **Still to do by hand:**
-  - set `ABLY_API_KEY` and check delivery against real Ably;
   - check a store app returning from the background on a phone;
-  - measure send time on the deployed site.
+  - measure send time on the deployed site (Neon), not locally.
 
 **Not built in this phase:** AI or automatic replies, attachments or images,
 editing or deleting messages, assigning a conversation to one staff member,
