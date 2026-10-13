@@ -34,17 +34,23 @@ function wasDismissed(org: string): boolean {
 export function ChatRepliesPrompt({ org, channel = 'app' }: { org: string; channel?: PushChannel }) {
   const [state, setState] = React.useState<State>('checking');
 
-  const enable = React.useCallback(async () => {
-    setState('working');
-    setState(await optIn(channel, (deviceToken) => notifyChatReplies(org, deviceToken)));
-  }, [channel, org]);
+  /* `quietly`: already allowed, so this only links the phone again — no
+   * card, not even for the moment it takes (it used to flash up and vanish). */
+  const enable = React.useCallback(
+    async (quietly = false) => {
+      if (!quietly) setState('working');
+      const result = await optIn(channel, (deviceToken) => notifyChatReplies(org, deviceToken));
+      setState(quietly && result !== 'on' ? 'hidden' : result);
+    },
+    [channel, org],
+  );
 
   React.useEffect(() => {
     let cancelled = false;
     void optInPermission(channel)
       .then((permission) => {
         if (cancelled) return;
-        if (permission === 'granted') void enable();
+        if (permission === 'granted') void enable(true);
         else setState(permission === 'prompt' && !wasDismissed(org) ? 'offer' : 'hidden');
       });
     return () => {

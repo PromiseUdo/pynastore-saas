@@ -33,14 +33,16 @@ export function OrderUpdatesPrompt({
 }) {
   const [state, setState] = React.useState<State>('checking');
 
-  const enable = React.useCallback(async () => {
-    setState('working');
+  /* `quietly`: already allowed, so this only adds the order — no card in
+   * the meantime (it used to flash up first); just the line saying it's on. */
+  const enable = React.useCallback(async (quietly = false) => {
+    if (!quietly) setState('working');
     const result = await optIn(
       channel,
       async (deviceToken) => (await watchOrderUpdatesAction(confirmationToken, deviceToken)).ok,
       { order: confirmationToken },
     );
-    setState(result);
+    setState(quietly && result !== 'on' ? 'hidden' : result);
   }, [channel, confirmationToken]);
 
   React.useEffect(() => {
@@ -48,7 +50,7 @@ export function OrderUpdatesPrompt({
     void optInPermission(channel)
       .then((permission) => {
         if (cancelled) return;
-        if (permission === 'granted') void enable();
+        if (permission === 'granted') void enable(true);
         else setState(permission === 'prompt' ? 'offer' : 'hidden');
       });
     return () => {

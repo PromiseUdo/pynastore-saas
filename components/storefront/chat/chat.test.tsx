@@ -265,12 +265,17 @@ describe('reply notifications in the store’s app (17.4)', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Turn on notifications' })).toBeNull());
   });
 
-  it('adds the conversation quietly when the app is already allowed to notify', async () => {
+  it('adds the conversation quietly when the app is already allowed to notify — the card never shows', async () => {
     push.pushPermission.mockResolvedValueOnce('granted');
+    // Hold the link open, to catch the card showing while it's being made.
+    let finish: (ok: boolean) => void = () => {};
+    client.notifyChatReplies.mockImplementationOnce(() => new Promise<boolean>((resolve) => (finish = resolve)));
     client.fetchShopperChat.mockResolvedValue(WITH_CONVERSATION);
     wrap(<ChatPanel />, { ...ON, exists: true, push: 'app' }, ADA);
     await waitFor(() => expect(client.notifyChatReplies).toHaveBeenCalled());
-    expect(screen.queryByRole('button', { name: 'Turn on notifications' })).toBeNull();
+    expect(screen.queryByText(/notification when the store replies/)).toBeNull();
+    finish(true);
+    await waitFor(() => expect(screen.queryByText(/notification when the store replies/)).toBeNull());
   });
 
   it('never offers them in a browser, or before the first message', async () => {
