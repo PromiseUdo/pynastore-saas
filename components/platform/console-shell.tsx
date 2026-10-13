@@ -228,8 +228,13 @@ function ConsoleSidebar({
           {initials(staff.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-medium leading-snug text-sidebar-foreground">{staff.name}</p>
-          <p className="truncate text-[10px] text-muted-foreground">Platform staff</p>
+          <p className="truncate text-[12px] font-medium leading-snug text-sidebar-foreground" title={staff.name}>
+            {staff.name}
+          </p>
+          {/* Which account is signed in; a staff member without a name already shows the email above. */}
+          <p className="truncate text-[10px] text-muted-foreground" title={staff.email}>
+            {staff.name === staff.email ? 'Platform staff' : staff.email}
+          </p>
         </div>
         <button
           type="button"
