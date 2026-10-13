@@ -16,6 +16,8 @@
  *   read            the newest message actually shown → marked read
  *   inbox           true when it's the Messages page asking, which tells the
  *                   unanswered-message email (17.4) someone is looking
+ *   away            true when the Messages page was hidden or left: nobody
+ *                   is looking, so the next message alerts at once (18)
  *
  * Always answers with the inbox summary (badge count, when anything last
  * changed); a screen that sees `changedAt` move refreshes its list.
@@ -27,6 +29,7 @@ import {
   chatProductCards,
   inboxSummary,
   listStaffMessages,
+  markInboxAway,
   markReadByStaff,
   touchInboxSeen,
 } from '@/lib/chat/service';
@@ -63,6 +66,10 @@ export async function POST(request: Request) {
   }
 
   const organizationId = ctx.organization.id;
+  if (body.away === true) {
+    await markInboxAway(organizationId);
+    return json({ ok: true });
+  }
   const conversationId = typeof body.conversationId === 'string' ? body.conversationId : null;
 
   /* Reading is shared across the team, so only someone who can reply marks

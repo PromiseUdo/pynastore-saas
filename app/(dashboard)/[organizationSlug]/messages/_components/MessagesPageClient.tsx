@@ -23,7 +23,7 @@ import { EmptyState } from '@/components/layout/empty-state';
 import { useChatFeed } from '@/lib/chat/use-chat-feed';
 import { backupInterval, useRealtimeChannel, type ChatEventView } from '@/lib/realtime/client';
 import { ADMIN_BACKUP_POLL_MS, InboxRealtimeContext, type InboxRealtime } from './inbox-realtime';
-import { fetchFeed, useInboxStore, type ChatProductCardView, type InboxSummaryView } from '@/lib/chat/inbox-client';
+import { fetchFeed, leaveInbox, useInboxStore, type ChatProductCardView, type InboxSummaryView } from '@/lib/chat/inbox-client';
 import type { InboxView, StaffChatMessage } from '@/lib/chat/rules';
 import type { ConversationRow, StaffConversation } from '@/lib/chat/service';
 import { ConversationList } from './ConversationList';
@@ -143,6 +143,23 @@ export function MessagesPageClient({
     }),
     [realtimeState],
   );
+
+  /* Looking, or not (ROADMAP 18): hiding this tab or leaving the page tells
+   * the server at once, so a shopper's next message alerts the team instead
+   * of being held back as if someone were watching. Coming back, the next
+   * poll marks the inbox as watched again. */
+  React.useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') leaveInbox();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', leaveInbox);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', leaveInbox);
+      leaveInbox();
+    };
+  }, []);
 
   // With nothing open, keep the list itself current.
   const pollInbox = React.useCallback(async () => {

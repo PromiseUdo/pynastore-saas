@@ -79,7 +79,8 @@ export interface EventFacts {
     storeName: string;
   };
   'order.alert': { kind: StoreOrderAlertKind; orderId: string; reference: string; returnId?: string; customerName: string };
-  'chat.message': { conversationId: string; shopperName: string | null };
+  /** `unread`: the shopper's messages nobody at the store has read, this one included */
+  'chat.message': { conversationId: string; shopperName: string | null; unread: number };
   /** `unread`: the store's messages they haven't read yet, this one included */
   'chat.reply': { conversationId: string; storeName: string; unread: number };
   'stock.low': {
@@ -188,7 +189,10 @@ export const EVENTS: Catalogue = {
     reaches: { staff: PERMISSIONS.MESSAGES_REPLY },
     audiences: () => [{ type: 'staff', permission: PERMISSIONS.MESSAGES_REPLY, owner: true }],
     channels: { EMAIL: 'on', WEB_PUSH: 'on', NATIVE_PUSH: 'on' },
-    words: (f) => ({ title: 'New message', body: `${f.shopperName ?? 'A guest'} is waiting for a reply.` }),
+    words: (f) => ({
+      title: f.unread > 1 ? `${f.unread} new messages` : 'New message',
+      body: `${f.shopperName ?? 'A guest'} is waiting for a reply.`,
+    }),
     target: (f) => ({ type: 'conversation', conversationId: f.conversationId }),
     thread: (f) => `chat:${f.conversationId}`,
   },

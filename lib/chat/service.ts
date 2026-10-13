@@ -832,6 +832,16 @@ export async function chatProductCards(organizationId: string, ids: readonly (st
 }
 
 /** Someone at the store has Messages open. Written at most once a minute. */
+/**
+ * Nobody here is looking any more: the Messages tab was hidden or left
+ * (ROADMAP 18). The next shopper message alerts the store at once instead of
+ * waiting out INBOX_WATCHING_MS. A member still looking re-marks it with
+ * their next poll.
+ */
+export async function markInboxAway(organizationId: string): Promise<void> {
+  await prisma.organization.updateMany({ where: { id: organizationId }, data: { chatInboxSeenAt: null } });
+}
+
 export async function touchInboxSeen(organizationId: string, now = new Date()): Promise<void> {
   await prisma.organization.updateMany({
     where: {

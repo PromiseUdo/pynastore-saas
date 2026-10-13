@@ -10,10 +10,12 @@
  */
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { BellOff, BellRing, Loader2, MonitorSmartphone, Share, SquarePlus } from 'lucide-react';
+import { BellOff, BellRing, Loader2, MonitorSmartphone, Share, SquarePlus, Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { SwitchRoot } from '@/components/ui/switch';
+import { playChime, prepareChime, setSoundEnabled, soundEnabled } from '@/lib/notifications/chime';
 import { formatDate } from '@/lib/format';
 import {
   currentSubscription,
@@ -133,6 +135,8 @@ export function DeviceAlerts({ route, devices, appName }: { route: string; devic
         )}
       </div>
 
+      <SoundChoice />
+
       {others.length > 0 && (
         <div className="border-t px-4 py-3">
           <h3 className="text-xs font-semibold text-muted-foreground">Your other devices</h3>
@@ -154,6 +158,36 @@ export function DeviceAlerts({ route, devices, appName }: { route: string; devic
         </div>
       )}
     </section>
+  );
+}
+
+/** A soft chime in this browser when something new arrives — the tab can be in the background. */
+function SoundChoice() {
+  const [on, setOn] = React.useState(true);
+  React.useEffect(() => {
+    setOn(soundEnabled());
+    prepareChime();
+  }, []);
+
+  function change(next: boolean) {
+    setOn(next);
+    setSoundEnabled(next);
+    if (next) playChime(); // so they hear what they turned on
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-t px-4 py-3">
+      <label htmlFor="notification-sound" className="flex min-w-0 items-start gap-2.5">
+        <Volume2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span>
+          <span className="block text-sm font-medium">Play a sound</span>
+          <span className="block text-xs text-muted-foreground">
+            A short chime in this browser when a notification or message arrives, even with the tab in the background.
+          </span>
+        </span>
+      </label>
+      <SwitchRoot id="notification-sound" checked={on} onCheckedChange={change} />
+    </div>
   );
 }
 

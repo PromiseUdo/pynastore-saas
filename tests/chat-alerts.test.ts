@@ -35,7 +35,15 @@ import { prisma } from '@/lib/prisma';
 import { createTestStores, pinDomains, storefrontRequest } from './helpers/storefront-requests';
 import { alertStaffAboutMessage, pushStoreReply, INBOX_WATCHING_MS } from '@/lib/chat/alerts';
 import { watchChatReplies } from '@/lib/chat/push';
-import { markReadByCustomer, markReadByStaff, markShopperAway, sendCustomerMessage, sendStaffMessage, setConversationBlocked } from '@/lib/chat/service';
+import {
+  markInboxAway,
+  markReadByCustomer,
+  markReadByStaff,
+  markShopperAway,
+  sendCustomerMessage,
+  sendStaffMessage,
+  setConversationBlocked,
+} from '@/lib/chat/service';
 import { purgeOldPushWatches } from '@/lib/mobile/push/watch';
 import { discardAfterTasks, flushAfterTasks } from '@/lib/run-after';
 import { POST as postMessage } from '@/app/api/storefront/chat/messages/route';
@@ -159,6 +167,24 @@ describe('emailing the store', () => {
     await shopperWrites(shopper, 'Third, after they read it');
     expect(await alertStaffAboutMessage(store.id, id)).toBe('sent');
     expect(email.sendChatMessageAlertEmail).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps every message on the bell — one entry per conversation, counting', async () => {
+    const shopper = guest('g');
+    const id = await shopperWrites(shopper, 'First');
+    await alertStaffAboutMessage(store.id, id);
+    await shopperWrites(shopper, 'Second');
+    expect(await alertStaffAboutMessage(store.id, id)).toBe('already-alerted'); // no second email…
+    const listed = await prisma.notification.findMany({ where: { userId: users[0], kind: 'chat.message', threadKey: `chat:${id}` } });
+    expect(listed.map((n) => n.title)).toEqual(['2 new messages']); // …but the bell (and devices) heard
+    expect(email.sendChatMessageAlertEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('alerts at once when the Messages tab was just hidden', async () => {
+    const id = await shopperWrites(guest('h'));
+    await prisma.organization.update({ where: { id: store.id }, data: { chatInboxSeenAt: new Date() } });
+    await markInboxAway(store.id);
+    expect(await alertStaffAboutMessage(store.id, id)).toBe('sent');
   });
 
   it('never sends two emails for two messages arriving together', async () => {

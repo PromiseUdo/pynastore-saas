@@ -5,11 +5,14 @@
  * Server only. Both run after the message is saved (Next's `after()`), so
  * neither slows a send, and neither ever throws.
  *
- *   staff email   a shopper wrote and nobody at the store has had Messages
- *                 open in the last couple of minutes → one email to the
- *                 members who can reply. One per unanswered stretch:
- *                 `staffAlertedAt` is claimed here and cleared when someone
- *                 reads the conversation (markReadByStaff) or replies.
+ *   staff alert   a shopper wrote and nobody at the store is looking at
+ *                 Messages (it was open in the last couple of minutes and
+ *                 not left since — markInboxAway) → the members who can
+ *                 reply hear about it on their devices and bell, for every
+ *                 message (one notification per conversation, counting),
+ *                 and by ONE email per unanswered stretch: `staffAlertedAt`
+ *                 is claimed here and cleared when someone reads the
+ *                 conversation (markReadByStaff) or replies.
  *
  *   shopper push  the store replied, the shopper isn't looking at the chat,
  *                 and their phone or browser asked to be told → "The store
@@ -66,44 +69,63 @@ export async function alertStaffAboutMessage(
     if (!org) return 'not-found';
     if (org.chatInboxSeenAt && now.getTime() - org.chatInboxSeenAt.getTime() < INBOX_WATCHING_MS) return 'inbox-open';
 
-    /* Claimed in one statement, so two messages arriving together send one
-     * email. A blocked shopper, or a conversation the store answered last,
-     * doesn't alert. */
+    /* The email: claimed in one statement, so two messages arriving together
+     * send one, and only once per unanswered stretch. */
     const claimed = await prisma.chatConversation.updateMany({
       where: { id: conversationId, organizationId, staffAlertedAt: null, blockedAt: null, lastSender: 'CUSTOMER' },
       data: { staffAlertedAt: now },
     });
-    if (claimed.count === 0) return 'already-alerted';
 
+    // A blocked shopper, or a conversation the store answered last, doesn't alert at all.
     const conversation = await prisma.chatConversation.findFirst({
-      where: { id: conversationId, organizationId },
+      where: { id: conversationId, organizationId, blockedAt: null, lastSender: 'CUSTOMER' },
       select: {
+        lastSeq: true,
+        staffReadSeq: true,
         guestName: true,
         customer: { select: { name: true } },
         messages: { where: { sender: 'CUSTOMER' }, orderBy: { seq: 'desc' }, take: 1, select: { body: true } },
       },
     });
-    if (!conversation) return 'not-found';
+    if (!conversation) return claimed.count === 0 ? 'already-alerted' : 'not-found';
+
+    /* Devices hear about EVERY message (ROADMAP 18) — each replacing the last
+     * on the device (the thread `chat:{id}`), so a burst is one notification
+     * that says how many. The list keeps one entry per conversation: the
+     * unread one before this is replaced, not stacked. */
+    const shopperName = conversation.customer?.name ?? conversation.guestName ?? null;
+    const unread = await prisma.chatMessage.count({
+      where: { conversationId, sender: 'CUSTOMER', seq: { gt: conversation.staffReadSeq } },
+    });
+    await prisma.notification.deleteMany({
+      where: { organizationId, kind: 'chat.message', threadKey: `chat:${conversationId}`, readAt: null },
+    });
 
     // Who: active members who can reply, and the Owner.
-    const shopperName = conversation.customer?.name ?? conversation.guestName ?? null;
     const body = conversation.messages[0]?.body ?? '';
     const result = await notify({
       kind: 'chat.message',
       organizationId,
-      key: `chat:${conversationId}:staff:${now.getTime()}`,
-      facts: { conversationId, shopperName },
-      email: {
-        template: 'chat-message-alert',
-        props: {
-          storeName: org.name,
-          shopperName,
-          isGuest: !conversation.customer,
-          message: body.length > EMAIL_QUOTE_LENGTH ? `${body.slice(0, EMAIL_QUOTE_LENGTH).trimEnd()}…` : body,
-          conversationUrl: getAdminUrl(org.slug, `/messages?c=${encodeURIComponent(conversationId)}`),
-        },
-      },
+      // The one that won the email claim raises its own event, so a race with
+      // another alert for the same message can't swallow the email.
+      key: `chat:${conversationId}:staff:${conversation.lastSeq}${claimed.count === 1 ? ':email' : ''}`,
+      facts: { conversationId, shopperName, unread: Math.max(1, unread) },
+      ...(claimed.count === 1
+        ? {
+            email: {
+              template: 'chat-message-alert' as const,
+              props: {
+                storeName: org.name,
+                shopperName,
+                isGuest: !conversation.customer,
+                message: body.length > EMAIL_QUOTE_LENGTH ? `${body.slice(0, EMAIL_QUOTE_LENGTH).trimEnd()}…` : body,
+                conversationUrl: getAdminUrl(org.slug, `/messages?c=${encodeURIComponent(conversationId)}`),
+              },
+            },
+          }
+        : {}),
     });
+    if (claimed.count === 0) return 'already-alerted';
     return result.listed === 0 ? 'no-recipients' : 'sent';
   } catch (error) {
     console.error(`[chat] Could not email the store about conversation ${conversationId}:`, error);

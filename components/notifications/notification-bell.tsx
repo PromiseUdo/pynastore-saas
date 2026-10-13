@@ -11,7 +11,12 @@
  * the new count (lib/notifications/realtime.ts) while real-time is live; a
  * poll every minute or two otherwise (every five as a backup when live); and
  * a fresh ask whenever the tab comes back. The list itself is only fetched
- * when the dropdown opens. Opening an entry marks it read.
+ * when the dropdown opens. Opening an entry marks it read. In a background
+ * tab it still checks about once a minute (or hears Ably at once).
+ *
+ * Someone on another tab still notices: the count is in the tab's title, and
+ * a soft chime plays when it goes up (lib/notifications/chime.ts — per
+ * browser, on by default, off in Settings → Notifications).
  *
  * While this browser could have alerts but hasn't been asked, the dropdown
  * offers them (ROADMAP 18.3) — the browser's own prompt only ever comes from
@@ -35,8 +40,12 @@ import { useChatFeed } from '@/lib/chat/use-chat-feed';
 import { formatRelativeTime } from '@/lib/format';
 import { isListEvent, unreadBadge, type BellFeed, type ListEvent, type NotificationItem } from '@/lib/notifications/view';
 import { dismissOffer, offerDismissed, turnOnWebPush, webPushSupport } from '@/lib/notifications/web-push-client';
+import { playChime, prepareChime } from '@/lib/notifications/chime';
+import { useTitleCount } from '@/lib/notifications/title-badge';
 
 const POLL_MS = 60_000;
+/** In a background tab browsers allow about one timer a minute anyway. */
+const HIDDEN_POLL_MS = 60_000;
 const POLL_IDLE_MS = 120_000;
 /** While real-time is live the poll is only a safety net. */
 const BACKUP_POLL_MS = 5 * 60_000;
@@ -69,11 +78,25 @@ export function NotificationBell({ base, className }: { base: '/notifications' |
   const unreadRef = React.useRef(0);
   const pollNowRef = React.useRef<() => void>(() => {});
 
-  const apply = React.useCallback((feed: BellFeed) => {
-    unreadRef.current = feed.unread;
-    setUnread(feed.unread);
-    if (feed.items) setItems(feed.items);
+  /** The count from the server; a rise after the first answer chimes. */
+  const known = React.useRef(false);
+  const setCount = React.useCallback((next: number) => {
+    if (known.current && next > unreadRef.current) playChime();
+    known.current = true;
+    unreadRef.current = next;
+    setUnread(next);
   }, []);
+
+  const apply = React.useCallback(
+    (feed: BellFeed) => {
+      setCount(feed.unread);
+      if (feed.items) setItems(feed.items);
+    },
+    [setCount],
+  );
+
+  React.useEffect(() => prepareChime(), []);
+  useTitleCount('notifications', unread);
 
   const loadList = React.useCallback(async () => {
     setState((s) => (s === 'error' ? 'loading' : s));
@@ -91,8 +114,7 @@ export function NotificationBell({ base, className }: { base: '/notifications' |
     accept: isListEvent,
     onEvent: (event) => {
       if (event.unread === unreadRef.current) return;
-      unreadRef.current = event.unread;
-      setUnread(event.unread);
+      setCount(event.unread);
       // Open: show what arrived. Closed: the next opening fetches afresh.
       if (openRef.current) void loadList();
       else setItems(null);
@@ -112,6 +134,8 @@ export function NotificationBell({ base, className }: { base: '/notifications' |
     poll,
     fastMs: live ? BACKUP_POLL_MS : POLL_MS,
     slowMs: live ? BACKUP_POLL_MS : POLL_IDLE_MS,
+    // Live hints still arrive in a background tab; without them, keep a light check going.
+    hiddenMs: live ? undefined : HIDDEN_POLL_MS,
   });
   React.useEffect(() => {
     pollNowRef.current = pollNow;

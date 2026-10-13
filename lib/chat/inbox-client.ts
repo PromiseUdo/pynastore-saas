@@ -44,6 +44,20 @@ export interface FeedRequest {
   inbox?: boolean;
 }
 
+/**
+ * The Messages page was hidden or left: nobody is looking, so the next
+ * shopper message alerts at once. `keepalive`, so it still goes as the page
+ * is hidden or closed; failures don't matter — the mark simply ages out.
+ */
+export function leaveInbox(): void {
+  void fetch('/messages/feed', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ away: true }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 export class FeedError extends Error {
   constructor(public status: number) {
     super(`Messages feed answered ${status}`);

@@ -6608,6 +6608,38 @@ Now:
 
 `tests/chat-alerts.test.ts` covers both.
 
+**The admin and console in a background tab (2026-10-14).** A merchant on
+another tab couldn't tell a shopper had written. Now:
+- **The tab title** shows the count: "(3) Orders" (`lib/notifications/title-badge.ts`).
+  It's the larger of the bell's count and Messages' unread conversations,
+  never their sum, since a waiting chat is on the bell too.
+- **A soft chime** plays when the bell's count rises or a new message
+  arrives (`lib/notifications/chime.ts`).
+  - **How:** two short notes from the Web Audio API, so there's no file to
+    load.
+  - **When:** after the person's first click (browsers forbid sound
+    before), and at most once every 3 seconds.
+  - **Control:** per browser, on by default, switchable in Settings →
+    Notifications under "Play a sound".
+- **Background tabs keep listening:**
+  - **Live hints:** the bell's and the inbox's Ably channels keep arriving
+    in a hidden tab.
+  - **Fallback:** without them, `useChatFeed`'s new `hiddenMs` keeps a
+    once-a-minute check going.
+  - **The Messages watcher** now also runs on the Messages page while its
+    tab is hidden, since the page itself pauses then.
+- **Chat alerts for the store had the shopper side's two flaws.**
+  - **Hiding or leaving Messages** now tells the server
+    (`POST /messages/feed { away: true }`, `markInboxAway`), so the next
+    message alerts at once instead of after 2 minutes.
+  - **Every customer message** reaches the members' devices and bell. Each
+    replaces the last ("3 new messages"), with one current entry per
+    conversation on the bell.
+  - **The email** stays once per unanswered stretch.
+
+  `tests/chat-alerts.test.ts` and `lib/notifications/title-badge.test.tsx`
+  cover it.
+
 ### 18.8 — Not in this phase
 
 SMS and WhatsApp (14.4), marketing pushes and campaigns (Phase 5),

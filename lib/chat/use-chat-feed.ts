@@ -10,7 +10,9 @@
  *
  * Polling, and only while someone is looking:
  *   - every 3s, easing to 10s after a minute with nothing new;
- *   - stopped while `enabled` is false (panel closed) or the tab is hidden;
+ *   - stopped while `enabled` is false (panel closed) or the tab is hidden —
+ *     unless the caller gives `hiddenMs`, for a light check that must keep
+ *     going in a background tab (the admin's title and sound);
  *   - asks at once when the tab comes back, the window regains focus, or the
  *     network returns — so a phone pulled from a pocket is up to date;
  *   - a failed poll backs off (6s, 12s, 24s, 30s…) and reports `reconnecting`
@@ -35,9 +37,11 @@ export interface UseChatFeedOptions {
   /** override the fast/slow intervals — for a lighter background check */
   fastMs?: number;
   slowMs?: number;
+  /** keep asking while the tab is hidden, this often (browsers allow about once a minute) */
+  hiddenMs?: number;
 }
 
-export function useChatFeed({ enabled, poll, fastMs, slowMs }: UseChatFeedOptions): {
+export function useChatFeed({ enabled, poll, fastMs, slowMs, hiddenMs }: UseChatFeedOptions): {
   status: ChatFeedStatus;
   /** ask now (after a send, say) and restart the timer from fast */
   pollNow: () => void;
@@ -67,16 +71,18 @@ export function useChatFeed({ enabled, poll, fastMs, slowMs }: UseChatFeedOption
     const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
     const schedule = () => {
-      if (stopped || hidden()) return;
+      if (stopped) return;
+      if (hidden() && !hiddenMs) return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(run, nextPollDelay({ sinceActivityMs: Date.now() - lastActivity, failures, fastMs, slowMs }));
+      const delay = hidden() && hiddenMs ? hiddenMs : nextPollDelay({ sinceActivityMs: Date.now() - lastActivity, failures, fastMs, slowMs });
+      timer = setTimeout(run, delay);
     };
 
     async function run() {
       if (stopped) return;
       if (timer) clearTimeout(timer);
       timer = null;
-      if (hidden()) return;
+      if (hidden() && !hiddenMs) return;
       // One poll at a time; a kick during one runs straight after it.
       if (inFlight) {
         again = true;
@@ -127,7 +133,7 @@ export function useChatFeed({ enabled, poll, fastMs, slowMs }: UseChatFeedOption
       window.removeEventListener('focus', onVisible);
       window.removeEventListener('online', kick);
     };
-  }, [enabled, fastMs, slowMs]);
+  }, [enabled, fastMs, slowMs, hiddenMs]);
 
   const pollNow = React.useCallback(() => kickRef.current(), []);
   return { status, pollNow };
