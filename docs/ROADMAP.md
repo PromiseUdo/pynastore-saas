@@ -6588,6 +6588,26 @@ hand is proved; the rest is a checklist.
 
   Then mark this part DONE.
 
+**Found on the first phone test (2026-10-14), fixed.** Chat replies rarely
+reached the shopper's phone, for two reasons:
+- **The 45-second window:** "looking at the chat" was inferred from the
+  chat's polls, so for up to 45 seconds after closing it the shopper still
+  counted as looking. A reply in that window was never notified, not even
+  later.
+- **Only the first reply in a batch** was pushed until they read the chat,
+  so after one notification the rest stayed silent.
+
+Now:
+- **Leaving is reported:** closing the chat, or the app or tab going to the
+  background, tells the server at once (`POST /api/storefront/chat/away`,
+  `markShopperAway`, sent with `keepalive`). The 45 seconds only matter for
+  an app killed before it can say so.
+- **Every reply is pushed** on the chat's thread, so it replaces the last
+  notification, and says how many are waiting ("The store sent you 3 new
+  messages."). Never the words themselves.
+
+`tests/chat-alerts.test.ts` covers both.
+
 ### 18.8 — Not in this phase
 
 SMS and WhatsApp (14.4), marketing pushes and campaigns (Phase 5),

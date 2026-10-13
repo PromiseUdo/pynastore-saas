@@ -41,6 +41,7 @@ import {
 import {
   ChatRequestError,
   fetchShopperChat,
+  leaveShopperChat,
   markShopperChatRead,
   sendShopperMessage,
   type ShopperChatResponse,
@@ -142,6 +143,24 @@ export function ChatPanel() {
   React.useEffect(() => {
     pollNowRef.current = pollNow;
   }, [pollNow]);
+
+  /* Looking, or not: the server holds a reply's push back only while the
+   * shopper is looking at this panel. Closing it, or the app or tab going
+   * into the background, says so at once; coming back, the next poll (which
+   * runs straight away) marks them as looking again. */
+  React.useEffect(() => {
+    const away = () => leaveShopperChat(org.slug);
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') away();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', away);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', away);
+      away();
+    };
+  }, [org.slug]);
 
   /* ── Scrolling ───────────────────────────────────────────────────────── */
 

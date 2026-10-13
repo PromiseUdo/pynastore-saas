@@ -149,7 +149,7 @@ describe('the catalogue', () => {
     'order.update': { kind: 'shipped', orderId: 'o1', reference: 'R1', confirmationToken: 't', storeName: 'S' },
     'order.alert': { kind: 'return-requested', orderId: 'o1', reference: 'R1', returnId: 'r1', customerName: 'Ada' },
     'chat.message': { conversationId: 'c1', shopperName: null },
-    'chat.reply': { conversationId: 'c1', storeName: 'S' },
+    'chat.reply': { conversationId: 'c1', storeName: 'S', unread: 1 },
     'stock.low': { warehouseId: 'w1', warehouseName: 'Lagos', itemName: 'Shoe', quantity: 2, reorderPoint: 5, thresholdSource: 'store' },
     'payment.dispute': { kind: 'opened', orderId: 'o1', reference: 'R1', amount: '₦1,000' },
     'platform.alert': { heading: 'A job failed', path: '/platform/jobs' },

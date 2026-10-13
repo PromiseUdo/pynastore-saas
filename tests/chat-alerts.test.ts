@@ -6,8 +6,9 @@
  *     has Messages open, and only the members who can reply;
  *   - a shopper's phone is linked to their own conversation only when they
  *     asked, inside the store's own app;
- *   - the store's reply buzzes it — once per unread stretch, never while
- *     they're looking, and never with the words of the message.
+ *   - the store's reply buzzes it — every reply, saying how many are
+ *     waiting, never while they're looking (and straight away once they've
+ *     closed the chat), and never with the words of the message.
  */
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -34,7 +35,7 @@ import { prisma } from '@/lib/prisma';
 import { createTestStores, pinDomains, storefrontRequest } from './helpers/storefront-requests';
 import { alertStaffAboutMessage, pushStoreReply, INBOX_WATCHING_MS } from '@/lib/chat/alerts';
 import { watchChatReplies } from '@/lib/chat/push';
-import { markReadByCustomer, markReadByStaff, sendCustomerMessage, sendStaffMessage, setConversationBlocked } from '@/lib/chat/service';
+import { markReadByCustomer, markReadByStaff, markShopperAway, sendCustomerMessage, sendStaffMessage, setConversationBlocked } from '@/lib/chat/service';
 import { purgeOldPushWatches } from '@/lib/mobile/push/watch';
 import { discardAfterTasks, flushAfterTasks } from '@/lib/run-after';
 import { POST as postMessage } from '@/app/api/storefront/chat/messages/route';
@@ -265,14 +266,26 @@ describe('pushing the store’s reply', () => {
     expect(fcm.sendFcm).not.toHaveBeenCalled();
   });
 
-  it('buzzes once for a burst of replies, and again after they’ve read them', async () => {
+  it('tells them about every reply, counting what’s waiting, on one notification', async () => {
     const { id, shopper } = await watchedConversation('k');
     expect((await pushStoreReply(store.id, id, await storeReplies(id, 'One'))).outcome).toBe('sent');
-    expect((await pushStoreReply(store.id, id, await storeReplies(id, 'Two'))).outcome).toBe('already-told');
+    expect((await pushStoreReply(store.id, id, await storeReplies(id, 'Two'))).outcome).toBe('sent');
+    const bodies = fcm.sendFcm.mock.calls.map((c) => (c[1] as { body: string }).body);
+    expect(bodies).toEqual(['The store replied to your message.', 'The store sent you 2 new messages.']);
+    // The same thread each time, so the phone shows one notification, not a pile.
+    expect(fcm.sendFcm.mock.calls.map((c) => ((c as unknown[])[3] as { thread?: string } | undefined)?.thread)).toEqual([`chat:${id}`, `chat:${id}`]);
+
     await markReadByCustomer(store.id, shopper, 3);
     await prisma.chatConversation.update({ where: { id }, data: { customerSeenAt: new Date(Date.now() - 60_000) } });
     expect((await pushStoreReply(store.id, id, await storeReplies(id, 'Three'))).outcome).toBe('sent');
-    expect(fcm.sendFcm).toHaveBeenCalledTimes(2);
+    expect((fcm.sendFcm.mock.calls[2][1] as { body: string }).body).toBe('The store replied to your message.');
+  });
+
+  it('is sent straight away once they’ve closed the chat', async () => {
+    const { id, shopper } = await watchedConversation('o');
+    await prisma.chatConversation.update({ where: { id }, data: { customerSeenAt: new Date() } });
+    await markShopperAway(store.id, shopper);
+    expect((await pushStoreReply(store.id, id, await storeReplies(id))).outcome).toBe('sent');
   });
 
   it('does nothing for a shopper who didn’t ask', async () => {

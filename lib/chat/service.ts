@@ -243,6 +243,16 @@ export async function hasShopperConversation(organizationId: string, identity: C
 }
 
 /**
+ * The shopper closed the chat or left the app (the panel says so as it goes):
+ * they're no longer looking, so the store's next reply is pushed straight
+ * away instead of waiting out SHOPPER_WATCHING_MS (lib/chat/alerts.ts).
+ */
+export async function markShopperAway(organizationId: string, identity: ChatIdentity): Promise<void> {
+  const whose = identity.kind === 'customer' ? { customerId: identity.customerId } : { guestKeyHash: identity.guestKeyHash };
+  await prisma.chatConversation.updateMany({ where: { organizationId, ...whose }, data: { customerSeenAt: null } });
+}
+
+/**
  * The shopper's own conversation with this store, or none yet. Polls pass
  * `after`; `markSeen` records that they have it open (throttled), which is
  * what keeps the reply push quiet while they're watching.

@@ -12,11 +12,16 @@
  *                 reads the conversation (markReadByStaff) or replies.
  *
  *   shopper push  the store replied, the shopper isn't looking at the chat,
- *                 and their phone (in the store's own app) asked to be told
- *                 → "The store replied to your message." Only for the first
- *                 unread reply, so a burst of three is one buzz. The words
- *                 of the message are never in the notification — a lock
- *                 screen is not a private place.
+ *                 and their phone or browser asked to be told → "The store
+ *                 replied to your message." Every reply is sent, and each
+ *                 replaces the last on the phone (the thread `chat:{id}`,
+ *                 ROADMAP 18.4) — so a burst of three is one notification
+ *                 saying "3 new messages", and the third is never silent.
+ *                 "Looking" ends the moment the chat closes or the app goes
+ *                 to the background (the panel says so, markShopperAway);
+ *                 SHOPPER_WATCHING_MS only covers an app killed before it
+ *                 could. The words of the message are never in the
+ *                 notification — a lock screen is not a private place.
  *
  * Both decide WHETHER to tell anyone; who hears and how is the notification
  * seam's ('chat.message' and 'chat.reply' in lib/notifications/events.ts).
@@ -34,6 +39,8 @@ export const INBOX_WATCHING_MS = 2 * 60_000;
  * throttle), and with real-time live the panel polls every 15s as a backup
  * (SHOPPER_BACKUP_POLL_MS) — so while it's open the mark is never more than
  * about 35s old. 45s keeps a shopper who is looking from being buzzed.
+ * Closing the chat clears the mark at once (markShopperAway); this window
+ * only matters when the app was killed before it could say so.
  */
 export const SHOPPER_WATCHING_MS = 45_000;
 
@@ -104,12 +111,11 @@ export async function alertStaffAboutMessage(
   }
 }
 
-export type ShopperPushOutcome = 'sent' | 'no-devices' | 'watching' | 'already-told' | 'not-found' | 'failed';
+export type ShopperPushOutcome = 'sent' | 'no-devices' | 'watching' | 'not-found' | 'failed';
 
 /**
- * The store just replied (message `seq`). Buzz the shopper's phones that
- * asked, unless they're looking at the chat or already have an unread reply
- * they were told about.
+ * The store just replied (message `seq`). Tell the shopper's phones and
+ * browsers that asked, unless they're looking at the chat right now.
  */
 export async function pushStoreReply(
   organizationId: string,
@@ -134,15 +140,17 @@ export async function pushStoreReply(
     if (conversation.customerSeenAt && now.getTime() - conversation.customerSeenAt.getTime() < SHOPPER_WATCHING_MS) {
       return { outcome: 'watching' };
     }
-    // Only the first reply they haven't seen; later ones in the same stretch stay quiet.
-    if (seq - conversation.customerReadSeq !== 1) return { outcome: 'already-told' };
+    // How many of the store's messages they haven't read: the notification says so, and replaces the last one.
+    const unread = await prisma.chatMessage.count({
+      where: { conversationId, sender: 'STAFF', seq: { gt: conversation.customerReadSeq } },
+    });
 
     // Opens the store's chat page: /chat, or /s/{slug}/chat in the app.
     const { tally } = await notify({
       kind: 'chat.reply',
       organizationId,
       key: `chat:${conversationId}:reply:${seq}`,
-      facts: { conversationId, storeName: conversation.organization.name },
+      facts: { conversationId, storeName: conversation.organization.name, unread: Math.max(1, unread) },
     });
     return { outcome: 'sent', tally };
   } catch (error) {

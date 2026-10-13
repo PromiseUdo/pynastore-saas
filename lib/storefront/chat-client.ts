@@ -70,6 +70,21 @@ export async function sendShopperMessage(
   return ((await response.json()) as { message: ShopperChatMessage }).message;
 }
 
+/**
+ * "I've stopped looking": the chat closed, or the app or tab went into the
+ * background. The store's next reply is then pushed at once. `keepalive`, so
+ * it still goes as the page is hidden or closed; failures don't matter — the
+ * mark simply ages out (SHOPPER_WATCHING_MS).
+ */
+export function leaveShopperChat(org: string): void {
+  void fetch('/api/storefront/chat/away', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ org }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 /** Link this phone to the shopper's conversation, so the store's replies are pushed (ROADMAP 17.4). */
 export async function notifyChatReplies(org: string, deviceToken: string): Promise<boolean> {
   try {

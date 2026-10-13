@@ -80,7 +80,8 @@ export interface EventFacts {
   };
   'order.alert': { kind: StoreOrderAlertKind; orderId: string; reference: string; returnId?: string; customerName: string };
   'chat.message': { conversationId: string; shopperName: string | null };
-  'chat.reply': { conversationId: string; storeName: string };
+  /** `unread`: the store's messages they haven't read yet, this one included */
+  'chat.reply': { conversationId: string; storeName: string; unread: number };
   'stock.low': {
     warehouseId: string;
     warehouseName: string;
@@ -196,7 +197,11 @@ export const EVENTS: Catalogue = {
     reaches: { shopper: true },
     audiences: (f) => [{ type: 'chat-shopper', conversationId: f.conversationId }],
     channels: { NATIVE_PUSH: 'on', WEB_PUSH: 'on' },
-    words: (f) => ({ title: f.storeName, body: 'The store replied to your message.' }),
+    // Never the message itself: a lock screen is not a private place.
+    words: (f) => ({
+      title: f.storeName,
+      body: f.unread > 1 ? `The store sent you ${f.unread} new messages.` : 'The store replied to your message.',
+    }),
     target: (f) => ({ type: 'conversation', conversationId: f.conversationId }),
     thread: (f) => `chat:${f.conversationId}`,
   },
