@@ -5846,7 +5846,7 @@ editing or deleting messages, assigning a conversation to one staff member,
 typing indicators, read receipts shown to the shopper, emailing guests,
 SMS/WhatsApp/Instagram DMs, and analytics such as response times.
 
-## Phase 18 — Notifications everywhere (vendors, shoppers, platform staff) — IN PROGRESS (18.1, 18.2 done 2026-10-12; 18.3 done 2026-10-13)
+## Phase 18 — Notifications everywhere (vendors, shoppers, platform staff) — CODE DONE (2026-10-14); 18.7's on-device acceptance is the owner's (docs/NOTIFICATIONS-ACCEPTANCE.md)
 
 Agreed 2026-10-12. Replaces 14.3. The goal: everyone hears about what needs
 them, on whatever they use (a phone or a computer, in the app or in a
@@ -6248,62 +6248,153 @@ offers notifications.
   Do this on the deployed site with the keys set (18.7). Subscriptions
   belong to an origin, and localhost isn't one a phone can reach.
 
-### 18.4 — Native push, complete — TODO
+### 18.4 — Native push, complete — DONE (2026-10-13)
 
-- **One permission per device:** a signed-in shopper allowing notifications
-  in a store app links the device to their account (18.0). The order-page
-  and chat prompts become a single "Get notified about your orders and
-  replies" prompt.
-- **More shopper events** go through the same channel (18.6's catalogue).
-- **App icon badge:**
-  - **iPhone:** APNs sends a `badge` with the unread count.
-  - **Android:** the launcher's dot follows the notifications we show.
-- **Collapse ids:** `apns-collapse-id` and the Android `tag` per thread.
+**As built.**
+- **A phone belongs to whoever is signed in when it asks.**
+  - **One function** (`linkDevice` in `lib/mobile/push/watch.ts`) handles
+    every way a phone opts in: the order page, the chat, and the account
+    page. It sets `PushDevice.customerId` to the signed-in shopper, or to
+    nobody for a guest, or a shopper who has signed out.
+  - **One yes covers everything:** a signed-in shopper's phone then hears
+    about all their orders and replies. The 18.1 recipients already reach
+    devices owned by a customer.
+  - **Account page:** in the app, `/account/notifications` shows
+    "Notifications on this phone" (`setAccountPhone`,
+    `setPhoneNotificationsAction`). If it's already allowed, the phone is
+    linked again quietly on each visit, unless it was turned off on that
+    phone. Turning it off forgets the phone for that store.
+  - **Wording:** a signed-in shopper's order prompt reads "Get notified
+    about your orders and replies".
+  - **Cleanup:** a phone linked to an account is kept past 60 days by the
+    retention job.
+  - **Not done:** signing out doesn't unlink the phone. The app can't hand
+    the server its token from the sign-out form. It's unlinked the next
+    time a guest opts in on it, or by "Turn off". Pushes never carry a
+    message's words (17.4), so this is a small exposure, but it is one.
+- **Opening the thing reads its notifications:**
+  - opening the chat (`markReadByCustomer`) or the account's order page
+    marks that thread's notifications read (`markThreadRead`);
+  - so do the 18.2 list actions.
+
+  This keeps the count true.
+- **Badge (iPhone):**
+  - **On send:** a push to a phone linked to an account carries the
+    shopper's unread count (`aps.badge`). A guest's phone gets no number.
+  - **On read:** when they read, their iPhones get a badge-only update,
+    with nothing shown and priority 5 (`lib/notifications/badges.ts`).
+  - **Android:** the dot follows the tray.
+- **Grouping:** each event's `threadKey` becomes `apns-collapse-id` (capped
+  at 64 bytes) plus `thread-id` on iPhone, and the notification `tag` on
+  Android. A burst about one order or chat replaces itself instead of
+  piling up.
 - **APNs sandbox:**
-  - **The problem:** builds run straight from Xcode get sandbox tokens. They
-    fail against `api.push.apple.com` today, which only uses the
-    production host.
-  - **The fix:** record the APNs environment with the token (the app reports
-    its build type), and send to `api.sandbox.push.apple.com` when needed.
-  - **Until then:** test iPhone push through TestFlight.
-- **Foreground taps and cold starts:** the existing listener in
-  `native-shell.tsx` stays. Its allow-list widens to every store page a
-  link can name (orders, account, chat, product).
+  - **The problem:** JavaScript can't reliably tell what kind of build it's
+    in, so the app doesn't report it as planned.
+  - **The fix:** a send tries the live service first. If that answers
+    `BadDeviceToken`, the send tries `api.sandbox.push.apple.com`. If that
+    works, it records `PushDevice.apnsSandbox` (migration
+    `20261013120000_push_device_apns_sandbox`), and later sends go
+    straight there.
+  - **A build run from Xcode now gets notifications.** Before, a bad token
+    on the live service deleted the device.
+- **Taps and cold starts:** the existing listener in `native-shell.tsx`
+  already allowed every `/s/{slug}/…` store page. Only its comment changed.
+- **More shopper events** come with 18.6's catalogue.
+- **Tests:** `tests/mobile-push.test.ts`, 5 new:
+  - the owner follows who's signed in;
+  - one yes covers every order, with badge 1 and the order's thread;
+  - reading clears the badge (a badge-only send, badge 0);
+  - Xcode-build fallback, then remembered;
+  - an account's phone outlives 60 days, and "Turn off" forgets it.
 
-### 18.5 — Deep links — TODO
+  Also: `tests/notification-bell.test.ts` covers opening a thing marking
+  its thread read, and the existing iPhone test checks the grouping
+  argument.
+- **Not checked yet:** a real iPhone and Android phone (18.7). This needs a
+  store app built with push and the Firebase and APNs keys.
 
-- **`links.ts` covers every target** in the catalogue (table in 18.6). One
-  test asserts that every event kind has a link on every surface it's sent
-  to.
-- **Notification taps:**
-  - **Web:** handled by the service worker (18.3).
-  - **Native:** the `path` in the payload (as today).
-  - **In-app list:** a normal `<Link>`.
+### 18.5 — Deep links — DONE (2026-10-13)
 
-  If the page needs sign-in, the person lands on sign-in with a return
-  address and arrives at the page after signing in.
-- **Universal Links (iOS) and App Links (Android) for store apps:**
-  - **iOS file:** `/.well-known/apple-app-site-association`, served by a
-    route handler on store hosts, from the store's `MobileApp` record
-    (Team ID + bundle id, paths `/*` minus checkout-return paths).
-  - **Android file:** `/.well-known/assetlinks.json`, from new
-    `MobileApp.androidCertSha256` values.
-  - **No redirects:** both must be served on the exact host, with no
-    redirect, so on the apex as well as `www`. The 12.6 canonical 308
-    skips them.
-  - **Build kit:** stamps `applinks:` associated domains (iOS entitlements)
-    and an `autoVerify` intent filter (Android) for:
-    - `shop-{slug}.{root}`;
-    - the custom domain, if the store has one at build time;
-    - a domain added later, which needs a rebuild. The console says so.
-  - **In the app:** `appUrlOpen` turns an `https://` store link into the
-    in-app path. The custom-scheme links for payments and sign-in
-    (`lib/mobile/deep-link.ts`) stay as they are.
-- **The shared app** (`com.mansaas.app`) gets Universal Links only when the
-  real store picker fixes bare paths (MOBILE.md). Until then it uses
-  in-app paths only.
+**As built.**
+- **`links.ts` covers every target:**
+  `tests/notifications.test.ts` asserts that every kind leads somewhere on
+  each surface it's sent to (since 18.1). Taps work on the web (18.3), on
+  phones (18.4) and in the list (18.2).
+- **Signing in returns you to the page:**
+  - **Before:** a signed-out shopper opening an order from a notification
+    or email was sent to sign-in and then to `/account`.
+  - **Now:** `proxy.ts` stamps the storefront page being opened
+    (`x-store-path`, like the admin's `x-admin-path`; never trusted from the
+    browser). The account layout passes it, through `safeNextPath`, as the
+    sign-in return. The admin already returned through the proxy's
+    `callbackUrl`.
+- **One allow-list, not "everything except checkout":** `lib/mobile/app-links.ts`
+  (`APP_LINK_PREFIXES`).
+  - **Why:** Android's filter can only list paths to take, and taking the
+    payment pages could catch the provider's return mid-payment.
+  - **What opens in the app:** the home page plus the product, category,
+    collection, sale, search, store pages, cart, wishlist, account, chat,
+    order tracking and order confirmation (every order email's link)
+    prefixes.
+  - **What doesn't:** checkout, invoices, `/app` and `/api`.
+  - **Shared:** the iPhone file, the Android filter and the app's own
+    routing (`routeIncomingLink`) all read this list.
+- **The two files:** served per store from
+  `app/store/[slug]/well-known/…`, only for a live store with an ACTIVE app.
+  Otherwise 404, and links open the browser.
+  - **`/.well-known/apple-app-site-association`:** the team (new
+    `MobileApp.appleTeamId`, falling back to `apnsTeamId`) plus the bundle
+    id. Both the modern `components` and the iOS 12 `paths` forms.
+  - **`/.well-known/assetlinks.json`:** the package and the new
+    `MobileApp.androidCertSha256` fingerprints.
+  - **Migration:** `20261013180000_mobile_app_links`.
+  - **`proxy.ts`** rewrites the two paths on storefront hosts before the
+    12.6 canonical redirects, including on the rewritten second pass. So
+    they load on the apex, `www` and the platform address with no redirect.
+- **Recording:** `npx tsx prisma/mobile-app.ts links <slug> --team-id … --android …`
+  (adds keys; `--clear-android` resets them).
+- **Build kit:**
+  - **Entitlements:** `iosEntitlements` adds `applinks:` for each host
+    (`appLinkHosts`: `shop-{slug}.{root}` plus the store's own domain, read
+    from the database at build time).
+  - **Android:** `editAndroidManifestForAppLinks` adds an `autoVerify`
+    https filter for those hosts and the allow-list's prefixes, before the
+    payment-return filter.
+  - **`check`:** says whether the team id and the upload key's fingerprint
+    are recorded, and prints the command with the fingerprint (read by
+    `keytool`).
+  - **Release builds:** stop if the hosts come out as localhost.
+  - **Console:** the store app's page shows the hosts and what's recorded,
+    and says a domain connected after a build needs a new build.
+- **In the app:**
+  - **Routing:** `native-shell.tsx` handles `appUrlOpen` and, once per run,
+    `App.getLaunchUrl()` (a cold start). An https link to a page in the
+    allow-list opens there, as a bare path, which a store's own app serves
+    as its store. Anything else opens in the browser instead of doing
+    nothing.
+  - **Payments and sign-in:** their custom-scheme returns
+    (`lib/mobile/deep-link.ts`) aren't https, so they're left to their flows.
+- **The shared app** gets no Universal Links, as planned, until the real
+  store picker.
+- **Tests:**
+  - **`tests/app-links.test.ts` (7):**
+    - the allow-list;
+    - routing an incoming link, and the browser fallback;
+    - the hosts;
+    - both files' shapes;
+    - fingerprint checks;
+    - the routes: 404 without an app or keys, the store's own app once
+      recorded, and 404 again once it lapses.
+  - **`tests/mobile-build.test.ts`, 2 more:** entitlements, and the Android
+    filter against the real manifest.
+- **Not tested automatically:**
+  - the proxy's no-redirect rule (`proxy.ts` has no harness);
+  - links on real phones.
 
-### 18.6 — What each person hears about — TODO
+  Check both by hand (docs/MOBILE-BUILD.md §5) and in 18.7.
+
+### 18.6 — What each person hears about — DONE (2026-10-14)
 
 Every row lands in the list. "Push" means web or native, whichever the
 person has. Defaults are shown; each can be changed in preferences, except
@@ -6335,7 +6426,88 @@ items marked **required**.
 - "New" rows add the producer call at the point that event already
   happens. No new workflow is invented to have something to say.
 
-### 18.7 — On real phones, and done — TODO
+**As built (2026-10-14).**
+- **New events,** each raised where the thing already happens:
+  - **`order.new`, to whoever handles orders and the Owner,** once per order
+    (key `order:{id}:new`):
+    - pay on delivery: when it's placed;
+    - paid online: when the payment is verified, not when an unpaid order
+      is started.
+
+    `order.transfer` asks them to confirm a bank transfer when one is
+    placed. This was a real gap: merchants were told about no new orders at
+    all. `notifyStoreOfOrder` is in `lib/storefront/orders/notifications.ts`.
+  - **`question.new`** (`askQuestion`) goes to whoever answers questions.
+  - **`purchasing.approval`** (`submitForApproval`) goes to approvers, not
+    the submitter.
+  - **`social.failed`** goes to the social team: when a publish fails (not
+    the person who pressed Publish), or when a stuck post is released.
+  - **`platform.merchant-new`** (`createShop`) and **`platform.verification`**
+    (a submitted payment setup) go to platform staff.
+  - **`account.notice`** puts the emails owners already get in their list
+    and on their devices, in the same words (`listOwnerNotice`): the trial
+    ending, domain renewal reminders, a domain live or failed, and a store
+    app delivered, live, renewal reminder, grace or lapsed. The email is
+    still sent where it was.
+  - **`notify({ actorUserId })`** leaves out the person who did the thing
+    (18.0).
+- **Low stock:**
+  - **Who:** `inventory.view` holders and the Owner, only those who can
+    work in that store (8.6, `MembershipWarehouse`).
+  - **What it says:** whose reorder point was crossed, in the list entry.
+  - **Email:** no email per item any more. The per-item template
+    (`emails/low-stock-alert.tsx`) and `sendLowStockAlertEmail` are gone.
+- **Daily summary:**
+  - **Which kinds:** those whose email default is `digest` (low stock,
+    product questions) land in the list at once.
+  - **The email:** the new daily job `notification-digests` (07:00 UTC,
+    `vercel.json`) sends each member one email per shop. It lists what they
+    haven't read from the last two days, in categories they still want by
+    email, for shops they're still in. It uses the platform-notice layout
+    with a list.
+  - **No repeats:** `Notification.emailedAt` (migration
+    `20261014120000_notification_digests`) means nothing is emailed twice.
+    A failed send is tried again the next day.
+- **Preferences:**
+  - **Where the rows come from:** `lib/notifications/preference-grid.ts`
+    derives everything from the catalogue (each kind's new `reaches`), so a
+    new kind appears by itself:
+    - a member sees the categories their permissions can receive;
+    - the Owner sees all of them;
+    - platform staff see device alerts only (their email goes to the
+      platform address);
+    - shoppers see orders and messages.
+  - **Each cell** is a switch, "Always" (required), or a switch marked
+    "Daily summary". Device alerts set web and phone together. A choice
+    equal to the default deletes the stored row.
+  - **Screens:** Settings → Notifications and the console's notification
+    settings show "What you hear about"
+    (`components/notifications/preference-grid.tsx`). The shopper's account
+    Notifications page has its own version, in the storefront's look, and
+    says that account-security emails are always sent.
+  - **Server actions:** `features/notifications/actions.ts` and
+    `setShopperNotificationPreferenceAction`.
+- **Not built, because there's nothing to hang them on yet:**
+  - payment-failed, grace and shop-closing notices for a shop's plan (no
+    such emails or events exist);
+  - shopper security emails through the seam: they stay direct
+    transactional sends, always on.
+- **Tests:**
+  - **`tests/notification-events.test.ts` (8):**
+    - new order once, for the right people;
+    - transfer wording;
+    - the actor left out;
+    - a question reaches the list and the summary;
+    - a summary turned off sends nothing;
+    - the grid per audience;
+    - choices stored only when they differ, required refused, a category
+      you can't receive refused;
+    - owner notices.
+  - **`tests/store-low-stock.test.ts`:** rewritten for the list entry,
+    store access and the summary.
+  - **`tests/notifications.test.ts`:** samples cover every new kind.
+
+### 18.7 — On real phones, and done — CODE DONE (2026-10-14); device acceptance TODO (owner)
 
 - **Tests (vitest, on the Docker database):**
   - the catalogue and links (pure);
@@ -6361,6 +6533,60 @@ items marked **required**.
   - **Desktop Chrome and Safari:** platform staff get the error-spike push,
     and tapping it opens `/platform/errors`.
   - **Dark mode and phone width** for the bell and the settings pages.
+
+**As built (2026-10-14).** Everything that can be proved without a phone in
+hand is proved; the rest is a checklist.
+- **Tests:** every item in the list above is covered.
+  - **Seam and recipients:** `tests/notifications.test.ts` and
+    `tests/notification-events.test.ts`: catalogue and links; recipients by
+    permission, store access, the actor and someone looking; the outbox
+    retrying with no doubles; dead endpoints.
+  - **Routes:** `tests/web-push.test.ts` covers the subscription routes'
+    refusals.
+  - **Service worker (new):** `tests/service-worker.test.ts` runs the real
+    `public/sw.js` in a stand-in worker scope:
+    - a push is shown, grouped and badged;
+    - an unreadable push still shows;
+    - a click goes to an open tab of this site, or a new one, and never to
+      another site.
+
+    It found a real bug: a push with no link opened `/undefined`. Fixed.
+  - **The full suite** passes.
+- **HTTP check of a production build:** `scripts/check-notification-urls.sh`
+  checks a running site the way browsers, Apple and Google read it: no
+  cookies, no following redirects.
+  - **What it checks:**
+    - `/sw.js` on admin, shop and platform hosts;
+    - manifests and icons load signed out;
+    - admin and console pages still need sign-in;
+    - a shop with its own domain redirects its pages, but serves both
+      well-known files on the platform address without a redirect.
+  - **Run (2026-10-14):** against a production build on `app.localhost:3100`
+    with two seeded shops. All checks passed.
+  - **Also seen working:** the iPhone file's contents; signing in returning
+    to `/account/orders/R-1?from=push`; a 192×192 icon.
+  - **Next:** run it against the live site (docs/GO-LIVE.md §7).
+- **Console → Go-live checklist** gained a **Notifications** group:
+  - browser push keys present and well-formed;
+  - the Firebase key readable;
+  - Ably;
+  - the retry job run within 30 minutes;
+  - no delivery given up in the last day;
+  - the manual step "Notifications on real phones and browsers".
+
+  `lib/ops/go-live.test.ts` covers it.
+- **docs/NOTIFICATIONS-ACCEPTANCE.md:** the on-device checklist. Android and
+  iPhone; admin, storefront and store apps; taps from a closed app; grouping;
+  the badge; links from WhatsApp and Mail; desktop console alerts; looks in
+  both themes; the daily summary.
+
+  docs/GO-LIVE.md §7 lists the settings to set first.
+- **What remains is the owner's:**
+  - set the keys and the retry job;
+  - run the URL check against production;
+  - tick docs/NOTIFICATIONS-ACCEPTANCE.md on real devices.
+
+  Then mark this part DONE.
 
 ### 18.8 — Not in this phase
 

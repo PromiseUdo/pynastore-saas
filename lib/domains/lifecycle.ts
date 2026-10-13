@@ -11,6 +11,7 @@
  *      and none once the merchant has paid to renew;
  *   3. a morning list for staff: what's due in 14 days, paid or not.
  */
+import { listOwnerNotice } from '@/lib/notifications/owner-notices';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@/lib/generated/prisma/client';
 import { sendPlatformNoticeEmail } from '@/lib/email';
@@ -88,16 +89,18 @@ export async function runDomainLifecycle(options: { now?: Date; only?: string[] 
         ...(d.organization.paymentAccount?.contactEmail ? [d.organization.paymentAccount.contactEmail] : []),
       ]),
     ];
+    const email = renewalReminderEmail({
+      shopName: d.organization.name,
+      domain: d.hostname,
+      expiresAt: d.expiresAt,
+      renewNgn: await renewPriceNgn(d.hostname),
+      pageUrl: getAdminUrl(d.organization.slug, '/settings/domain'),
+      kind: kind.split(':')[0],
+    });
+    await listOwnerNotice(d.organizationId, email, '/settings/domain', `domain:${d.id}:${kind}`);
     const sent = await sendPlatformNoticeEmail({
       to,
-      ...renewalReminderEmail({
-        shopName: d.organization.name,
-        domain: d.hostname,
-        expiresAt: d.expiresAt,
-        renewNgn: await renewPriceNgn(d.hostname),
-        pageUrl: getAdminUrl(d.organization.slug, '/settings/domain'),
-        kind: kind.split(':')[0],
-      }),
+      ...email,
     });
     if (sent) result.reminders += 1;
     else {

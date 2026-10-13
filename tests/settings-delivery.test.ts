@@ -17,7 +17,6 @@ const ctx = vi.hoisted(() => ({
 vi.mock('@/lib/organization', () => ({ getOrganizationContext: async () => ctx }));
 vi.mock('@/lib/email', () => ({
   sendStorefrontOrderUpdateEmail: vi.fn(async () => {}),
-  sendLowStockAlertEmail: vi.fn(async () => {}),
 }));
 
 const fixturesWere = process.env.STOREFRONT_FIXTURES;

@@ -12,6 +12,7 @@
  *      longer available" (16.1) until it's renewed, which switches it straight
  *      back on (lib/mobile/orders.ts, applyMobileAppPayment).
  */
+import { listOwnerNotice } from '@/lib/notifications/owner-notices';
 import { prisma } from '@/lib/prisma';
 import { sendPlatformNoticeEmail } from '@/lib/email';
 import { getAdminUrl } from '@/lib/tenant/urls';
@@ -57,9 +58,11 @@ export async function runMobileAppRenewals(options: { now?: Date; only?: string[
         } catch {
           continue; // already sent
         }
+        const email = appRenewalReminderEmail({ ...facts, paidThrough, days: due.days });
+        await listOwnerNotice(app.organizationId, email, '/settings/mobile-app', `mobile-app:${app.id}:${due.kind}`);
         const sent = await sendPlatformNoticeEmail({
           to: await ownerEmails(app.organizationId, { includePaymentsContact: true }),
-          ...appRenewalReminderEmail({ ...facts, paidThrough, days: due.days }),
+          ...email,
         });
         if (sent) result.reminders += 1;
         else {
@@ -79,10 +82,9 @@ export async function runMobileAppRenewals(options: { now?: Date; only?: string[
         if (claimed.count !== 1) continue;
         if (pricing.graceDays > 0) {
           result.inGrace += 1;
-          await sendPlatformNoticeEmail({
-            to: await ownerEmails(app.organizationId, { includePaymentsContact: true }),
-            ...appGraceEmail({ ...facts, graceEndsAt }),
-          });
+          const email = appGraceEmail({ ...facts, graceEndsAt });
+          await listOwnerNotice(app.organizationId, email, '/settings/mobile-app', `mobile-app:${app.id}:grace:${graceEndsAt.getTime()}`);
+          await sendPlatformNoticeEmail({ to: await ownerEmails(app.organizationId, { includePaymentsContact: true }), ...email });
           continue;
         }
       } else if (app.graceEndsAt > now) {
@@ -93,10 +95,9 @@ export async function runMobileAppRenewals(options: { now?: Date; only?: string[
       const lapsed = await prisma.mobileApp.updateMany({ where: { id: app.id, status: 'ACTIVE' }, data: { status: 'LAPSED' } });
       if (lapsed.count !== 1) continue;
       result.lapsed += 1;
-      await sendPlatformNoticeEmail({
-        to: await ownerEmails(app.organizationId, { includePaymentsContact: true }),
-        ...appLapsedEmail(facts),
-      });
+      const lapsedEmail = appLapsedEmail(facts);
+      await listOwnerNotice(app.organizationId, lapsedEmail, '/settings/mobile-app', `mobile-app:${app.id}:lapsed:${now.getTime()}`);
+      await sendPlatformNoticeEmail({ to: await ownerEmails(app.organizationId, { includePaymentsContact: true }), ...lapsedEmail });
     } catch (error) {
       result.failed += 1;
       console.error(`[mobile-app renewals] ${app.appId}:`, error);

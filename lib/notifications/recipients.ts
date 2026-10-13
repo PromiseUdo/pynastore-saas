@@ -79,6 +79,8 @@ export async function resolveRecipients(organizationId: string | null, audiences
           where: {
             organizationId,
             status: 'ACTIVE',
+            // Store access (8.6): no rows means every store.
+            ...(audience.warehouseId ? { OR: [{ warehouses: { none: {} } }, { warehouses: { some: { warehouseId: audience.warehouseId } } }] } : {}),
             role: {
               OR: [
                 { rolePermissions: { some: { permission: { key: audience.permission } } } },

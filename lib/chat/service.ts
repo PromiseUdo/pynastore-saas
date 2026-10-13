@@ -27,6 +27,8 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@/lib/generated/prisma/client';
 import { storefrontIsOpen } from '@/lib/billing/workspace-access';
 import { notifyChatChanged } from './realtime';
+import { markThreadRead } from '@/lib/notifications/inbox';
+import { runAfter } from '@/lib/run-after';
 import type { ChatIdentity } from './identity';
 import {
   CHAT_STORE_AUTHOR,
@@ -425,6 +427,11 @@ export async function markReadByCustomer(
     data: { customerReadSeq: target, customerSeenAt: now },
   });
   if (count) notifyChatChanged({ kind: 'read', organizationId, conversationId: conversation.id, side: 'CUSTOMER' });
+  // Reading the chat is reading its notifications too (ROADMAP 18.4: the app icon's count).
+  if (count && identity.kind === 'customer') {
+    const reader = { kind: 'shopper' as const, customerId: identity.customerId, organizationId };
+    runAfter(() => markThreadRead(reader, `chat:${conversation.id}`));
+  }
 }
 
 /**

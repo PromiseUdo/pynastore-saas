@@ -20,7 +20,6 @@ vi.mock('@/lib/billing/webhook-events', () => ({
 const disputeEmails = vi.hoisted(() => [] as { to: string[]; kind: string; reference: string; dueDate: string | null }[]);
 vi.mock('@/lib/email', () => ({
   sendStorefrontOrderUpdateEmail: vi.fn(async () => {}),
-  sendLowStockAlertEmail: vi.fn(async () => {}),
   sendStoreOrderAlertEmail: vi.fn(async () => {}),
   sendPaymentDisputeEmail: async (payload: { to: string[]; kind: string; reference: string; dueDate: string | null }) => {
     disputeEmails.push(payload);

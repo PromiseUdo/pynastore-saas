@@ -13,6 +13,8 @@
  * verification), and the merchant is emailed when there's something for them
  * to do or see.
  */
+import { listOwnerNotice } from '@/lib/notifications/owner-notices';
+import { appLinkHosts } from '@/lib/mobile/app-links';
 import { prisma } from '@/lib/prisma';
 import { requirePlatformStaff } from '@/lib/platform-staff';
 import { createAuditLog } from '@/lib/audit';
@@ -65,6 +67,8 @@ export interface AppOrderDetail {
   listing: { appStoreId: string | null; onGooglePlay: boolean; promoteOnWebsite: boolean };
   renewal: { paidThrough: Date | null; graceEndsAt: Date | null };
   iosPush: boolean;
+  /** links to the store opening the app (ROADMAP 18.5): the hosts a build claims today, and what's recorded */
+  links: { hosts: string[]; ios: boolean; androidKeys: number };
   payments: { kind: string; amount: number; paidAt: Date | null; reference: string }[];
   organization: { id: string; name: string; slug: string };
 }
@@ -147,7 +151,7 @@ export async function getAppOrder(id: string): Promise<ActionResult<AppOrderDeta
     const a = await prisma.mobileApp.findUnique({
       where: { id },
       include: {
-        organization: { select: { id: true, name: true, slug: true } },
+        organization: { select: { id: true, name: true, slug: true, customStoreDomain: true } },
         payments: { orderBy: { createdAt: 'desc' }, include: { billingTransaction: { select: { reference: true, status: true } } } },
       },
     });
@@ -170,11 +174,16 @@ export async function getAppOrder(id: string): Promise<ActionResult<AppOrderDeta
         listing: { appStoreId: a.appStoreId, onGooglePlay: a.onGooglePlay, promoteOnWebsite: a.promoteOnWebsite },
         renewal: { paidThrough: a.paidThrough, graceEndsAt: a.graceEndsAt },
         iosPush: Boolean(a.apnsKeySealed),
+        links: {
+          hosts: appLinkHosts(a.organization),
+          ios: Boolean(a.appleTeamId ?? a.apnsTeamId),
+          androidKeys: a.androidCertSha256.length,
+        },
         // Only payments Paystack confirmed, or that are still open — abandoned checkouts are noise.
         payments: a.payments
           .filter((p) => p.paidAt || p.billingTransaction.status === 'PENDING')
           .map((p) => ({ kind: p.kind, amount: Number(p.amount), paidAt: p.paidAt, reference: p.billingTransaction.reference })),
-        organization: a.organization,
+        organization: { id: a.organization.id, name: a.organization.name, slug: a.organization.slug },
       },
     };
   } catch (error) {
@@ -262,17 +271,16 @@ export async function markAppDelivered(
     });
     await audit(a.organizationId, staff.userId, 'platform.mobile_app.delivered', id, { versionName, buildNumber: input.buildNumber });
     if (firstTime) {
-      await sendPlatformNoticeEmail({
-        to: await ownerEmails(a.organizationId),
-        ...appDeliveredEmail({
-          shopName: a.organization.name,
-          appName: a.name,
-          versionName,
-          platforms: { android: a.wantsAndroid, ios: a.wantsIos },
-          hasDownload: Boolean(downloadUrl),
-          pageUrl: getAdminUrl(a.organization.slug, '/settings/mobile-app'),
-        }),
+      const email = appDeliveredEmail({
+        shopName: a.organization.name,
+        appName: a.name,
+        versionName,
+        platforms: { android: a.wantsAndroid, ios: a.wantsIos },
+        hasDownload: Boolean(downloadUrl),
+        pageUrl: getAdminUrl(a.organization.slug, '/settings/mobile-app'),
       });
+      await listOwnerNotice(a.organizationId, email, '/settings/mobile-app', `mobile-app:${id}:delivered`);
+      await sendPlatformNoticeEmail({ to: await ownerEmails(a.organizationId), ...email });
     }
     return { success: true, data: undefined };
   } catch (error) {
@@ -307,15 +315,14 @@ export async function recordAppListings(id: string, input: { appStoreId: string;
     });
     await audit(a.organizationId, staff.userId, 'platform.mobile_app.listings', id, { appStoreId: appStoreId || null, onGooglePlay: input.onGooglePlay === true });
     if (becomesLive) {
-      await sendPlatformNoticeEmail({
-        to: await ownerEmails(a.organizationId),
-        ...appLiveEmail({
-          shopName: a.organization.name,
-          appName: a.name,
-          stores: [appStoreId ? 'the App Store' : null, input.onGooglePlay ? 'Google Play' : null].filter((s): s is string => Boolean(s)),
-          pageUrl: getAdminUrl(a.organization.slug, '/settings/mobile-app'),
-        }),
+      const email = appLiveEmail({
+        shopName: a.organization.name,
+        appName: a.name,
+        stores: [appStoreId ? 'the App Store' : null, input.onGooglePlay ? 'Google Play' : null].filter((s): s is string => Boolean(s)),
+        pageUrl: getAdminUrl(a.organization.slug, '/settings/mobile-app'),
       });
+      await listOwnerNotice(a.organizationId, email, '/settings/mobile-app', `mobile-app:${id}:live`);
+      await sendPlatformNoticeEmail({ to: await ownerEmails(a.organizationId), ...email });
     }
     return { success: true, data: undefined };
   } catch (error) {

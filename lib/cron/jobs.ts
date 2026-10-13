@@ -20,6 +20,7 @@ import { runOnboardingReminders } from '@/lib/onboarding/reminders';
 import { runDataRetention } from '@/lib/data-rights/retention';
 import { runMobileAppRenewals } from '@/lib/mobile/renewals';
 import { retryDueDeliveries } from '@/lib/notifications/outbox';
+import { sendDailyDigests } from '@/lib/notifications/digest';
 
 export interface CronJob {
   title: string;
@@ -93,6 +94,22 @@ export const CRON_JOBS = {
           ]
             .filter(Boolean)
             .join(' · '),
+  },
+  'notification-digests': {
+    title: 'Daily notification summaries',
+    description:
+      'Sends each member one email a day per shop with the low-stock alerts and product questions they haven’t seen yet. Without it, those only show in the notification list.',
+    schedule: 'Daily at 8am Lagos time',
+    everyMinutes: 24 * 60,
+    run: () => sendDailyDigests(),
+    describe: (r) =>
+      [
+        `${plural(n(r, 'emails'), 'summary', 'summaries')} sent`,
+        n(r, 'notifications') ? `covering ${plural(n(r, 'notifications'), 'notification', 'notifications')}` : null,
+        n(r, 'failed') ? `${n(r, 'failed')} couldn’t be sent` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
   },
   'domain-lifecycle': {
     title: 'Domain renewals',

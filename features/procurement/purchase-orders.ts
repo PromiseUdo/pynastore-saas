@@ -1,5 +1,7 @@
 'use server';
 
+import { notify } from '@/lib/notifications/notify';
+import { runAfter } from '@/lib/run-after';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
@@ -272,6 +274,17 @@ export async function submitForApproval(poId: string): Promise<ActionResult> {
       entityType: 'PurchaseOrder',
       entityId: poId,
     });
+
+    // Whoever can approve it is told — not the person who just submitted it (ROADMAP 18.6).
+    const supplier = await prisma.supplier.findUnique({ where: { id: po.supplierId }, select: { name: true } });
+    runAfter(() =>
+      notify({
+        kind: 'purchasing.approval',
+        organizationId: ctx.organization.id,
+        actorUserId: ctx.userId,
+        facts: { purchaseOrderId: poId, number: po.poNumber, supplierName: supplier?.name ?? 'your supplier' },
+      }),
+    );
 
     return { success: true, data: undefined };
   } catch (err) {

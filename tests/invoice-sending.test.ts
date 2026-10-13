@@ -24,7 +24,6 @@ vi.mock('@/lib/email', () => ({
   sendInvoiceEmail: vi.fn(async (payload: Record<string, unknown>) => {
     sent.invoices.push(payload);
   }),
-  sendLowStockAlertEmail: vi.fn(async () => {}),
   sendStorefrontOrderUpdateEmail: vi.fn(async () => {}),
   sendStoreOrderAlertEmail: vi.fn(async () => {}),
 }));

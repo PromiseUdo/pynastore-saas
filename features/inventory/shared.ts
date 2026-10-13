@@ -3,7 +3,6 @@
 
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notifications/notify';
-import { getAdminUrl } from '@/lib/tenant/urls';
 
 export type ActionResult<T = void> =
   | { success: true; data: T }
@@ -81,16 +80,17 @@ export function computeMovingAverageCost(
 
 /**
  * Edge-triggered low-stock alert ('stock.low', lib/notifications): fires
- * only when `previousQty` was above
- * `threshold` and `newQty` is now at or below it. No cron/background worker
- * in this app — every store-quantity decrease evaluates this inline.
- * Shared by features/inventory/stock.ts, features/inventory/cycle-counts.ts,
+ * only when `previousQty` was above `threshold` and `newQty` is now at or
+ * below it. Every store-quantity decrease evaluates this inline. Shared by
+ * features/inventory/stock.ts, features/inventory/cycle-counts.ts,
  * features/sales/fulfillment.ts and lib/storefront/orders/lifecycle.ts.
  *
- * Stock is per store and so is the threshold, so the mail goes to the store
- * that ran low, not to the org-wide reports page (ROADMAP Phase 8.3) — and it
- * says WHOSE reorder point was crossed, since a merchant who set 10 for Lagos
- * should not have to guess why an alert arrived at 4.
+ * It lands in the list of whoever can see stock and work in that store
+ * (8.6), and in their one email a day (ROADMAP 18.6) — not an email per item.
+ * Stock is per store and so is the threshold, so it leads to the store that
+ * ran low (Phase 8.3), and says WHOSE reorder point was crossed, since a
+ * merchant who set 10 for Lagos should not have to guess why an alert
+ * arrived at 4.
  */
 export async function maybeSendLowStockAlert(params: {
   organizationId: string;
@@ -103,25 +103,19 @@ export async function maybeSendLowStockAlert(params: {
   newQty: number;
   threshold: number | null;
 }): Promise<void> {
-  const { organizationId, organizationSlug, itemName, itemSku, warehouseId, warehouseName, previousQty, newQty, threshold } = params;
+  const { organizationId, itemName, warehouseId, warehouseName, previousQty, newQty, threshold } = params;
   if (threshold === null || previousQty <= threshold || newQty > threshold) return;
 
-  // Who: members who can add stock (`inventory.create`).
   await notify({
     kind: 'stock.low',
     organizationId,
-    facts: { warehouseId, warehouseName, itemName, quantity: newQty },
-    email: {
-      template: 'low-stock-alert',
-      props: {
-        itemName,
-        sku: itemSku,
-        warehouseName,
-        quantity: newQty,
-        reorderPoint: threshold,
-        thresholdSource: await thresholdSourceFor(warehouseId, params),
-        storeUrl: getAdminUrl(organizationSlug, `/inventory/warehouses/${warehouseId}?tab=inventory&stock=low`),
-      },
+    facts: {
+      warehouseId,
+      warehouseName,
+      itemName,
+      quantity: newQty,
+      reorderPoint: threshold,
+      thresholdSource: await thresholdSourceFor(warehouseId, params),
     },
   });
 }

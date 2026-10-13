@@ -60,8 +60,9 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-/** An absolute URL on this origin, or this origin's home. */
+/** An absolute URL on this origin, or this origin's home (also when there's no link at all). */
 function sameOrigin(value) {
+  if (typeof value !== 'string' || !value) return self.location.origin + '/';
   try {
     const url = new URL(value, self.location.origin);
     return url.origin === self.location.origin ? url.href : self.location.origin + '/';

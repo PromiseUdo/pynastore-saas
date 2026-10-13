@@ -226,3 +226,28 @@ export async function notifyMerchant(
     console.error(`[orders] Could not tell the store about order ${orderId} (${kind}):`, error);
   }
 }
+
+/**
+ * Tell the store there's an online order to deal with (ROADMAP 18.6) — once,
+ * when it needs them: an order to be paid on delivery when it's placed, an
+ * online payment when it has gone through (an unpaid one may never be), and
+ * a bank transfer when it's placed, asking them to confirm the money. To
+ * whoever handles orders, and the Owner ('order.new', 'order.transfer').
+ */
+export async function notifyStoreOfOrder(orderId: string, kind: 'paid' | 'on-delivery' | 'transfer'): Promise<void> {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, reference: true, organizationId: true, firstName: true, lastName: true, email: true, currency: true, totalAmount: true },
+    });
+    if (!order) return;
+    const customerName = `${order.firstName ?? ''} ${order.lastName ?? ''}`.trim() || order.email || 'A customer';
+    const total = formatMoney(minor(order.totalAmount), order.currency);
+    const facts = { orderId: order.id, reference: order.reference, customerName, total };
+    await (kind === 'transfer'
+      ? notify({ kind: 'order.transfer', organizationId: order.organizationId, key: `order:${order.id}:new`, facts })
+      : notify({ kind: 'order.new', organizationId: order.organizationId, key: `order:${order.id}:new`, facts: { ...facts, payment: kind } }));
+  } catch (error) {
+    console.error(`[orders] Could not tell the store about new order ${orderId}:`, error);
+  }
+}

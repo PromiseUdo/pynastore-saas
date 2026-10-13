@@ -21,7 +21,8 @@ Variables**, for **Production**, and only take effect after a **redeploy**
 | 4. Paystack live | Paystack's business activation | a few working days |
 | 5. Tidy up test mode | nobody | 15 minutes |
 | 6. App Store and Google Play | Apple and Google review | 1–7 days each |
-| 7. Final check | — | 30 minutes |
+| 7. Notifications | nobody, then a phone in each hand | 1 hour |
+| 8. Final check | — | 30 minutes |
 
 ---
 
@@ -209,16 +210,44 @@ forms ask what the app collects. This is what it actually does:
   Nigerian shops, with accounts, search by photo, wishlists and order
   tracking, and give a test shop and shopper login.
 
-## 7. Final check
+## 7. Notifications (ROADMAP 18)
 
-1. **Console → Go-live checklist:** every check says **Ready**.
+1. **Browser push keys,** once and never again:
+   ```
+   npx web-push generate-vapid-keys
+   ```
+   Set `NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY` (the public key),
+   `WEB_PUSH_PRIVATE_KEY` (the private key), and `WEB_PUSH_SUBJECT`
+   (`mailto:` plus an address you read). New keys later would cut off every
+   browser that signed up.
+2. **Firebase** (Android store apps): `FIREBASE_SERVICE_ACCOUNT` set to the
+   platform project's service-account key (docs/MOBILE-BUILD.md §1).
+3. **Ably** (`ABLY_API_KEY`) for instant bells and chat. Without it they
+   still work, only slower.
+4. **cron-job.org:** `/api/cron/notification-retries` every 5 minutes, with
+   the same `Authorization` header as the other jobs (docs/SCHEDULED-JOBS.md).
+   The daily summary job is in `vercel.json` already.
+5. Redeploy, then from your machine run:
+   ```
+   scripts/check-notification-urls.sh https <your domain> <a shop's slug>
+   ```
+   It should print **All good**. Add `--app` for a shop with a store app, and
+   `--custom-domain <its domain>` if it has one.
+6. Work through **docs/NOTIFICATIONS-ACCEPTANCE.md** on real phones and
+   browsers.
+
+## 8. Final check
+
+1. **Console → Go-live checklist:** every check says **Ready**, Notifications
+   included.
 2. **Confirm the manual steps:**
    - Meta approved and the app Live;
    - the Resend domain Verified;
    - a real payment end to end;
    - both app listings approved;
    - counsel's review of the terms and privacy policy, including the 6-year
-     and 30-day rules (10.10).
+     and 30-day rules (10.10);
+   - notifications on real phones and browsers (§7).
 3. **Console → Scheduled jobs:** every job **Working**.
 4. **Console → Errors:** nothing new and open.
 5. Watch the console for the first few days of real orders.

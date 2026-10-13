@@ -12,6 +12,8 @@
 import { prisma } from '@/lib/prisma';
 import { pathFor, type NotificationTarget, type Surface } from './links';
 import { announceListChanged } from './realtime';
+import { syncAppBadges } from './badges';
+import { runAfter } from '@/lib/run-after';
 import { unreadCount, whose, type Reader } from './readers';
 import type { NotificationItem, NotificationPage } from './view';
 
@@ -24,7 +26,18 @@ export const PAGE_SIZE = 20;
 
 const SURFACE: Record<Reader['kind'], Surface> = { staff: 'admin', platform: 'platform', shopper: 'store' };
 
-const TARGET_TYPES = new Set<NotificationTarget['type']>(['order', 'return', 'conversation', 'dispute', 'low-stock', 'platform']);
+const TARGET_TYPES = new Set<NotificationTarget['type']>([
+  'order',
+  'return',
+  'conversation',
+  'dispute',
+  'low-stock',
+  'purchase-order',
+  'social-post',
+  'questions',
+  'admin-page',
+  'platform',
+]);
 
 /** Where an entry leads for this reader. A signed-in shopper goes to their account's page, not the emailed link. */
 function hrefFor(target: unknown, reader: Reader): string | null {
@@ -69,15 +82,35 @@ export async function listNotifications(reader: Reader, options: { unreadOnly?: 
   return { items: rows.map((row) => toItem(row, reader)), total, page, pageSize: PAGE_SIZE, unread, any: any > 0 };
 }
 
+/** After a change to what's unread: open bells hear it, and a shopper's iPhone icons are corrected — after the response. */
+async function unreadChanged(reader: Reader): Promise<void> {
+  await announceListChanged([reader]);
+  runAfter(() => syncAppBadges(reader));
+}
+
 /** Mark one read (opening it does this). Someone else's id, or one already read, changes nothing. */
 export async function markNotificationRead(reader: Reader, id: string): Promise<boolean> {
   const marked = await prisma.notification.updateMany({ where: { id, ...whose(reader), readAt: null }, data: { readAt: new Date() } });
-  if (marked.count > 0) await announceListChanged([reader]);
+  if (marked.count > 0) await unreadChanged(reader);
   return marked.count > 0;
 }
 
 export async function markAllNotificationsRead(reader: Reader): Promise<number> {
   const marked = await prisma.notification.updateMany({ where: { ...whose(reader), readAt: null }, data: { readAt: new Date() } });
-  if (marked.count > 0) await announceListChanged([reader]);
+  if (marked.count > 0) await unreadChanged(reader);
   return marked.count;
+}
+
+/**
+ * Everything about one thing ("order:{id}", "chat:{id}") marked read — when
+ * the person opens that thing itself, not the notification: the chat, or the
+ * order's page. Never throws.
+ */
+export async function markThreadRead(reader: Reader, threadKey: string): Promise<void> {
+  try {
+    const marked = await prisma.notification.updateMany({ where: { ...whose(reader), threadKey, readAt: null }, data: { readAt: new Date() } });
+    if (marked.count > 0) await unreadChanged(reader);
+  } catch (error) {
+    console.error('[notifications] Couldn’t mark a thread read:', error);
+  }
 }

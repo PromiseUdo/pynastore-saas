@@ -91,6 +91,12 @@ const AUTH_ONLY_PREFIXES = ['/onboarding', '/platform'];
 // on the rewritten second pass through here.
 const INSTALL_ASSET = /^(\/[^/]+)?\/(manifest\.webmanifest|app-icon\/\d+)$/;
 
+/* The files that let a store's own app open its links (ROADMAP 18.5). Apple
+ * and Google fetch them at exactly the host they're checking and follow no
+ * redirect, so they skip the 12.6 canonical redirects and are served on the
+ * apex, www and the platform address alike — from app/store/[slug]/well-known. */
+const APP_LINK_FILE = /^\/\.well-known\/(apple-app-site-association|assetlinks\.json)$/;
+
 /*
  * next-auth's auth() wrapper rewrites req.url/req.nextUrl's ORIGIN to
  * AUTH_URL before calling this function (see reqWithEnvURL in
@@ -230,8 +236,10 @@ const routeRequest = auth(async function proxy(req: NextRequest & { auth: any })
 
     // A suspended shop opens only its "unavailable" page (ROADMAP 11.4).
     const rest = tenant.status === 'SUSPENDED' ? '' : route.rest;
+    const headers = stampStorefront(tenant.orgSlug);
+    headers.set('x-store-path', `${rest || '/'}${req.nextUrl.search}`);
     const rewriteUrl = new URL(`/store/${tenant.orgSlug}${rest}${tenant.status === 'SUSPENDED' ? '' : req.nextUrl.search}`, requestUrl);
-    return NextResponse.rewrite(rewriteUrl, { request: { headers: stampStorefront(tenant.orgSlug) } });
+    return NextResponse.rewrite(rewriteUrl, { request: { headers } });
   }
 
   // ── 2. Resolve the tenant from the hostname ─────────────────────────────
@@ -292,6 +300,14 @@ const routeRequest = auth(async function proxy(req: NextRequest & { auth: any })
   //        the live custom domain — permanently, so saved links keep working
   //        and search engines see one shop. The mobile origin never leaves
   //        its single host, so it isn't redirected.
+  if (tenant.siteType === 'storefront' && APP_LINK_FILE.test(pathname)) {
+    const rewrite = new URL(`${internalPrefix}/well-known/${pathname.slice('/.well-known/'.length)}`, requestUrl);
+    return NextResponse.rewrite(rewrite, { request: { headers: requestHeaders } });
+  }
+  // …and its second pass through here, under the internal path, isn't redirected either.
+  if (tenant.siteType === 'storefront' && pathname.startsWith(`${internalPrefix}/well-known/`)) {
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
   if (tenant.redirectHost) {
     return NextResponse.redirect(`https://${tenant.redirectHost}${pathname}${req.nextUrl.search}`, 308);
   }
@@ -326,6 +342,14 @@ const routeRequest = auth(async function proxy(req: NextRequest & { auth: any })
    * for the dashboard layout: a lapsed workspace opens only billing and the
    * orders already placed (ROADMAP 12.1). Set by the proxy, never trusted from
    * the browser — an incoming header of the same name is overwritten. */
+  /* The storefront page being opened, as the shopper sees it (/account/orders/R-1?x=y),
+   * for the account pages' sign-in to come back to (ROADMAP 18.5). Set here,
+   * never trusted from the browser — an incoming header of the same name is
+   * overwritten. */
+  if (tenant.siteType === 'storefront') {
+    const storePath = pathname === internalPrefix || pathname.startsWith(`${internalPrefix}/`) ? pathname.slice(internalPrefix.length) || '/' : pathname;
+    requestHeaders.set('x-store-path', `${storePath}${req.nextUrl.search}`);
+  }
   if (tenant.siteType === 'admin') {
     const adminPath =
       pathname === internalPrefix || pathname.startsWith(`${internalPrefix}/`)

@@ -13,12 +13,18 @@
  *   - toggle a `.keyboard-open` class so layouts can react to the keyboard
  *   - Android hardware back button → history back, or exit at the root
  *   - stamp `<html data-native="ios|android">` for CSS hooks
- *   - a tapped order notification opens that order (store apps with push)
+ *   - a tapped notification opens its page (store apps with push)
+ *   - a link to the store (an email, a message, a share) opens its page in
+ *     the store's own app instead of the browser (Universal Links / App
+ *     Links, ROADMAP 18.5)
  */
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { isNativePlatform, getPlatform } from '@/lib/platform';
 import { userAgentHasPush } from '@/lib/mobile/app-config';
+import { routeIncomingLink } from '@/lib/mobile/app-links';
+
+let launchLinkHandled = false;
 
 export function NativeShell() {
   const router = useRouter();
@@ -141,9 +147,10 @@ export function NativeShell() {
     return () => handle?.remove();
   }, [pathname, router]);
 
-  // Tapping an order notification opens that order (ROADMAP 16.4). Only in a
-  // build with push; the plugin holds a tap that launched the app until this
-  // listener is added.
+  // Tapping a notification opens its page — an order, the account's
+  // notifications, the chat, a product (ROADMAP 16.4, 18.4). Only in a build
+  // with push; the plugin holds a tap that launched the app (a cold start)
+  // until this listener is added, so it isn't lost.
   useEffect(() => {
     if (!isNativePlatform() || !userAgentHasPush(navigator.userAgent)) return;
     let handle: { remove: () => Promise<void> } | undefined;
@@ -155,6 +162,36 @@ export function NativeShell() {
         // Only a page of a store on this origin — never a URL from outside.
         if (typeof path === 'string' && /^\/s\/[a-z0-9-]+\/[^/]/.test(path)) router.push(path);
       });
+    })();
+
+    return () => void handle?.remove();
+  }, [router]);
+
+  // A link to the store, handed to this app by the phone (ROADMAP 18.5) —
+  // while it runs (appUrlOpen) or as what launched it (getLaunchUrl). The
+  // phone only does that for hosts the app claims and the store vouches for
+  // (/.well-known/…). In a store's own app every bare path is its store, so
+  // the link's path is the page. The custom-scheme returns from payment and
+  // sign-in (lib/mobile/deep-link.ts) aren't https and are left to their flows.
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    let handle: { remove: () => Promise<void> } | undefined;
+    const open = (url: string | undefined) => {
+      const route = url ? routeIncomingLink(url) : null;
+      if (!route) return;
+      if ('open' in route) router.push(route.open);
+      // A page the app doesn't show: the browser, rather than nothing at all.
+      else void import('@capacitor/browser').then(({ Browser }) => Browser.open({ url: route.browser }));
+    };
+
+    (async () => {
+      const { App } = await import('@capacitor/app');
+      // The launch link once per app run, however often this effect re-runs.
+      if (!launchLinkHandled) {
+        launchLinkHandled = true;
+        open((await App.getLaunchUrl().catch(() => undefined))?.url);
+      }
+      handle = await App.addListener('appUrlOpen', ({ url }) => open(url));
     })();
 
     return () => void handle?.remove();

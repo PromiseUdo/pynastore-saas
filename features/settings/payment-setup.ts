@@ -20,6 +20,8 @@
  * Viewing needs `settings.view`; changing it, uploading and opening documents
  * need `settings.edit`.
  */
+import { runAfter } from '@/lib/run-after';
+import { notify } from '@/lib/notifications/notify';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
@@ -584,6 +586,18 @@ export async function savePaymentSetup(
         documents: documents.length,
       },
     });
+
+    // Waiting for platform staff to review (ROADMAP 18.6).
+    if (submit) {
+      runAfter(() =>
+        notify({
+          kind: 'platform.verification',
+          organizationId: null,
+          key: `verification:${organizationId}:${now.getTime()}`,
+          facts: { shopName: ctx.organization.name },
+        }),
+      );
+    }
 
     return { success: true, data: { submitted: submit } };
   } catch (error) {

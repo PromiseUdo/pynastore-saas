@@ -37,10 +37,11 @@ import {
   editAndroidStrings,
   editIosInfoPlist,
   editAndroidManifestForPush,
+  editAndroidManifestForAppLinks,
   editIosProject,
   editOfflinePage,
   googleServicesIncludes,
-  IOS_PUSH_ENTITLEMENTS,
+  iosEntitlements,
   parseStoreAppConfig,
   pngInfo,
   releaseServerProblem,
@@ -48,6 +49,7 @@ import {
 } from './native-project';
 import { makeListingPack } from './listing-pack';
 import { appIconPngUrl } from '../../lib/mobile/icon';
+import { appLinkHosts, normalizeCertFingerprint } from '../../lib/mobile/app-links';
 
 const REPO = path.resolve(__dirname, '../..');
 const APPS_DIR = path.resolve(process.env.MOBILE_APPS_DIR?.trim() || path.join(os.homedir(), 'mansaas-store-apps'));
@@ -128,6 +130,12 @@ interface Registration {
   iconUrl: string | null;
   backgroundColor: string | null;
   host: string;
+  /** the store's hosts whose links open the app (ROADMAP 18.5) */
+  linkHosts: string[];
+  /** an Apple team id is recorded, so iPhones can check the store's links */
+  appleLinks: boolean;
+  /** the Android signing-key fingerprints the store's website vouches for */
+  androidFingerprints: string[];
 }
 
 async function readRegistration(slug: string): Promise<Registration | null | 'no-database'> {
@@ -146,16 +154,30 @@ async function readRegistration(slug: string): Promise<Registration | null | 'no
       select: {
         name: true,
         status: true,
+        customStoreDomain: true,
         mobileApp: {
-          select: { appId: true, name: true, status: true, apnsKeySealed: true, iconUrl: true, backgroundColor: true },
+          select: {
+            appId: true,
+            name: true,
+            status: true,
+            apnsKeySealed: true,
+            iconUrl: true,
+            backgroundColor: true,
+            appleTeamId: true,
+            apnsTeamId: true,
+            androidCertSha256: true,
+          },
         },
         storePages: { where: { isPublished: true }, select: { kind: true } },
       },
     });
     if (!store?.mobileApp) return null;
-    const { apnsKeySealed, ...app } = store.mobileApp;
+    const { apnsKeySealed, appleTeamId, apnsTeamId, androidCertSha256, ...app } = store.mobileApp;
     return {
       ...app,
+      linkHosts: appLinkHosts({ slug, customStoreDomain: store.customStoreDomain }),
+      appleLinks: Boolean(appleTeamId ?? apnsTeamId),
+      androidFingerprints: androidCertSha256,
       iosPush: Boolean(apnsKeySealed),
       iconUrl: app.iconUrl,
       backgroundColor: app.backgroundColor,
@@ -306,6 +328,19 @@ function readUploadKey(slug: string) {
   };
 }
 
+/** The upload key's SHA-256 fingerprint ("AA:BB:…"), for App Links (ROADMAP 18.5); null when there's no key or keytool. */
+function uploadKeyFingerprint(slug: string): string | null {
+  if (!fs.existsSync(path.join(signingDir(slug), 'upload.properties')) || !has('keytool', ['-help'])) return null;
+  const key = readUploadKey(slug);
+  const listed = spawnSync(
+    'keytool',
+    ['-list', '-v', '-keystore', key.MANSAAS_UPLOAD_KEYSTORE, '-alias', key.MANSAAS_UPLOAD_KEY_ALIAS, '-storepass', key.MANSAAS_UPLOAD_STORE_PASSWORD],
+    { encoding: 'utf8' },
+  );
+  const line = listed.stdout?.split('\n').find((l) => l.trim().startsWith('SHA256:'));
+  return line ? normalizeCertFingerprint(line.trim().slice('SHA256:'.length)) : null;
+}
+
 /* ── push (ROADMAP 16.4) ────────────────────────────────────────────── */
 
 /** The store's own google-services.json, or the platform-wide one, and whether it has this app. */
@@ -411,6 +446,17 @@ async function check(slug: string, platforms: Platform[], options: { debug: bool
       if (platforms.includes('ios')) {
         if (registration.iosPush) ok('iPhone notifications: APNs key recorded');
         else warn("No APNs key recorded — the iPhone app won't offer order notifications until it is (docs/MOBILE-BUILD.md §2).");
+        if (registration.appleLinks) ok(`iPhone links: ${registration.linkHosts.join(', ')}`);
+        else warn(`No Apple team id recorded — links to the store will open Safari, not the app. Run: npx tsx prisma/mobile-app.ts links ${slug} --team-id <10 chars>`);
+      }
+      if (platforms.includes('android') && !options.debug) {
+        const upload = uploadKeyFingerprint(slug);
+        if (upload && registration.androidFingerprints.includes(upload)) ok(`Android links: ${registration.linkHosts.join(', ')}`);
+        else if (upload) {
+          warn(
+            `The upload key's fingerprint isn't recorded — links to the store will open the browser, not this build. Run: npx tsx prisma/mobile-app.ts links ${slug} --android ${upload}`,
+          );
+        }
       }
     }
   } catch (error) {
@@ -522,6 +568,15 @@ async function build(slug: string, platforms: Platform[], flags: Record<string, 
   }
   ok('Copied the native projects');
 
+  // The hosts whose links open the app (ROADMAP 18.5) — from the store's record now,
+  // so a domain added after this build needs a new build.
+  const registration = await readRegistration(slug).catch(() => null);
+  const linkHosts = registration && registration !== 'no-database' ? registration.linkHosts : [];
+  if (linkHosts.length === 0) warn("Couldn't read the store's hosts — this build won't open the store's links.");
+  if (!debug && linkHosts.some((host) => host.includes('localhost'))) {
+    stop(`The store's hosts came out as ${linkHosts.join(', ')}. Set NEXT_PUBLIC_ROOT_DOMAIN to production's value for a release build.`);
+  }
+
   // 2. Capacitor: the app id, name, user-agent marker and the site it loads.
   const firebase = platforms.includes('android') ? googleServicesFor(slug, config.appId) : null;
   const androidPush = firebase?.state === 'ok';
@@ -557,6 +612,10 @@ async function build(slug: string, platforms: Platform[], flags: Record<string, 
       edit(path.join(work, 'android/app/src/main/AndroidManifest.xml'), (text) => editAndroidManifestForPush(text, { smallIcon }));
       ok('Android: order notifications included');
     }
+    if (linkHosts.length > 0) {
+      edit(path.join(work, 'android/app/src/main/AndroidManifest.xml'), (text) => editAndroidManifestForAppLinks(text, linkHosts));
+      ok(`Android: links to ${linkHosts.join(', ')} open the app`);
+    }
   }
   if (platforms.includes('ios')) {
     edit(path.join(work, 'ios/App/App.xcodeproj/project.pbxproj'), (text) =>
@@ -568,7 +627,8 @@ async function build(slug: string, platforms: Platform[], flags: Record<string, 
         entitlements: 'App/App.entitlements',
       }),
     );
-    fs.writeFileSync(path.join(work, 'ios/App/App/App.entitlements'), IOS_PUSH_ENTITLEMENTS);
+    fs.writeFileSync(path.join(work, 'ios/App/App/App.entitlements'), iosEntitlements({ linkHosts }));
+    if (linkHosts.length > 0) ok(`iOS: links to ${linkHosts.join(', ')} open the app`);
     edit(path.join(work, 'ios/App/App/Info.plist'), (text) => editIosInfoPlist(text, { appId: config.appId, name: config.name }));
   }
   ok('Set the app id, name, version and deep-link scheme');

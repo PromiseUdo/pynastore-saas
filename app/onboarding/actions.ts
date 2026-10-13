@@ -7,6 +7,8 @@
  * their first store and where it is. Everything is created together
  * (lib/onboarding/bootstrap.ts), and only once their email is confirmed.
  */
+import { runAfter } from '@/lib/run-after';
+import { notify } from '@/lib/notifications/notify';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@/lib/generated/prisma/client';
@@ -154,6 +156,15 @@ export async function createShop(input: CreateShopInput): Promise<CreateShopResu
   const { organization, start } = created;
   await updateCurrentOrganization(userId, organization.id, organization.slug);
   await sendWelcome(organization.id, organization.slug, organization.name, start);
+  // A new shop, for platform staff (ROADMAP 18.6).
+  runAfter(() =>
+    notify({
+      kind: 'platform.merchant-new',
+      organizationId: null,
+      key: `merchant:${organization.id}:new`,
+      facts: { organizationId: organization.id, shopName: organization.name },
+    }),
+  );
 
   return { ok: true, adminUrl: getAdminUrl(organization.slug, '/dashboard') };
 }

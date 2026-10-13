@@ -5,8 +5,11 @@
  *
  * A store's iPhone app belongs to the merchant's Apple team, so it is sent
  * to with THEIR APNs key (.p8): team id + key id + the key, kept sealed on
- * the store's MobileApp. Production APNs only — TestFlight and App Store
- * builds use it; an app run straight from Xcode doesn't get notifications.
+ * the store's MobileApp.
+ *
+ * TestFlight and App Store builds use the live service; a build run straight
+ * from Xcode registers with Apple's test one (`sandbox`). Which one a phone
+ * uses is worked out by ./send.ts on the first send (ROADMAP 18.4).
  */
 import http2 from 'node:http2';
 import { SignJWT, importPKCS8 } from 'jose';
@@ -53,17 +56,39 @@ export async function isUsableApnsKey(key: string): Promise<boolean> {
   }
 }
 
+export interface ApnsOptions {
+  /** the number on the app's icon; 0 clears it */
+  badge?: number;
+  /** notifications about the same thing replace each other and group together */
+  thread?: string;
+  /** Apple's test service, for a build run from Xcode */
+  sandbox?: boolean;
+}
+
+/** Apple caps apns-collapse-id at 64 bytes. */
+const collapseId = (thread: string) => thread.slice(0, 64);
+
+/**
+ * Send one notification — or, with `message` null, only set the icon's badge.
+ * 'bad-token' is the live service refusing a token it doesn't know, which is
+ * what a sandbox token looks like to it (./send.ts tries the sandbox then).
+ */
 export async function sendApns(
   deviceToken: string,
-  message: PushMessage,
+  message: PushMessage | null,
   data: Record<string, string>,
   credentials: ApnsCredentials,
-): Promise<SendOutcome> {
+  options: ApnsOptions = {},
+): Promise<SendOutcome | 'bad-token'> {
   const jwt = await apnsJwt(credentials);
-  const payload = JSON.stringify({ aps: { alert: { title: message.title, body: message.body }, sound: 'default' }, ...data });
+  const badge = options.badge !== undefined ? { badge: options.badge } : {};
+  const aps = message
+    ? { alert: { title: message.title, body: message.body }, sound: 'default', ...badge, ...(options.thread ? { 'thread-id': options.thread } : {}) }
+    : badge;
+  const payload = JSON.stringify({ aps, ...data });
 
   const { status, reason } = await new Promise<{ status: number; reason: string }>((resolve, reject) => {
-    const session = http2.connect('https://api.push.apple.com');
+    const session = http2.connect(options.sandbox ? 'https://api.sandbox.push.apple.com' : 'https://api.push.apple.com');
     session.on('error', reject);
     const request = session.request({
       ':method': 'POST',
@@ -71,7 +96,9 @@ export async function sendApns(
       authorization: `bearer ${jwt}`,
       'apns-topic': credentials.topic,
       'apns-push-type': 'alert',
-      'apns-priority': '10',
+      // A badge on its own isn't urgent; Apple asks for 5 when nothing is shown.
+      'apns-priority': message ? '10' : '5',
+      ...(message && options.thread ? { 'apns-collapse-id': collapseId(options.thread) } : {}),
       'content-type': 'application/json',
     });
     let statusCode = 0;
@@ -106,10 +133,10 @@ export async function sendApns(
   });
 
   if (status === 200) return 'sent';
+  // Not a token this service knows: perhaps it's the other service's.
+  if (reason === 'BadDeviceToken') return 'bad-token';
   // Uninstalled (410), or a token that was never valid for this app.
-  if (status === 410 || reason === 'BadDeviceToken' || reason === 'Unregistered' || reason === 'DeviceTokenNotForTopic') {
-    return 'gone';
-  }
+  if (status === 410 || reason === 'Unregistered' || reason === 'DeviceTokenNotForTopic') return 'gone';
   console.error(`[push] APNs send failed (${status} ${reason})`);
   return 'failed';
 }

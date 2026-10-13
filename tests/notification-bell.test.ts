@@ -47,6 +47,7 @@ import {
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  markThreadRead,
   unreadCount,
   type Reader,
 } from '@/lib/notifications/inbox';
@@ -175,6 +176,18 @@ describe('reading and clearing', () => {
     expect((await prisma.notification.findUniqueOrThrow({ where: { id: theirs.id } })).readAt).toBeNull();
     expect(await markNotificationRead(me, mine.id)).toBe(true);
     expect(await unreadCount(me)).toBe(0);
+  });
+
+  it('marks a whole thread read when the thing itself is opened', async () => {
+    const shopper: Reader = { kind: 'shopper', customerId, organizationId: shop.id };
+    const thread = await entry({ customerId, organizationId: shop.id, target: { type: 'order', orderId: 'o7', reference: 'R7' } });
+    await prisma.notification.update({ where: { id: thread.id }, data: { threadKey: 'order:o7' } });
+    const other = await entry({ customerId, organizationId: shop.id, target: { type: 'order', orderId: 'o8', reference: 'R8' } });
+    await prisma.notification.update({ where: { id: other.id }, data: { threadKey: 'order:o8' } });
+
+    await markThreadRead(shopper, 'order:o7');
+    expect(await unreadCount(shopper)).toBe(1);
+    expect((await prisma.notification.findUniqueOrThrow({ where: { id: other.id } })).readAt).toBeNull();
   });
 
   it('filters to unread, pages, and marks everything read', async () => {

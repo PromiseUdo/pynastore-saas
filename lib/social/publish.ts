@@ -26,6 +26,8 @@
  * the post row — SocialPost has no token column.
  */
 import { prisma } from '@/lib/prisma';
+import { notify } from '@/lib/notifications/notify';
+import { runAfter } from '@/lib/run-after';
 import { open } from './crypto';
 import { getProviderForPlatform } from './registry';
 import { getProductFacts, resolveImageUrls } from './product-facts';
@@ -370,7 +372,7 @@ export async function publishPost(
     };
   }
 
-  return sendToPlatform(organizationId, postId);
+  return sendToPlatform(organizationId, postId, userId);
 }
 
 /**
@@ -390,7 +392,7 @@ function isUniqueViolation(error: unknown): boolean {
  * Same tenancy rule and the same status guard as a first attempt — a retry
  * is not a way in around either.
  */
-export async function retryPost(organizationId: string, postId: string): Promise<PublishOutcome> {
+export async function retryPost(organizationId: string, postId: string, actorUserId?: string): Promise<PublishOutcome> {
   const post = await prisma.socialPost.findFirst({
     where: { id: postId, organizationId },
     select: { id: true, status: true },
@@ -402,7 +404,26 @@ export async function retryPost(organizationId: string, postId: string): Promise
     return { ok: true, post: toRow(row) };
   }
 
-  return sendToPlatform(organizationId, postId);
+  return sendToPlatform(organizationId, postId, actorUserId);
+}
+
+/** "Facebook", "Instagram" — how a failed post names where it was going. */
+const PLATFORM_NAMES: Record<string, string> = { FACEBOOK_PAGE: 'Facebook', INSTAGRAM_BUSINESS: 'Instagram', TIKTOK: 'TikTok' };
+
+/**
+ * The rest of the store's social team hears that a post didn't go out
+ * (ROADMAP 18.6) — in their list, after the response. Not whoever pressed
+ * Publish: they saw it fail on screen.
+ */
+function tellTeamPostFailed(organizationId: string, post: { id: string; platform: string; productName: string | null }, actorUserId?: string) {
+  runAfter(() =>
+    notify({
+      kind: 'social.failed',
+      organizationId,
+      actorUserId,
+      facts: { postId: post.id, productName: post.productName, platform: PLATFORM_NAMES[post.platform] ?? 'social' },
+    }),
+  );
 }
 
 /**
@@ -413,7 +434,7 @@ export async function retryPost(organizationId: string, postId: string): Promise
  * other is told the post is already going out. That is the double-click
  * guard, and it lives in the database rather than in the browser.
  */
-async function sendToPlatform(organizationId: string, postId: string): Promise<PublishOutcome> {
+async function sendToPlatform(organizationId: string, postId: string, actorUserId?: string): Promise<PublishOutcome> {
   const claimed = await prisma.socialPost.updateMany({
     where: { id: postId, organizationId, status: { in: ['DRAFT', 'FAILED'] } },
     data: { status: 'PUBLISHING', errorCode: null, errorMessage: null, attempts: { increment: 1 } },
@@ -434,6 +455,7 @@ async function sendToPlatform(organizationId: string, postId: string): Promise<P
       id: true,
       connectionId: true,
       platform: true,
+      productName: true,
       caption: true,
       hashtags: true,
       imageUrls: true,
@@ -450,6 +472,7 @@ async function sendToPlatform(organizationId: string, postId: string): Promise<P
       data: { status: 'FAILED', errorCode: code, errorMessage: message.slice(0, 500) },
       select: POST_FIELDS,
     });
+    tellTeamPostFailed(organizationId, post, actorUserId);
     return { ok: false, reason, post: toRow(updated) };
   };
 
@@ -518,14 +541,21 @@ async function sendToPlatform(organizationId: string, postId: string): Promise<P
 export async function releaseStalePublishing(organizationId: string): Promise<void> {
   const cutoff = new Date(Date.now() - 5 * 60_000);
   try {
-    await prisma.socialPost.updateMany({
+    const stuck = await prisma.socialPost.findMany({
       where: { organizationId, status: 'PUBLISHING', updatedAt: { lt: cutoff } },
+      select: { id: true, platform: true, productName: true },
+    });
+    if (stuck.length === 0) return;
+    const released = await prisma.socialPost.updateMany({
+      where: { organizationId, id: { in: stuck.map((p) => p.id) }, status: 'PUBLISHING' },
       data: {
         status: 'FAILED',
         errorCode: 'unavailable',
         errorMessage: 'Publishing was interrupted before the platform answered.',
       },
     });
+    // Nobody saw these fail: everyone who manages social hears.
+    if (released.count > 0) for (const post of stuck) tellTeamPostFailed(organizationId, post);
   } catch (error) {
     console.error('[social] releasing stale posts failed:', error);
   }

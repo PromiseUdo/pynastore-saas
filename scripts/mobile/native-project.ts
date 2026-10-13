@@ -12,6 +12,7 @@
  * calls itself com.mansaas.app.
  */
 import { SHARED_APP_ID, isValidAppId } from '../../lib/mobile/app-config';
+import { APP_LINK_PREFIXES } from '../../lib/mobile/app-links';
 
 /* ── the store's build settings (app.json in its folder) ─────────────── */
 
@@ -120,11 +121,17 @@ export function releaseServerProblem(serverUrl: string): string | null {
 
 /* ── text edits ─────────────────────────────────────────────────────── */
 
-function replaceRequired(text: string, pattern: RegExp, replacement: string, what: string): string {
+function replaceRequired(
+  text: string,
+  pattern: RegExp,
+  replacement: string | ((match: string, ...groups: string[]) => string),
+  what: string,
+): string {
   const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
   const global = new RegExp(pattern.source, flags);
   if (!global.test(text)) throw new Error(`Couldn't find ${what}. Has the native project changed shape?`);
-  return text.replace(new RegExp(pattern.source, flags), replacement);
+  const again = new RegExp(pattern.source, flags);
+  return typeof replacement === 'string' ? text.replace(again, replacement) : text.replace(again, replacement);
 }
 
 /** Escape for an Android string resource (XML, plus Android's own apostrophe/quote rules). */
@@ -214,19 +221,63 @@ export function editIosProject(
 }
 
 /**
- * The app's entitlements: push notifications (ROADMAP 16.4). "development"
- * is what Xcode expects in the file; exporting for the App Store or
- * TestFlight switches it to production by itself.
+ * The app's entitlements: push notifications (ROADMAP 16.4) and the store's
+ * hosts whose links open the app (Universal Links, 18.5). "development" is
+ * what Xcode expects in the file; exporting for the App Store or TestFlight
+ * switches it to production by itself.
  */
-export const IOS_PUSH_ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
+export function iosEntitlements(input: { linkHosts: string[] }): string {
+  const domains = input.linkHosts.length
+    ? `
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+${input.linkHosts.map((host) => `		<string>applinks:${xmlEscape(host)}</string>`).join('\n')}
+	</array>`
+    : '';
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>aps-environment</key>
-	<string>development</string>
+	<string>development</string>${domains}
 </dict>
 </plist>
 `;
+}
+
+/**
+ * AndroidManifest.xml for App Links (ROADMAP 18.5): a verified filter for the
+ * store's hosts and the pages that open in the app (lib/mobile/app-links.ts —
+ * the same allow-list the iPhone gets). Android checks /.well-known/
+ * assetlinks.json on each host when the app is installed.
+ */
+export function editAndroidManifestForAppLinks(xml: string, hosts: string[]): string {
+  if (hosts.length === 0) return xml;
+  return replaceRequired(
+    xml,
+    /(\n(\s*)<!-- Deep link back from the in-app payment browser:)/,
+    (_match: string, line: string, indent: string) => {
+      const data = [
+        `${indent}    <data android:scheme="https" />`,
+        ...hosts.map((host) => `${indent}    <data android:host="${xmlEscape(host)}" />`),
+        `${indent}    <data android:path="/" />`,
+        ...APP_LINK_PREFIXES.map((prefix) => `${indent}    <data android:pathPrefix="${prefix}" />`),
+      ];
+      return [
+        '',
+        `${indent}<!-- Links to the store open this app (ROADMAP 18.5): checked against /.well-known/assetlinks.json. -->`,
+        `${indent}<intent-filter android:autoVerify="true">`,
+        `${indent}    <action android:name="android.intent.action.VIEW" />`,
+        `${indent}    <category android:name="android.intent.category.DEFAULT" />`,
+        `${indent}    <category android:name="android.intent.category.BROWSABLE" />`,
+        ...data,
+        `${indent}</intent-filter>`,
+        '',
+      ].join('\n') + line;
+    },
+    'the payment deep-link intent filter in AndroidManifest.xml',
+  );
+}
 
 /**
  * AndroidManifest.xml for push (ROADMAP 16.4): the Android 13+ notification

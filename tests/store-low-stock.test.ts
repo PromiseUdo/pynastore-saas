@@ -1,7 +1,8 @@
 /*
  * Low stock, per store (ROADMAP Phase 8.3): whose reorder point decides,
- * where the alert email points, and that restocking suggestions can be
- * narrowed to the store that actually ran low.
+ * where the alert points and who gets it (18.6: the list, store access, one
+ * summary email a day), and that restocking suggestions can be narrowed to
+ * the store that actually ran low.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
@@ -13,18 +14,20 @@ const ctx = vi.hoisted(() => ({
   userId: null as unknown as string,
 }));
 
-const sentEmails = vi.hoisted(() => ({ lowStock: [] as Record<string, unknown>[] }));
+const sentEmails = vi.hoisted(() => ({ summaries: [] as { to: string | string[]; list?: string[]; button?: { url: string } }[] }));
 
 vi.mock('@/lib/organization', () => ({ getOrganizationContext: async () => ctx }));
 vi.mock('@/lib/email', () => ({
-  sendLowStockAlertEmail: async (payload: Record<string, unknown>) => {
-    sentEmails.lowStock.push(payload);
+  sendPlatformNoticeEmail: async (payload: { to: string | string[]; list?: string[]; button?: { url: string } }) => {
+    sentEmails.summaries.push(payload);
+    return true;
   },
 }));
 
 const { maybeSendLowStockAlert } = await import('@/features/inventory/shared');
 const { getLowStockLevels } = await import('@/features/inventory/reports');
 const { previewReorderDrafts } = await import('@/features/procurement/auto-reorder');
+const { sendDailyDigests } = await import('@/lib/notifications/digest');
 
 let lagos = '';
 let portHarcourt = '';
@@ -65,8 +68,9 @@ beforeAll(async () => {
   await prisma.inventoryLevel.create({ data: { inventoryItemId: mug.id, warehouseId: portHarcourt, quantity: 2 } });
 });
 
-beforeEach(() => {
-  sentEmails.lowStock.length = 0;
+beforeEach(async () => {
+  sentEmails.summaries.length = 0;
+  await prisma.notificationEvent.deleteMany({ where: { organizationId: ctx.organization.id } });
 });
 
 afterAll(async () => {
@@ -127,43 +131,33 @@ describe('restocking suggestions for one store', () => {
   });
 });
 
-describe('the alert email', () => {
-  /** A member who may be told about stock. */
-  async function addRecipient(email: string) {
+describe('the alert', () => {
+  /** A member who may see stock — in every store, or only in `onlyStore`. */
+  async function addRecipient(email: string, onlyStore?: string) {
     const permission = await prisma.permission.upsert({
-      where: { key: PERMISSIONS.INVENTORY_CREATE },
-      create: { key: PERMISSIONS.INVENTORY_CREATE, module: 'inventory', description: 'Create inventory' },
+      where: { key: PERMISSIONS.INVENTORY_VIEW },
+      create: { key: PERMISSIONS.INVENTORY_VIEW, module: 'inventory', description: 'View inventory' },
       update: {},
     });
     const role = await prisma.role.create({
       data: {
         organizationId: ctx.organization.id,
-        name: 'Stock keeper',
+        name: `Stock keeper ${Math.random().toString(36).slice(2, 6)}`,
         rolePermissions: { create: { permissionId: permission.id } },
       },
     });
     const user = await prisma.user.create({ data: { email, name: 'Keeper' } });
-    await prisma.membership.create({
+    const membership = await prisma.membership.create({
       data: { organizationId: ctx.organization.id, userId: user.id, roleId: role.id, status: 'ACTIVE' },
     });
+    if (onlyStore) await prisma.membershipWarehouse.create({ data: { membershipId: membership.id, warehouseId: onlyStore } });
     return { userId: user.id, roleId: role.id };
   }
 
-  let recipient: { userId: string; roleId: string };
-
-  beforeAll(async () => {
-    recipient = await addRecipient(`keeper-${Date.now()}@example.test`);
-  });
-
-  afterAll(async () => {
-    await prisma.membership.deleteMany({ where: { userId: recipient.userId } });
-    await prisma.user.delete({ where: { id: recipient.userId } });
-    await prisma.rolePermission.deleteMany({ where: { roleId: recipient.roleId } });
-    await prisma.role.delete({ where: { id: recipient.roleId } });
-  });
-
-  it('links to the store that ran low, and says the reorder point was that store’s own', async () => {
-    await maybeSendLowStockAlert({
+  let everywhere: { userId: string; roleId: string };
+  let portHarcourtOnly: { userId: string; roleId: string };
+  const crossedAtLagos = () =>
+    maybeSendLowStockAlert({
       organizationId: ctx.organization.id,
       organizationSlug: ctx.organization.slug,
       itemName: 'Nike Air Max',
@@ -174,14 +168,28 @@ describe('the alert email', () => {
       newQty: 8,
       threshold: 10,
     });
+  const listFor = (userId: string) => prisma.notification.findMany({ where: { userId, organizationId: ctx.organization.id, kind: 'stock.low' } });
 
-    expect(sentEmails.lowStock).toHaveLength(1);
-    const [payload] = sentEmails.lowStock;
-    expect(payload.warehouseName).toBe('Lagos');
-    expect(payload.thresholdSource).toBe('store');
-    expect(String(payload.storeUrl)).toContain(`/inventory/warehouses/${lagos}`);
-    expect(String(payload.storeUrl)).toContain('stock=low');
-    expect(String(payload.storeUrl)).not.toContain('/inventory/reports');
+  beforeAll(async () => {
+    everywhere = await addRecipient(`keeper-${Date.now()}@example.test`);
+    portHarcourtOnly = await addRecipient(`ph-keeper-${Date.now()}@example.test`, portHarcourt);
+  });
+
+  afterAll(async () => {
+    for (const r of [everywhere, portHarcourtOnly]) {
+      await prisma.membership.deleteMany({ where: { userId: r.userId } });
+      await prisma.user.delete({ where: { id: r.userId } });
+      await prisma.rolePermission.deleteMany({ where: { roleId: r.roleId } });
+      await prisma.role.delete({ where: { id: r.roleId } });
+    }
+  });
+
+  it('leads to the store that ran low, and says the reorder point was that store’s own', async () => {
+    await crossedAtLagos();
+    const [entry] = await listFor(everywhere.userId);
+    expect(entry.body).toBe('8 left at Lagos — Lagos’s own reorder point is 10.');
+    expect(entry.target).toEqual({ type: 'low-stock', warehouseId: lagos });
+    expect(sentEmails.summaries).toEqual([]); // not an email per item
   });
 
   it('says the product’s reorder point when the store has no override of its own', async () => {
@@ -196,9 +204,28 @@ describe('the alert email', () => {
       newQty: 2,
       threshold: 4,
     });
+    const [entry] = await listFor(everywhere.userId);
+    expect(entry.body).toBe('2 left at Port Harcourt — the product’s reorder point is 4.');
+  });
 
-    expect(sentEmails.lowStock).toHaveLength(1);
-    expect(sentEmails.lowStock[0].thresholdSource).toBe('product');
+  it('goes only to people who can work in that store', async () => {
+    await crossedAtLagos();
+    expect(await listFor(everywhere.userId)).toHaveLength(1);
+    expect(await listFor(portHarcourtOnly.userId)).toHaveLength(0);
+  });
+
+  it('is gathered into one email a day, once, unless already seen', async () => {
+    await crossedAtLagos();
+    const later = new Date(Date.now() + 60_000);
+    await sendDailyDigests({ now: later });
+    const mine = sentEmails.summaries.filter((e) => [e.to].flat().some((to) => to.startsWith('keeper-')));
+    expect(mine).toHaveLength(1);
+    expect(mine[0].list).toEqual(['Low stock: Nike Air Max — 8 left at Lagos — Lagos’s own reorder point is 10.']);
+    expect(mine[0].button?.url).toContain('/notifications');
+
+    sentEmails.summaries.length = 0;
+    await sendDailyDigests({ now: later });
+    expect(sentEmails.summaries).toEqual([]);
   });
 
   it('stays silent unless the threshold was actually crossed on the way down', async () => {
@@ -215,6 +242,6 @@ describe('the alert email', () => {
     await maybeSendLowStockAlert({ ...base, previousQty: 30, newQty: 20, threshold: 10 }); // still above
     await maybeSendLowStockAlert({ ...base, previousQty: 30, newQty: 20, threshold: null }); // no threshold at all
 
-    expect(sentEmails.lowStock).toEqual([]);
+    expect(await listFor(everywhere.userId)).toEqual([]);
   });
 });

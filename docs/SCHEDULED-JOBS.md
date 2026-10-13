@@ -1,6 +1,6 @@
 # Scheduled jobs
 
-The platform runs seven chores on a timer (ROADMAP 13.1). Each one is a web
+The platform runs eight chores on a timer (ROADMAP 13.1). Each one is a web
 address under `/api/cron/` that only answers a caller who sends
 `Authorization: Bearer <CRON_SECRET>`.
 
@@ -13,6 +13,7 @@ address under `/api/cron/` that only answers a caller who sends
 | Setup and trial reminders | `/api/cron/onboarding-reminders` | daily, 08:00 UTC | Vercel Cron (`vercel.json`) |
 | Store app renewals | `/api/cron/mobile-app-renewals` | daily, 07:30 UTC | Vercel Cron (`vercel.json`) |
 | Data retention | `/api/cron/data-retention` | daily, 03:00 UTC | Vercel Cron (`vercel.json`) |
+| Daily notification summaries | `/api/cron/notification-digests` | daily, 07:00 UTC | Vercel Cron (`vercel.json`) |
 
 What each one does is written in `lib/cron/jobs.ts`, and is also shown on the
 console's **Scheduled jobs** page (`/platform/jobs`).

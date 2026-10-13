@@ -14,8 +14,12 @@ import { listNotifications } from '@/lib/notifications/inbox';
 import { NOTIFICATION_RETENTION_DAYS } from '@/lib/data-rights/policy';
 import { ShopperNotificationList } from '@/components/storefront/account/notification-list';
 import { DeviceNotifications } from '@/components/storefront/account/device-notifications';
+import { ShopperNotificationPreferences } from '@/components/storefront/account/notification-preferences';
+import { loadPreferenceGrid } from '@/lib/notifications/preference-grid';
 import { webPushConfigured } from '@/lib/notifications/channels/web-push';
 import { prisma } from '@/lib/prisma';
+import { headers } from 'next/headers';
+import { pushReadyFor } from '@/lib/mobile/push/watch';
 import { AccountHeading } from '../../_components/account-heading';
 
 export const metadata: Metadata = { title: 'Notifications' };
@@ -28,11 +32,24 @@ export default async function ShopperNotificationsPage({ searchParams }: Props) 
   const data = await listNotifications({ kind: 'shopper', customerId: shopper.id, organizationId: shopper.organizationId }, { page });
   if (data.items.length === 0 && page > 1) redirect('/account/notifications');
 
-  // Browser notifications, when the platform has its keys (ROADMAP 18.3).
-  const store = webPushConfigured()
-    ? await prisma.organization.findUnique({ where: { id: shopper.organizationId }, select: { name: true } })
-    : null;
-  const device = store ? <DeviceNotifications storeName={store.name} /> : null;
+  /* Notifications on this device: this phone inside the store's own app
+   * (ROADMAP 18.4), or the browser on the website once the platform has its
+   * keys (18.3). */
+  const requestHeaders = await headers();
+  const store = await prisma.organization.findUnique({ where: { id: shopper.organizationId }, select: { name: true, slug: true } });
+  const channel =
+    requestHeaders.get('x-runtime') === 'mobile'
+      ? store && (await pushReadyFor(requestHeaders.get('user-agent'), store.slug))
+        ? ('app' as const)
+        : null
+      : webPushConfigured()
+        ? ('browser' as const)
+        : null;
+  const device = store && channel ? <DeviceNotifications storeName={store.name} storeSlug={store.slug} channel={channel} /> : null;
+  // What reaches them by email and on their devices (ROADMAP 18.6).
+  const preferences = (
+    <ShopperNotificationPreferences rows={await loadPreferenceGrid({ audience: 'shopper', customerId: shopper.id, organizationId: shopper.organizationId })} />
+  );
 
   if (!data.any) {
     return (
@@ -46,6 +63,7 @@ export default async function ShopperNotificationsPage({ searchParams }: Props) 
             When your order moves along or the store replies to you, it shows up here.
           </p>
         </div>
+        {preferences}
       </>
     );
   }
@@ -57,6 +75,7 @@ export default async function ShopperNotificationsPage({ searchParams }: Props) 
       </AccountHeading>
       {device}
       <ShopperNotificationList data={data} />
+      {preferences}
     </>
   );
 }

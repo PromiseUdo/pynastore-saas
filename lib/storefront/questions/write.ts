@@ -14,6 +14,8 @@
  * open text box on a product page from being a place to publish anything.
  */
 import { prisma } from '@/lib/prisma';
+import { notify } from '@/lib/notifications/notify';
+import { runAfter } from '@/lib/run-after';
 import { validateQuestion } from './rules';
 
 export type AskFailure = 'invalid' | 'unknown-product' | 'duplicate' | 'failed';
@@ -38,7 +40,7 @@ export async function askQuestion(input: {
    * the only thing a tampered form could try, and it ends here. */
   const product = await prisma.inventoryItem.findFirst({
     where: { id: input.productId, organizationId: input.organizationId },
-    select: { id: true },
+    select: { id: true, name: true },
   });
   if (!product) {
     return { ok: false, code: 'unknown-product', message: 'We couldn’t find that product.' };
@@ -68,8 +70,17 @@ export async function askQuestion(input: {
         customerId: input.customerId,
         body: checked.value,
       },
-      select: { id: true },
+      select: { id: true, customer: { select: { name: true } } },
     });
+    // Waiting in Sales → Questions: in the list now, in the day's summary email (ROADMAP 18.6).
+    runAfter(() =>
+      notify({
+        kind: 'question.new',
+        organizationId: input.organizationId,
+        key: `question:${question.id}`,
+        facts: { productName: product.name, shopperName: question.customer?.name?.trim() || 'A shopper' },
+      }),
+    );
     return { ok: true, questionId: question.id };
   } catch (error) {
     console.error('[questions] Could not save question:', error);

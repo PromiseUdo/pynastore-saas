@@ -24,7 +24,9 @@ vi.mock('@/lib/email', async (importOriginal) => ({
   sendStorefrontOrderUpdateEmail: vi.fn(async () => true),
 }));
 
-const { pushReadyFor, watchOrder, purgeOldPushWatches } = await import('@/lib/mobile/push/watch');
+const { pushReadyFor, watchOrder, purgeOldPushWatches, setAccountPhone } = await import('@/lib/mobile/push/watch');
+const { markAllNotificationsRead } = await import('@/lib/notifications/inbox');
+const { flushAfterTasks, discardAfterTasks } = await import('@/lib/run-after');
 const { notifyShopper } = await import('@/lib/storefront/orders/notifications');
 const { resetFcmTokenCache } = await import('@/lib/mobile/push/fcm');
 const { sendApns } = await import('@/lib/mobile/push/apns');
@@ -119,6 +121,7 @@ afterAll(async () => {
   else process.env.SOCIAL_TOKEN_KEY = savedSocialKey;
   resetSocialKeyCache();
   await prisma.order.deleteMany({ where: { organizationId: { in: [A.id, B.id] } } }); // watches cascade
+  await prisma.customer.deleteMany({ where: { organizationId: { in: [A.id, B.id] } } }); // their notifications cascade
   await cleanup(); // devices and apps go with the stores
 }, 60_000);
 
@@ -221,6 +224,8 @@ describe('telling the phone', () => {
       { title: 'Test store 0', body: `Payment received for order ${order.reference}.` },
       { path: `/s/${A.slug}/checkout/confirmation?t=${order.token}` },
       { teamId: 'ABCDE12345', keyId: 'KEY1234567', key: 'not-a-real-key', topic: A_APP },
+      // A guest's phone: no list, so no number on the icon; grouped by the order (18.4).
+      { badge: undefined, thread: `order:${order.id}`, sandbox: false },
     );
   });
 });
@@ -232,6 +237,78 @@ describe('cleaning up', () => {
     await watchOrder({ organizationSlug: A.slug, confirmationToken: order.token, deviceToken: token, userAgent: ANDROID_UA(A_APP) });
     const later = new Date(Date.now() + 61 * 86_400_000);
     await purgeOldPushWatches(later);
+    await expect(prisma.pushDevice.findUnique({ where: { appId_token: { appId: A_APP, token } } })).resolves.toBeNull();
+  });
+});
+
+describe('a shopper’s own phone (ROADMAP 18.4)', () => {
+  const sendApnsMock = sendApns as unknown as ReturnType<typeof vi.fn>;
+  let shopper = '';
+
+  async function ordersFor(customerId: string) {
+    const order = await newOrder(A.id);
+    await prisma.order.update({ where: { id: order.id }, data: { customerId } });
+    return order;
+  }
+
+  beforeAll(async () => {
+    shopper = (await prisma.customer.create({ data: { organizationId: A.id, name: 'Ada', email: `ada-push-${SUFFIX}@example.com`, passwordHash: 'x' } })).id;
+  });
+
+  it('belongs to the signed-in shopper who asked, and to nobody once a guest asks on it', async () => {
+    const token = 'c3'.repeat(32);
+    const order = await newOrder(A.id);
+    await watchOrder({ organizationSlug: A.slug, confirmationToken: order.token, deviceToken: token, userAgent: IOS_UA(A_APP), customerId: shopper });
+    const owner = () => prisma.pushDevice.findUniqueOrThrow({ where: { appId_token: { appId: A_APP, token } }, select: { customerId: true } });
+    expect((await owner()).customerId).toBe(shopper);
+    await watchOrder({ organizationSlug: A.slug, confirmationToken: order.token, deviceToken: token, userAgent: IOS_UA(A_APP) });
+    expect((await owner()).customerId).toBeNull();
+  });
+
+  it('hears about every order of theirs with one yes, with their unread count on the icon', async () => {
+    const token = 'd4'.repeat(32);
+    await expect(setAccountPhone({ organizationSlug: A.slug, deviceToken: token, userAgent: IOS_UA(A_APP), customerId: shopper, on: true })).resolves.toBe('on');
+    const order = await ordersFor(shopper); // never watched
+    sendApnsMock.mockClear();
+
+    await notifyShopper(order.id, 'shipped');
+    const call = sendApnsMock.mock.calls.find((c) => c[0] === token)!;
+    expect(call[4]).toMatchObject({ badge: 1, thread: `order:${order.id}` });
+  });
+
+  it('clears the icon’s count when they read their notifications', async () => {
+    const token = 'd4'.repeat(32);
+    discardAfterTasks();
+    sendApnsMock.mockClear();
+    await markAllNotificationsRead({ kind: 'shopper', customerId: shopper, organizationId: A.id });
+    await flushAfterTasks();
+    const call = sendApnsMock.mock.calls.find((c) => c[0] === token)!;
+    expect(call[1]).toBeNull(); // nothing shown, nothing heard
+    expect(call[4]).toMatchObject({ badge: 0 });
+  });
+
+  it('finds a build run from Xcode on Apple’s test service, and remembers it', async () => {
+    const token = 'e5'.repeat(32);
+    const order = await newOrder(A.id);
+    await watchOrder({ organizationSlug: A.slug, confirmationToken: order.token, deviceToken: token, userAgent: IOS_UA(A_APP) });
+    sendApnsMock.mockClear();
+    sendApnsMock.mockResolvedValueOnce('bad-token').mockResolvedValueOnce('sent');
+
+    await expect(pushOrderUpdate(order.id, 'shipped')).resolves.toMatchObject({ sent: 1, gone: 0 });
+    expect(sendApnsMock.mock.calls.map((c) => (c[4] as { sandbox?: boolean }).sandbox)).toEqual([false, true]);
+    const device = await prisma.pushDevice.findUniqueOrThrow({ where: { appId_token: { appId: A_APP, token } }, select: { apnsSandbox: true } });
+    expect(device.apnsSandbox).toBe(true);
+
+    sendApnsMock.mockClear();
+    await pushOrderUpdate(order.id, 'delivered');
+    expect(sendApnsMock.mock.calls.map((c) => (c[4] as { sandbox?: boolean }).sandbox)).toEqual([true]);
+  });
+
+  it('keeps an account’s phone past 60 days, and forgets it when turned off', async () => {
+    const token = 'd4'.repeat(32);
+    await purgeOldPushWatches(new Date(Date.now() + 61 * 86_400_000));
+    await expect(prisma.pushDevice.findUnique({ where: { appId_token: { appId: A_APP, token } } })).resolves.not.toBeNull();
+    await setAccountPhone({ organizationSlug: A.slug, deviceToken: token, userAgent: IOS_UA(A_APP), customerId: shopper, on: false });
     await expect(prisma.pushDevice.findUnique({ where: { appId_token: { appId: A_APP, token } } })).resolves.toBeNull();
   });
 });

@@ -15,12 +15,17 @@
  * get a small breadcrumb-ish label back to the account instead, and their
  * own <h1> lives in the page, where it belongs.
  */
+import { headers } from 'next/headers';
 import { requireShopper } from '@/lib/storefront/account/session';
+import { safeNextPath } from '@/lib/storefront/account/return-url';
 import { AccountNav, SignOutButton } from '../_components/account-nav';
 import { AccountGreeting } from '../_components/account-greeting';
 
 export default async function SignedInAccountLayout({ children }: { children: React.ReactNode }) {
-  const shopper = await requireShopper('/account');
+  /* Back to the page they were opening — an order a notification or email
+   * linked to, say — once they've signed in (ROADMAP 18.5). The path comes
+   * from proxy.ts, never the browser, and is checked as a same-site path. */
+  const shopper = await requireShopper(safeNextPath((await headers()).get('x-store-path'), '/account'));
 
   return (
     <div className="sf-container py-6 sm:py-12">

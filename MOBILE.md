@@ -96,8 +96,16 @@ for one store. The runbook is [docs/MOBILE-BUILD.md](docs/MOBILE-BUILD.md).
   (`FIREBASE_SERVICE_ACCOUNT`). iPhone goes straight to APNs with the
   merchant's own key, sealed on `MobileApp`. A device is linked only to the
   orders it asked about (`PushOrderWatch`), for 60 days. Sent beside the order
-  email (`lib/storefront/orders/notifications.ts` → `lib/mobile/push/send.ts`).
-  Tapping one opens the order (`components/native/native-shell.tsx`).
+  email, through the notification seam (`lib/notifications`, ROADMAP 18).
+  Tapping one opens its page (`components/native/native-shell.tsx`).
+  A signed-in shopper's phone is linked to their account and hears about all
+  their orders and replies, with the unread count on the iPhone icon; a build
+  run from Xcode is found on Apple's test service automatically (18.4).
+- **Store links open the app** (ROADMAP 18.5): Universal Links and App
+  Links for the store's hosts, vouched for by `/.well-known/…` on its
+  website (`lib/mobile/app-links.ts`, recorded with
+  `prisma/mobile-app.ts links`). Pages outside the allow-list (checkout,
+  invoices) stay in the browser. See docs/MOBILE-BUILD.md §2.7.
 - **Share** on product pages uses the phone's share sheet (`@capacitor/share`),
   and always shares the store's public web address.
 - **Offline screen.** `server.errorPath` shows `mobile/www/offline.html`, which

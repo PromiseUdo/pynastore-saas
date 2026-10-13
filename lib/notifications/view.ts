@@ -57,3 +57,21 @@ export function isListEvent(data: unknown): data is ListEvent {
 export function unreadBadge(count: number): string {
   return count > 9 ? '9+' : String(count);
 }
+
+/** Email, or alerts on the person's devices (browser and phone together). */
+export type ChannelGroup = 'email' | 'push';
+
+export interface PreferenceCell {
+  /** `required`: always sent, can't be turned off; `digest`: once a day */
+  kind: 'choice' | 'required' | 'digest';
+  on: boolean;
+}
+
+/** One category in someone's notification preferences (ROADMAP 18.6). */
+export interface PreferenceRow {
+  category: string;
+  label: string;
+  about: string;
+  email: PreferenceCell | null;
+  push: PreferenceCell | null;
+}

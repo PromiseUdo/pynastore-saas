@@ -23,7 +23,6 @@ vi.mock('@/lib/email', () => ({
   sendStorefrontOrderUpdateEmail: vi.fn(async (payload: { to: string; kind: string; reference: string }) => {
     sentEmails.push({ to: payload.to, kind: payload.kind, reference: payload.reference });
   }),
-  sendLowStockAlertEmail: vi.fn(async () => {}),
 }));
 
 import { prisma } from '@/lib/prisma';

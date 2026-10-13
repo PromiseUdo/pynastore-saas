@@ -100,7 +100,7 @@ export default async function ConfirmationPage({
       config={config}
       signedIn={Boolean(shopper)}
       payment={{ ...payment, confirmationToken: token, confirmationPath: confirmationPath(prefix, token) }}
-      updatesPrompt={channel ? <OrderUpdatesPrompt confirmationToken={token} channel={channel} /> : null}
+      updatesPrompt={channel ? <OrderUpdatesPrompt confirmationToken={token} channel={channel} signedIn={Boolean(shopper)} /> : null}
     />
   );
 }

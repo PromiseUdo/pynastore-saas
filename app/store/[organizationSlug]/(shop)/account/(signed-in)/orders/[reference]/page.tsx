@@ -23,6 +23,8 @@ import { getOrderPaymentState, reconcileOpenAttempts } from '@/lib/storefront/ch
 import { confirmationPath, storePathPrefix } from '@/lib/storefront/store-path';
 import { formatMoney } from '@/lib/storefront/format';
 import { PayNowButton } from '@/components/storefront/checkout/pay-now-button';
+import { markThreadRead } from '@/lib/notifications/inbox';
+import { runAfter } from '@/lib/run-after';
 
 export const metadata: Metadata = { title: 'Your order' };
 
@@ -41,6 +43,11 @@ export default async function OrderDetailPage({
     where: { organizationId: shopper.organizationId, customerId: shopper.id, reference, channel: 'ONLINE' },
     select: { id: true, paymentStatus: true, confirmationToken: true },
   });
+  // Looking at the order is reading its notifications (ROADMAP 18.4: the app icon's count).
+  if (row) {
+    const reader = { kind: 'shopper' as const, customerId: shopper.id, organizationId: shopper.organizationId };
+    runAfter(() => markThreadRead(reader, `order:${row.id}`));
+  }
   if (row?.paymentStatus === 'AWAITING_PAYMENT') {
     await reconcileOpenAttempts(row.id).catch((error) => {
       console.error('[account order] Could not re-check payment:', error);

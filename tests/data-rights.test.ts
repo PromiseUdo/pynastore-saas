@@ -18,7 +18,6 @@ vi.mock('@/lib/email', async (importOriginal) => ({
   }),
   sendStorefrontOrderUpdateEmail: vi.fn(async () => {}),
   sendStoreOrderAlertEmail: vi.fn(async () => {}),
-  sendLowStockAlertEmail: vi.fn(async () => {}),
 }));
 const paystack = vi.hoisted(() => ({ disabled: [] as string[] }));
 vi.mock('@/lib/billing/paystack', async (importOriginal) => ({

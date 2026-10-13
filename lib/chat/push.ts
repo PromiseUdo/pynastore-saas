@@ -10,9 +10,9 @@
  * notifications for the app).
  */
 import { prisma } from '@/lib/prisma';
-import { appIdFromUserAgent, pushPlatformFromUserAgent } from '@/lib/mobile/app-config';
+import { pushPlatformFromUserAgent } from '@/lib/mobile/app-config';
 import { isPlausiblePushToken } from '@/lib/mobile/push/messages';
-import { pushReadyFor } from '@/lib/mobile/push/watch';
+import { linkDevice, pushReadyFor } from '@/lib/mobile/push/watch';
 import type { ChatIdentity } from './identity';
 
 export type ChatWatchResult = 'watching' | 'unavailable' | 'not-found' | 'invalid-token';
@@ -25,7 +25,6 @@ export async function watchChatReplies(input: {
 }): Promise<ChatWatchResult> {
   if (!(await pushReadyFor(input.userAgent, input.store.slug))) return 'unavailable';
   const platform = pushPlatformFromUserAgent(input.userAgent)!;
-  const appId = appIdFromUserAgent(input.userAgent)!;
 
   const deviceToken = input.deviceToken.trim();
   if (!isPlausiblePushToken(platform, deviceToken)) return 'invalid-token';
@@ -41,12 +40,14 @@ export async function watchChatReplies(input: {
   });
   if (!conversation) return 'not-found';
 
-  const device = await prisma.pushDevice.upsert({
-    where: { appId_token: { appId, token: deviceToken } },
-    create: { organizationId, appId, platform, token: deviceToken },
-    update: { organizationId, platform, lastSeenAt: new Date() },
-    select: { id: true },
+  // A signed-in shopper's phone becomes theirs (ROADMAP 18.4); a guest's belongs to nobody.
+  const device = await linkDevice({
+    organizationId,
+    deviceToken,
+    userAgent: input.userAgent,
+    customerId: input.identity.kind === 'customer' ? input.identity.customerId : null,
   });
+  if (!device) return 'invalid-token';
   await prisma.pushChatWatch.upsert({
     where: { deviceId_conversationId: { deviceId: device.id, conversationId: conversation.id } },
     create: { deviceId: device.id, conversationId: conversation.id },

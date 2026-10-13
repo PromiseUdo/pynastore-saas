@@ -377,7 +377,7 @@ export async function retrySocialPost(postId: string): Promise<ActionResult<Soci
       return { success: false, error: 'You’re retrying very quickly. Give it a minute and try again.' };
     }
 
-    const outcome = await retryPost(ctx.organization.id, postId);
+    const outcome = await retryPost(ctx.organization.id, postId, ctx.userId);
     if (!outcome.ok) return { success: false, error: outcome.reason };
 
     return { success: true, data: outcome.post };

@@ -115,6 +115,23 @@ export function AppOrderClient({ app }: { app: AppOrderDetail }) {
                   No APNs key recorded yet — the iPhone app won’t offer order notifications until it is (docs/MOBILE-BUILD.md §2).
                 </p>
               )}
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>
+                  <span className="font-medium text-foreground">Store links open the app</span> on {app.links.hosts.join(', ')}.
+                  A domain connected after a build needs a new build to be included.
+                </p>
+                {app.platforms.ios && (
+                  <p>iPhone: {app.links.ios ? 'Apple team id recorded.' : 'no Apple team id recorded yet — links open Safari until it is.'}</p>
+                )}
+                {app.platforms.android && (
+                  <p>
+                    Android:{' '}
+                    {app.links.androidKeys > 0
+                      ? `${app.links.androidKeys} signing key${app.links.androidKeys === 1 ? '' : 's'} recorded. Add Google Play’s app signing key once it’s published there.`
+                      : 'no signing key recorded yet — links open the browser until it is. The kit prints the command.'}
+                  </p>
+                )}
+              </div>
             </Section>
           )}
 

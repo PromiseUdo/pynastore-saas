@@ -19,7 +19,7 @@ import { headers } from 'next/headers';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getStoreCheckoutConfig } from '@/lib/storefront/checkout/store-config';
 import { findStoreBySlug } from '@/lib/storefront/account/shopper';
-import { currentStoreSlug, getShopper } from '@/lib/storefront/account/session';
+import { currentStoreSlug, getShopper, getShopperForStore } from '@/lib/storefront/account/session';
 import { placeOrder, resolveLines, type OrderLineRequest, type PlaceOrderFailure } from '@/lib/storefront/orders/create';
 import { findOrderByReferenceAndEmail } from '@/lib/storefront/orders/read';
 import { startOrderPayment } from '@/lib/storefront/checkout/payment-service';
@@ -34,7 +34,7 @@ import { resolveDiscount } from '@/lib/storefront/discounts/resolve';
 import { normalizeCode } from '@/lib/storefront/discounts/rules';
 import type { AppliedCoupon, ShippingMethod } from '@/lib/storefront/types';
 import { findPaymentMethod } from '@/lib/storefront/checkout/config';
-import { notifyShopper } from '@/lib/storefront/orders/notifications';
+import { notifyShopper, notifyStoreOfOrder } from '@/lib/storefront/orders/notifications';
 import { isLocalHostname } from '@/lib/tenant/resolveHostname';
 import type { CheckoutAddress, CheckoutContact } from '@/lib/storefront/checkout/types';
 import type { StorefrontOrder } from '@/lib/storefront/orders/types';
@@ -151,6 +151,8 @@ export async function placeOrderAction(
       result.orderId,
       method?.id === 'transfer' ? 'placed-bank-transfer' : 'placed-pay-on-delivery',
     );
+    // …and the store: a new order to deal with, or a transfer to look out for (ROADMAP 18.6).
+    await notifyStoreOfOrder(result.orderId, method?.id === 'transfer' ? 'transfer' : 'on-delivery');
   }
 
   return {
@@ -461,11 +463,14 @@ export async function watchOrderUpdatesAction(
     return { ok: false, message: 'Too many attempts. Please wait a moment and try again.' };
   }
 
+  const shopper = await getShopperForStore(slug);
   const result = await watchOrder({
     organizationSlug: slug,
     confirmationToken: String(confirmationToken ?? '').trim(),
     deviceToken: String(deviceToken ?? ''),
     userAgent: (await headers()).get('user-agent'),
+    // Signed in: the phone hears about all their orders and replies from now on (ROADMAP 18.4).
+    customerId: shopper?.id ?? null,
   });
   return result === 'watching'
     ? { ok: true }

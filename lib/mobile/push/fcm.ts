@@ -68,7 +68,16 @@ async function accessToken(account: ServiceAccount): Promise<string> {
   return body.access_token;
 }
 
-export async function sendFcm(token: string, message: PushMessage, data: Record<string, string>): Promise<SendOutcome> {
+/**
+ * `thread`: notifications about the same thing replace each other on the
+ * phone (Android's `tag`), so a burst is one notification, not a pile.
+ */
+export async function sendFcm(
+  token: string,
+  message: PushMessage,
+  data: Record<string, string>,
+  options: { thread?: string } = {},
+): Promise<SendOutcome> {
   const account = readServiceAccount();
   if (!account) return 'failed';
 
@@ -80,7 +89,7 @@ export async function sendFcm(token: string, message: PushMessage, data: Record<
         token,
         notification: { title: message.title, body: message.body },
         data,
-        android: { priority: 'HIGH', notification: { sound: 'default' } },
+        android: { priority: 'HIGH', notification: { sound: 'default', ...(options.thread ? { tag: options.thread } : {}) } },
       },
     }),
   });

@@ -45,6 +45,8 @@ export interface NotifyInput<K extends NotificationKind> {
   key?: string;
   /** the email, when the event has one: its template and props, built by the caller */
   email?: EmailMessage;
+  /** who did the thing: they aren't told about it (18.0) */
+  actorUserId?: string | null;
 }
 
 export interface NotifyResult {
@@ -72,6 +74,7 @@ export async function notify<K extends NotificationKind>(input: NotifyInput<K>):
       resolveRecipients(input.organizationId, definition.audiences(facts)),
     ]);
     if (input.organizationId && !org) return nothing();
+    if (input.actorUserId) reach.people = reach.people.filter((person) => person.userId !== input.actorUserId);
 
     const choices = await loadChoices(reach.people, definition.category);
     const allowed = (person: Person, channel: NotificationChannel) =>
@@ -86,7 +89,8 @@ export async function notify<K extends NotificationKind>(input: NotifyInput<K>):
     const deliveries: { channel: NotificationChannel; recipient: string; payload: DeliveryPayload }[] = [];
 
     // One email, to everyone it's for — as each of these emails always went.
-    if (input.email) {
+    // A digest kind's email waits for the day's summary (./digest.ts).
+    if (input.email && definition.channels.EMAIL !== 'digest') {
       const to = new Set<string>();
       for (const person of reach.people) if (person.email && allowed(person, 'EMAIL')) to.add(person.email);
       if (byDefault('EMAIL')) for (const address of reach.emails) to.add(address);
@@ -103,7 +107,11 @@ export async function notify<K extends NotificationKind>(input: NotifyInput<K>):
         for (const person of reach.people) if (allowed(person, 'NATIVE_PUSH')) person.devices.forEach((id) => devices.add(id));
         if (byDefault('NATIVE_PUSH')) reach.watchingDevices.forEach((id) => devices.add(id));
         for (const id of devices) {
-          deliveries.push({ channel: 'NATIVE_PUSH', recipient: id, payload: { title: words.title, body: words.body, path: appPath } });
+          deliveries.push({
+            channel: 'NATIVE_PUSH',
+            recipient: id,
+            payload: { title: words.title, body: words.body, path: appPath, ...(threadKey ? { thread: threadKey } : {}) },
+          });
         }
       }
 

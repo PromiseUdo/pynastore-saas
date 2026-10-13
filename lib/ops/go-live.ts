@@ -16,7 +16,7 @@ export type CheckStatus = 'ok' | 'action' | 'manual';
 
 export interface GoLiveCheck {
   id: string;
-  group: 'Payments' | 'Email' | 'Social' | 'Platform';
+  group: 'Payments' | 'Email' | 'Social' | 'Platform' | 'Notifications';
   title: string;
   status: CheckStatus;
   /** what we found, in plain words — never a secret's value */
@@ -30,7 +30,27 @@ export interface GoLiveFacts {
   payoutsToMove: number;
   /** the callback address Meta must have on file */
   expectedMetaRedirect: string;
+  /** when the "notification-retries" job last finished well (ROADMAP 18.7) */
+  lastRetryRun: string | null;
+  /** notifications that couldn't be delivered in the last day: given up, after retries */
+  failedDeliveries24h: number;
   now: Date;
+}
+
+/** A VAPID public key: an uncompressed P-256 point, 65 bytes — 87 base64url characters. */
+const VAPID_PUBLIC = /^[A-Za-z0-9_-]{87}$/;
+
+/** FIREBASE_SERVICE_ACCOUNT as lib/mobile/push/fcm.ts reads it: JSON, as-is or base64. */
+function firebaseAccountReadable(raw: string | undefined): boolean {
+  const value = raw?.trim();
+  if (!value) return false;
+  try {
+    const json = value.startsWith('{') ? value : Buffer.from(value, 'base64').toString('utf8');
+    const parsed = JSON.parse(json) as { project_id?: string; client_email?: string; private_key?: string };
+    return Boolean(parsed.project_id && parsed.client_email && parsed.private_key?.includes('PRIVATE KEY'));
+  } catch {
+    return false;
+  }
 }
 
 type Env = Record<string, string | undefined>;
@@ -169,6 +189,55 @@ export function goLiveChecks(env: Env, facts: GoLiveFacts): GoLiveCheck[] {
       : { status: 'action' as const, detail: 'Cloudinary isn’t fully configured, so merchants can’t upload product photos.' }),
   });
 
+  // ── Notifications (ROADMAP 18) ──
+  const vapidPublic = env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY?.trim() ?? '';
+  const subject = env.WEB_PUSH_SUBJECT?.trim() ?? '';
+  checks.push({
+    id: 'web-push',
+    group: 'Notifications',
+    title: 'Browser notifications',
+    ...(VAPID_PUBLIC.test(vapidPublic) && has(env, 'WEB_PUSH_PRIVATE_KEY') && /^(mailto:|https:\/\/)/.test(subject)
+      ? { status: 'ok' as const, detail: 'The browser push keys are set. Never change them: new keys cut off every browser that signed up.' }
+      : !vapidPublic && !has(env, 'WEB_PUSH_PRIVATE_KEY')
+        ? { status: 'action' as const, detail: 'No browser push keys: nobody is offered alerts in a browser. Run `npx web-push generate-vapid-keys` once and set the three WEB_PUSH settings.' }
+        : { status: 'action' as const, detail: 'The browser push keys are incomplete or malformed: NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY (87 characters), WEB_PUSH_PRIVATE_KEY, and WEB_PUSH_SUBJECT (mailto: or https:).' }),
+  });
+  checks.push({
+    id: 'firebase',
+    group: 'Notifications',
+    title: 'Android app notifications',
+    ...(firebaseAccountReadable(env.FIREBASE_SERVICE_ACCOUNT)
+      ? { status: 'ok' as const, detail: 'The Firebase service account is set and readable.' }
+      : has(env, 'FIREBASE_SERVICE_ACCOUNT')
+        ? { status: 'action' as const, detail: 'FIREBASE_SERVICE_ACCOUNT is set but isn’t a readable service-account key (the JSON, as-is or base64).' }
+        : { status: 'action' as const, detail: 'FIREBASE_SERVICE_ACCOUNT isn’t set, so store apps on Android never offer notifications.' }),
+  });
+  checks.push({
+    id: 'realtime',
+    group: 'Notifications',
+    title: 'Live updates',
+    ...(has(env, 'ABLY_API_KEY')
+      ? { status: 'ok' as const, detail: 'Ably is set: the bell and chat update the moment something changes.' }
+      : { status: 'action' as const, detail: 'ABLY_API_KEY isn’t set: bells and chats still work, but only notice changes every minute or so.' }),
+  });
+  const retryAge = facts.lastRetryRun ? (facts.now.getTime() - new Date(facts.lastRetryRun).getTime()) / 60_000 : null;
+  checks.push({
+    id: 'notification-retries',
+    group: 'Notifications',
+    title: 'Retrying notifications',
+    ...(retryAge !== null && retryAge <= 30
+      ? { status: 'ok' as const, detail: `The retry job last ran ${Math.max(1, Math.round(retryAge))} minutes ago.` }
+      : { status: 'action' as const, detail: retryAge === null ? 'The retry job has never run. Add /api/cron/notification-retries on cron-job.org, every 5 minutes (docs/SCHEDULED-JOBS.md).' : 'The retry job hasn’t run in the last half hour. Check it on cron-job.org.' }),
+  });
+  checks.push({
+    id: 'deliveries',
+    group: 'Notifications',
+    title: 'Notifications delivered',
+    ...(facts.failedDeliveries24h === 0
+      ? { status: 'ok' as const, detail: 'Nothing failed to deliver in the last day.' }
+      : { status: 'action' as const, detail: `${facts.failedDeliveries24h} couldn’t be delivered in the last day, even after retrying. The error log has the provider’s answers.` }),
+  });
+
   return checks;
 }
 
@@ -178,6 +247,7 @@ export const MANUAL_STEPS: { id: string; group: GoLiveCheck['group'] | 'Mobile a
   { id: 'resend-domain', group: 'Email', title: 'Sending domain verified in Resend', detail: 'The domain in EMAIL_FROM shows “Verified” under Resend → Domains.' },
   { id: 'paystack-live', group: 'Payments', title: 'A real payment, end to end', detail: 'One small live order paid with a real card, the order marked paid, and the money arriving in the merchant’s bank account.' },
   { id: 'app-store', group: 'Mobile app', title: 'App Store listing and privacy answers', detail: 'App Store Connect: listing, screenshots, privacy policy link and the App Privacy questions answered.' },
+  { id: 'notifications-devices', group: 'Notifications', title: 'Notifications on real phones and browsers', detail: 'Every row of docs/NOTIFICATIONS-ACCEPTANCE.md ticked on the live site: Android and iPhone, browser and store app, taps and links.' },
   { id: 'play-store', group: 'Mobile app', title: 'Google Play listing and Data safety form', detail: 'Play Console: listing, screenshots, privacy policy link and the Data safety form answered.' },
   { id: 'counsel', group: 'Legal', title: 'Terms and privacy reviewed by counsel (10.10)', detail: 'Including the 6-year retention and 30-day closing rules (lib/data-rights/policy.ts).' },
 ];

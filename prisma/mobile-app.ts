@@ -19,6 +19,13 @@
  * It is sealed with SOCIAL_TOKEN_KEY, so run this with production's value set:
  *   npx tsx prisma/mobile-app.ts apns <store-slug> --team-id ABCDE12345 --key-id XYZ123ABCD --key AuthKey_XYZ123ABCD.p8
  *
+ * Links to the store open its app (ROADMAP 18.5) once the store's website can
+ * vouch for it: the merchant's Apple team id, and the SHA-256 fingerprint of
+ * each key the Android app is signed with (the build kit prints the upload
+ * key's; Play Console → App integrity has Google's, once published):
+ *   npx tsx prisma/mobile-app.ts links <store-slug> --team-id ABCDE12345 --android AA:BB:… [--android …]
+ *   npx tsx prisma/mobile-app.ts links <store-slug> --clear-android
+ *
  * Usage:
  *   npx tsx prisma/mobile-app.ts register <store-slug> <app-id> "<App name>"
  *   npx tsx prisma/mobile-app.ts lapse    <store-slug>
@@ -35,6 +42,7 @@ import { SHARED_APP_ID, isValidAppId } from '../lib/mobile/app-config';
 import { isAppStoreId } from '../lib/mobile/listing-rules';
 import { isUsableApnsKey } from '../lib/mobile/push/apns';
 import { seal } from '../lib/social/crypto';
+import { normalizeCertFingerprint } from '../lib/mobile/app-links';
 import fs from 'node:fs';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
@@ -48,6 +56,7 @@ const USAGE = [
   '  npx tsx prisma/mobile-app.ts unlisted <store-slug> --app-store | --google-play',
   '  npx tsx prisma/mobile-app.ts website <store-slug> on|off',
   '  npx tsx prisma/mobile-app.ts apns <store-slug> --team-id <10 chars> --key-id <10 chars> --key <AuthKey.p8>',
+  '  npx tsx prisma/mobile-app.ts links <store-slug> [--team-id <10 chars>] [--android <SHA-256>]… [--clear-android]',
   '  npx tsx prisma/mobile-app.ts list',
 ].join('\n');
 
@@ -169,6 +178,28 @@ async function main() {
       data: { apnsTeamId: teamId, apnsKeyId: keyId, apnsKeySealed: seal(key) },
     });
     console.log(`${store.name}'s iPhone app can now be sent order notifications. You can delete ${keyFile} from this machine.`);
+    return;
+  }
+
+  if (command === 'links') {
+    const flags = process.argv.slice(4);
+    const teamIndex = flags.indexOf('--team-id');
+    const teamId = teamIndex >= 0 ? flags[teamIndex + 1] : undefined;
+    if (teamId !== undefined && !/^[A-Z0-9]{10}$/.test(teamId)) return fail('A team id is 10 capital letters and digits (Apple Developer → Membership).');
+    const given = flags.flatMap((flag, i) => (flag === '--android' ? [flags[i + 1] ?? ''] : []));
+    const fingerprints = given.map(normalizeCertFingerprint);
+    if (fingerprints.some((f) => f === null)) return fail('An Android fingerprint is the SHA-256 one: 32 pairs like AA:BB:… (keytool -list -v, or Play Console → App integrity).');
+    const clear = flags.includes('--clear-android');
+    if (teamId === undefined && fingerprints.length === 0 && !clear) return fail(USAGE);
+
+    const app = await prisma.mobileApp.findUniqueOrThrow({ where: { organizationId: store.id }, select: { androidCertSha256: true } });
+    const android = clear ? [] : [...new Set([...app.androidCertSha256, ...(fingerprints as string[])])];
+    await prisma.mobileApp.update({
+      where: { organizationId: store.id },
+      data: { ...(teamId ? { appleTeamId: teamId } : {}), androidCertSha256: android },
+    });
+    console.log(`${store.name}'s links: iPhone ${teamId ? `team ${teamId}` : 'unchanged'}; Android ${android.length} key(s).`);
+    console.log('Phones check these when the app is installed — an app already on a phone picks it up on its next update.');
     return;
   }
 

@@ -12,13 +12,11 @@
 import {
   sendChatMessageAlertEmail,
   sendDomainOrderNotificationEmail,
-  sendLowStockAlertEmail,
   sendPaymentDisputeEmail,
   sendPlatformNoticeEmail,
   sendStoreOrderAlertEmail,
   sendStorefrontOrderUpdateEmail,
   type DomainOrderNotificationEmailPayload,
-  type LowStockAlertEmailPayload,
 } from '@/lib/email';
 import type { StorefrontOrderUpdateEmailProps } from '@/emails/storefront-order-update';
 import type { StoreOrderAlertEmailProps } from '@/emails/store-order-alert';
@@ -30,7 +28,6 @@ export type EmailMessage =
   | { template: 'storefront-order-update'; props: StorefrontOrderUpdateEmailProps }
   | { template: 'store-order-alert'; props: StoreOrderAlertEmailProps }
   | { template: 'chat-message-alert'; props: ChatMessageAlertEmailProps }
-  | { template: 'low-stock-alert'; props: Omit<LowStockAlertEmailPayload, 'to'> }
   | { template: 'payment-dispute'; props: PaymentDisputeEmailProps }
   | { template: 'platform-notice'; props: PlatformNoticeEmailProps & { subject: string } }
   | { template: 'domain-order'; props: Omit<DomainOrderNotificationEmailPayload, 'to'> };
@@ -52,8 +49,6 @@ export async function sendEmailMessage(message: EmailMessage, to: string[]): Pro
       return accepted(sendStoreOrderAlertEmail({ ...message.props, to }));
     case 'chat-message-alert':
       return accepted(sendChatMessageAlertEmail({ ...message.props, to }));
-    case 'low-stock-alert':
-      return accepted(sendLowStockAlertEmail({ ...message.props, to }));
     case 'payment-dispute':
       return accepted(sendPaymentDisputeEmail({ ...message.props, to }));
     case 'platform-notice':

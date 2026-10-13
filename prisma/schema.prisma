@@ -3616,6 +3616,17 @@ model MobileApp {
   apnsKeySealed String?
 
   /**
+   * Links to the store opening this app instead of the browser (ROADMAP
+   * 18.5). iPhone: the merchant's Apple team id (falls back to apnsTeamId —
+   * the same team). Android: the SHA-256 fingerprints of the keys the app is
+   * signed with — the upload key for a sideloaded build, and Google Play's
+   * app signing key once it's published there. Served from the store's own
+   * domains (/.well-known/…); without them, links open the browser.
+   */
+  appleTeamId       String?
+  androidCertSha256 String[] @default([])
+
+  /**
    * The order (ROADMAP 16.2). A merchant asks for an app in Settings → Mobile
    * app and pays; staff build it, deliver the files, and record the listings.
    * `stage` is where the work is; `status` (above) is whether the app opens.
@@ -3698,6 +3709,13 @@ model PushDevice {
    */
   customerId     String?
   userId         String?
+  /**
+   * An iPhone build run straight from Xcode registers with Apple's test
+   * service (sandbox), not the live one. Found out on the first send — the
+   * live service refuses the token, the sandbox takes it — and remembered
+   * here (ROADMAP 18.4). TestFlight and App Store builds are never sandbox.
+   */
+  apnsSandbox    Boolean      @default(false)
   createdAt      DateTime     @default(now())
   lastSeenAt     DateTime     @default(now())
 
@@ -4713,6 +4731,10 @@ model Notification {
    */
   threadKey      String?
   readAt         DateTime?
+  /**
+   * gathered into a daily summary email (ROADMAP 18.6, lib/notifications/digest.ts)
+   */
+  emailedAt      DateTime?
   createdAt      DateTime  @default(now())
 
   event        NotificationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)

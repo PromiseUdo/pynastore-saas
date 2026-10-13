@@ -22,7 +22,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 vi.mock('@/lib/email', () => ({
   sendStorefrontOrderUpdateEmail: vi.fn(async () => {}),
   sendStoreOrderAlertEmail: vi.fn(async () => {}),
-  sendLowStockAlertEmail: vi.fn(async () => {}),
 }));
 
 const ctx = vi.hoisted(() => ({

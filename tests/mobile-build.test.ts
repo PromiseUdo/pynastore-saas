@@ -14,7 +14,9 @@ import {
   editAndroidStrings,
   editIosInfoPlist,
   editAndroidManifestForPush,
+  editAndroidManifestForAppLinks,
   editIosProject,
+  iosEntitlements,
   editOfflinePage,
   googleServicesIncludes,
   parseStoreAppConfig,
@@ -158,6 +160,29 @@ describe('push in the native projects (16.4)', () => {
   it('gives the iOS app its entitlements file in every configuration', () => {
     const out = editIosProject(PBXPROJ, { appId: 'com.a.b', version: '1.0.0', buildNumber: 1, teamId: null, entitlements: 'App/App.entitlements' });
     expect(out.match(/CODE_SIGN_ENTITLEMENTS = App\/App\.entitlements;/g)).toHaveLength(2);
+  });
+});
+
+describe('links to the store open the app (18.5)', () => {
+  const MANIFEST = read('android/app/src/main/AndroidManifest.xml');
+  const HOSTS = ['shop-acme.getnotely.io', 'www.acme.ng'];
+
+  it('claims the store’s hosts in the iOS entitlements, beside push', () => {
+    const out = iosEntitlements({ linkHosts: HOSTS });
+    expect(out).toContain('<key>aps-environment</key>');
+    expect(out).toContain('<string>applinks:shop-acme.getnotely.io</string>');
+    expect(out).toContain('<string>applinks:www.acme.ng</string>');
+    expect(iosEntitlements({ linkHosts: [] })).not.toContain('associated-domains');
+  });
+
+  it('adds a verified Android filter for the store’s pages, before the payment return', () => {
+    const out = editAndroidManifestForAppLinks(MANIFEST, HOSTS);
+    expect(out).toContain('<intent-filter android:autoVerify="true">');
+    expect(out).toContain('<data android:host="www.acme.ng" />');
+    expect(out).toContain('<data android:pathPrefix="/checkout/confirmation" />');
+    expect(out).not.toContain('android:pathPrefix="/checkout" ');
+    expect(out.indexOf('autoVerify')).toBeLessThan(out.indexOf('Deep link back from the in-app payment browser'));
+    expect(editAndroidManifestForAppLinks(MANIFEST, [])).toBe(MANIFEST);
   });
 });
 

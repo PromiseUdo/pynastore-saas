@@ -24,6 +24,12 @@ export type NotificationTarget =
   | { type: 'dispute'; orderId: string; reference: string }
   /** what is low in one store */
   | { type: 'low-stock'; warehouseId: string }
+  | { type: 'purchase-order'; purchaseOrderId: string }
+  | { type: 'social-post'; postId: string }
+  /** the shop's questions waiting for an answer */
+  | { type: 'questions' }
+  /** a page of the shop's admin — its billing, domain or app settings */
+  | { type: 'admin-page'; path: string }
   /** a page of the platform console, e.g. /platform/errors/abc */
   | { type: 'platform'; path: string };
 
@@ -55,6 +61,15 @@ export function pathFor(target: NotificationTarget, surface: Surface): string | 
       return null;
     case 'low-stock':
       return surface === 'admin' ? `/inventory/warehouses/${target.warehouseId}?tab=inventory&stock=low` : null;
+    case 'purchase-order':
+      return surface === 'admin' ? `/procurement/purchase-orders/${target.purchaseOrderId}` : null;
+    case 'social-post':
+      return surface === 'admin' ? `/social/posts/${target.postId}` : null;
+    case 'questions':
+      return surface === 'admin' ? '/sales/questions' : null;
+    case 'admin-page':
+      // Only a path inside the admin: never another host.
+      return surface === 'admin' && target.path.startsWith('/') && !target.path.startsWith('//') ? target.path : null;
     case 'platform':
       return surface === 'platform' && target.path.startsWith('/platform') ? target.path : null;
   }

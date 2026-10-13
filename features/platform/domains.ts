@@ -13,6 +13,7 @@
  * Each decision is recorded on the MERCHANT's activity log (like the
  * verification queue), and the merchant is emailed.
  */
+import { listOwnerNotice } from '@/lib/notifications/owner-notices';
 import { ownerEmails as ownerAndPaymentsEmails } from '@/lib/org-owners';
 import { prisma } from '@/lib/prisma';
 import { requirePlatformStaff } from '@/lib/platform-staff';
@@ -334,15 +335,17 @@ export async function markDomainLive(orderId: string): Promise<ActionResult> {
       entityId: orderId,
       metadata: { domain: o.domain, expiresAt: o.expiresAt?.toISOString() ?? null },
     });
+    const liveEmail = domainLiveEmail({
+      shopName: o.organization.name,
+      host: shopDomain.canonicalHost,
+      renewed: kind === 'RENEW',
+      expiresAt: kind === 'EXISTING' ? null : o.expiresAt,
+      pageUrl: getAdminUrl(o.organization.slug, '/settings/domain'),
+    });
+    await listOwnerNotice(o.organizationId, liveEmail, '/settings/domain', `domain-order:${orderId}:live`);
     await sendPlatformNoticeEmail({
       to: await ownerAndPaymentsEmails(o.organizationId, { includePaymentsContact: true }),
-      ...domainLiveEmail({
-        shopName: o.organization.name,
-        host: shopDomain.canonicalHost,
-        renewed: kind === 'RENEW',
-        expiresAt: kind === 'EXISTING' ? null : o.expiresAt,
-        pageUrl: getAdminUrl(o.organization.slug, '/settings/domain'),
-      }),
+      ...liveEmail,
     });
     return { success: true, data: undefined };
   } catch (error) {
@@ -379,15 +382,17 @@ export async function markDomainFailed(orderId: string, reason: string): Promise
       entityId: orderId,
       metadata: { domain: o.domain, reason: why },
     });
+    const failedEmail = domainFailedEmail({
+      shopName: o.organization.name,
+      domain: o.domain ?? 'your domain',
+      reason: why,
+      paid: o.billingTransaction?.status === 'SUCCESS',
+      pageUrl: getAdminUrl(o.organization.slug, '/settings/domain'),
+    });
+    await listOwnerNotice(o.organizationId, failedEmail, '/settings/domain', `domain-order:${orderId}:failed`);
     await sendPlatformNoticeEmail({
       to: await ownerAndPaymentsEmails(o.organizationId, { includePaymentsContact: true }),
-      ...domainFailedEmail({
-        shopName: o.organization.name,
-        domain: o.domain ?? 'your domain',
-        reason: why,
-        paid: o.billingTransaction?.status === 'SUCCESS',
-        pageUrl: getAdminUrl(o.organization.slug, '/settings/domain'),
-      }),
+      ...failedEmail,
     });
     return { success: true, data: undefined };
   } catch (error) {

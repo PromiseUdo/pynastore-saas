@@ -59,7 +59,7 @@ import { getOnlinePaymentReadiness } from '@/lib/payments/online-readiness';
 import { OutOfStockError, reReserveOrderStock } from '../orders/stock';
 import { requestGatheringTransfers } from '../orders/gather';
 import { reclaimDiscountUse } from '../discounts/usage';
-import { notifyShopper } from '../orders/notifications';
+import { notifyShopper, notifyStoreOfOrder } from '../orders/notifications';
 
 /** The checkout method (and attempt provider) for paying online. */
 export const ONLINE_PAYMENT_METHOD = 'paystack';
@@ -376,6 +376,10 @@ export async function reconcilePayment(reference: string): Promise<ReconcileOutc
   } else if (settled.status !== 'CANCELLED') {
     await notifyShopper(attempt.orderId, 'payment-received');
   }
+  // Paid online: now the store has an order to deal with (ROADMAP 18.6) — a
+  // revived one too; one left cancelled has nothing to deal with.
+  const after = await prisma.order.findUnique({ where: { id: attempt.orderId }, select: { status: true } });
+  if (after && after.status !== 'CANCELLED') await notifyStoreOfOrder(attempt.orderId, 'paid');
 
   return 'paid';
 }

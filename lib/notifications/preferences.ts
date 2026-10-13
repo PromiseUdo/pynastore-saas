@@ -40,9 +40,13 @@ export async function loadChoices(people: Person[], category: NotificationCatego
   return choices;
 }
 
-/** The decision for one channel: the event's default, unless the person chose otherwise. */
+/**
+ * The decision for one channel: the event's default, unless the person chose
+ * otherwise. A `digest` email is wanted unless turned off — it's just sent
+ * once a day rather than at once.
+ */
 export function wants(fallback: ChannelDefault | undefined, choice: boolean | undefined): boolean {
   if (!fallback) return false;
   if (fallback === 'required') return true;
-  return choice ?? fallback === 'on';
+  return choice ?? fallback !== 'off';
 }

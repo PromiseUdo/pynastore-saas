@@ -12,6 +12,7 @@
  * releases its claim so tomorrow's run tries again. A workspace that's
  * suspended or deleted gets nothing.
  */
+import { listOwnerNotice } from '@/lib/notifications/owner-notices';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@/lib/generated/prisma/client';
 import { sendPlatformNoticeEmail } from '@/lib/email';
@@ -135,6 +136,8 @@ export async function runOnboardingReminders(
       if (!claimId) continue;
       if (await sendPlatformNoticeEmail(email)) {
         sent[kind] += 1;
+        // The trial ending is also in the owners' list (ROADMAP 18.6); setup nudges are email only.
+        if (kind.startsWith('trial')) await listOwnerNotice(org.id, email, '/upgrade', `onboarding:${org.id}:${kind}`);
       } else {
         failed += 1;
         await prisma.onboardingEmail.delete({ where: { id: claimId } }).catch(() => {});

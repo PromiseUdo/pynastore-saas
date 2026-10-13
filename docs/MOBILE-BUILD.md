@@ -112,6 +112,26 @@ Billing settings, then shows "no longer available" until it's renewed
    ```
    Then delete the `.p8` file from your machine. One key works for all of
    the merchant's apps.
+7. **Links open the app** (ROADMAP 18.5): store links in emails, messages
+   and shares open the app instead of the browser. The store's website
+   vouches for the app, so record who signs it:
+   ```
+   npx tsx prisma/mobile-app.ts links <slug> --team-id <TEAMID> --android <SHA-256>
+   ```
+   - **iPhone:** the merchant's team id (the same as the APNs key's). In the
+     App ID, tick **Associated Domains**; automatic signing in Xcode usually
+     does this for you.
+   - **Android:** the upload key's fingerprint. `check` prints the exact
+     command once the upload key exists. When the app is published on Google
+     Play, Play re-signs it: add Play's **app signing key** fingerprint too
+     (Play Console → Test and release → App integrity → App signing), with
+     a second `--android`.
+   - **Without these**, links simply open the browser. Nothing breaks.
+
+   The build claims the store's hosts as they are at build time: its
+   platform address and its own domain. A domain connected later needs a
+   new build. For a release build, `NEXT_PUBLIC_ROOT_DOMAIN` must be
+   production's value; the kit stops if the hosts come out as localhost.
 
 ## 3. Build
 
@@ -218,9 +238,14 @@ the phone and open it. **iOS:** use TestFlight.
       now". **Try again** returns to the store once the phone is back online.
 - [ ] **Notifications** (if set up): place an order and press **Turn on
       notifications**. Then mark the order shipped in the dashboard. The
-      notification arrives, and tapping it opens the order. iPhone needs a
-      TestFlight build, because an app run from Xcode uses Apple's test
-      service.
+      notification arrives, and tapping it opens the order. An app run
+      straight from Xcode works too: it registers with Apple's test service,
+      which the server finds on the first send (ROADMAP 18.4).
+- [ ] **Links** (if recorded, §2.7): with the app installed, tap a link to a
+      product on the store's site from Notes or a message. It opens in the
+      app on that product. A link to `/invoice/…` still opens the browser.
+      On Android, **Settings → Apps → the app → Open by default** should
+      list the store's hosts as verified.
 
 To test against your own machine first, make a debug build that loads your
 dev server over the network:
@@ -278,5 +303,6 @@ don't use up a build number.
 | The app shows the store picker | It was built without the kit (no `MansaasApp/` marker), so it's the shared app. |
 | Gradle: "Unsupported class file major version" | Wrong Java. Use JDK 21 (`JAVA_HOME`). |
 | No "Turn on notifications" on the order page | Android: `FIREBASE_SERVICE_ACCOUNT` isn't set in production, or the build had no google-services.json with this app. iPhone: no APNs key recorded (§2.6). |
+| Store links open the browser, not the app | Not recorded (§2.7); the app was built before the store's domain was connected (rebuild); or the app is LAPSED. Check `https://<host>/.well-known/apple-app-site-association` and `/assetlinks.json` load with no redirect. Android: a build signed with a key whose fingerprint isn't recorded (Play's key once published). |
 | Android notification icon is a grey square | `logo.png` has no transparent background. Use one that does and rebuild. |
 | Xcode: "No profiles for '…' were found" | You're not on the merchant's team with certificate access, or the App ID isn't registered (step 3.1). |

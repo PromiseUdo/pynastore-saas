@@ -150,11 +150,19 @@ describe('the catalogue', () => {
     'order.alert': { kind: 'return-requested', orderId: 'o1', reference: 'R1', returnId: 'r1', customerName: 'Ada' },
     'chat.message': { conversationId: 'c1', shopperName: null },
     'chat.reply': { conversationId: 'c1', storeName: 'S' },
-    'stock.low': { warehouseId: 'w1', warehouseName: 'Lagos', itemName: 'Shoe', quantity: 2 },
+    'stock.low': { warehouseId: 'w1', warehouseName: 'Lagos', itemName: 'Shoe', quantity: 2, reorderPoint: 5, thresholdSource: 'store' },
     'payment.dispute': { kind: 'opened', orderId: 'o1', reference: 'R1', amount: '₦1,000' },
     'platform.alert': { heading: 'A job failed', path: '/platform/jobs' },
     'platform.domain-order': { shopName: 'S', domain: 'shoes.ng', type: 'REGISTER' },
     'platform.mobile-app-paid': { appOrderId: 'a1', shopName: 'S', appName: 'Shoes' },
+    'order.new': { orderId: 'o1', reference: 'R1', customerName: 'Ada', total: '₦1,000', payment: 'paid' },
+    'order.transfer': { orderId: 'o1', reference: 'R1', customerName: 'Ada', total: '₦1,000' },
+    'question.new': { productName: 'Shoe', shopperName: 'Ada' },
+    'purchasing.approval': { purchaseOrderId: 'p1', number: 'PO-1', supplierName: 'Acme' },
+    'account.notice': { title: 'Your trial ends in 3 days', body: 'Choose a plan.', path: '/upgrade' },
+    'social.failed': { postId: 's1', productName: 'Shoe', platform: 'Facebook' },
+    'platform.merchant-new': { organizationId: 'org1', shopName: 'S' },
+    'platform.verification': { shopName: 'S' },
   };
   const surfaceOf = { staff: 'admin', 'order-shopper': 'store', 'chat-shopper': 'store', platform: 'platform' } as const;
 

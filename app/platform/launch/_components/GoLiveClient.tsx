@@ -10,7 +10,7 @@ import { PageBody } from '@/components/layout/page-header';
 import { movePayoutsToCurrentMode, type GoLivePage } from '@/features/platform/go-live';
 import type { GoLiveCheck } from '@/lib/ops/go-live';
 
-const GROUP_ORDER = ['Payments', 'Email', 'Social', 'Platform', 'Mobile app', 'Legal'] as const;
+const GROUP_ORDER = ['Payments', 'Email', 'Social', 'Platform', 'Notifications', 'Mobile app', 'Legal'] as const;
 
 export function GoLiveClient({ data }: { data: GoLivePage }) {
   const router = useRouter();

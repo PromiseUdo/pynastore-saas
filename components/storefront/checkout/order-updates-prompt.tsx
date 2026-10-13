@@ -21,7 +21,16 @@ import { watchOrderUpdatesAction } from '@/features/shop-orders/actions';
 
 type State = 'checking' | 'offer' | 'working' | 'on' | 'blocked' | 'failed' | 'hidden';
 
-export function OrderUpdatesPrompt({ confirmationToken, channel = 'app' }: { confirmationToken: string; channel?: PushChannel }) {
+export function OrderUpdatesPrompt({
+  confirmationToken,
+  channel = 'app',
+  signedIn = false,
+}: {
+  confirmationToken: string;
+  channel?: PushChannel;
+  /** signed in, the phone or browser becomes theirs: every order and reply, not only this one (ROADMAP 18.4) */
+  signedIn?: boolean;
+}) {
   const [state, setState] = React.useState<State>('checking');
 
   const enable = React.useCallback(async () => {
@@ -53,7 +62,9 @@ export function OrderUpdatesPrompt({ confirmationToken, channel = 'app' }: { con
     return (
       <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
         <Bell aria-hidden className="size-4" />
-        You&apos;ll get a notification when this order&apos;s status changes.
+        {signedIn
+          ? 'You’ll get a notification when your orders move along or the store replies.'
+          : 'You’ll get a notification when this order’s status changes.'}
       </p>
     );
   }
@@ -63,7 +74,7 @@ export function OrderUpdatesPrompt({ confirmationToken, channel = 'app' }: { con
       <div className="flex items-start gap-3">
         <Bell aria-hidden className="mt-0.5 size-5 shrink-0 text-brand" />
         <div className="min-w-0 flex-1">
-          <p className="font-semibold">Get updates on this order</p>
+          <p className="font-semibold">{signedIn ? 'Get notified about your orders and replies' : 'Get updates on this order'}</p>
           {state === 'blocked' ? (
             <p className="mt-1 text-sm text-muted-foreground">
               {channel === 'app'

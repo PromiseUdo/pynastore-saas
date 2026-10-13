@@ -17,11 +17,18 @@ const LIVE_ENV = {
   NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: 'c',
   NEXT_PUBLIC_CLOUDINARY_API_KEY: 'k',
   CLOUDINARY_API_SECRET: 's',
+  NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY: 'B'.repeat(87),
+  WEB_PUSH_PRIVATE_KEY: 'private',
+  WEB_PUSH_SUBJECT: 'mailto:ops@getnotely.io',
+  FIREBASE_SERVICE_ACCOUNT: JSON.stringify({ project_id: 'p', client_email: 'a@p.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n' }),
+  ABLY_API_KEY: 'app.key:secret',
 };
 const FACTS: GoLiveFacts = {
   lastWebhook: { at: '2026-10-01T09:00:00Z', mode: 'live' },
   payoutsToMove: 0,
   expectedMetaRedirect: 'https://app.getnotely.io/api/social/meta/callback',
+  lastRetryRun: '2026-10-01T09:55:00Z',
+  failedDeliveries24h: 0,
   now: new Date('2026-10-01T10:00:00Z'),
 };
 const statusOf = (env: Record<string, string | undefined>, facts: Partial<GoLiveFacts> = {}) =>
@@ -51,5 +58,15 @@ describe('the go-live checklist', () => {
     for (const secret of ['sk_live_abc', 're_live', 'shh', LIVE_ENV.SOCIAL_TOKEN_KEY, LIVE_ENV.AUTH_SECRET, 'cron-value-7f3a']) {
       expect(text).not.toContain(secret);
     }
+  });
+
+  it('flags notifications that would never reach anyone (ROADMAP 18.7)', () => {
+    expect(statusOf({ ...LIVE_ENV, NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY: undefined, WEB_PUSH_PRIVATE_KEY: undefined })['web-push']).toBe('action');
+    expect(statusOf({ ...LIVE_ENV, WEB_PUSH_SUBJECT: 'ops@getnotely.io' })['web-push']).toBe('action');
+    expect(statusOf({ ...LIVE_ENV, FIREBASE_SERVICE_ACCOUNT: '{"project_id":"p"}' })['firebase']).toBe('action');
+    expect(statusOf({ ...LIVE_ENV, FIREBASE_SERVICE_ACCOUNT: Buffer.from(LIVE_ENV.FIREBASE_SERVICE_ACCOUNT).toString('base64') })['firebase']).toBe('ok');
+    expect(statusOf(LIVE_ENV, { lastRetryRun: null })['notification-retries']).toBe('action');
+    expect(statusOf(LIVE_ENV, { lastRetryRun: '2026-10-01T08:00:00Z' })['notification-retries']).toBe('action');
+    expect(statusOf(LIVE_ENV, { failedDeliveries24h: 3 })['deliveries']).toBe('action');
   });
 });

@@ -10,7 +10,6 @@ import { ResetPasswordEmail } from '@/emails/reset-password';
 import { StorefrontResetPasswordEmail } from '@/emails/storefront-reset-password';
 import { StorefrontConfirmEmailChangeEmail } from '@/emails/storefront-confirm-email';
 import { StorefrontEmailChangeNoticeEmail } from '@/emails/storefront-email-change-notice';
-import { LowStockAlertEmail } from '@/emails/low-stock-alert';
 import {
   StoreOrderAlertEmail,
   storeOrderAlertSubject,
@@ -222,28 +221,6 @@ export async function sendChatMessageAlertEmail(payload: ChatMessageAlertEmailPr
   if (payload.to.length === 0) return false;
   const { to, ...props } = payload;
   return handOver('chat message alert email', { to, subject: chatMessageAlertSubject(props), react: ChatMessageAlertEmail(props) });
-}
-
-export type LowStockAlertEmailPayload = {
-  to: string[];
-  itemName: string;
-  sku: string;
-  warehouseName: string;
-  quantity: number;
-  reorderPoint: number;
-  /** Whose reorder point fired: this store's own override, or the product's. */
-  thresholdSource: 'store' | 'product';
-  /** The store's own page, filtered to what is low there. */
-  storeUrl: string;
-};
-
-export async function sendLowStockAlertEmail(payload: LowStockAlertEmailPayload): Promise<boolean> {
-  if (payload.to.length === 0) return false;
-  return handOver('low stock alert email', {
-    to: payload.to,
-    subject: `Low stock: ${payload.itemName} at ${payload.warehouseName}`,
-    react: LowStockAlertEmail(payload),
-  });
 }
 
 export type DomainOrderNotificationEmailPayload = {

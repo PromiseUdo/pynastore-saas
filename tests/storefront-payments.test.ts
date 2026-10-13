@@ -23,7 +23,6 @@ import {
 /* Emails are proved in tests/storefront-order-lifecycle.test.ts; never send real ones. */
 vi.mock('@/lib/email', () => ({
   sendStorefrontOrderUpdateEmail: vi.fn(async () => {}),
-  sendLowStockAlertEmail: vi.fn(async () => {}),
   sendStoreOrderAlertEmail: vi.fn(async () => {}),
 }));
 
