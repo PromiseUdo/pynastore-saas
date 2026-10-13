@@ -244,46 +244,56 @@ export default async function DashboardPage() {
                 description="When someone buys from your online store, their order shows up here."
               />
             ) : (
-              <TableWrapper>
+              <TableWrapper flush>
                 <Table>
                   <TableHead>
                     <TableRow>
+                      {/* A phone gets two columns: the order, with its customer and both
+                          badges under the reference, and the total, with when under it. */}
                       <TableColumnHeader>Order</TableColumnHeader>
-                      <TableColumnHeader primary>Customer</TableColumnHeader>
-                      <TableColumnHeader>Status</TableColumnHeader>
-                      <TableColumnHeader>Payment</TableColumnHeader>
-                      <TableColumnHeader className="text-right">Items</TableColumnHeader>
+                      <TableColumnHeader primary className="hidden md:table-cell">Customer</TableColumnHeader>
+                      <TableColumnHeader className="hidden md:table-cell">Status</TableColumnHeader>
+                      <TableColumnHeader className="hidden md:table-cell">Payment</TableColumnHeader>
+                      <TableColumnHeader className="hidden text-right lg:table-cell">Items</TableColumnHeader>
                       <TableColumnHeader className="text-right">Total</TableColumnHeader>
-                      <TableColumnHeader className="text-right">Placed</TableColumnHeader>
+                      <TableColumnHeader className="hidden text-right md:table-cell">Placed</TableColumnHeader>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {overview.recentOrders.map((order) => (
                       <TableRow key={order.id}>
-                        <TableCell>
+                        <TableCell className="py-2">
                           <Link
                             href={`/sales/orders/${order.id}`}
                             className="font-medium text-foreground hover:underline"
                           >
                             {order.reference}
                           </Link>
+                          <div className="md:hidden">
+                            <p className="max-w-48 truncate text-xs text-muted-foreground">{order.customerName || '—'}</p>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              <Badge variant={ORDER_STATUS_VARIANT[order.status] ?? 'draft'}>{ORDER_STATUS_LABEL[order.status] ?? '—'}</Badge>
+                              <Badge variant={ORDER_PAYMENT_VARIANT[order.paymentStatus] ?? 'draft'}>{ORDER_PAYMENT_LABEL[order.paymentStatus] ?? '—'}</Badge>
+                            </div>
+                          </div>
                         </TableCell>
-                        <TableCell>{order.customerName || '—'}</TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">{order.customerName || '—'}</TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <Badge variant={ORDER_STATUS_VARIANT[order.status] ?? 'draft'}>
                             {ORDER_STATUS_LABEL[order.status] ?? '—'}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <Badge variant={ORDER_PAYMENT_VARIANT[order.paymentStatus] ?? 'draft'}>
                             {ORDER_PAYMENT_LABEL[order.paymentStatus] ?? '—'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">{formatNumber(order.itemCount)}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatMoney(order.totalAmount, currency)}
+                        <TableCell className="hidden text-right tabular-nums lg:table-cell">{formatNumber(order.itemCount)}</TableCell>
+                        <TableCell className="py-2 text-right tabular-nums">
+                          <span className="whitespace-nowrap">{formatMoney(order.totalAmount, currency)}</span>
+                          <p className="whitespace-nowrap text-xs text-muted-foreground md:hidden">{formatRelativeTime(order.placedAt, now)}</p>
                         </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
+                        <TableCell className="hidden text-right text-muted-foreground md:table-cell">
                           {formatRelativeTime(order.placedAt, now)}
                         </TableCell>
                       </TableRow>

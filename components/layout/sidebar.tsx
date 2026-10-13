@@ -240,7 +240,11 @@ export function Sidebar(props: SidebarProps) {
             {...props}
             collapsed={false}
             onToggle={() => setMobileOpen(false)}
-            className="relative w-[272px] max-w-[85vw] shadow-xl animate-in slide-in-from-left"
+            // `flex`, like the desktop panel: without it the menu list has no
+            // height to scroll in, and a long open section (Inventory) ran
+            // off the bottom of the screen. `safe-y` keeps it clear of a
+            // phone's status bar and home indicator in the business app.
+            className="safe-y relative flex w-[272px] max-w-[85vw] shadow-xl animate-in slide-in-from-left"
             mobile
           />
         </div>

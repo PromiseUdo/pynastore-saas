@@ -331,8 +331,9 @@ export function ProductsPageClient({
                 <TableRow>
                   <TableColumnHeader primary>Product</TableColumnHeader>
                   <TableColumnHeader className="hidden lg:table-cell">Category</TableColumnHeader>
-                  <TableColumnHeader align="right">Price</TableColumnHeader>
-                  <TableColumnHeader align="right">Available</TableColumnHeader>
+                  {/* On a phone, price and stock sit under the name instead (below). */}
+                  <TableColumnHeader align="right" className="hidden sm:table-cell">Price</TableColumnHeader>
+                  <TableColumnHeader align="right" className="hidden sm:table-cell">Available</TableColumnHeader>
                   <TableColumnHeader className="hidden md:table-cell">Online store</TableColumnHeader>
                   <TableColumnHeader>
                     <span className="sr-only">Actions</span>
@@ -351,7 +352,7 @@ export function ProductsPageClient({
                     }}
                   >
                     <TableCell className="py-2">
-                      <div className="flex min-w-56 items-center gap-3">
+                      <div className="flex items-center gap-3 sm:min-w-56">
                         <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted text-muted-foreground">
                           {row.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element -- Cloudinary does the resizing
@@ -360,10 +361,10 @@ export function ProductsPageClient({
                             <Package className="size-4" />
                           )}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <Link
                             href={`/inventory/products/${row.id}`}
-                            className="block truncate font-medium text-foreground hover:underline"
+                            className="line-clamp-2 font-medium text-foreground hover:underline sm:line-clamp-none sm:block sm:truncate"
                           >
                             {row.name}
                           </Link>
@@ -373,16 +374,26 @@ export function ProductsPageClient({
                             {row.variantCount > 0 && <Badge variant="muted">{row.variantCount} variants</Badge>}
                             {row.status !== 'ACTIVE' && <Badge variant={row.status === 'ARCHIVED' ? 'cancelled' : 'warning'}>{enumLabel(row.status)}</Badge>}
                           </div>
+                          {/* A phone has no room for the Price and Available columns: the same facts, here. */}
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:hidden">
+                            <span className="tabular-nums text-foreground">{formatMoneyRange(row.priceMin, row.priceMax)}</span>
+                            <span aria-hidden className="text-muted-foreground">·</span>
+                            <span className={cn('tabular-nums', row.stockState === 'out' ? 'text-destructive' : 'text-muted-foreground')}>
+                              {formatNumber(row.available)} {row.unit} available
+                            </span>
+                            {row.stockState === 'low' && <Badge variant="warning">Low stock</Badge>}
+                            {row.stockState === 'out' && <Badge variant="destructive">Out of stock</Badge>}
+                          </div>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell muted className="hidden max-w-56 truncate lg:table-cell" title={row.categoryPath.join(' › ')}>
                       {row.categoryPath.length ? row.categoryPath.join(' › ') : '—'}
                     </TableCell>
-                    <TableCell align="right" className="whitespace-nowrap tabular-nums">
+                    <TableCell align="right" className="hidden whitespace-nowrap tabular-nums sm:table-cell">
                       {formatMoneyRange(row.priceMin, row.priceMax)}
                     </TableCell>
-                    <TableCell align="right" className="whitespace-nowrap">
+                    <TableCell align="right" className="hidden whitespace-nowrap sm:table-cell">
                       <div className="flex flex-col items-end gap-0.5">
                         <span className={cn('tabular-nums', row.stockState === 'out' && 'text-destructive')}>
                           {formatNumber(row.available)} <span className="text-xs text-muted-foreground">{row.unit}</span>
