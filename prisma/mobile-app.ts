@@ -94,7 +94,7 @@ async function main() {
     return;
   }
 
-  if (!['register', 'lapse', 'restore', 'listed', 'unlisted', 'website', 'apns'].includes(command) || !slugArg) return fail(USAGE);
+  if (!['register', 'lapse', 'restore', 'listed', 'unlisted', 'website', 'apns', 'links'].includes(command) || !slugArg) return fail(USAGE);
 
   const slug = slugArg.trim().toLowerCase();
   const store = await prisma.organization.findUnique({
