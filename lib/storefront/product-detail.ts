@@ -289,8 +289,10 @@ export async function getRecommendations(
  *
  * Driven by the merchant's own "Goes well with" categories for this
  * product's category (Inventory › Categories), not by product, so nothing is
- * hand-picked per row. Where the merchant hasn't set any, it falls back to
- * the sibling aisles — a weaker answer but never an empty or a wrong one.
+ * hand-picked per row. Where the merchant hasn't set any, the rail is left
+ * out: the obvious fallback — best sellers from the neighbouring aisles — is
+ * what "You may also like" already shows once it widens to the parent
+ * category, so it read as the same row twice.
  * Returns one candidate list per aisle, longer than the rail, so the caller
  * can drop what the "Often bought together" rail shows and still fill it.
  */
@@ -301,22 +303,7 @@ async function getCompanions(
   const keep = (p: Product) => p.id !== product.id && p.inStock;
   const rule = product.categoryId ? await getCompanionCategories(product.categoryId, store) : null;
 
-  if (!rule?.categories.length) {
-    const category = await getCategoryById(product.categoryId, store);
-    if (!category?.parentId) return { title: DEFAULT_COMPANION_TITLE, lists: [] };
-    // Structural fallback: the other aisles beside this one.
-    const parent = await getCategoryById(category.parentId, store);
-    const { items } = await listProducts({
-      store,
-      categoryPath: parent?.path,
-      perPage: 200,
-      sort: 'bestselling',
-    });
-    return {
-      title: DEFAULT_COMPANION_TITLE,
-      lists: [items.filter((p) => p.categoryId !== product.categoryId && keep(p)).slice(0, RAIL_SIZE * 2)],
-    };
-  }
+  if (!rule?.categories.length) return { title: DEFAULT_COMPANION_TITLE, lists: [] };
 
   /*
    * One query per companion category, taking the best sellers from each, so

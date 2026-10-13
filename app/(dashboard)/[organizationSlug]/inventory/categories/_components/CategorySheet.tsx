@@ -319,8 +319,8 @@ export function CategorySheet({ open, onOpenChange, categories, editing, default
                   />
                 )}
                 <FieldDescription>
-                  Up to {MAX_COMPANIONS}, most important first — e.g. Bags and Jewellery for Dresses. Leave empty and
-                  we’ll suggest products from the categories next to this one.
+                  Up to {MAX_COMPANIONS}, most important first — e.g. Bags and Jewellery for Dresses. Shown on this
+                  category’s product pages as an extra row. Leave empty and that row won’t appear.
                 </FieldDescription>
               </Field>
 

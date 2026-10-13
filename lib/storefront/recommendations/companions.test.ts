@@ -62,7 +62,7 @@ describe('merchant companion rules', () => {
     });
 
     expect(catalogue.companionsFor(a.id)).toEqual({ title: 'Complete the look', categoryIds: [b.id, c.id] });
-    // Only itself → no rule at all, so the page falls back to sibling aisles.
+    // Only itself → no rule at all, so the page leaves the companion rail out.
     expect(catalogue.companionsFor(b.id)).toBeNull();
     expect(catalogue.companionsFor('cat_deleted')).toBeNull();
   });
