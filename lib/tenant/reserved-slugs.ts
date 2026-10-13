@@ -27,6 +27,8 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   'app',
   'www',
   'm',
+  // b.{ROOT_DOMAIN} — the business host (ROADMAP 19).
+  'b',
   'shop',
   'api',
   'admin',
@@ -38,6 +40,9 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   'platform',
   // app/unavailable — the page a suspended workspace's admin shows (11.4).
   'unavailable',
+  // app/business — the business host's own pages, e.g. opening a shop from a
+  // link (ROADMAP 19.1).
+  'business',
 ]);
 
 /** Slug prefixes that would collide with a storefront hostname. */

@@ -1,5 +1,7 @@
 'use client';
 
+import { signOutHere } from '@/components/account/sign-out';
+import { UpgradeLink } from '@/components/business-app/no-buying';
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -18,12 +20,10 @@ import {
   Store,
   MessagesSquare,
 } from 'lucide-react';
-import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import type { OrgInfo, UserInfo } from './dashboard-layout';
 import { OrgSwitcher, type OrgSwitcherItem } from '@/components/org-switcher';
 import { Badge } from '@/components/ui/badge';
-import { getMarketingUrl } from '@/lib/tenant/urls';
 import { useInboxStore } from '@/lib/chat/inbox-client';
 
 /* ─── Nav data ─────────────────────────────────────────────────────────── */
@@ -134,6 +134,7 @@ const navGroups: NavGroup[] = [
           { title: 'Billing', href: '/settings/billing' },
           { title: 'Your data', href: '/settings/data' },
           { title: 'Notifications', href: '/settings/notifications' },
+          { title: 'Your account', href: '/settings/account' },
         ],
       },
     ],
@@ -308,13 +309,12 @@ function SidebarPanel({
         )}
       >
         {collapsed ? (
-          <Link
-            href="/upgrade"
+          <UpgradeLink
             title={`${org.plan} — Plans`}
             className="flex size-6 items-center justify-center rounded-md text-muted-foreground/70 hover:text-primary"
           >
             <ArrowUpCircle className="size-4" />
-          </Link>
+          </UpgradeLink>
         ) : (
           <>
             <Badge
@@ -330,13 +330,12 @@ function SidebarPanel({
             >
               {org.plan}
             </Badge>
-            <Link
-              href="/upgrade"
+            <UpgradeLink
               className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
             >
               <ArrowUpCircle className="size-3" />
               {org.planState === 'active' ? 'Plans' : 'Choose a plan'}
-            </Link>
+            </UpgradeLink>
           </>
         )}
       </div>
@@ -464,7 +463,7 @@ function SidebarPanel({
 
           {!collapsed && (
             <button
-              onClick={() => signOut({ callbackUrl: getMarketingUrl('/login') })}
+              onClick={() => void signOutHere()}
               aria-label="Sign out"
               className="shrink-0 text-muted-foreground/60 transition-colors hover:text-destructive"
             >

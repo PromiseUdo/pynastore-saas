@@ -14,6 +14,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@/lib/generated/prisma/client';
 import { bootstrapOrganization } from '@/lib/onboarding/bootstrap';
 import { updateCurrentOrganization } from '@/lib/session';
+import { currentShopUrlHere } from '@/lib/tenant/here';
 import { getAdminUrl, getStorefrontUrl } from '@/lib/tenant/urls';
 import { isEmailVerified, sendVerificationEmail } from '@/lib/email-verification';
 import {
@@ -72,6 +73,18 @@ export async function resendVerificationEmail(): Promise<{ ok: true; result: 'se
   const result = await sendVerificationEmail(session.user.id);
   if (result === 'failed') return { ok: false, error: 'We couldn’t send the email just now. Try again in a minute.' };
   return { ok: true, result };
+}
+
+/**
+ * Has the signed-in person confirmed their email yet? Asked by the "Confirm
+ * your email" screen when they come back to it — from the Mail app, or to
+ * the business app (ROADMAP 19.2) — so it moves on without a tap.
+ */
+export async function isEmailConfirmed(): Promise<boolean> {
+  const session = await auth();
+  if (!session?.user?.id) return false;
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { emailVerified: true } });
+  return Boolean(user?.emailVerified);
 }
 
 export interface CreateShopInput {
@@ -166,7 +179,7 @@ export async function createShop(input: CreateShopInput): Promise<CreateShopResu
     }),
   );
 
-  return { ok: true, adminUrl: getAdminUrl(organization.slug, '/dashboard') };
+  return { ok: true, adminUrl: await currentShopUrlHere(organization.slug, '/dashboard') };
 }
 
 /** The welcome email, once — best effort: a failed send never undoes the shop. */

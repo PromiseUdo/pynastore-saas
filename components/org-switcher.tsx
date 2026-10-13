@@ -4,8 +4,9 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import { switchOrganization } from '@/features/org/actions';
-import { getMarketingUrl } from '@/lib/tenant/urls';
+import { marketingUrlHere, onBusinessHost } from '@/lib/tenant/urls';
 import {
   DropdownMenuRoot,
   DropdownMenuTrigger,
@@ -38,7 +39,11 @@ export function OrgSwitcher({ orgs, currentOrgSlug, collapsed }: OrgSwitcherProp
   function handleSwitch(org: OrgSwitcherItem) {
     if (org.slug === currentOrgSlug) return;
     startTransition(async () => {
-      await switchOrganization(org.id);
+      // Elsewhere this redirects to the other shop's own address; on the
+      // business host it returns, and a full reload shows the new shop.
+      const result = await switchOrganization(org.id);
+      if (!result.success) toast.error(result.error);
+      else if (onBusinessHost()) window.location.assign('/dashboard');
     });
   }
 
@@ -151,7 +156,7 @@ function OrgSwitcherMenuContent({
       })}
       <DropdownMenuSeparator />
       <DropdownMenuItem
-        onSelect={() => (window.location.href = getMarketingUrl('/onboarding'))}
+        onSelect={() => (window.location.href = marketingUrlHere('/onboarding'))}
         className="cursor-pointer text-muted-foreground"
       >
         <Plus className="size-4" />

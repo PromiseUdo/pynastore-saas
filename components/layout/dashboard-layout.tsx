@@ -3,6 +3,8 @@ import { Sidebar, SidebarProvider } from './sidebar';
 import { Header } from './header';
 import { Toaster } from '@/components/ui/toaster';
 import { InboxWatcher } from '@/components/messages/inbox-watcher';
+import { NoBuyingProvider } from '@/components/business-app/no-buying';
+import { PhoneAlertsSync } from '@/components/business-app/phone-alerts-sync';
 import type { OrgSwitcherItem } from '@/components/org-switcher';
 
 export type OrgInfo = {
@@ -33,6 +35,8 @@ type DashboardLayoutProps = {
   notice?: React.ReactNode;
   /** holds `messages.view`: the sidebar shows the unread count (ROADMAP 17.2) */
   canViewMessages?: boolean;
+  /** inside the business app: no prices, no buy buttons, no upgrade links (ROADMAP 19.3) */
+  noBuying?: boolean;
 };
 
 export function DashboardLayout({
@@ -44,19 +48,23 @@ export function DashboardLayout({
   headerActions,
   notice,
   canViewMessages = false,
+  noBuying = false,
 }: DashboardLayoutProps) {
   return (
-    <SidebarProvider>
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar org={org} orgs={orgs} user={user} showMessageCount={canViewMessages} />
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <Header breadcrumbs={breadcrumbs} actions={headerActions} user={user} />
-          {notice}
-          <main className="flex-1 overflow-y-auto">{children}</main>
+    <NoBuyingProvider value={noBuying}>
+      <SidebarProvider>
+        <div data-admin-shell className="flex h-screen overflow-hidden">
+          <Sidebar org={org} orgs={orgs} user={user} showMessageCount={canViewMessages} />
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <Header breadcrumbs={breadcrumbs} actions={headerActions} user={user} />
+            {notice}
+            <main className="flex-1 overflow-y-auto">{children}</main>
+          </div>
         </div>
-      </div>
-      <Toaster />
-      {canViewMessages && <InboxWatcher />}
-    </SidebarProvider>
+        <Toaster />
+        {canViewMessages && <InboxWatcher />}
+        <PhoneAlertsSync />
+      </SidebarProvider>
+    </NoBuyingProvider>
   );
 }

@@ -24,7 +24,10 @@ import { z } from 'zod';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
-import { getAdminUrl } from '@/lib/tenant/urls';
+import { getMarketingUrl } from '@/lib/tenant/urls';
+import { adminUrlHere } from '@/lib/tenant/here';
+import { mintAppTicket } from '@/lib/business-app/tickets';
+import { BUSINESS_SOCIAL_START } from '@/lib/business-app/paths';
 import { getRootDomain, isLocalHostname } from '@/lib/tenant/resolveHostname';
 import { metaRedirectUri } from '@/lib/social/config';
 import {
@@ -100,8 +103,17 @@ export async function getSocialOverview(): Promise<ActionResult<SocialOverview>>
  * Returns the URL rather than redirecting, so the button can show its
  * spinner and the caller can surface a clear error when the platform isn't
  * configured — a redirect into a Meta error page explains nothing.
+ *
+ * `inApp` (the business app, ROADMAP 19.2): Meta's dialog must run in the
+ * app's browser sheet, which has none of this WebView's cookies — no
+ * session, no nonce. So instead of Meta's URL this returns a link to
+ * /api/social/meta/app-start carrying a one-minute, single-use ticket that
+ * stands in for the session there; the nonce is armed in the sheet.
  */
-export async function startSocialConnect(providerKey: string): Promise<ActionResult<{ url: string }>> {
+export async function startSocialConnect(
+  providerKey: string,
+  options: { inApp?: boolean } = {},
+): Promise<ActionResult<{ url: string }>> {
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SOCIAL_MANAGE);
@@ -115,13 +127,29 @@ export async function startSocialConnect(providerKey: string): Promise<ActionRes
       return { success: false, error: provider.unavailableReason() ?? 'That platform isn’t available yet' };
     }
 
+    // Back to the page this began on — on the business host, through its
+    // /o/{slug}/… link so it lands in this shop (ROADMAP 19.1).
+    const returnTo = await adminUrlHere(ctx.organization.slug, '/social');
+
+    if (options.inApp) {
+      const ticket = await mintAppTicket('social-connect', {
+        organizationId: ctx.organization.id,
+        userId: ctx.userId,
+        provider: providerKey,
+        returnTo,
+      });
+      const url = new URL(getMarketingUrl(BUSINESS_SOCIAL_START));
+      url.searchParams.set('ticket', ticket);
+      return { success: true, data: { url: url.toString() } };
+    }
+
     const nonce = createNonce();
     const state = encodeState({
       organizationId: ctx.organization.id,
       userId: ctx.userId,
       nonce,
       provider: primaryPlatform(providerKey),
-      returnTo: getAdminUrl(ctx.organization.slug, '/social'),
+      returnTo,
     });
 
     const root = getRootDomain();

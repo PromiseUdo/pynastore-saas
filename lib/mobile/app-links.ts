@@ -69,10 +69,31 @@ export function appLinkHosts(store: { slug: string; customStoreDomain?: string |
 
 const TEAM_ID = /^[A-Z0-9]{10}$/;
 
+/**
+ * The business app (ROADMAP 19.5) is the whole business host: every page
+ * opens in it — sign-in, the admin, /o/{slug}/… — except /api, which is
+ * opened by the app itself, never by a link.
+ */
+export type AppLinkPaths = 'store-pages' | 'whole-host';
+
 /** /.well-known/apple-app-site-association, or null without a team id. */
-export function appleAppSiteAssociation(app: { appId: string; teamId: string | null | undefined }) {
+export function appleAppSiteAssociation(app: { appId: string; teamId: string | null | undefined }, paths: AppLinkPaths = 'store-pages') {
   if (!app.teamId || !TEAM_ID.test(app.teamId)) return null;
   const appId = `${app.teamId}.${app.appId}`;
+  if (paths === 'whole-host') {
+    return {
+      applinks: {
+        details: [
+          {
+            appIDs: [appId],
+            components: [{ '/': '/api/*', exclude: true }, { '/': '*' }],
+            appID: appId,
+            paths: ['NOT /api/*', '*'],
+          },
+        ],
+      },
+    };
+  }
   return {
     applinks: {
       details: [
@@ -105,4 +126,22 @@ export function assetLinks(app: { appId: string; fingerprints: string[] }) {
       target: { namespace: 'android_app', package_name: app.appId, sha256_cert_fingerprints: fingerprints },
     },
   ];
+}
+
+/**
+ * The business app's own pair of well-known files (ROADMAP 19.5), from the
+ * platform's settings — it is the platform's app, with no row in MobileApp:
+ *   - iPhone: APPLE_TEAM_ID (the platform's Apple Developer team; the same
+ *     one Sign in with Apple and the APNs key use), or APNS_BUSINESS_TEAM_ID;
+ *   - Android: BUSINESS_APP_ANDROID_SHA256, comma-separated — the upload
+ *     key's fingerprint (the build kit prints it) and, once it's on Google
+ *     Play, Play's app-signing key's.
+ */
+export function businessAppLinkSettings(): { teamId: string | null; fingerprints: string[] } {
+  const teamId = process.env.APPLE_TEAM_ID?.trim() || process.env.APNS_BUSINESS_TEAM_ID?.trim() || null;
+  const fingerprints = (process.env.BUSINESS_APP_ANDROID_SHA256 ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  return { teamId, fingerprints };
 }

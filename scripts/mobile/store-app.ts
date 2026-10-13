@@ -24,6 +24,16 @@
  *
  * The shared `android/` and `ios/` projects are never edited: every change is
  * made to the copy in work/ (scripts/mobile/native-project.ts holds the edits).
+ *
+ * The business app (ROADMAP 19.5) is built by the same kit, from the folder
+ * `business` (a reserved slug, so never a shop's):
+ *
+ *   npm run mobile:business -- init|check|build|listing [same flags]
+ *
+ * It's the PLATFORM's app — no MobileApp row, no merchant: it loads the
+ * business host (b.{root}), claims every link there, reads its push and
+ * link settings from the platform's environment, and is published under the
+ * platform's own Apple and Google accounts. Runbook: docs/MOBILE-BUILD.md §8.
  */
 import 'dotenv/config';
 import { spawnSync } from 'node:child_process';
@@ -36,6 +46,9 @@ import {
   editAndroidBuildGradle,
   editAndroidStrings,
   editIosInfoPlist,
+  BUSINESS_PHOTO_PURPOSE,
+  STORE_PHOTO_PURPOSE,
+  allowHttpForDebug,
   editAndroidManifestForPush,
   editAndroidManifestForAppLinks,
   editIosProject,
@@ -49,11 +62,18 @@ import {
 } from './native-project';
 import { makeListingPack } from './listing-pack';
 import { appIconPngUrl } from '../../lib/mobile/icon';
-import { appLinkHosts, normalizeCertFingerprint } from '../../lib/mobile/app-links';
+import { appLinkHosts, businessAppLinkSettings, normalizeCertFingerprint } from '../../lib/mobile/app-links';
+import { BUSINESS_APP_ID } from '../../lib/mobile/app-config';
+import { BUSINESS_APP_NAME } from '../../lib/brand';
+import { getBusinessDomain } from '../../lib/tenant/resolveHostname';
+import { businessApnsCredentials } from '../../lib/mobile/push/send';
 
 const REPO = path.resolve(__dirname, '../..');
 const APPS_DIR = path.resolve(process.env.MOBILE_APPS_DIR?.trim() || path.join(os.homedir(), 'mansaas-store-apps'));
 const KEY_ALIAS = 'upload';
+/** The business app's folder — a reserved slug (lib/tenant/reserved-slugs.ts), so never a shop's. */
+const BUSINESS = 'business';
+const isBusiness = (slug: string) => slug === BUSINESS;
 
 type Platform = 'android' | 'ios';
 
@@ -197,9 +217,29 @@ async function readRegistration(slug: string): Promise<Registration | null | 'no
 async function init(slug: string, flags: Record<string, string | true>) {
   const dir = storeDir(slug);
   fs.mkdirSync(dir, { recursive: true });
-  say(`Store folder: ${dir}`);
+  say(`${isBusiness(slug) ? 'Business app' : 'Store'} folder: ${dir}`);
 
-  if (fs.existsSync(configPath(slug))) {
+  if (isBusiness(slug) && !fs.existsSync(configPath(slug))) {
+    // The platform's own app: nothing to read from a merchant's order.
+    const serverUrl = (typeof flags['server-url'] === 'string' && flags['server-url']) || `https://${getBusinessDomain()}`;
+    const config = {
+      slug,
+      appId: BUSINESS_APP_ID,
+      name: BUSINESS_APP_NAME,
+      version: '1.0.0',
+      buildNumber: 0,
+      serverUrl,
+      iconBackgroundColor: '#ffffff',
+      splashBackgroundColor: '#ffffff',
+      splashBackgroundColorDark: '#0b0b0c',
+      appleTeamId: process.env.APPLE_TEAM_ID?.trim() || null,
+    };
+    fs.writeFileSync(configPath(slug), `${JSON.stringify(config, null, 2)}\n`);
+    ok(`Wrote app.json for ${BUSINESS_APP_ID} ("${BUSINESS_APP_NAME}"), loading ${serverUrl}.`);
+    if (serverUrl.includes('localhost')) warn('serverUrl is a local address: set NEXT_PUBLIC_ROOT_DOMAIN to production first, or edit app.json.');
+  } else if (isBusiness(slug)) {
+    ok('app.json already exists — left as it is.');
+  } else if (fs.existsSync(configPath(slug))) {
     ok('app.json already exists — left as it is.');
   } else {
     const registration = await readRegistration(slug);
@@ -237,7 +277,7 @@ async function init(slug: string, flags: Record<string, string | true>) {
 
   // The merchant's icon, from their order (16.2) — a 1024 PNG made by Cloudinary.
   const logo = path.join(dir, 'logo.png');
-  if (!fs.existsSync(logo)) {
+  if (!fs.existsSync(logo) && !isBusiness(slug)) {
     const registration = await readRegistration(slug).catch(() => null);
     if (registration && registration !== 'no-database' && registration.iconUrl) {
       const response = await fetch(appIconPngUrl(registration.iconUrl));
@@ -250,6 +290,18 @@ async function init(slug: string, flags: Record<string, string | true>) {
 
   const config = readConfigLoose(slug);
   ensureUploadKey(slug, config?.name ?? slug);
+
+  if (isBusiness(slug)) {
+    say(`
+Next:
+  1. Put the platform's logo at ${path.join(dir, 'logo.png')} (square, 1024×1024 or larger, transparent background
+     so Android's notification icon is its shape). Optional: icon.png, splash.png, splash-dark.png.
+  2. Put google-services.json (Firebase → the business app, ${BUSINESS_APP_ID}) in ${dir}.
+  3. Check serverUrl and appleTeamId (the platform's team) in app.json.
+  4. Back up ${signingDir(slug)} — without it the business app can never be updated on Google Play.
+  5. npm run mobile:business -- check`);
+    return;
+  }
 
   say(`
 Next:
@@ -426,8 +478,10 @@ async function check(slug: string, platforms: Platform[], options: { debug: bool
     else ok('icon.png');
   }
 
+  // The business app has no registration: it's the platform's (ROADMAP 19.5).
+  if (isBusiness(slug)) checkBusiness(config, platforms, options, { block, ok, warn });
   // The registration: an unregistered app opens "no longer available".
-  try {
+  else try {
     const registration = await readRegistration(slug);
     if (registration === 'no-database') warn("DATABASE_URL isn't set — couldn't confirm the app is registered.");
     else if (!registration) block(`No app is registered for ${slug}. Run: npx tsx prisma/mobile-app.ts register ${slug} ${config.appId} "${config.name}"`);
@@ -467,7 +521,7 @@ async function check(slug: string, platforms: Platform[], options: { debug: bool
   if (platforms.includes('android')) {
     const firebase = googleServicesFor(slug, config.appId);
     if (firebase.state === 'ok') ok(`Android notifications: ${path.relative(APPS_DIR, firebase.file)}`);
-    else if (firebase.state === 'missing') warn("No google-services.json — the Android app will be built without order notifications.");
+    else if (firebase.state === 'missing') warn(`No google-services.json — the Android app will be built without ${isBusiness(slug) ? 'staff' : 'order'} notifications.`);
     else block(`${firebase.file} doesn't include ${config.appId}. Add the app in Firebase, then download it again.`);
   }
 
@@ -485,11 +539,101 @@ async function check(slug: string, platforms: Platform[], options: { debug: bool
     if (process.platform !== 'darwin') block('iOS apps can only be built on a Mac.');
     else if (!has('xcodebuild', ['-version'])) block('Xcode is not installed — see docs/MOBILE-BUILD.md.');
     else ok('Xcode');
-    if (!config.appleTeamId) warn("appleTeamId is empty in app.json — Xcode will ask for the merchant's team when you archive.");
+    if (!config.appleTeamId) warn(`appleTeamId is empty in app.json — Xcode will ask for the ${isBusiness(slug) ? "platform's" : "merchant's"} team when you archive.`);
   }
 
   say(blocked ? '\nNot ready — fix the ✗ items above.' : '\nReady to build.');
   return !blocked;
+}
+
+/* ── the business app's checks (ROADMAP 19.5) ───────────────────────── */
+
+/**
+ * What the business app needs instead of a registration: to load the
+ * business host, and the platform's own settings for push and links. Read
+ * from the environment this runs in — run it with production's settings for
+ * a release build. Only the host is a hard stop; the rest degrade (no push,
+ * links that open the browser) and say so.
+ */
+function checkBusiness(
+  config: StoreAppConfig,
+  platforms: Platform[],
+  options: { debug: boolean },
+  out: { block: (m: string) => void; ok: (m: string) => void; warn: (m: string) => void },
+) {
+  if (config.appId !== BUSINESS_APP_ID) out.block(`appId must be ${BUSINESS_APP_ID} for the business app (app.json says ${config.appId}).`);
+  if (!options.debug) {
+    const host = new URL(config.serverUrl).host;
+    if (host !== getBusinessDomain()) {
+      out.block(`serverUrl must be the business host, https://${getBusinessDomain()} (app.json says ${config.serverUrl}). Check NEXT_PUBLIC_ROOT_DOMAIN in this shell.`);
+    } else out.ok(`The business host: ${host}`);
+  }
+  if (platforms.includes('ios')) {
+    if (businessApnsCredentials()) out.ok('iPhone notifications: the platform’s APNs key is set');
+    else out.warn('APNS_BUSINESS_KEY / _KEY_ID / _TEAM_ID aren’t set here — the server needs them to reach iPhones (.env.example).');
+    if (businessAppLinkSettings().teamId) out.ok(`iPhone links: ${getBusinessDomain()}`);
+    else out.warn('APPLE_TEAM_ID isn’t set — links to the business host will open Safari, not the app, until the server has it.');
+  }
+  if (platforms.includes('android') && !options.debug) {
+    const upload = uploadKeyFingerprint(BUSINESS);
+    const recorded = businessAppLinkSettings().fingerprints.map((f) => normalizeCertFingerprint(f));
+    if (upload && recorded.includes(upload)) out.ok(`Android links: ${getBusinessDomain()}`);
+    else if (upload) out.warn(`Links to the business host will open the browser until the server has this key: add ${upload} to BUSINESS_APP_ANDROID_SHA256.`);
+  }
+  out.ok('Privacy and terms: the platform’s own pages');
+}
+
+/**
+ * The business app's listing (ROADMAP 19.5): the answers live in
+ * docs/BUSINESS-APP-STORE.md; this writes the facts a listing form asks for
+ * next to the build, so nobody types an id or a URL from memory.
+ */
+function businessListing() {
+  const config = readConfig(BUSINESS);
+  const problem = releaseServerProblem(config.serverUrl);
+  if (problem) stop(problem);
+  const site = new URL(config.serverUrl);
+  const platform = site.host.replace(/^b\./, 'app.');
+  const dir = path.join(storeDir(BUSINESS), 'listing');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'LISTING.md');
+  fs.writeFileSync(
+    file,
+    `# ${config.name} — listing facts
+
+Generated by \`npm run mobile:business -- listing\`. The answers to every
+review and privacy question are in docs/BUSINESS-APP-STORE.md — read it before
+filling the forms.
+
+| | |
+|---|---|
+| Name | ${config.name} |
+| Bundle id / package | ${config.appId} |
+| Version | ${config.version} (build ${config.buildNumber}) |
+| Loads | ${config.serverUrl} |
+| Privacy policy URL | https://${platform}/privacy |
+| Terms URL | https://${platform}/terms |
+| Support URL | https://${platform}/ |
+| Category | Business |
+| Price | Free (no in-app purchases) |
+
+## Short description (Play, 80 characters)
+
+Run your ${config.name.replace(/ Business$/, '')} shop from your phone: orders, stock, chats and alerts.
+
+## Reviewer access
+
+Fill in the demo shop's sign-in (docs/BUSINESS-APP-STORE.md §4) in App Store
+Connect → App Review Information, and Play → App content → App access.
+
+## Screenshots
+
+Take them on the phones themselves from the demo shop: the dashboard, an
+order, a product with photos, Messages, and a notification. Both stores want
+real screens, not mock-ups.
+`,
+  );
+  ok(`Wrote ${file}`);
 }
 
 /* ── build ──────────────────────────────────────────────────────────── */
@@ -570,8 +714,10 @@ async function build(slug: string, platforms: Platform[], flags: Record<string, 
 
   // The hosts whose links open the app (ROADMAP 18.5) — from the store's record now,
   // so a domain added after this build needs a new build.
-  const registration = await readRegistration(slug).catch(() => null);
-  const linkHosts = registration && registration !== 'no-database' ? registration.linkHosts : [];
+  const registration = isBusiness(slug) ? null : await readRegistration(slug).catch(() => null);
+  // The business app claims its one host, whole (ROADMAP 19.5).
+  const linkHosts = isBusiness(slug) ? [getBusinessDomain()] : registration && registration !== 'no-database' ? registration.linkHosts : [];
+  const linkPaths = isBusiness(slug) ? 'whole-host' : 'store-pages';
   if (linkHosts.length === 0) warn("Couldn't read the store's hosts — this build won't open the store's links.");
   if (!debug && linkHosts.some((host) => host.includes('localhost'))) {
     stop(`The store's hosts came out as ${linkHosts.join(', ')}. Set NEXT_PUBLIC_ROOT_DOMAIN to production's value for a release build.`);
@@ -610,10 +756,10 @@ async function build(slug: string, platforms: Platform[], flags: Record<string, 
       const smallIcon = await makeNotificationIcon(path.join(dir, 'logo.png'), path.join(work, 'android/app/src/main/res'));
       if (!smallIcon) warn("logo.png has no transparent background, so Android's status-bar icon will be a plain square.");
       edit(path.join(work, 'android/app/src/main/AndroidManifest.xml'), (text) => editAndroidManifestForPush(text, { smallIcon }));
-      ok('Android: order notifications included');
+      ok(isBusiness(slug) ? 'Android: staff notifications included' : 'Android: order notifications included');
     }
     if (linkHosts.length > 0) {
-      edit(path.join(work, 'android/app/src/main/AndroidManifest.xml'), (text) => editAndroidManifestForAppLinks(text, linkHosts));
+      edit(path.join(work, 'android/app/src/main/AndroidManifest.xml'), (text) => editAndroidManifestForAppLinks(text, linkHosts, linkPaths));
       ok(`Android: links to ${linkHosts.join(', ')} open the app`);
     }
   }
@@ -629,7 +775,9 @@ async function build(slug: string, platforms: Platform[], flags: Record<string, 
     );
     fs.writeFileSync(path.join(work, 'ios/App/App/App.entitlements'), iosEntitlements({ linkHosts }));
     if (linkHosts.length > 0) ok(`iOS: links to ${linkHosts.join(', ')} open the app`);
-    edit(path.join(work, 'ios/App/App/Info.plist'), (text) => editIosInfoPlist(text, { appId: config.appId, name: config.name }));
+    edit(path.join(work, 'ios/App/App/Info.plist'), (text) => editIosInfoPlist(text, { appId: config.appId, name: config.name, photos: isBusiness(slug) ? BUSINESS_PHOTO_PURPOSE : STORE_PHOTO_PURPOSE }));
+    // A debug build may load a laptop over plain http; a release build never does.
+    if (debug) edit(path.join(work, 'ios/App/App/Info.plist'), allowHttpForDebug);
   }
   ok('Set the app id, name, version and deep-link scheme');
 
@@ -707,13 +855,17 @@ async function build(slug: string, platforms: Platform[], flags: Record<string, 
   say(`\nDone. Files in ${out}`);
   for (const file of Object.keys(delivered)) say(`  ${file}`);
   if (platforms.includes('android') && !debug) {
-    say('  .aab → upload to Google Play (the merchant\'s account). .apk → install directly on a phone to test, or share.');
+    say(
+      isBusiness(slug)
+        ? '  .aab → upload to Google Play (the platform\'s account). .apk → send to testers to install, or Firebase App Distribution (docs/MOBILE-BUILD.md §8).'
+        : '  .aab → upload to Google Play (the merchant\'s account). .apk → install directly on a phone to test, or share.',
+    );
   }
   if (platforms.includes('ios')) {
     say(`
 iOS: the project is ready at ${path.join(work, 'ios/App/App.xcodeproj')}
   open "${path.join(work, 'ios/App/App.xcodeproj')}"
-  In Xcode: pick the merchant's team (Signing & Capabilities), then Product → Archive
+  In Xcode: pick the ${isBusiness(slug) ? "platform's" : "merchant's"} team (Signing & Capabilities), then Product → Archive
   → Distribute App → App Store Connect. See docs/MOBILE-BUILD.md.`);
   }
 }
@@ -721,6 +873,7 @@ iOS: the project is ready at ${path.join(work, 'ios/App/App.xcodeproj')}
 /* ── listing (ROADMAP 16.4) ─────────────────────────────────────────── */
 
 async function listing(slug: string, flags: Record<string, string | true>) {
+  if (isBusiness(slug)) return businessListing();
   const config = readConfig(slug);
   const problem = releaseServerProblem(config.serverUrl);
   if (problem) stop(problem);
@@ -755,11 +908,17 @@ function platformsFrom(flag: string | true | undefined): Platform[] {
 }
 
 async function main() {
-  const { flags, positional } = parseFlags(process.argv.slice(2));
-  const [command, rawSlug] = positional;
+  // `npm run mobile:business` puts --business first; take it off before the
+  // flags are read, or it would swallow the command as its value.
+  const argv = process.argv.slice(2);
+  const business = argv[0] === '--business';
+  const { flags, positional } = parseFlags(business ? argv.slice(1) : argv);
+  // `npm run mobile:business -- <command>`: the business app, with no slug to type (ROADMAP 19.5).
+  const [command, rawSlug] = business ? [positional[0], BUSINESS] : positional;
   const slug = (rawSlug ?? '').trim().toLowerCase();
-  const usage =
-    'Usage: npm run mobile:app -- init|check|build|listing <store-slug> [--platform android|ios|all] [--version 1.0.0] [--debug] [--server-url URL] [--reviewer-account] [--no-screenshots]';
+  const usage = business
+    ? 'Usage: npm run mobile:business -- init|check|build|listing [--platform android|ios|all] [--version 1.0.0] [--debug] [--server-url URL]'
+    : 'Usage: npm run mobile:app -- init|check|build|listing <store-slug> [--platform android|ios|all] [--version 1.0.0] [--debug] [--server-url URL] [--reviewer-account] [--no-screenshots]';
 
   if (!slug || !['init', 'check', 'build', 'listing'].includes(command)) stop(usage);
   if (command === 'init') return init(slug, flags);

@@ -44,6 +44,12 @@ export interface SocialOAuthState {
   returnTo: string;
   /** Epoch ms. */
   expiresAt: number;
+  /**
+   * Started in the business app's browser sheet (ROADMAP 19.2), from a
+   * single-use ticket a signed-in member minted: the sheet has no session,
+   * so the callback answers by deep link and takes the member from here.
+   */
+  app?: boolean;
 }
 
 function secret(): string {

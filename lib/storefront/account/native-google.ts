@@ -3,7 +3,9 @@
 /*
  * lib/storefront/account/native-google.ts
  *
- * "Continue with Google" inside the phone app (ROADMAP 16.1).
+ * "Continue with Google" inside the phone app (ROADMAP 16.1). The business
+ * app runs its staff Google and Apple sign-in through the same sheet, with
+ * its own start and handoff routes (ROADMAP 19.2, lib/business-app/client.ts).
  *
  * Google refuses to sign anyone in inside an app's embedded WebView, so on
  * the web this is a plain link (./google-link.ts) and in the app it runs in
@@ -45,6 +47,8 @@ export function nextLocationAfterAuthReturn(
   deepLink: string,
   verifier: string,
   current: string,
+  // The business app's staff handoff lives elsewhere (ROADMAP 19.2).
+  handoffPath: string = HANDOFF_PATH,
 ): string | null {
   const link = parseAppDeepLink(deepLink);
   if (!link || link.host !== AUTH_RETURN_HOST) return null;
@@ -64,13 +68,13 @@ export function nextLocationAfterAuthReturn(
   } catch {
     return null;
   }
-  if (handoff.origin !== new URL(current).origin || handoff.pathname !== HANDOFF_PATH) return null;
+  if (handoff.origin !== new URL(current).origin || handoff.pathname !== handoffPath) return null;
 
   handoff.searchParams.set('verifier', verifier);
   return handoff.toString();
 }
 
-export async function signInWithGoogleInApp(startHref: string): Promise<void> {
+export async function signInWithGoogleInApp(startHref: string, handoffPath: string = HANDOFF_PATH): Promise<void> {
   const [{ Browser }, { App }] = await Promise.all([import('@capacitor/browser'), import('@capacitor/app')]);
 
   const [{ id: appId }, { verifier, challenge }] = await Promise.all([App.getInfo(), newVerifier()]);
@@ -96,7 +100,7 @@ export async function signInWithGoogleInApp(startHref: string): Promise<void> {
   handles.push(
     await App.addListener('appUrlOpen', ({ url }) => {
       if (parseAppDeepLink(url)?.host !== AUTH_RETURN_HOST) return;
-      finish(nextLocationAfterAuthReturn(url, verifier, window.location.href));
+      finish(nextLocationAfterAuthReturn(url, verifier, window.location.href, handoffPath));
     }),
   );
 

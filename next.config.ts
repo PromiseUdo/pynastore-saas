@@ -28,8 +28,11 @@ const nextConfig: NextConfig = {
   // must be the left-most label; `**.app.localhost` covers every depth
   // (admin, storefront, and the `m.app.localhost` mobile origin).
   //
-  // LAN IPs are added automatically for on-device testing (see above).
-  allowedDevOrigins: ['app.localhost', '*.app.localhost', '**.app.localhost', ...lanAddresses],
+  // LAN IPs are added automatically for on-device testing (see above), and
+  // nip.io names for them (b.192-168-1-4.nip.io): a phone or simulator needs
+  // a real domain for the sign-in cookie, and nip.io points at the LAN IP
+  // in its own name (docs/MOBILE-BUILD.md §8). Dev only.
+  allowedDevOrigins: ['app.localhost', '*.app.localhost', '**.app.localhost', '**.nip.io', ...lanAddresses],
 
   images: {
     remotePatterns: [

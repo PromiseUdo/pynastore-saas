@@ -9,6 +9,7 @@
  * these files have no public URL, show no thumbnail, and are opened only
  * through a short-lived link the server makes (`onView`).
  */
+import { openPendingTab } from '@/lib/business-app/client';
 import * as React from 'react';
 import { ExternalLink, FileText, Loader2, RotateCcw, Trash2, TriangleAlert, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -135,15 +136,13 @@ export function DocumentUploader({
   async function view(doc: UploadedDocument) {
     setOpening(doc.publicId);
     // Open the tab now, while the click still counts as the user's, and point it
-    // at the signed link once the server has made one.
-    // (`noopener` would make window.open return null, so the opener link is
-    // cut by hand instead.) Never navigate this tab: the form may be unsaved.
-    const tab = window.open('about:blank', '_blank');
-    if (tab) tab.opener = null;
+    // at the signed link once the server has made one (in the business app:
+    // the in-app sheet). Never navigate this tab: the form may be unsaved.
+    const tab = openPendingTab();
     const result = await onView(doc);
     setOpening(null);
     if (result.success) {
-      if (tab) tab.location.href = result.data.url;
+      if (tab) tab.go(result.data.url);
       else setNotice('Your browser blocked the new tab. Allow pop-ups for this site to view documents.');
     } else {
       tab?.close();

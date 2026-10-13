@@ -20,6 +20,8 @@
  *   4. there must be a signed-in user      → the session cookie is scoped to
  *                                            .{ROOT_DOMAIN}, so it is here
  *   5. that user must be the one who started the flow
+ *      (4–5 from the business app's sheet: the single-use ticket spent by
+ *      app-start instead — the sheet has no session, ROADMAP 19.2)
  *   6. that user must STILL hold an active membership in that organization
  *      with `social.manage`                → the actual tenant boundary
  *
@@ -40,6 +42,9 @@ import { metaRedirectUri } from '@/lib/social/config';
 import { createConnectionDraft } from '@/lib/social/service';
 import { metaProvider } from '@/lib/social/providers/meta';
 import { SocialProviderError } from '@/lib/social/types';
+import { BUSINESS_APP_ID } from '@/lib/mobile/app-config';
+import { appDeepLink, deepLinkPage } from '@/lib/mobile/deep-link-page';
+import { SOCIAL_RETURN_HOST } from '@/lib/business-app/paths';
 
 /** Tokens and per-merchant data: never cached, never statically rendered. */
 export const dynamic = 'force-dynamic';
@@ -49,10 +54,15 @@ export const dynamic = 'force-dynamic';
  * Only codes — never Meta's raw error text, which is written for developers
  * and can be alarming or misleading in a shop owner's browser.
  */
-function backToDashboard(returnTo: string | null, params: Record<string, string>): NextResponse {
+function backToDashboard(returnTo: string | null, params: Record<string, string>, app = false): NextResponse {
   const target = new URL(returnTo ?? getMarketingUrl('/'));
   for (const [key, value] of Object.entries(params)) target.searchParams.set(key, value);
-  const response = NextResponse.redirect(target);
+  /* From the business app's sheet (ROADMAP 19.2): hand the page back to the
+   * app, which closes the sheet and opens it in its own WebView. Always THE
+   * business app's scheme — never one a request names. */
+  const response = app
+    ? deepLinkPage({ heading: 'Connecting your account', deepLink: appDeepLink(BUSINESS_APP_ID, SOCIAL_RETURN_HOST, { to: target.toString() }) })
+    : NextResponse.redirect(target);
   // The nonce is spent either way — success or failure.
   response.cookies.set(STATE_COOKIE, '', {
     httpOnly: true,
@@ -88,26 +98,35 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * own domains so a compromised signing key can't also become an open
    * redirect. */
   const returnTo = safeReturnTo(state.returnTo);
+  const app = state.app === true;
+  const back = (target: string, params: Record<string, string>) => backToDashboard(target, params, app);
 
   // The merchant pressed Cancel on Meta's dialog, or Meta refused.
   if (metaError) {
     const denied = metaError === 'access_denied';
     if (!denied) await webhookFailed('meta-callback', { kind: 'meta-error', message: `Meta sent the merchant back with “${metaError.slice(0, 80)}”` });
-    return backToDashboard(returnTo, { social_error: denied ? 'denied' : 'meta' });
+    return back(returnTo, { social_error: denied ? 'denied' : 'meta' });
   }
 
   if (!code) {
-    return backToDashboard(returnTo, { social_error: 'denied' });
+    return back(returnTo, { social_error: 'denied' });
   }
 
-  // 4–5. A signed state is not a session. Both must agree.
-  const session = await auth();
-  if (!session?.user?.id) {
-    return backToDashboard(returnTo, { social_error: 'signed_out' });
-  }
-  if (session.user.id !== state.userId) {
-    console.error('[social] callback state belonged to a different user');
-    return backToDashboard(returnTo, { social_error: 'expired' });
+  /* 4–5. A signed state is not a session. Both must agree — except from
+   * the business app's sheet, which has no session: there the state was
+   * made from a single-use ticket that member minted while signed in
+   * (app-start), and step 6 still re-reads their permission. */
+  let userId = state.userId;
+  if (!app) {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return back(returnTo, { social_error: 'signed_out' });
+    }
+    if (session.user.id !== state.userId) {
+      console.error('[social] callback state belonged to a different user');
+      return back(returnTo, { social_error: 'expired' });
+    }
+    userId = session.user.id;
   }
 
   /* 6. THE tenant check. Re-read from the database rather than trusting the
@@ -115,9 +134,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
    * their role changed between starting the flow and coming back, and the
    * state itself only proves the id wasn't tampered with — not that this
    * user may act for that store. */
-  if (!(await canManageSocial(session.user.id, state.organizationId))) {
+  if (!(await canManageSocial(userId, state.organizationId))) {
     console.error('[social] callback user may not manage social for the claimed organization');
-    return backToDashboard(returnTo, { social_error: 'forbidden' });
+    return back(returnTo, { social_error: 'forbidden' });
   }
 
   try {
@@ -127,10 +146,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Meta answered properly; the merchant simply has no Page to connect.
     await webhookSucceeded('meta-callback');
     if (result.accounts.length === 0) {
-      return backToDashboard(returnTo, { social_error: 'no_pages' });
+      return back(returnTo, { social_error: 'no_pages' });
     }
 
-    const draftId = await createConnectionDraft(state.organizationId, session.user.id, state.provider, result);
+    const draftId = await createConnectionDraft(state.organizationId, userId, state.provider, result);
 
     /* The chooser lives on the merchant's own subdomain, where the org
      * context exists again. Only the draft id travels in the URL: it is
@@ -138,14 +157,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const target = new URL(returnTo);
     target.pathname = target.pathname.replace(/\/social\/?$/, '/social/connect');
     target.searchParams.set('draft', draftId);
-    return backToDashboard(target.toString(), {});
+    return back(target.toString(), {});
   } catch (error) {
     if (error instanceof SocialProviderError) {
       // A merchant unticking permissions on Meta's dialog is their choice, not a failure.
       if (error.kind !== 'permission_missing') {
         await webhookFailed('meta-callback', { kind: error.kind, message: `Connecting to Meta failed: ${error.message}`, error });
       }
-      return backToDashboard(returnTo, {
+      return back(returnTo, {
         social_error: error.kind === 'permission_missing' ? 'permissions' : 'meta',
       });
     }
@@ -154,7 +173,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       message: `The connection callback failed: ${error instanceof Error ? error.message : String(error)}`,
       error,
     });
-    return backToDashboard(returnTo, { social_error: 'meta' });
+    return back(returnTo, { social_error: 'meta' });
   }
 }
 

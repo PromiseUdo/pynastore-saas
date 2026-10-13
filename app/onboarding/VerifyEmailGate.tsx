@@ -1,17 +1,33 @@
 'use client';
 
+import { signOutHere } from '@/components/account/sign-out';
 import * as React from 'react';
 import { Loader2, MailCheck } from 'lucide-react';
-import { signOut } from 'next-auth/react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/toaster';
-import { getMarketingUrl } from '@/lib/tenant/urls';
-import { resendVerificationEmail } from './actions';
+import { isEmailConfirmed, resendVerificationEmail } from './actions';
 
 /** Shown on /onboarding until the owner has confirmed their email (ROADMAP 12.5). */
 export function VerifyEmailGate({ email }: { email: string }) {
   const [pending, setPending] = React.useState(false);
+
+  /* Confirming happens elsewhere — in the Mail app, or a browser tab the
+   * link opened — so check again whenever this screen comes back into view
+   * (a phone app returning to the front counts, ROADMAP 19.2), and move on
+   * by ourselves. "I've confirmed it" stays for anyone who looks first. */
+  React.useEffect(() => {
+    let checking = false;
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible' || checking) return;
+      checking = true;
+      const confirmed = await isEmailConfirmed().catch(() => false);
+      checking = false;
+      if (confirmed) window.location.reload();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   async function resend() {
     setPending(true);
@@ -37,7 +53,7 @@ export function VerifyEmailGate({ email }: { email: string }) {
           {pending && <Loader2 className="size-3.5 animate-spin" />}
           Send the link again
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => signOut({ callbackUrl: getMarketingUrl('/login') })}>
+        <Button variant="ghost" size="sm" onClick={() => void signOutHere()}>
           Wrong email? Sign out
         </Button>
       </div>

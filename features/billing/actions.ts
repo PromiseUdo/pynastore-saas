@@ -1,5 +1,6 @@
 'use server';
 
+import { isBusinessAppRequest, NOT_IN_THE_APP } from '@/lib/business-app/request';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
@@ -30,6 +31,8 @@ const CheckoutSchema = z.object({
 export async function createCheckoutSession(
   input: z.infer<typeof CheckoutSchema>,
 ): Promise<ActionResult<{ authorizationUrl: string }>> {
+  // Nothing is sold inside the business app (ROADMAP 19.3); the screens don't offer it either.
+  if (await isBusinessAppRequest()) return { success: false, error: NOT_IN_THE_APP };
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.BILLING_MANAGE);

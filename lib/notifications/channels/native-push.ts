@@ -8,17 +8,20 @@
  * an iPhone that turned out to use Apple's test service.
  *
  * A phone linked to a signed-in shopper's account shows their unread count
- * on the app's icon (iPhone); a guest's phone has no list, so no number.
+ * on the app's icon (iPhone); a guest's phone has no list, so no number. A
+ * phone in the business app (ROADMAP 19.4) shows its staff member's unread
+ * count across every shop they're in.
  */
 import { prisma } from '@/lib/prisma';
 import { sendToDevice } from '@/lib/mobile/push/send';
-import { unreadCount } from '../readers';
+import { BUSINESS_APP_ID } from '@/lib/mobile/app-config';
+import { staffUnreadEverywhere, unreadCount } from '../readers';
 import type { ChannelOutcome } from './outcome';
 
 export interface NativePushPayload {
   title: string;
   body: string;
-  /** opened in the app when tapped: a path on the mobile origin, /s/{slug}/… */
+  /** opened in the app when tapped: /s/{slug}/… in a store's app, /o/{slug}/… in the business app */
   path: string;
   /** notifications about the same thing replace each other ("order:{id}") */
   thread?: string;
@@ -27,14 +30,17 @@ export interface NativePushPayload {
 export async function sendNativePush(deviceId: string, payload: NativePushPayload): Promise<ChannelOutcome> {
   const device = await prisma.pushDevice.findUnique({
     where: { id: deviceId },
-    select: { organizationId: true, appId: true, platform: true, token: true, apnsSandbox: true, customerId: true },
+    select: { organizationId: true, appId: true, platform: true, token: true, apnsSandbox: true, customerId: true, userId: true },
   });
   if (!device) return 'gone';
 
-  const badge =
-    device.platform === 'IOS' && device.customerId
-      ? await unreadCount({ kind: 'shopper', customerId: device.customerId, organizationId: device.organizationId })
-      : undefined;
+  let badge: number | undefined;
+  if (device.platform === 'IOS') {
+    if (device.appId === BUSINESS_APP_ID && device.userId) badge = await staffUnreadEverywhere(device.userId);
+    else if (device.customerId && device.organizationId) {
+      badge = await unreadCount({ kind: 'shopper', customerId: device.customerId, organizationId: device.organizationId });
+    }
+  }
 
   let sent: Awaited<ReturnType<typeof sendToDevice>>;
   try {

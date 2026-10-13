@@ -119,7 +119,8 @@ export function storefrontOpen(state: AccessState): boolean {
  * dispatched, delivered and refunded (ROADMAP 12.1). Not a new counter sale.
  */
 // A member's own notifications stay readable: they include what's needed to put things right.
-const OPEN_WHILE_LAPSED = ['/settings/billing', '/upgrade', '/sales/orders', '/notifications', '/settings/notifications'];
+// Your account stays reachable: deleting it can't wait on the shop's plan (ROADMAP 19.3).
+const OPEN_WHILE_LAPSED = ['/settings/billing', '/upgrade', '/sales/orders', '/notifications', '/settings/notifications', '/settings/account'];
 
 export function isOpenWhileLapsed(pathname: string): boolean {
   if (pathname === '/sales/orders/new' || pathname.startsWith('/sales/orders/new/')) return false;

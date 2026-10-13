@@ -14,7 +14,7 @@ import { ShieldAlert } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { formatDate } from '@/lib/format';
-import { getAdminUrl } from '@/lib/tenant/urls';
+import { adminUrlHere } from '@/lib/tenant/here';
 import { platformSupportEmail } from '@/lib/platform-contact';
 import { PLATFORM_NAME } from '@/lib/brand';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -45,6 +45,8 @@ export default async function WorkspaceSuspendedPage() {
       })
     : [];
   const support = platformSupportEmail();
+  // On the business host (ROADMAP 19) these go through /o/{slug}/…, which switches shop.
+  const otherLinks = await Promise.all(others.map((m) => adminUrlHere(m.organization.slug, '/dashboard')));
 
   return (
     <main className="flex min-h-full items-center justify-center bg-muted/30 px-4 py-16">
@@ -93,9 +95,9 @@ export default async function WorkspaceSuspendedPage() {
           <div className="mt-6 border-t pt-4">
             <p className="text-xs font-medium text-muted-foreground">Your other workspaces</p>
             <ul className="mt-2 space-y-1">
-              {others.map((m) => (
+              {others.map((m, i) => (
                 <li key={m.organization.slug}>
-                  <a href={getAdminUrl(m.organization.slug, '/dashboard')} className={buttonVariants({ variant: 'link', size: 'sm', className: 'h-auto px-0' })}>
+                  <a href={otherLinks[i]} className={buttonVariants({ variant: 'link', size: 'sm', className: 'h-auto px-0' })}>
                     {m.organization.name}
                   </a>
                 </li>

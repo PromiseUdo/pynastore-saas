@@ -5,6 +5,7 @@
  * whether the new shop comes with a free trial, and of what.
  */
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -48,6 +49,11 @@ export default async function OnboardingPage() {
       ) : (
         <VerifyEmailGate email={user.email} />
       )}
+
+      {/* Someone may sign up and never make a shop; they can still delete what they made (ROADMAP 19.3). */}
+      <Link href="/onboarding/account" className="mt-8 text-xs text-muted-foreground hover:text-foreground hover:underline">
+        Delete my account
+      </Link>
     </div>
   );
 }

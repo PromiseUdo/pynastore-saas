@@ -5,6 +5,10 @@
  *  - PrismaAdapter  (DB session linking for OAuth accounts)
  *  - Google provider
  *  - Credentials provider (bcrypt password verification via Prisma)
+ *  - Apple provider, when configured (ROADMAP 19.2, lib/apple-sign-in.ts)
+ *  - "app-handoff": spends a business-app sign-in ticket (ROADMAP 19.2,
+ *    lib/business-app/tickets.ts) — how a Google or Apple sign-in finished
+ *    in the app's browser sheet reaches the app's own WebView
  *  - JWT callbacks that embed currentOrganizationId + currentOrgSlug,
  *    and enforce sessionVersion (see lib/session-version.ts) so a
  *    password reset invalidates every previously issued JWT
@@ -13,6 +17,7 @@
  */
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
+import Apple from 'next-auth/providers/apple';
 import Credentials from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { compare } from 'bcryptjs';
@@ -21,6 +26,11 @@ import { prisma } from '@/lib/prisma';
 import { authConfig } from '@/auth.config';
 import { isSessionVersionValid } from '@/lib/session-version';
 import { markEmailVerified } from '@/lib/email-verification';
+import { appleClientId, appleClientSecret } from '@/lib/apple-sign-in';
+import { userForAppTicket } from '@/lib/business-app/handoff-user';
+
+/** Only when every Apple setting is present; otherwise there is no button either. */
+const appleSecret = appleClientSecret();
 
 const credentialsSchema = z.object({
   email: z.email(),
@@ -42,6 +52,26 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
        * email ownership.
        */
       allowDangerousEmailAccountLinking: true,
+    }),
+
+    ...(appleSecret
+      ? [
+          Apple({
+            clientId: appleClientId()!,
+            clientSecret: appleSecret,
+            // Apple confirms the address too (a private relay address included).
+            allowDangerousEmailAccountLinking: true,
+          }),
+        ]
+      : []),
+
+    /* The business app's sign-in ticket: minted in the sheet by
+     * /api/business/auth/finish once Google or Apple said yes, spent here —
+     * in the app's WebView — with the verifier only that WebView holds. */
+    Credentials({
+      id: 'app-handoff',
+      credentials: { token: {}, verifier: {} },
+      authorize: (raw) => userForAppTicket(raw?.token, raw?.verifier),
     }),
 
     Credentials({
@@ -81,11 +111,11 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ],
 
   events: {
-    /* Google has already confirmed the address, so a Google sign-in counts
+    /* Google (and Apple) have already confirmed the address, so such a sign-in counts
      * as a verified email (ROADMAP 12.5) — including for someone who signed
      * up with a password first. */
     async signIn({ user, account }) {
-      if (account?.provider === 'google' && user.id) await markEmailVerified(user.id);
+      if ((account?.provider === 'google' || account?.provider === 'apple') && user.id) await markEmailVerified(user.id);
     },
   },
 

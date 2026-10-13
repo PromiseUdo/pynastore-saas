@@ -13,7 +13,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { sendPlatformNoticeEmail } from '@/lib/email';
-import { getMarketingUrl } from '@/lib/tenant/urls';
+import { accountUrlHere } from '@/lib/tenant/here';
 import { verifyEmail } from '@/lib/onboarding/emails';
 
 export const VERIFY_TTL_HOURS = 48;
@@ -58,7 +58,8 @@ export async function sendVerificationEmail(userId: string, now = new Date()): P
 
   const email = verifyEmail({
     name: user.name,
-    url: getMarketingUrl(`/verify-email/${raw}`),
+    // Back to the host they signed up on — the business host included (ROADMAP 19.2).
+    url: await accountUrlHere(`/verify-email/${raw}`),
     expiresInHours: VERIFY_TTL_HOURS,
   });
   const sent = await sendPlatformNoticeEmail({ to: user.email, ...email });

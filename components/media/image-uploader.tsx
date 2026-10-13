@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowLeft, ArrowRight, ImagePlus, Loader2, RotateCcw, Star, Trash2, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, ImagePlus, Loader2, RotateCcw, Star, Trash2, TriangleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,6 +59,12 @@ function uploadWithProgress(url: string, form: FormData, onProgress: (pct: numbe
 
 export function ImageUploader({ purpose, value, onChange, max = 12, disabled, hint, onBusyChange }: ImageUploaderProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const cameraRef = React.useRef<HTMLInputElement>(null);
+  /* On a phone (the business app included, ROADMAP 19.4) the camera is a tap
+   * away: Android's WebView offers it only to an input that asks for it
+   * (`capture`), so it gets its own button beside the photo library. */
+  const [touch, setTouch] = React.useState(false);
+  React.useEffect(() => setTouch(window.matchMedia('(pointer: coarse)').matches), []);
   const [pending, setPending] = React.useState<Pending[]>([]);
   const [dragging, setDragging] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -251,8 +257,33 @@ export function ImageUploader({ purpose, value, onChange, max = 12, disabled, hi
             <button type="button" className="font-medium text-primary hover:underline" onClick={() => inputRef.current?.click()}>
               {single && value.length ? 'Replace image' : 'Choose images'}
             </button>{' '}
-            or drag them here
+            {touch ? '' : 'or drag them here'}
           </p>
+          {touch && (
+            <>
+              <button
+                type="button"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 text-sm font-medium text-foreground hover:bg-muted"
+                onClick={() => cameraRef.current?.click()}
+              >
+                <Camera className="size-4" aria-hidden />
+                Take a photo
+              </button>
+              <input
+                ref={cameraRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                tabIndex={-1}
+                aria-label="Take a photo"
+                onChange={(e) => {
+                  if (e.target.files) addFiles(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+            </>
+          )}
           <p className="text-xs text-muted-foreground">{hint ?? 'JPG, PNG, WebP or GIF, up to 10 MB each.'}</p>
           <input
             ref={inputRef}

@@ -39,3 +39,12 @@ export function readerOf(person: Pick<Person, 'userId' | 'customerId' | 'scope' 
 export function unreadCount(reader: Reader): Promise<number> {
   return prisma.notification.count({ where: { ...whose(reader), readAt: null } });
 }
+
+/**
+ * Everything unread for a staff member, across every shop they're in — the
+ * number on the business app's icon, which is one app for all of them
+ * (ROADMAP 19.4).
+ */
+export function staffUnreadEverywhere(userId: string): Promise<number> {
+  return prisma.notification.count({ where: { userId, organizationId: { not: null }, readAt: null } });
+}

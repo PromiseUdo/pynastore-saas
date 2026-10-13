@@ -17,6 +17,7 @@
 import { prisma } from '@/lib/prisma';
 import { SYSTEM_ROLES } from '@/lib/permissions';
 import { WATCH_DAYS } from '@/lib/mobile/push/watch';
+import { BUSINESS_APP_ID } from '@/lib/mobile/app-config';
 import type { Audience } from './events';
 import type { Surface } from './links';
 
@@ -160,7 +161,7 @@ export async function resolveRecipients(organizationId: string | null, audiences
   return { people: list, emails: [...emails], watchingDevices: [...watchingDevices], guestBrowsers };
 }
 
-/** Each person's own phones (signed-in shoppers, in the store's app) and browsers. */
+/** Each person's own phones (signed-in shoppers in the store's app; staff in the business app) and browsers. */
 async function attachDevicesAndBrowsers(organizationId: string | null, people: Person[]): Promise<void> {
   const staffIds = people.filter((p) => p.userId && p.scope !== PLATFORM_SCOPE).map((p) => p.userId!);
   const platformIds = people.filter((p) => p.userId && p.scope === PLATFORM_SCOPE).map((p) => p.userId!);
@@ -178,9 +179,16 @@ async function attachDevicesAndBrowsers(organizationId: string | null, people: P
       },
       select: { id: true, origin: true, userId: true, customerId: true, audience: true },
     }),
-    customerIds.length && organizationId
-      ? prisma.pushDevice.findMany({ where: { organizationId, customerId: { in: customerIds } }, select: { id: true, customerId: true } })
-      : Promise.resolve([]),
+    prisma.pushDevice.findMany({
+      where: {
+        OR: [
+          ...(customerIds.length && organizationId ? [{ organizationId, customerId: { in: customerIds } }] : []),
+          // Staff hear on their phones through the business app, whichever shop it's about (ROADMAP 19.4).
+          ...(staffIds.length && organizationId ? [{ userId: { in: staffIds }, appId: BUSINESS_APP_ID }] : []),
+        ],
+      },
+      select: { id: true, customerId: true, userId: true },
+    }),
   ]);
 
   for (const person of people) {
@@ -192,6 +200,7 @@ async function attachDevicesAndBrowsers(organizationId: string | null, people: P
       person.browsers = browsers
         .filter((b) => b.userId === person.userId && b.audience === audience)
         .map(({ id, origin }) => ({ id, origin }));
+      if (audience === 'STAFF') person.devices = devices.filter((d) => d.userId === person.userId && !d.customerId).map((d) => d.id);
     }
   }
 }

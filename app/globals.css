@@ -316,6 +316,24 @@
   user-select: text;
 }
 
+/* The admin's frame (components/layout/dashboard-layout.tsx) in the business
+   app or an installed web app (ROADMAP 19.4): the header clear of the status
+   bar, the last row and the sticky save bars clear of the home indicator, and
+   the height of what's actually visible — so when the keyboard opens (the
+   WebView resizes), a save bar sits above it rather than behind it. In an
+   ordinary browser every inset is 0 and nothing moves. Unlayered, so it wins
+   over the h-screen utility. */
+[data-admin-shell] {
+  height: 100dvh;
+  padding-top: var(--inset-top);
+}
+[data-admin-shell] main {
+  padding-bottom: var(--inset-bottom);
+}
+[data-admin-shell] main .sticky.bottom-0 {
+  padding-bottom: calc(0.75rem + var(--inset-bottom));
+}
+
 /* NativeShell toggles this on <html> around the software keyboard. */
 :root.keyboard-open {
   --keyboard-inset: env(keyboard-inset-height, 0px);

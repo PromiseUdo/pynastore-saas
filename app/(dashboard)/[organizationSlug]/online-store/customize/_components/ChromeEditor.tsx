@@ -13,6 +13,7 @@
  * Saved into the same draft as the look and the front page; nothing is live
  * until Publish.
  */
+import { openPendingTab } from '@/lib/business-app/client';
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -188,7 +189,7 @@ export function ChromeEditor({
   }
 
   async function onPreviewTab() {
-    const tab = window.open('', '_blank');
+    const tab = openPendingTab();
     setBusy('preview');
     const savedAt = dirty ? await save() : 'unchanged';
     const link = savedAt ? await createDesignPreviewLink() : null;
@@ -199,10 +200,8 @@ export function ChromeEditor({
       return;
     }
     if (dirty) router.refresh();
-    if (tab) {
-      tab.opener = null;
-      tab.location.href = link.data.url;
-    } else window.location.href = link.data.url;
+    if (tab) tab.go(link.data.url);
+    else window.location.href = link.data.url;
   }
 
   return (

@@ -1,5 +1,6 @@
 'use server';
 
+import { accountUrlHere } from '@/lib/tenant/here';
 import { randomBytes, createHash } from 'crypto';
 import { headers } from 'next/headers';
 import { z } from 'zod';
@@ -103,9 +104,8 @@ export async function forgotPasswordAction(
         }),
       ]);
 
-      const baseUrl =
-        process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001';
-      const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
+      // The platform host, or the business host when that's where they asked (ROADMAP 19.2).
+      const resetUrl = await accountUrlHere(`/reset-password?token=${rawToken}`);
 
       await sendPasswordResetEmail({
         to: user.email,

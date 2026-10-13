@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { UpgradeLink } from '@/components/business-app/no-buying';
 import { AlertTriangle, ArrowUpRight, Boxes, ClipboardList, Layers, PackageX, Truck, Wallet } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/layout/empty-state';
@@ -260,9 +261,9 @@ export function StoreOverview({
               {restock.upgradeHint && (
                 <p className="text-xs text-muted-foreground">
                   Automatic restocking suggestions, grouped by supplier, come with a higher plan.{' '}
-                  <Link href="/upgrade" className="text-primary hover:underline">
+                  <UpgradeLink className="text-primary hover:underline">
                     See plans
-                  </Link>
+                  </UpgradeLink>
                 </p>
               )}
             </div>

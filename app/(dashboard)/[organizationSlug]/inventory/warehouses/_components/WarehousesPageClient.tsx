@@ -1,5 +1,6 @@
 'use client';
 
+import { UpgradeLink } from '@/components/business-app/no-buying';
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -82,9 +83,9 @@ export function WarehousesPageClient({
                 New store
               </Button>
               {atLimit && (
-                <Link href="/upgrade" className="text-xs text-primary hover:underline">
+                <UpgradeLink className="text-xs text-primary hover:underline">
                   Upgrade to add more stores
-                </Link>
+                </UpgradeLink>
               )}
             </div>
           ) : undefined

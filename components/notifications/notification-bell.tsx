@@ -40,6 +40,7 @@ import { useChatFeed } from '@/lib/chat/use-chat-feed';
 import { formatRelativeTime } from '@/lib/format';
 import { isListEvent, unreadBadge, type BellFeed, type ListEvent, type NotificationItem } from '@/lib/notifications/view';
 import { dismissOffer, offerDismissed, turnOnWebPush, webPushSupport } from '@/lib/notifications/web-push-client';
+import { phoneAlertsAvailable, phoneAlertsState, turnOnPhoneAlerts } from '@/lib/business-app/phone-alerts';
 import { playChime, prepareChime } from '@/lib/notifications/chime';
 import { useTitleCount } from '@/lib/notifications/title-badge';
 
@@ -250,12 +251,21 @@ export function NotificationBell({ base, className }: { base: '/notifications' |
   );
 }
 
-/** "Get alerts on this device", for a browser that can have them and hasn't been asked. */
+/**
+ * "Get alerts on this device", for a browser that can have them and hasn't
+ * been asked — or, in the business app (ROADMAP 19.4), a phone that hasn't.
+ */
 function AlertsOffer({ route, dismissKey }: { route: string; dismissKey: string }) {
   const [show, setShow] = React.useState(false);
+  const [phone, setPhone] = React.useState(false);
   const [working, setWorking] = React.useState(false);
 
   React.useEffect(() => {
+    if (phoneAlertsAvailable()) {
+      setPhone(true);
+      void phoneAlertsState().then((state) => setShow(state === 'available' && !offerDismissed(dismissKey)));
+      return;
+    }
     setShow(webPushSupport() === 'ready' && Notification.permission === 'default' && !offerDismissed(dismissKey));
   }, [dismissKey]);
 
@@ -263,11 +273,11 @@ function AlertsOffer({ route, dismissKey }: { route: string; dismissKey: string 
 
   async function turnOn() {
     setWorking(true);
-    const result = await turnOnWebPush(route);
+    const result = phone ? await turnOnPhoneAlerts() : await turnOnWebPush(route);
     setWorking(false);
     setShow(false);
-    if (result === 'on') toast.success('Alerts are on for this browser');
-    else if (result === 'blocked') toast.error('This browser blocked notifications for this site.');
+    if (result === 'on') toast.success(phone ? 'Alerts are on for this phone' : 'Alerts are on for this browser');
+    else if (result === 'blocked') toast.error(phone ? 'Notifications are off for this app in your phone’s settings.' : 'This browser blocked notifications for this site.');
     else toast.error('We couldn’t turn alerts on. Please try again.');
   }
 
@@ -276,7 +286,9 @@ function AlertsOffer({ route, dismissKey }: { route: string; dismissKey: string 
       <BellRing className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">Get alerts on this device</p>
-        <p className="text-xs text-muted-foreground">Hear about what needs you, even with this tab closed.</p>
+        <p className="text-xs text-muted-foreground">
+          {phone ? 'Hear about what needs you, even with the app closed.' : 'Hear about what needs you, even with this tab closed.'}
+        </p>
         <div className="mt-2 flex gap-2">
           <Button type="button" size="sm" onClick={() => void turnOn()} disabled={working}>
             {working && <Loader2 className="animate-spin" aria-hidden />}

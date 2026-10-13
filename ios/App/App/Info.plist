@@ -56,6 +56,10 @@
       </array>
     </dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>To take a photo, of a product to add or something to search for.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>To choose a photo, of a product to add or something to search for.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

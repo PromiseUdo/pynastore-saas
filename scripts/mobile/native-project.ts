@@ -12,7 +12,7 @@
  * calls itself com.mansaas.app.
  */
 import { SHARED_APP_ID, isValidAppId } from '../../lib/mobile/app-config';
-import { APP_LINK_PREFIXES } from '../../lib/mobile/app-links';
+import { APP_LINK_PREFIXES, type AppLinkPaths } from '../../lib/mobile/app-links';
 
 /* ── the store's build settings (app.json in its folder) ─────────────── */
 
@@ -251,7 +251,7 @@ ${input.linkHosts.map((host) => `		<string>applinks:${xmlEscape(host)}</string>`
  * the same allow-list the iPhone gets). Android checks /.well-known/
  * assetlinks.json on each host when the app is installed.
  */
-export function editAndroidManifestForAppLinks(xml: string, hosts: string[]): string {
+export function editAndroidManifestForAppLinks(xml: string, hosts: string[], paths: AppLinkPaths = 'store-pages'): string {
   if (hosts.length === 0) return xml;
   return replaceRequired(
     xml,
@@ -260,12 +260,14 @@ export function editAndroidManifestForAppLinks(xml: string, hosts: string[]): st
       const data = [
         `${indent}    <data android:scheme="https" />`,
         ...hosts.map((host) => `${indent}    <data android:host="${xmlEscape(host)}" />`),
-        `${indent}    <data android:path="/" />`,
-        ...APP_LINK_PREFIXES.map((prefix) => `${indent}    <data android:pathPrefix="${prefix}" />`),
+        // The business app takes the whole host (ROADMAP 19.5); a store's app, its shopping pages.
+        ...(paths === 'whole-host'
+          ? [`${indent}    <data android:pathPrefix="/" />`]
+          : [`${indent}    <data android:path="/" />`, ...APP_LINK_PREFIXES.map((prefix) => `${indent}    <data android:pathPrefix="${prefix}" />`)]),
       ];
       return [
         '',
-        `${indent}<!-- Links to the store open this app (ROADMAP 18.5): checked against /.well-known/assetlinks.json. -->`,
+        `${indent}<!-- Links open this app (ROADMAP 18.5, 19.5): checked against /.well-known/assetlinks.json. -->`,
         `${indent}<intent-filter android:autoVerify="true">`,
         `${indent}    <action android:name="android.intent.action.VIEW" />`,
         `${indent}    <category android:name="android.intent.category.DEFAULT" />`,
@@ -309,7 +311,18 @@ export function googleServicesIncludes(json: unknown, appId: string): boolean {
 }
 
 /** ios/App/App/Info.plist: the name under the icon and the deep-link scheme. */
-export function editIosInfoPlist(plist: string, input: { appId: string; name: string }): string {
+/**
+ * Why the app asks for the camera and the photo library. iPhone apps crash on
+ * the first tap without these, and Apple reads them in review, so each app
+ * says it in its own words (ROADMAP 19.4): a shop's app for searching by
+ * photo, the business app for product photos.
+ */
+export interface PhotoPurpose {
+  camera: string;
+  library: string;
+}
+
+export function editIosInfoPlist(plist: string, input: { appId: string; name: string; photos?: PhotoPurpose }): string {
   let out = replaceRequired(
     plist,
     /(<key>CFBundleDisplayName<\/key>\s*<string>)[^<]*(<\/string>)/,
@@ -328,8 +341,50 @@ export function editIosInfoPlist(plist: string, input: { appId: string; name: st
     `$1${input.appId}$2`,
     'CFBundleURLSchemes in Info.plist',
   );
+  if (input.photos) {
+    out = replaceRequired(
+      out,
+      /(<key>NSCameraUsageDescription<\/key>\s*<string>)[^<]*(<\/string>)/,
+      `$1${xmlEscape(input.photos.camera)}$2`,
+      'NSCameraUsageDescription in Info.plist',
+    );
+    out = replaceRequired(
+      out,
+      /(<key>NSPhotoLibraryUsageDescription<\/key>\s*<string>)[^<]*(<\/string>)/,
+      `$1${xmlEscape(input.photos.library)}$2`,
+      'NSPhotoLibraryUsageDescription in Info.plist',
+    );
+  }
   return out;
 }
+
+/**
+ * A DEBUG build only (ROADMAP 19.5): let the app load a laptop's plain-http
+ * dev server. iOS refuses http in a WebView unless App Transport Security
+ * says so — found trying the first business-app build on a simulator. A
+ * release build never gets this: it loads https only (releaseServerProblem).
+ */
+export function allowHttpForDebug(plist: string): string {
+  if (plist.includes('<key>NSAppTransportSecurity</key>')) return plist;
+  return replaceRequired(
+    plist,
+    /(\n(\s*)<key>UILaunchStoryboardName<\/key>)/,
+    `\n$2<key>NSAppTransportSecurity</key>\n$2<dict>\n$2\t<key>NSAllowsArbitraryLoads</key>\n$2\t<true/>\n$2</dict>$1`,
+    'UILaunchStoryboardName in Info.plist',
+  );
+}
+
+/** The business app's words for the camera and photos (ROADMAP 19.4, 19.5). */
+export const BUSINESS_PHOTO_PURPOSE: PhotoPurpose = {
+  camera: 'To take photos of your products for your shop.',
+  library: 'To choose photos of your products for your shop.',
+};
+
+/** A shop's own app: shoppers search the shop by photo (ROADMAP 16). */
+export const STORE_PHOTO_PURPOSE: PhotoPurpose = {
+  camera: 'To take a photo of something you’d like to find in this shop.',
+  library: 'To choose a photo of something you’d like to find in this shop.',
+};
 
 /** mobile/www/offline.html: the store's name and the address "Try again" returns to. */
 export function editOfflinePage(html: string, input: { name: string; serverUrl: string }): string {

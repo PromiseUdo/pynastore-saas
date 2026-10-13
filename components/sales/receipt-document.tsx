@@ -54,7 +54,7 @@ export function ReceiptDocument({
   return (
     <div className="mx-auto max-w-[420px] bg-white px-6 py-8 text-black print:max-w-none print:px-0 print:py-0">
       <div className="mb-6 flex justify-end print:hidden">
-        <PrintButton />
+        <PrintButton share={{ title, text: receiptText({ businessName, title, facts, lines, totals, total, footerFacts, note }) }} />
       </div>
 
       <header className="text-center">
@@ -136,4 +136,33 @@ function Row({ label, value }: ReceiptFact) {
       <dd className="text-right">{value}</dd>
     </div>
   );
+}
+
+/**
+ * The same receipt as plain words, for sending from the business app's
+ * share sheet (ROADMAP 19.4) — WhatsApp, a text, an email.
+ */
+export function receiptText(input: {
+  businessName: string;
+  title: string;
+  facts: ReceiptFact[];
+  lines: ReceiptLine[];
+  totals: ReceiptFact[];
+  total: ReceiptFact;
+  footerFacts: ReceiptFact[];
+  note?: string | null;
+}): string {
+  const fact = (f: ReceiptFact) => `${f.label}: ${f.value}`;
+  return [
+    input.businessName,
+    input.title,
+    ...input.facts.map(fact),
+    '',
+    ...input.lines.map((l) => `${l.quantity} × ${l.name}${l.variantName ? ` (${l.variantName})` : ''} — ${l.total}`),
+    '',
+    ...input.totals.map(fact),
+    fact(input.total),
+    ...input.footerFacts.map(fact),
+    ...(input.note ? ['', input.note] : []),
+  ].join('\n');
 }

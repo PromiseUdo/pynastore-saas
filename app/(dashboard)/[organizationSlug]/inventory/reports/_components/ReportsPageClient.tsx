@@ -1,5 +1,6 @@
 'use client';
 
+import { UpgradeLink } from '@/components/business-app/no-buying';
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -108,14 +109,13 @@ export function ReportsPageClient({
               Sales-based reports <ArrowUpRight className="size-3.5" />
             </Link>
           ) : !advancedEnabled ? (
-            <Link
-              href="/upgrade"
+            <UpgradeLink
               className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
               title="Aging, sell-through and profitability reports"
             >
               <Lock className="size-3.5" />
               Unlock sales-based reports
-            </Link>
+            </UpgradeLink>
           ) : undefined
         }
       />

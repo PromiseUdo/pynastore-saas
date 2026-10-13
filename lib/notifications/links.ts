@@ -89,3 +89,13 @@ export function appPathFor(target: NotificationTarget, slug: string): string | n
   const path = pathFor(target, 'store');
   return path ? `/s/${slug}${path}` : null;
 }
+
+/**
+ * The same admin page inside the business app (ROADMAP 19.4): through
+ * /o/{slug}/…, which switches the app to this shop first (lib/tenant/business.ts).
+ * Read by components/native/native-shell.tsx when the notification is tapped.
+ */
+export function businessAppPathFor(target: NotificationTarget, slug: string): string | null {
+  const path = pathFor(target, 'admin');
+  return path ? `/o/${slug}${path}` : null;
+}

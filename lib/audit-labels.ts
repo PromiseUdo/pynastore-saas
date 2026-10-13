@@ -158,6 +158,7 @@ const OVERRIDES: Record<string, string> = {
   'settings.returns.updated': 'Updated the returns policy',
   'staff.member.role_changed': 'Changed a member’s role',
   'staff.member.stores_changed': 'Changed which stores a member can work in',
+  'staff.account.deleted': 'Deleted their account and left the workspace',
 };
 
 /**

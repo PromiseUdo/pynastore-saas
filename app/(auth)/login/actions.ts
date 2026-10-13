@@ -3,6 +3,7 @@
 import { signIn } from '@/lib/auth';
 import { AuthError } from 'next-auth';
 import { z } from 'zod';
+import { signInTargetHere } from '@/lib/tenant/here';
 
 const LoginSchema = z.object({
   email: z.email(),
@@ -26,7 +27,8 @@ export async function loginAction(
 
   // Support callbackUrl for invite flow (e.g. /login?callbackUrl=/invite/TOKEN)
   const callbackUrl = formData.get('callbackUrl') as string | null;
-  const redirectTo = callbackUrl ?? '/';
+  // On the business host a relative target is made absolute there (ROADMAP 19).
+  const redirectTo = await signInTargetHere(callbackUrl || '/');
 
   try {
     await signIn('credentials', {
@@ -50,6 +52,17 @@ export async function loginAction(
   return null;
 }
 
-export async function googleSignInAction() {
-  await signIn('google', { redirectTo: '/' });
+export async function googleSignInAction(formData: FormData) {
+  await signIn('google', { redirectTo: await signInTargetHere(callbackFrom(formData)) });
+}
+
+/** Sign in with Apple (ROADMAP 19.2) — offered only when it's configured. */
+export async function appleSignInAction(formData: FormData) {
+  await signIn('apple', { redirectTo: await signInTargetHere(callbackFrom(formData)) });
+}
+
+/** Where a Google or Apple sign-in returns to: the page that asked, or home. */
+function callbackFrom(formData: FormData): string {
+  const value = formData.get('callbackUrl');
+  return typeof value === 'string' && value ? value : '/';
 }

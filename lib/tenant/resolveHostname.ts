@@ -21,6 +21,10 @@
  *   {MOBILE_DOMAIN} / m.{ROOT_DOMAIN} -> mobile (single-origin host for the
  *                                    Capacitor app; slug travels in the path
  *                                    as /s/{slug}/... — see proxy.ts)
+ *   {BUSINESS_DOMAIN} / b.{ROOT_DOMAIN} -> business (the admin for ANY shop
+ *                                    on one origin, for the business app —
+ *                                    ROADMAP 19; the shop comes from the
+ *                                    session, see lib/tenant/business.ts)
  *   anything else                 -> unknown + isCustomDomain (resolved via DB)
  *
  * The storefront prefix is ONE label (`shop-`) on purpose: every platform
@@ -33,7 +37,7 @@
  * the mobile host so on-device live reload works without extra config.
  */
 
-export type SiteType = 'marketing' | 'admin' | 'storefront' | 'mobile';
+export type SiteType = 'marketing' | 'admin' | 'storefront' | 'mobile' | 'business';
 
 export interface HostnameInfo {
   hostname: string;
@@ -52,6 +56,7 @@ const STOREFRONT_PREFIX = 'shop-';
 /** Previous two-label shape. Still parsed; never generated. */
 const LEGACY_STOREFRONT_PREFIX = 'shop.';
 const MOBILE_PREFIX = 'm.';
+const BUSINESS_PREFIX = 'b.';
 
 export function getRootDomain(): string {
   return process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? 'localhost:3000';
@@ -71,6 +76,11 @@ export function getPlatformHost(): string {
 /** Dedicated single-origin host for the Capacitor mobile app, if configured. */
 export function getMobileDomain(): string | null {
   return process.env.NEXT_PUBLIC_MOBILE_DOMAIN?.toLowerCase().trim() || null;
+}
+
+/** The business host (ROADMAP 19): NEXT_PUBLIC_BUSINESS_DOMAIN, or b.{ROOT_DOMAIN}. */
+export function getBusinessDomain(): string {
+  return process.env.NEXT_PUBLIC_BUSINESS_DOMAIN?.toLowerCase().trim() || `${BUSINESS_PREFIX}${getRootDomain()}`;
 }
 
 /**
@@ -119,6 +129,12 @@ export function resolveHostname(hostHeader: string | null): HostnameInfo {
     hostname === `${MOBILE_PREFIX}${rootDomain}`
   ) {
     return { hostname, siteType: 'mobile', subdomain: null, isCustomDomain: false };
+  }
+
+  // The business host — before the tenant shapes, or b.{ROOT_DOMAIN} would
+  // parse as the admin of a shop called "b" (which is reserved for this).
+  if (hostname === getBusinessDomain() || hostname === `${BUSINESS_PREFIX}${rootDomain}`) {
+    return { hostname, siteType: 'business', subdomain: null, isCustomDomain: false };
   }
 
   if (hostname.endsWith(`.${rootDomain}`)) {

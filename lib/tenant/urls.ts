@@ -7,15 +7,26 @@
  * links) — same-org navigation should just use ordinary relative paths.
  */
 import {
+  getBusinessDomain,
   getMobileDomain,
   getPlatformHost,
   getRootDomain,
   isLocalHostname,
+  resolveHostname,
   storefrontHostsFor,
 } from './resolveHostname';
 
+/**
+ * A LAN name like b.192-168-1-4.nip.io — how a phone or simulator reaches a
+ * laptop's `next dev`, which serves plain http (docs/MOBILE-BUILD.md §8.4).
+ * Only those wildcard-IP names, only in development: a real domain stays
+ * https whatever the build is called (a tunnel, staging).
+ */
+const LAN_DEV_NAME = /\.(nip|sslip)\.io(:\d+)?$/i;
+
 function protocolFor(host: string): string {
-  return isLocalHostname(host) ? 'http' : 'https';
+  if (isLocalHostname(host)) return 'http';
+  return process.env.NODE_ENV === 'development' && LAN_DEV_NAME.test(host) ? 'http' : 'https';
 }
 
 function getProtocol(): string {
@@ -69,4 +80,44 @@ export function getMobileUrl(path = '/'): string {
 export function getMobileStorefrontUrl(orgSlug: string, path = '/'): string {
   const suffix = path === '/' ? '' : path.startsWith('/') ? path : `/${path}`;
   return getMobileUrl(`/s/${orgSlug}${suffix}`);
+}
+
+/**
+ * Absolute URL on the business host (ROADMAP 19): the admin for whichever
+ * shop the session is in, plus sign-in and onboarding. Paths are the admin's
+ * own, slug-free ones (/orders/123).
+ */
+export function getBusinessUrl(path = '/'): string {
+  const suffix = path.startsWith('/') ? path : `/${path}`;
+  const domain = getBusinessDomain();
+  return `${protocolFor(domain)}://${domain}${suffix}`;
+}
+
+/**
+ * The business host's link to a page of ONE shop: `/o/{slug}/{path}`. Opening
+ * it switches the session to that shop (when the person is a member) and
+ * lands on the page — what a link must use when the session may be in
+ * another shop. See lib/tenant/business.ts.
+ */
+export function getBusinessEntryUrl(orgSlug: string, path = '/'): string {
+  const suffix = path === '/' ? '' : path.startsWith('/') ? path : `/${path}`;
+  return getBusinessUrl(`/o/${orgSlug}${suffix}`);
+}
+
+/**
+ * Browser side: is this page on the business host? Only meaningful in the
+ * browser (event handlers); during server rendering it is false. Server code
+ * uses lib/tenant/here.ts instead.
+ */
+export function onBusinessHost(): boolean {
+  return typeof window !== 'undefined' && resolveHostname(window.location.host).siteType === 'business';
+}
+
+/**
+ * Browser side: a sign-in or onboarding page (/login, /onboarding) on the
+ * host this page is on — the business host keeps its own, everything else
+ * uses the platform host's.
+ */
+export function marketingUrlHere(path = '/'): string {
+  return onBusinessHost() ? getBusinessUrl(path) : getMarketingUrl(path);
 }

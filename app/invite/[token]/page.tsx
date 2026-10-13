@@ -5,7 +5,7 @@ import { acceptInvitation } from '@/features/invitations/actions';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { AcceptForm } from './accept-form';
-import { getAdminUrl } from '@/lib/tenant/urls';
+import { adminUrlHere, signInTargetHere } from '@/lib/tenant/here';
 import { PLATFORM_NAME } from '@/lib/brand';
 
 type Params = { token: string };
@@ -59,7 +59,7 @@ export default async function InvitePage({
     if (invitation.status === 'ACCEPTED') {
       // Membership already exists — skip the error screen and go straight to the org.
       const session = await auth();
-      const dashboardUrl = getAdminUrl(invitation.organization.slug, '/dashboard');
+      const dashboardUrl = await adminUrlHere(invitation.organization.slug, '/dashboard');
       if (session?.user?.id) {
         redirect(dashboardUrl);
       } else {
@@ -134,7 +134,7 @@ export default async function InvitePage({
   if (session.user.email !== invitation.email) {
     async function handleSignOut() {
       'use server';
-      await signOut({ redirectTo: `/invite/${token}` });
+      await signOut({ redirectTo: await signInTargetHere(`/invite/${token}`) });
     }
 
     return (

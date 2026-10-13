@@ -294,6 +294,127 @@ don't use up a build number.
   then shows "no longer available" with a link to the store's website.
   `restore <slug>` undoes it.
 
+## 8. The business app (ROADMAP 19.5)
+
+One app for every merchant and their staff: **{PLATFORM_NAME} Business**,
+`com.mansaas.business`. It's built with the same kit, but it's the
+**platform's** app:
+- **No merchant, no `MobileApp` row:** it is published under the
+  platform's own Apple and Google accounts.
+- **What it loads:** the business host, `https://b.{root}`, the admin for
+  any shop (19.1).
+- **Settings:** its push and link settings are the platform's
+  environment.
+
+The commands are the same, with no slug:
+```
+npm run mobile:business -- init                      # ~/mansaas-store-apps/business: app.json + upload key
+npm run mobile:business -- check  [--platform android|ios]
+npm run mobile:business -- build  [--platform android|ios] [--version 1.1.0]
+npm run mobile:business -- build  --debug --server-url http://b.192-168-1-4.nip.io:3000   # a laptop, see 8.4
+npm run mobile:business -- listing                   # listing/LISTING.md: ids, URLs, short description
+```
+Run `check`, `build` and `listing` with **production's**
+`NEXT_PUBLIC_ROOT_DOMAIN` in the shell. The kit reads `b.{root}` from it
+and stops if `serverUrl` isn't that host.
+
+### 8.1 Once, before the first build
+
+1. **Accounts:** the platform's Apple Developer Program (as an
+   organisation) and Google Play developer account. See ROADMAP 19 →
+   "What the owner provides".
+2. **Firebase:** in the platform's project, Add app → Android → package
+   `com.mansaas.business`. Put its `google-services.json` in
+   `~/mansaas-store-apps/business/`. Without it, Android builds have no
+   notifications (`check` says so).
+3. **Production settings** (Vercel), all in `.env.example`:
+
+   | Setting | For |
+   |---|---|
+   | `APNS_BUSINESS_KEY`, `APNS_BUSINESS_KEY_ID`, `APNS_BUSINESS_TEAM_ID` | iPhone notifications |
+   | `APPLE_TEAM_ID` | iPhone links: `b.{root}/.well-known/apple-app-site-association` |
+   | `BUSINESS_APP_ANDROID_SHA256` | Android links: `/.well-known/assetlinks.json` |
+
+   `BUSINESS_APP_ANDROID_SHA256` takes the upload key's fingerprint, which
+   `check` prints. Once the app is on Google Play, add Play's app-signing
+   key's too, comma-separated (Play Console → Test and release → App
+   integrity).
+4. **The logo:** `logo.png` in the folder, square, 1024px or more, with a
+   **transparent** background (Android's notification icon is cut from
+   its shape).
+5. **The team:** set `appleTeamId` in `app.json` to the platform's team.
+6. **Back up** `~/mansaas-store-apps/business/signing/` (§7): without it,
+   no Android update can ever be uploaded.
+
+### 8.2 Builds for testers
+
+- **Android, now (no Play account needed):** `build --platform android`
+  makes a signed `.apk` and `.aab` in `builds/{version}-{n}/`. Send the
+  `.apk` to testers. They open it and allow "install unknown apps" once.
+  Or use **Firebase App Distribution** in the same Firebase project:
+  upload the `.apk`, add testers' emails, and they get an install link.
+  Neither needs Google Play.
+- **Android, Google Play:** upload the `.aab` to an **internal testing**
+  track (up to 100 testers, no review).
+  - **A personal Play account** must also run a closed test with at least
+    12 testers for 14 days before production.
+  - **An organisation account** doesn't have to.
+- **iPhone:** run `build --platform ios`, then in Xcode pick the
+  platform's team and choose Product → Archive → Distribute → App Store
+  Connect. In App Store Connect → **TestFlight**:
+  - **internal testers** (people on the team, up to 100) can install
+    straight away;
+  - **external testers** (up to 10,000, by email or a public link) after a
+    short beta review.
+
+Every release build raises the build number. Use `--version` for what
+testers see.
+
+### 8.3 What to try on each phone
+
+Use the 12 steps in ROADMAP 19.6. At least:
+- signing up and the email confirmation;
+- Google (and Apple on iPhone) sign-in through the sheet;
+- a new-order notification arriving with the app closed, and its tap
+  opening the order;
+- the badge;
+- "Take a photo" on a product;
+- a spreadsheet and a receipt through the share sheet;
+- the back button on Android;
+- the keyboard over a save bar;
+- switching shops.
+
+Record what you find in ROADMAP 19.6.
+
+### 8.4 Against a laptop (developers)
+
+A phone or simulator needs a **real domain** for the sign-in cookie
+(`.{root}`). A LAN IP doesn't give one, so use **nip.io**: a public name
+that points at the IP written in it.
+```
+IP=$(ipconfig getifaddr en0)                 # e.g. 192.168.1.4
+R=${IP//./-}.nip.io:3000                     # 192-168-1-4.nip.io:3000
+NEXT_PUBLIC_ROOT_DOMAIN=$R AUTH_URL=http://$R npx next dev -H 0.0.0.0 -p 3000
+NEXT_PUBLIC_ROOT_DOMAIN=$R npm run mobile:business -- build --debug --platform ios --server-url http://b.$R
+```
+- **Why `next dev`:** under it a nip.io (or sslip.io) address stays `http`; a production
+  build would redirect to `https` and the app would hand that to Safari.
+- **What a debug build adds:** iOS's App Transport Security exception for
+  plain http (`allowHttpForDebug`); Android allows cleartext in debug
+  builds already. A release build never has the exception.
+- **iPhone simulator:** build the debug project for the simulator, then
+  install and open it:
+  ```
+  xcodebuild -project ~/mansaas-store-apps/business/work/ios/App/App.xcodeproj -scheme App -sdk iphonesimulator \
+    -derivedDataPath /tmp/dd CODE_SIGNING_ALLOWED=NO build
+  xcrun simctl install booted /tmp/dd/Build/Products/Debug-iphonesimulator/App.app
+  xcrun simctl launch booted com.mansaas.business
+  ```
+- **Android phone:** install the debug `.apk` (`adb install …`) on the
+  same Wi-Fi.
+- **Live reload:** for the store apps as well, `npm run mobile:ios:live`
+  works the same way once the server is on a nip.io root.
+
 ## Troubleshooting
 
 | Symptom | Cause |
@@ -306,3 +427,6 @@ don't use up a build number.
 | Store links open the browser, not the app | Not recorded (§2.7); the app was built before the store's domain was connected (rebuild); or the app is LAPSED. Check `https://<host>/.well-known/apple-app-site-association` and `/assetlinks.json` load with no redirect. Android: a build signed with a key whose fingerprint isn't recorded (Play's key once published). |
 | Android notification icon is a grey square | `logo.png` has no transparent background. Use one that does and rebuild. |
 | Xcode: "No profiles for '…' were found" | You're not on the merchant's team with certificate access, or the App ID isn't registered (step 3.1). |
+| The business app opens Safari instead of the page | A redirect left its host: a production build on plain http (use `next dev`, §8.4), or `NEXT_PUBLIC_ROOT_DOMAIN` differs between the server and the build. |
+| "Can't reach … right now" in a debug iPhone build | The laptop isn't reachable on that name (try it in the phone's browser), or the build predates `allowHttpForDebug`. |
+| Business-app links open the browser | `APPLE_TEAM_ID` / `BUSINESS_APP_ANDROID_SHA256` aren't set in production, or Play's signing key's fingerprint is missing (§8.1). |

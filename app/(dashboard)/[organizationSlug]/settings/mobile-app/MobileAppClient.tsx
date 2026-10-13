@@ -1,7 +1,7 @@
 'use client';
 
+import { UpgradeLink, useNoBuying } from '@/components/business-app/no-buying';
 import * as React from 'react';
-import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Check, Circle, Download, ExternalLink, Loader2, Lock, Smartphone } from 'lucide-react';
 import { toast } from 'sonner';
@@ -67,7 +67,20 @@ export interface MobileAppPageData {
 
 export function MobileAppClient({ data }: { data: MobileAppPageData }) {
   useCheckoutToast();
+  const noBuying = useNoBuying();
   const { pricing, app } = data;
+
+  /* A store app is a paid add-on: inside the business app it isn't offered,
+   * and an ordered one shows where it is without its price (ROADMAP 19.3). */
+  if (noBuying && (!app || app.stage === 'REQUESTED')) {
+    return (
+      <EmptyState
+        icon={Smartphone}
+        title="Your shop’s own app"
+        description="This shop doesn’t have an Android or iPhone app of its own."
+      />
+    );
+  }
 
   if (pricing.setupFee === null || pricing.yearlyFee === null) {
     return (
@@ -159,9 +172,9 @@ function Offer({ data, setupFee, yearlyFee }: { data: MobileAppPageData; setupFe
             <Lock className="mt-0.5 size-4 shrink-0" aria-hidden />A store app needs a paid plan.
           </p>
           {data.canPay && (
-            <Link href="/upgrade" className={buttonVariants({ size: 'sm', variant: 'outline', className: 'shrink-0' })}>
+            <UpgradeLink className={buttonVariants({ size: 'sm', variant: 'outline', className: 'shrink-0' })}>
               See plans
-            </Link>
+            </UpgradeLink>
           )}
         </div>
       ) : !data.canEdit ? (
@@ -203,9 +216,9 @@ function Unpaid({ data, app, setupFee }: { data: MobileAppPageData; app: NonNull
           <p className="text-sm text-muted-foreground">
             {data.paidPlan ? 'Someone who manages billing can pay for it.' : 'A store app needs a paid plan. '}
             {!data.paidPlan && data.canPay && (
-              <Link href="/upgrade" className="text-primary hover:underline">
+              <UpgradeLink className="text-primary hover:underline">
                 See plans
-              </Link>
+              </UpgradeLink>
             )}
           </p>
         )}
@@ -393,6 +406,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 
 function Ordered({ data, app, yearlyFee }: { data: MobileAppPageData; app: NonNullable<MobileAppPageData['app']>; yearlyFee: number }) {
   const router = useRouter();
+  const noBuying = useNoBuying();
   const [busy, setBusy] = React.useState(false);
   const badge = appStateBadge(app);
   const steps: { label: string; at: Date | null }[] = [
@@ -406,12 +420,12 @@ function Ordered({ data, app, yearlyFee }: { data: MobileAppPageData; app: NonNu
     <div className="mx-auto max-w-3xl space-y-6">
       {app.status === 'LAPSED' && (
         <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Your app is switched off: customers who open it see that it’s no longer available. Renew it to switch it straight back on.
+          Your app is switched off: customers who open it see that it’s no longer available.{noBuying ? '' : ' Renew it to switch it straight back on.'}
         </p>
       )}
       {app.status !== 'LAPSED' && app.graceEndsAt && (
         <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
-          Your app’s year has ended. It keeps working until {formatDate(app.graceEndsAt)} — renew it before then.
+          Your app’s year has ended. It keeps working until {formatDate(app.graceEndsAt)}{noBuying ? '.' : ' — renew it before then.'}
         </p>
       )}
 
@@ -487,6 +501,11 @@ function Ordered({ data, app, yearlyFee }: { data: MobileAppPageData; app: NonNu
         </Card>
       )}
 
+      {noBuying ? (
+        <Card title="Paid until">
+          <p className="text-sm text-foreground">{app.paidThrough ? formatDate(app.paidThrough) : '—'}</p>
+        </Card>
+      ) : (
       <Card title="Renewal" description={`${formatMoney(yearlyFee)} a year.`}>
         <p className="text-sm text-foreground">
           {app.paidThrough ? <>Paid until {formatDate(app.paidThrough)}.</> : 'Not paid yet.'}
@@ -514,6 +533,7 @@ function Ordered({ data, app, yearlyFee }: { data: MobileAppPageData; app: NonNu
           </ul>
         )}
       </Card>
+      )}
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { csvFilename, toCsv, type CsvColumn } from '@/lib/csv';
+import { inBusinessApp } from '@/lib/business-app/client';
+import { shareFile } from '@/lib/business-app/share';
 
 /**
  * Downloads what's on screen as a spreadsheet.
@@ -40,9 +42,15 @@ export function ExportCsvButton<T>({
 }: ExportCsvButtonProps<T>) {
   const [pending, setPending] = React.useState(false);
 
-  function save(data: T[]) {
+  async function save(data: T[]) {
     // The BOM is what makes Excel read the naira sign and accented names.
-    const blob = new Blob([`﻿${toCsv(data, columns)}`], { type: 'text/csv;charset=utf-8' });
+    const csv = `\uFEFF${toCsv(data, columns)}`;
+    // The business app has no downloads: the phone's share sheet saves or sends the file (ROADMAP 19.4).
+    if (inBusinessApp()) {
+      if (!(await shareFile(csvFilename(name), csv))) toast.error('We couldn’t prepare the file. Please try again.');
+      return;
+    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -53,7 +61,7 @@ export function ExportCsvButton<T>({
 
   async function download() {
     if (!fetchRows) {
-      save(rows ?? []);
+      await save(rows ?? []);
       return;
     }
 
@@ -69,7 +77,7 @@ export function ExportCsvButton<T>({
       toast.error('There’s nothing to download with these filters');
       return;
     }
-    save(result.data);
+    await save(result.data);
   }
 
   return (

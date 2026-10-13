@@ -1,5 +1,6 @@
 'use client';
 
+import { UpgradeLink } from '@/components/business-app/no-buying';
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -66,9 +67,9 @@ export function SuppliersPageClient({ suppliers, canManage, performanceEnabled, 
         {!performanceEnabled && suppliers.length > 0 && (
           <p className="text-xs text-muted-foreground">
             Supplier performance — how reliably each one delivers, and what their prices have done — comes with a higher plan.{' '}
-            <Link href="/upgrade" className="text-primary hover:underline">
+            <UpgradeLink className="text-primary hover:underline">
               See plans
-            </Link>
+            </UpgradeLink>
           </p>
         )}
         {suppliers.length === 0 ? (

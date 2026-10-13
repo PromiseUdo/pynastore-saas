@@ -27,7 +27,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@/lib/generated/prisma/client';
 import type { NotificationChannel } from '@/lib/generated/prisma/enums';
 import { eventDefinition, type EventFacts, type NotificationKind } from './events';
-import { appPathFor, pathFor } from './links';
+import { appPathFor, businessAppPathFor, pathFor } from './links';
 import { loadChoices, personKey, wants } from './preferences';
 import { resolveRecipients, type Browser, type Person } from './recipients';
 import { deliverEvent, emptyTally, type DeliveryPayload, type Tally } from './outbox';
@@ -100,19 +100,28 @@ export async function notify<K extends NotificationKind>(input: NotifyInput<K>):
     }
 
     if (pushes) {
-      // Phones are in a store's own app, so they open the store's page there.
-      const appPath = org ? appPathFor(target, org.slug) : null;
-      if (appPath) {
-        const devices = new Set<string>();
-        for (const person of reach.people) if (allowed(person, 'NATIVE_PUSH')) person.devices.forEach((id) => devices.add(id));
-        if (byDefault('NATIVE_PUSH')) reach.watchingDevices.forEach((id) => devices.add(id));
-        for (const id of devices) {
-          deliveries.push({
-            channel: 'NATIVE_PUSH',
-            recipient: id,
-            payload: { title: words.title, body: words.body, path: appPath, ...(threadKey ? { thread: threadKey } : {}) },
-          });
-        }
+      // A shopper's phone is in the store's own app, so it opens the store's
+      // page there; a staff member's is in the business app (ROADMAP 19.4),
+      // where /o/{slug}/… opens this shop's admin page, whichever shop the
+      // app was last on.
+      const storeAppPath = org ? appPathFor(target, org.slug) : null;
+      const businessPath = org ? businessAppPathFor(target, org.slug) : null;
+      const devices = new Map<string, string>();
+      const addDevice = (id: string, path: string | null) => {
+        if (path && !devices.has(id)) devices.set(id, path);
+      };
+      for (const person of reach.people) {
+        if (!allowed(person, 'NATIVE_PUSH')) continue;
+        const path = person.surface === 'admin' ? businessPath : person.surface === 'store' ? storeAppPath : null;
+        person.devices.forEach((id) => addDevice(id, path));
+      }
+      if (byDefault('NATIVE_PUSH')) reach.watchingDevices.forEach((id) => addDevice(id, storeAppPath));
+      for (const [id, path] of devices) {
+        deliveries.push({
+          channel: 'NATIVE_PUSH',
+          recipient: id,
+          payload: { title: words.title, body: words.body, path, ...(threadKey ? { thread: threadKey } : {}) },
+        });
       }
 
       // A browser opens the page on its own origin, for the surface it belongs to.

@@ -44,6 +44,8 @@ import {
   type SocialOverview,
 } from '@/features/social/actions';
 import { PlatformIcon } from '@/components/social/platform-icon';
+import { inBusinessApp, openSheetUntilReturn, sameOriginTarget } from '@/lib/business-app/client';
+import { SOCIAL_RETURN_HOST } from '@/lib/business-app/paths';
 import { SocialNav } from '@/components/social/social-nav';
 import {
   CONNECTION_STATUS_LABELS,
@@ -106,10 +108,20 @@ export function SocialPageClient({
 
   async function handleConnect(providerKey: string) {
     setConnecting(providerKey);
-    const result = await startSocialConnect(providerKey);
+    const app = inBusinessApp();
+    const result = await startSocialConnect(providerKey, { inApp: app });
     if (!result.success) {
       setConnecting(null);
       toast.error(result.error);
+      return;
+    }
+    if (app) {
+      // Meta won't run inside the app's WebView: its dialog opens in the
+      // sign-in sheet and hands the next page back (ROADMAP 19.2).
+      const back = await openSheetUntilReturn(result.data.url, SOCIAL_RETURN_HOST);
+      const next = sameOriginTarget(back?.get('to') ?? null);
+      if (next) window.location.assign(next);
+      else setConnecting(null); // closed by hand: nothing happened
       return;
     }
     // A full navigation, not a router push: the next stop is facebook.com.

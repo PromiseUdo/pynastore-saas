@@ -28,6 +28,14 @@
 /** The shared app's id, which is also its URL scheme. */
 export const SHARED_APP_ID = process.env.NEXT_PUBLIC_MOBILE_APP_SCHEME || 'com.mansaas.app';
 
+/**
+ * The business app's id (ROADMAP 19): one platform-owned app for every
+ * merchant and their staff, on the business host. Also its URL scheme, which
+ * the sign-in and Facebook sheets deep-link back to. Permanent once
+ * published, like SHARED_APP_ID.
+ */
+export const BUSINESS_APP_ID = 'com.mansaas.business';
+
 /** The user-agent token every app build appends (capacitor.config.ts). */
 export const APP_USER_AGENT_TOKEN = 'MansaasApp';
 
@@ -62,6 +70,15 @@ export function appIdFromUserAgent(userAgent: string | null | undefined): string
   const match = (userAgent ?? '').match(new RegExp(`(?:^|\\s)${APP_USER_AGENT_TOKEN}/(\\S+)`));
   const id = match?.[1] ?? null;
   return id && isValidAppId(id) ? id : null;
+}
+
+/**
+ * Is this request from the business app? The marker can be forged, and that
+ * only changes HOW a sign-in or connection is carried (through the app's
+ * sheet and deep link) — never who may do it.
+ */
+export function isBusinessAppUserAgent(userAgent: string | null | undefined): boolean {
+  return appIdFromUserAgent(userAgent) === BUSINESS_APP_ID;
 }
 
 export type MobileApp =

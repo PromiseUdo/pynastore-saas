@@ -12,6 +12,7 @@
  * the arrangement (and refreshes the preview); Publish puts the whole draft
  * — look and front page — live at once.
  */
+import { openPendingTab } from '@/lib/business-app/client';
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -301,7 +302,7 @@ export function HomepageEditor({
 
   /* Small screens have no room for the frame: preview in a new tab. */
   async function onPreviewTab() {
-    const tab = window.open('', '_blank');
+    const tab = openPendingTab();
     setBusy('preview');
     const savedAt = dirty ? await save() : 'unchanged';
     const link = savedAt ? await createDesignPreviewLink() : null;
@@ -312,10 +313,8 @@ export function HomepageEditor({
       return;
     }
     if (dirty) router.refresh();
-    if (tab) {
-      tab.opener = null;
-      tab.location.href = link.data.url;
-    } else window.location.href = link.data.url;
+    if (tab) tab.go(link.data.url);
+    else window.location.href = link.data.url;
   }
 
   return (

@@ -6,7 +6,8 @@
  * notifications on or off for THIS browser, explains what to do when the
  * browser can't (an iPhone that hasn't installed the site, a blocked site,
  * an old browser), and lists the person's other browsers with a way to
- * remove each.
+ * remove each. Inside the business app (ROADMAP 19.4) it is THIS PHONE's own
+ * notifications instead, through the phone's permission.
  */
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
@@ -28,6 +29,9 @@ import {
   type WebPushSupport,
 } from '@/lib/notifications/web-push-client';
 import type { BrowserView } from '@/lib/notifications/view';
+import { phoneAlertsAvailable, phoneAlertsState, turnOffPhoneAlerts, turnOnPhoneAlerts } from '@/lib/business-app/phone-alerts';
+import { inBusinessApp } from '@/lib/business-app/client';
+import { BUSINESS_APP_NAME } from '@/lib/brand';
 
 export function DeviceAlerts({ route, devices, appName }: { route: string; devices: BrowserView[]; appName: string }) {
   const router = useRouter();
@@ -35,8 +39,17 @@ export function DeviceAlerts({ route, devices, appName }: { route: string; devic
   const [state, setState] = React.useState<WebPushState | null>(null);
   const [endpoint, setEndpoint] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
+  /** the business app: the phone's notifications, not the browser's (decided after mount — the server can't know) */
+  const [phone, setPhone] = React.useState(false);
 
   const refresh = React.useCallback(async () => {
+    if (inBusinessApp()) {
+      setPhone(true);
+      const ready = phoneAlertsAvailable();
+      setSupport(ready ? 'ready' : 'off');
+      if (ready) setState(await phoneAlertsState());
+      return;
+    }
     const supported = webPushSupport();
     setSupport(supported);
     if (supported !== 'ready') return;
@@ -50,10 +63,10 @@ export function DeviceAlerts({ route, devices, appName }: { route: string; devic
 
   async function turnOn() {
     setBusy('this');
-    const result = await turnOnWebPush(route);
+    const result = phone ? await turnOnPhoneAlerts() : await turnOnWebPush(route);
     setBusy(null);
-    if (result === 'on') toast.success('Alerts are on for this browser');
-    else if (result === 'blocked') toast.error('This browser blocked notifications for this site.');
+    if (result === 'on') toast.success(phone ? 'Alerts are on for this phone' : 'Alerts are on for this browser');
+    else if (result === 'blocked') toast.error(phone ? 'Notifications are off for this app in your phone’s settings.' : 'This browser blocked notifications for this site.');
     else toast.error('We couldn’t turn alerts on. Please try again.');
     await refresh();
     router.refresh();
@@ -61,9 +74,9 @@ export function DeviceAlerts({ route, devices, appName }: { route: string; devic
 
   async function turnOff() {
     setBusy('this');
-    const ok = await turnOffWebPush(route);
+    const ok = phone ? await turnOffPhoneAlerts() : await turnOffWebPush(route);
     setBusy(null);
-    if (ok) toast.success('Alerts are off for this browser');
+    if (ok) toast.success(phone ? 'Alerts are off for this phone' : 'Alerts are off for this browser');
     else toast.error('We couldn’t turn alerts off. Please try again.');
     await refresh();
     router.refresh();
@@ -94,7 +107,7 @@ export function DeviceAlerts({ route, devices, appName }: { route: string; devic
       <div className="px-4 py-4">
         {support === null || (support === 'ready' && state === null) ? (
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" aria-hidden /> Checking this browser…
+            <Loader2 className="size-4 animate-spin" aria-hidden /> {phone ? 'Checking this phone…' : 'Checking this browser…'}
           </p>
         ) : support === 'needs-install' ? (
           <InstallSteps appName={appName} />
@@ -108,8 +121,9 @@ export function DeviceAlerts({ route, devices, appName }: { route: string; devic
           <div className="flex items-start gap-3">
             <BellOff className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
             <p className="text-sm text-muted-foreground">
-              This browser is blocking notifications from this site. Allow them in the browser’s site settings (the icon
-              beside the address), then come back to this page.
+              {phone
+                ? `Notifications are off for ${BUSINESS_APP_NAME} in your phone’s settings. Turn them on there (Settings → Notifications), then come back to this page.`
+                : 'This browser is blocking notifications from this site. Allow them in the browser’s site settings (the icon beside the address), then come back to this page.'}
             </p>
           </div>
         ) : state === 'on' ? (
@@ -117,7 +131,7 @@ export function DeviceAlerts({ route, devices, appName }: { route: string; devic
             <p className="flex items-center gap-2 text-sm">
               <BellRing className="size-4 text-primary" aria-hidden />
               <Badge variant="success">On</Badge>
-              <span>for this browser</span>
+              <span>{phone ? 'for this phone' : 'for this browser'}</span>
             </p>
             <Button type="button" variant="outline" size="sm" onClick={turnOff} disabled={busy !== null}>
               {busy === 'this' && <Loader2 className="animate-spin" aria-hidden />}
@@ -126,7 +140,7 @@ export function DeviceAlerts({ route, devices, appName }: { route: string; devic
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Your browser will ask for permission.</p>
+            <p className="text-sm text-muted-foreground">{phone ? 'Your phone will ask for permission.' : 'Your browser will ask for permission.'}</p>
             <Button type="button" size="sm" onClick={turnOn} disabled={busy !== null}>
               {busy === 'this' ? <Loader2 className="animate-spin" aria-hidden /> : <BellRing aria-hidden />}
               Turn on alerts

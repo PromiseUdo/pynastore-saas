@@ -17,12 +17,26 @@
  *   - a link to the store (an email, a message, a share) opens its page in
  *     the store's own app instead of the browser (Universal Links / App
  *     Links, ROADMAP 18.5)
+ *   - in the business app, a link off the business host (or to a new tab)
+ *     opens in the in-app browser sheet, on top of the app (ROADMAP 19.2)
  */
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { isNativePlatform, getPlatform } from '@/lib/platform';
 import { userAgentHasPush } from '@/lib/mobile/app-config';
 import { routeIncomingLink } from '@/lib/mobile/app-links';
+import { externalLinkTarget, inBusinessApp, isBusinessEntryPath, openExternal } from '@/lib/business-app/client';
+
+/** Close the topmost open Radix dialog, sheet or menu, as Escape does. True when there was one. */
+function closeOpenOverlay(): boolean {
+  // Radix overlays say data-state="open"; the admin's phone menu is a plain modal dialog (components/layout/sidebar.tsx).
+  const open = document.querySelector(
+    '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"], [role="dialog"][aria-modal="true"]',
+  );
+  if (!open) return false;
+  (open as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  return true;
+}
 
 let launchLinkHandled = false;
 
@@ -93,7 +107,10 @@ export function NativeShell() {
       const darkBehind = () => {
         if (platform === 'android' && androidMajor >= 15 && !pageUnderBar()) return false;
         const shop = document.querySelector<HTMLElement>('[data-storefront]');
-        return shop ? shop.dataset.sfTheme === 'dark' : mq.matches;
+        if (shop) return shop.dataset.sfTheme === 'dark';
+        // The admin (business app, ROADMAP 19.4) is dark only when its `.dark` class says so.
+        if (inBusinessApp()) return document.documentElement.classList.contains('dark');
+        return mq.matches;
       };
       let last: boolean | null = null;
       const update = () => {
@@ -108,7 +125,7 @@ export function NativeShell() {
       // Capacitor setting the inset variables on <html> once the page loads.
       const observer = new MutationObserver(update);
       observer.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-sf-theme'] });
-      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
       cleanups.push(() => mq.removeEventListener('change', update), () => observer.disconnect());
 
       const showHandle = await Keyboard.addListener('keyboardWillShow', () => {
@@ -134,8 +151,10 @@ export function NativeShell() {
     (async () => {
       const { App } = await import('@capacitor/app');
       handle = await App.addListener('backButton', ({ canGoBack }) => {
-        // At the store picker / storefront home, back = leave the app.
-        const atRoot = pathname === '/' || /^\/s\/[^/]+\/?$/.test(pathname);
+        // An open dialog, sheet or menu closes first, as Escape would (Radix listens for it).
+        if (closeOpenOverlay()) return;
+        // At the store picker / storefront home — or the business app's dashboard — back = leave the app.
+        const atRoot = pathname === '/' || /^\/s\/[^/]+\/?$/.test(pathname) || (inBusinessApp() && pathname === '/dashboard');
         if (canGoBack && !atRoot) {
           router.back();
         } else {
@@ -159,8 +178,13 @@ export function NativeShell() {
       const { PushNotifications } = await import('@capacitor/push-notifications');
       handle = await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
         const path = (notification.data as { path?: unknown } | undefined)?.path;
-        // Only a page of a store on this origin — never a URL from outside.
-        if (typeof path === 'string' && /^\/s\/[a-z0-9-]+\/[^/]/.test(path)) router.push(path);
+        // Only a page on this origin — never a URL from outside. A store's app
+        // opens /s/{slug}/…; the business app opens /o/{slug}/…, which switches
+        // shop first, so it's a full load (ROADMAP 19.4).
+        if (typeof path !== 'string') return;
+        if (inBusinessApp()) {
+          if (isBusinessEntryPath(path)) window.location.assign(path);
+        } else if (/^\/s\/[a-z0-9-]+\/[^/]/.test(path)) router.push(path);
       });
     })();
 
@@ -196,6 +220,26 @@ export function NativeShell() {
 
     return () => void handle?.remove();
   }, [router]);
+
+  // The business app stays on its one host (ROADMAP 19.2). "View my shop",
+  // help pages and every other link that leaves it — or asks for a new tab,
+  // which an app doesn't have — open in the sheet on top of the app, so the
+  // merchant is one "Done" away from where they were. Mail and phone links
+  // go to the phone's own apps as they always do.
+  useEffect(() => {
+    if (!inBusinessApp()) return;
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      const anchor = (event.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      const link = anchor ? externalLinkTarget(anchor.href, anchor.target, window.location.href) : null;
+      if (!link) return;
+      event.preventDefault();
+      if (link.open === 'sheet') void openExternal(link.url);
+      else window.location.assign(link.url);
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, []);
 
   return null;
 }

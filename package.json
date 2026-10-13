@@ -22,7 +22,8 @@
     "mobile:android": "cap run android",
     "mobile:ios:live": "cap run ios --live-reload --external --port 3000",
     "mobile:android:live": "cap run android --live-reload --port 3000",
-    "mobile:app": "tsx scripts/mobile/store-app.ts"
+    "mobile:app": "tsx scripts/mobile/store-app.ts",
+    "mobile:business": "tsx scripts/mobile/store-app.ts --business"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -32,6 +33,7 @@
     "@capacitor/app": "^8.1.1",
     "@capacitor/browser": "^8.0.4",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/filesystem": "^8.1.4",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/keyboard": "^8.0.5",
     "@capacitor/push-notifications": "^8.1.3",

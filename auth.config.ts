@@ -19,6 +19,8 @@ function getRootDomain(): string {
   return process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? 'localhost:3000';
 }
 
+const secureAuth = (process.env.AUTH_URL ?? '').startsWith('https://');
+
 /** Hostname portion only (no port) — Set-Cookie's Domain attribute can't carry a port. */
 function getRootHostname(): string {
   return getRootDomain().split(':')[0];
@@ -46,6 +48,16 @@ export const authConfig = {
         domain: `.${getRootHostname()}`,
       },
     },
+    /* Sign in with Apple answers with a cross-site POST (form_post), which
+     * never carries a SameSite=Lax cookie — so the state and nonce it is
+     * checked against must be SameSite=None (ROADMAP 19.2). Only over https,
+     * where None is allowed; Apple won't send anyone to plain http anyway. */
+    ...(secureAuth
+      ? {
+          state: { options: { sameSite: 'none' as const, secure: true } },
+          nonce: { options: { sameSite: 'none' as const, secure: true } },
+        }
+      : {}),
   },
 
   pages: {

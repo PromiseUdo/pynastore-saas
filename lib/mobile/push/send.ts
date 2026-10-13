@@ -2,7 +2,9 @@
  * lib/mobile/push/send.ts
  *
  * Sending to one phone in a store's own app (ROADMAP 16.4, 18.4): FCM for
- * Android, APNs with the store app's own key for iOS. Server only.
+ * Android, APNs with the store app's own key for iOS. Server only. A phone in
+ * the business app (ROADMAP 19.4) is the platform's own app: Android through
+ * the same Firebase project, iPhone with the PLATFORM's APNs key (env).
  *
  * Who is told, and when, is decided by lib/notifications (ROADMAP 18); this
  * is the native channel's transport (lib/notifications/channels/
@@ -20,9 +22,11 @@ import { open } from '@/lib/social/crypto';
 import { sendFcm, type SendOutcome } from './fcm';
 import { sendApns, type ApnsCredentials } from './apns';
 import type { PushMessage } from './messages';
+import { BUSINESS_APP_ID } from '../app-config';
 
 export interface PushTarget {
-  organizationId: string;
+  /** null for a phone in the business app, which belongs to a person, not a shop */
+  organizationId: string | null;
   appId: string;
   platform: 'ANDROID' | 'IOS';
   token: string;
@@ -60,7 +64,21 @@ export async function sendToDevice(
   return { outcome: sandbox === 'failed' ? 'failed' : 'gone' };
 }
 
-async function apnsCredentials(organizationId: string, appId: string): Promise<ApnsCredentials | null> {
+/**
+ * The business app's APNs key (ROADMAP 19.4): the platform's own, from
+ * APNS_BUSINESS_KEY (the .p8's contents, real or escaped line breaks),
+ * APNS_BUSINESS_KEY_ID and APNS_BUSINESS_TEAM_ID. Null until all three are set.
+ */
+export function businessApnsCredentials(): ApnsCredentials | null {
+  const key = process.env.APNS_BUSINESS_KEY?.trim().replace(/\\n/g, '\n');
+  const keyId = process.env.APNS_BUSINESS_KEY_ID?.trim();
+  const teamId = process.env.APNS_BUSINESS_TEAM_ID?.trim();
+  return key && keyId && teamId ? { teamId, keyId, key, topic: BUSINESS_APP_ID } : null;
+}
+
+async function apnsCredentials(organizationId: string | null, appId: string): Promise<ApnsCredentials | null> {
+  if (appId === BUSINESS_APP_ID) return businessApnsCredentials();
+  if (!organizationId) return null;
   const app = await prisma.mobileApp.findFirst({
     where: { organizationId, appId },
     select: { apnsTeamId: true, apnsKeyId: true, apnsKeySealed: true },

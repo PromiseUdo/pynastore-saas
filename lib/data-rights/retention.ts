@@ -12,14 +12,18 @@
  *      name on the customer record goes too;
  *   5. guest chats nobody has written in for a year → removed (17.5);
  *   6. phones' and browsers' order watches past 60 days → ended (16.4, 18.3);
- *   7. notifications past 90 days, with what was sent for them → removed (18.1).
+ *   7. notifications past 90 days, with what was sent for them → removed (18.1);
+ *   8. spent one-minute sign-in tickets (shoppers' and the business app's,
+ *      16.1 and 19.2) → removed an hour after they expired.
  *
  * A running shop's own customers and guest orders are the merchant's records
  * and are never touched here. Each workspace is handled on its own, so one
  * failure (Cloudinary down, say) is recorded and retried tomorrow without
  * holding up the rest.
  */
+import { purgeExpiredAppTickets } from '@/lib/business-app/tickets';
 import { purgeOldPushWatches } from '@/lib/mobile/push/watch';
+import { purgeExpiredHandoffs } from '@/lib/storefront/account/handoff';
 import { purgeOldBrowserWatches } from '@/lib/notifications/web-push-subscriptions';
 import { prisma } from '@/lib/prisma';
 import { reportCaughtError } from '@/lib/ops/errors';
@@ -143,6 +147,9 @@ export async function runDataRetention(options: { now?: Date; only?: string[] } 
   });
   await prisma.notificationEvent.deleteMany({ where: { ...old, ...(options.only ? { organizationId: { in: options.only } } : {}) } });
   result.notificationsRemoved = notifications.count;
+
+  // 8. Tickets are worthless after their minute; only their ids are kept.
+  if (!options.only) await Promise.all([purgeExpiredHandoffs(), purgeExpiredAppTickets()]);
 
   return result;
 }

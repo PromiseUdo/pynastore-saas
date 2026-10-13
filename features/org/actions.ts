@@ -8,13 +8,17 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { updateCurrentOrganization } from '@/lib/session';
+import { isBusinessRequest } from '@/lib/tenant/here';
 import { getAdminUrl } from '@/lib/tenant/urls';
 
 type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
 
 /**
  * Switch the current user's active organization.
- * Validates membership before updating the JWT. Redirects to the new org's dashboard.
+ * Validates membership before updating the JWT. Redirects to the new org's dashboard —
+ * except on the business host (ROADMAP 19), where the shop changes but the host
+ * doesn't: it returns, and the switcher reloads the page, so nothing from the
+ * old shop is left on screen to act on.
  */
 export async function switchOrganization(orgId: string): Promise<ActionResult> {
   const session = await auth();
@@ -42,5 +46,6 @@ export async function switchOrganization(orgId: string): Promise<ActionResult> {
     membership.organization.slug,
   );
 
+  if (await isBusinessRequest()) return { success: true, data: undefined };
   redirect(getAdminUrl(membership.organization.slug, '/dashboard'));
 }

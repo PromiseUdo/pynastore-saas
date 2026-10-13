@@ -6646,19 +6646,11 @@ SMS and WhatsApp (14.4), marketing pushes and campaigns (Phase 5),
 back-in-stock alerts (a shopper-facing feature of its own), quiet hours, and
 install attribution or deferred deep links (see 18.0).
 
-### 18.9 — Later, a separate decision: a native business app
+### 18.9 — A native business app — MOVED to Phase 19 (2026-10-13)
 
-A platform-owned app ("{PLATFORM_NAME} Business", one for all merchants)
-makes vendor push on iPhone work without the Home Screen step.
-- **What it needs:**
-  - a business host that keeps the admin on one origin, the way `m.` does
-    for stores (`b.{root}/o/{slug}/…`);
-  - App Store review of a wrapped admin;
-  - FCM for both platforms with the PLATFORM's own APNs key, uploaded to
-    Firebase.
-- **What it reuses:** the seam, preferences and links from 18.1–18.6. It
-  plugs in as another device type.
-- **When:** only if merchants find "Add to Home Screen" too hard.
+Taken up as its own phase, because many merchants run the whole business
+from a phone (see Phase 19). The sketch that was here is superseded by
+19.0's decisions.
 
 ### What the owner provides
 
@@ -6721,6 +6713,720 @@ cron-job.org account (one new 5-minute job for the outbox).
   prompt);
 - an iPhone on iOS 16.4 or newer (17+ preferred);
 - a deployed environment over HTTPS.
+
+## Phase 19 — The business app: run the whole shop from a phone — IN PROGRESS (19.1 done, 19.2 code done, 19.3 done, 19.4 code done, 19.5 done 2026-10-13; 19.6 is on real phones)
+
+Agreed 2026-10-13. Many merchants have no laptop. They will sign up, set up
+the shop, add products, take orders, chat with shoppers and run the team
+**only from a phone**. Today that works in a phone browser, and 18.3 made
+the admin installable, but:
+- on iPhone, alerts need "Add to Home Screen" first, which many merchants
+  won't manage;
+- the installable admin belongs to one shop's host (`{slug}.`), so it can't
+  be installed before a shop exists, and two shops mean two icons;
+- there is nothing to find in the App Store or Google Play;
+- the one native app we have (`com.mansaas.app`) is for shoppers and blocks
+  the admin on purpose (MOBILE.md).
+
+**The goal:** one app, "{PLATFORM_NAME} Business", for every merchant and
+every staff member. It is free to download, and you sign in before you see
+anything. From it, a person can do everything the admin does on the web:
+sign up, verify their email, create a shop, and switch between the shops
+they belong to. It hears about new orders and chats through real phone
+notifications, on Android and iPhone alike.
+
+**Not for shoppers.** Shoppers keep the store website, the shared shopper
+app and the store's own app (Phase 16). Platform staff keep the console on
+the web.
+
+**Where we are (audit 2026-10-13):**
+- **Built and reusable:**
+  - Capacitor 8 with the native shell (`components/native/`), the user-agent
+    marker, the in-app browser sheet with the deep-link return (payments,
+    Google sign-in), the handoff ticket bound to a PKCE-style verifier, and
+    the offline page;
+  - the build kit (`npm run mobile:app`, `scripts/mobile/native-project.ts`),
+    which already rewrites the native projects' id, name, icons, push and
+    App Links settings;
+  - native push senders (`lib/mobile/push/fcm.ts`, `apns.ts`), the outbox,
+    sandbox detection and dead-token cleanup;
+  - the notification seam, preferences and typed targets (18.1–18.6);
+  - an admin that follows the responsive rules (AGENTS §8).
+- **Missing:**
+  - a host that serves the admin for **any** shop on one origin. The admin
+    is chosen by hostname (`{slug}.`), and the Capacitor bridge works only
+    on its own `server.url` origin;
+  - sign-in, sign-up and onboarding on that origin. Today they live only on
+    the platform host;
+  - native push to **staff**: `PushDevice.organizationId` is required, and
+    recipients attach phones only to shoppers (`recipients.ts`);
+  - the flows that leave the site: Google sign-in for staff, Meta (Social
+    Commerce) connect, Paystack billing checkout, "view my store" and other
+    external links;
+  - phone versions of what a WebView can't do: CSV downloads
+    (`export-csv-button.tsx` uses a blob link), printing
+    (`print-button.tsx`) and camera permission text;
+  - what the app stores require of an app with sign-up: **staff account
+    deletion inside the app** (Apple 5.1.1(v); only shoppers can delete
+    today), **Sign in with Apple** next to Google (Apple 4.8), and **no
+    purchasing inside the app** (19.0).
+
+### 19.0 — Decisions — DECIDED (2026-10-13)
+
+- **One platform-owned app.** It is published under the PLATFORM's Apple
+  Developer and Google Play accounts. That's the opposite of Phase 16,
+  because here the content is ours, not one merchant's.
+  - **App id:** `com.mansaas.business`. It's an internal identifier, so it
+    keeps the old name like `com.mansaas.app`, and it never changes once
+    published.
+  - **Display name:** `{PLATFORM_NAME} Business`, read from `lib/brand.ts`.
+- **A business host: `b.{ROOT_DOMAIN}`** (`NEXT_PUBLIC_BUSINESS_DOMAIN`), a
+  new site type `business` in `resolveHostname.ts`. It serves the admin for
+  any shop, plus the sign-in and onboarding pages, on one origin.
+  - **`b` becomes a reserved slug.** Before it ships, confirm that no
+    production organisation already has the slug `b`. Existing shops are
+    never renamed (AGENTS §7), so if one has it, pick another label.
+  - **It is an ordinary website too.** It works in any browser. That's how
+    most of this phase is built and tested before there is any native
+    build (19.1).
+- **The shop comes from the browser, not the path.** This replaces the
+  18.9 sketch's `/o/{slug}/…` prefix.
+  - **How:** on `b.`, `proxy.ts` reads this host's own shop cookie
+    (`mansaas-business-shop`), falling back to `session.currentOrgSlug`. It
+    re-checks an ACTIVE membership on every request, and rewrites
+    `/inventory` → `/{slug}/inventory` with the same `x-org-slug` header the
+    admin host sets.
+  - **Why a cookie of its own (found in 19.1):** Auth.js re-sends the
+    session cookie on every response. A request the old page already had
+    in flight, such as the Messages poll, carries the old session, and its
+    reply put the session back to the old shop a moment after a switch.
+    Only a switch writes the shop cookie (`updateCurrentOrganization`), so
+    that can't happen. It grants nothing, because membership is re-checked
+    every time.
+  - **Why:** every admin link is slug-free (AGENTS §7). Putting the slug in
+    the path would mean rewriting every link in the admin. Reading it from
+    the session leaves pages, links and server actions untouched.
+  - **Switching shops** on `b.` updates the session and reloads to
+    `/dashboard` on `b.`. It doesn't jump to `{slug}.`. A full reload means
+    no page from the old shop is left on screen to post an action to the
+    new one.
+- **One entry link: `/o/{slug}/{path}` on `b.`.** Push taps, staff emails and
+  "open in the app" all use it.
+  - **For a member:** switch to that shop, then land on `{path}` on `b.`.
+    This works the same in the app and in a browser. **Changed in 19.1:**
+    the plan was to send browsers on to `{slug}.`, but a browser on `b.`
+    is already a complete admin, so it stays. Whether emails to web users
+    use this link is decided in 19.2.
+  - **Not a member:** they see the shared access-denied state, never another
+    shop's page.
+- **Links open the app when it's installed.** iOS Universal Links and
+  Android App Links on **`b.` only**, through the existing
+  `/.well-known/` route (`APP_LINK_FILE`).
+  - **Staff emails** (verify email, reset password, invite, order and chat
+    alerts) link through `/o/{slug}/…` or `b.`. So the same link opens the
+    app on a phone that has it, and the browser everywhere else.
+  - **No wildcard domains:** `*.{root}` would also capture shoppers' store
+    links.
+- **Signing in.** Email and password run inside the app.
+  - **Google** refuses embedded WebViews, so it uses the browser sheet and
+    the handoff ticket, as the shopper app does (16.1). It needs a staff
+    version of the handoff (Auth.js session, not the shopper session).
+  - **Sign in with Apple** is added for staff on every surface, not just
+    iPhone, so an account made one way can sign in anywhere (Apple 4.8
+    requires it once Google is offered).
+- **No purchasing in the app, on either platform.** Apple 3.1.3(f) lets a
+  free companion app to a paid web service skip in-app purchase **only if
+  there is no buying and no call to action to buy** inside it. Google Play's
+  payments policy is read the same way, and one behaviour is simpler.
+  - **What it means in the app** (told apart from a browser on `b.` by the
+    app's user-agent marker):
+    - Billing, `/upgrade`, buying a custom domain and buying a store app
+      are read-only: what you have and until when, with no prices, buttons
+      or "go to the website".
+    - Plan-gated features show the lock and what the feature does (AGENTS
+      §7), but not the upgrade link.
+    - A lapsed shop says it has lapsed and that the owner can renew it.
+  - **What stays:** the no-card trial at signup is free and stays.
+  - **Verify before submitting** (19.6): re-read Apple 3.1.1/3.1.3 and
+    Google's payments policy as they stand at submission.
+- **Phone notifications for staff reuse `PushDevice`.**
+  - **The change:** `organizationId` becomes nullable. A business-app phone
+    has `appId = com.mansaas.business` and a `userId`, and no
+    `organizationId`.
+  - **Shoppers are unaffected:** every shopper query filters by
+    `organizationId`, which a null never matches.
+  - **Recipients:** `recipients.ts` gives staff (and only staff in a shop)
+    their business-app phones by `userId`. Access to the shop is already
+    checked there (8.6).
+  - **Taps:** a tap opens `/o/{slug}/{admin path}`, so an alert from shop B
+    opens shop B even if the app was on shop A.
+  - **Senders:**
+    - **Android:** the platform's existing Firebase project.
+    - **iPhone:** direct to APNs with the **platform's own** APNs key, kept
+      in env and not on a `MobileApp` row. The sender is the one that
+      already exists. The 18.9 sketch's "APNs through Firebase" is dropped,
+      since we already send to APNs directly.
+- **The bell asks the right way.** In the app, "Get alerts on this device"
+  and Settings → Notifications register the phone for native push instead
+  of Web Push. That's the existing channel switch, `'app' | 'browser'`, as
+  in `lib/storefront/push-optin.ts`. The "Add to Home Screen" steps never
+  show inside the app.
+- **The admin's look is unchanged.** Same pages, same rules (AGENTS §1–9).
+  - **No "app-only" screens** except what a store review needs: account
+    deletion, and the plain sign-in screen shown at launch.
+  - **Phone fixes help everyone:** layout fixes found while building land
+    for every phone browser too.
+- **Dev:** an unrecognised host (LAN IP) is treated as `mobile` today. With
+  the business app's user-agent marker it is treated as `business`, so
+  `--live-reload` works for both apps.
+
+### 19.1 — The business host, in a browser — DONE (2026-10-13)
+
+**As built.** The admin for any shop, with sign-in and onboarding, works at
+`http://b.app.localhost:3000` (or `b.{root}` on a preview) in any browser.
+Nothing changes on `{slug}.`, the platform host or the storefronts.
+
+- **Hostname:**
+  - `resolveHostname.ts`: site type `business`, `getBusinessDomain()`
+    (`NEXT_PUBLIC_BUSINESS_DOMAIN`, blank = `b.{root}`; in `.env.example`).
+  - `urls.ts`: `getBusinessUrl`, `getBusinessEntryUrl` (`/o/{slug}/…`), and
+    for the browser `onBusinessHost()` and `marketingUrlHere(path)`.
+  - `b` and `business` are reserved slugs. **Before production:** confirm
+    that no live organisation already has either slug.
+- **Routing:** `lib/tenant/business.ts`.
+  - `resolveBusinessRoute` is pure: it holds the proxy's decisions and is
+    unit-tested.
+  - `businessShopFor` picks the shop. It is the remembered one while the
+    person is still an active member and the shop is open or suspended.
+    Otherwise it is their first active shop, then their first suspended
+    one, as the platform host's `/` picks.
+  - The proxy's branch is `1d` in `proxy.ts`.
+- **Who sees what:**
+  - **Anyone:** `/login`, `/register`, `/forgot-password`,
+    `/reset-password`, `/privacy`, `/terms`, `/invite/…`, `/verify-email/…`,
+    and the install files. `/manifest.webmanifest` and `/app-icon/{size}`
+    are served from `app/business/`, re-exporting the admin's, which name
+    no shop.
+  - **Signed in, no shop needed:** `/onboarding` and `/business/no-access`.
+  - **Signed in:** everything else is the admin of their shop.
+    - With no shop at all, they go to `/onboarding`.
+    - If the remembered shop is gone, they go through `/o/{slug}` for one
+      of theirs, so the cookie is rewritten.
+    - A POST from a page of a shop they've just lost still names that
+      shop, so its own membership check refuses it. It never runs against
+      another shop.
+    - A suspended shop shows its page (11.4). Lapsed shops work as on
+      `{slug}.`, through `x-admin-path`.
+  - **Never served here:** `/platform`, `/store`, `/s` and `/m` redirect to
+    `/`. `/login` and `/register` while signed in also go to `/`, for GET
+    only, so a form's own POST still works.
+- **The switch:** `/o/{slug}/{path}` is rewritten to
+  `app/business/open/[organizationSlug]/route.ts`.
+  - **A member:** `updateCurrentOrganization` (the JWT plus this host's
+    cookie), then a redirect to `{path}`. `safeBusinessPath` only allows
+    paths on this host.
+  - **A non-member:** `/business/no-access`, the shared `AccessDenied`,
+    which gained an optional `hint`.
+  - **Signed out:** sign in, then come back to the same link.
+  - **Any other host:** a 404.
+- **Staying on `b.`:** `lib/tenant/here.ts` (server) decides from the
+  request's Host header.
+  - **`adminUrlHere`** uses the entry link on `b.`. It's used by the
+    invitation page and the suspended page's other shops.
+  - **`currentShopUrlHere`** is for just after a switch: in accepting an
+    invitation and in creating a shop.
+  - **`signInTargetHere`** makes the login, register, Google and
+    invitation sign-out targets absolute on `b.`. Auth.js otherwise
+    resolves them against `AUTH_URL`.
+  - **`switchOrganization`** on `b.` returns without redirecting, and the
+    switcher reloads `/dashboard` (it also shows an error toast now, where
+    it used to fail silently).
+  - **Sign-out buttons** and "Create organization" use `marketingUrlHere`.
+- **Design preview:** the CSP lets `b.` frame the platform's hosts, and a
+  storefront in preview accepts `b.` as its parent. The storefront still
+  re-checks the member.
+- **Emails are unchanged.** Verify, reset, invite and alert links still
+  point at the platform host and `{slug}.`. Verifying in another tab works;
+  "I've confirmed it" picks it up. Changing them is 19.2.
+- **Tests:**
+  - `tests/business-host.test.ts` (27): the hostname and the env override;
+    reserved slugs; every routing decision; safe landing paths; the helpers
+    on `b.` and elsewhere; picking the shop (remembered, deleted, foreign,
+    none); the switch for a member, a non-member, someone signed out, a
+    path off the host and another host; `switchOrganization` on `b.` and
+    elsewhere.
+  - `tests/business-session.test.ts` (2): the shop cookie is written only
+    on `b.`, and host-only.
+- **Checked in a real browser** (production build on port 3100, the local
+  Docker database, Chrome at phone width):
+  - signing in;
+  - an `/o/` switch that sticks, including across polls;
+  - no access to a shop the person isn't in;
+  - `/platform` blocked;
+  - registering, which lands on "Confirm your email" on `b.`;
+  - signing out back to `b./login`;
+  - the install files;
+  - `{slug}.`, the platform host and storefronts unchanged.
+
+  The switcher menu couldn't be opened by the test browser (no Radix menu
+  in the admin opens under puppeteer), so its server side is covered by
+  the unit tests instead. **Click through it once by hand.**
+- **Seen, not caused by this:** Ably refuses the bell's
+  `notifications:{org}:user:{id}` token with 40160 ("intersection of key
+  capabilities… is empty") on `{slug}.` too. The Ably key in `.env` doesn't
+  allow the `notifications:` channels. Add them to the key's capabilities
+  in the Ably dashboard (`inbox:` works).
+
+### 19.2 — Signing in, and leaving the app and coming back — CODE DONE (2026-10-13); on a phone with 19.5's first build
+
+**As built.** Everything that leaves the app now has a way out and a way
+back. The app itself doesn't exist until 19.4–19.5, so the in-app paths are
+covered by tests and by the routes answering over HTTP, not yet on a phone.
+In every browser, behaviour is unchanged apart from three things:
+- the Apple button, once configured;
+- friendlier sign-in error messages;
+- the account-email links described below.
+
+- **Recognising the app:** `BUSINESS_APP_ID = com.mansaas.business` and
+  `isBusinessAppUserAgent` (`lib/mobile/app-config.ts`).
+  - **In the browser:** `inBusinessApp()` (`lib/business-app/client.ts`)
+    is true only when native AND on `b.`.
+  - **Every deep link goes to that one scheme,** never to one a request
+    names.
+- **One-minute tickets:** `lib/business-app/tickets.ts`, table
+  `staff_app_tickets` (migration `20261015120000_staff_app_tickets`).
+  - Signed, one purpose each (`sign-in` | `social-connect`), and spent once
+    by a compare-and-set.
+  - **`sign-in` tickets** must be bound to a challenge and are spent only
+    with its verifier, the PKCE-style pattern from 16.1.
+  - **Cleanup:** the daily data-retention job purges spent tickets, and now
+    the shoppers' `customer_auth_handoffs` too, which had a purge function
+    that nothing called.
+- **Staff Google and Apple sign-in in the app** (the sheet has its own
+  cookies, which is why it takes three steps):
+  1. **`/api/business/auth/start`**, on the platform host, in the sheet.
+     It checks the provider and challenge and seals `{challenge, next}` in
+     a 10-minute cookie scoped to `/api/business/auth`. Then Auth.js
+     `signIn(provider, { redirect: false })` starts the provider. Opened on
+     another host, it redirects to the platform host.
+  2. **`/api/business/auth/finish`**, after Auth.js signed the person in
+     inside the sheet. It mints a `sign-in` ticket for them, **signs the
+     sheet back out** so nothing stays behind, and deep-links
+     `com.mansaas.business://auth-return?to={b./api/business/auth/handoff?token=…&next=…}`.
+     If something is missing, it sends `?error=sign-in`.
+  3. **`/api/business/auth/handoff`**, on `b.` only, in the app's WebView,
+     with the verifier only it holds. Auth.js `signIn('app-handoff')` (a
+     new Credentials provider in `auth.ts`; the check is
+     `lib/business-app/handoff-user.ts`, which also refuses after a
+     password reset) sets the session there and lands on `next`.
+     If refused, it goes to `b./login?error=app-sign-in`.
+
+  The app side reuses the shopper app's sheet code
+  (`signInWithGoogleInApp`, now taking the handoff path).
+  - **Buttons:** `components/auth/sign-in-providers.tsx` serves both
+    pages. On the web they post their server actions as before. In the app
+    they open the sheet.
+  - **Pages:** login and register are now a server page plus a client
+    form, so the server decides whether the Apple button shows.
+  - **Google from the login page** now returns to its `callbackUrl` too,
+    as the password form already did.
+  - **If Google or Apple refuses inside the sheet,** Auth.js shows its
+    sign-in page there. Closing the sheet returns to the app unchanged.
+- **Sign in with Apple** (`lib/apple-sign-in.ts`), on every surface. It's
+  off, with no button and no provider, until four settings are set
+  (`.env.example`).
+  - **Client secret:** Apple's ES256 token is made from the `.p8` key when
+    the server starts (it lasts 150 days, under Apple's six-month limit),
+    so nothing pasted in quietly expires.
+  - **Cookies:** Apple answers with a cross-site POST, so `state` and
+    `nonce` are `SameSite=None; Secure` when `AUTH_URL` is https
+    (`auth.config.ts`).
+  - **Accounts:** email linking and email verification work as they do for
+    Google.
+  - **Native Apple sheet on iPhone:** that's 19.4. Until then the app uses
+    the web flow in the sheet.
+- **Connecting Facebook from the app.**
+  - **Starting:** `startSocialConnect(key, { inApp: true })` returns a link
+    to `/api/social/meta/app-start?ticket=…` (a `social-connect` ticket)
+    instead of Meta's URL.
+  - **In the sheet:** app-start spends the ticket in place of the session
+    the sheet doesn't have. It arms the nonce in the sheet and marks the
+    state `app`.
+  - **The callback:** for an `app` state it skips the session check (the
+    ticket did that job) and **still re-reads `social.manage`**. Every
+    ending deep-links `social-return?to={page}`.
+  - **Coming back:** the app opens that page in its WebView, only if it's
+    on its own host (`sameOriginTarget`).
+  - **Also fixed for browsers on `b.`:** the return address is now
+    `adminUrlHere(…'/social')`, so a merchant on `b.` comes back to `b.`
+    (through `/o/{slug}/social`).
+- **Every other way out:**
+  - **In `NativeShell` (business app only):** a tapped link off `b.` opens
+    in the sheet. A same-host `target="_blank"` link opens in the app,
+    because the sheet has no session. `mailto:` and `tel:` are left to the
+    phone. The rule lives in `externalLinkTarget`.
+  - **"Preview in a new tab"** (the three Customize editors) and **viewing
+    an uploaded document** now use `openPendingTab()`. On the web it's the
+    same blank-tab-then-navigate as before. In the app it opens the sheet,
+    which works because both are signed links, not sessions.
+- **Account emails come back to where you are.** `accountUrlHere` builds
+  the verify-email and reset-password links: `b.` for someone on `b.`,
+  otherwise the platform host.
+  - **Changed:** the reset link no longer comes from `NEXT_PUBLIC_APP_URL`.
+    That was a hand-built address against AGENTS §7, and set to
+    `localhost:3001` in CI.
+  - **Shop alert and invitation emails are unchanged.** Pointing them at
+    `b.` only helps once Universal Links open the app (19.4–19.5), so
+    that's decided there.
+- **"Confirm your email" moves on by itself.** It re-checks
+  (`isEmailConfirmed`) whenever the screen becomes visible again: back from
+  the Mail app, or the app returning to the front.
+- **Tests:** `tests/business-app-sign-in.test.ts` (22):
+  - **tickets:** used once, the verifier, the wrong purpose, forged,
+    expired, the challenge required, the purge;
+  - **sign-in:** the user, and a password reset ending it;
+  - **start:** the provider handover with its cookie; platform host only;
+    a bad challenge or provider; Apple off;
+  - **finish:** a ticket plus the sheet signed out; failure links;
+  - **handoff:** success, refused, an off-site `next`, the wrong host;
+  - **the app's return rules:** handoff links, links it may open,
+    `sameOriginTarget`;
+  - **Apple's secret,** verified with the matching public key;
+  - **Facebook from the app:** the link instead of Meta's; `/o/` returns on
+    `b.`; app-start spends once and sets the nonce; the callback without a
+    session deep-links the connect page; a member suspended meanwhile is
+    refused;
+  - **account email hosts.**
+- **Checked over HTTP** (production build on port 3100, the Docker
+  database):
+  - `start` hands over to Google with the sign-in, PKCE and callback
+    cookies set;
+  - a bad ticket on `handoff` lands on `b./login?error=app-sign-in`;
+  - `app-start` without a ticket is refused;
+  - on `b.` the login error message, register (with the invite carried in
+    the Google form), password sign-in and the Social page all render.
+- **Left for a phone (19.5):** a real Google, Apple and Facebook round trip
+  in the app; the sheet closing on Android (`Browser.close` is
+  unsupported there, but the deep link brings the app forward); the
+  link-tap rules.
+
+### 19.3 — What the stores require — DONE (2026-10-13)
+
+**As built.** The answers for each store, and the reviewer steps, are in
+**`docs/BUSINESS-APP-STORE.md`**.
+
+- **Delete my account (staff), on every surface.** The rules are in
+  `lib/data-rights/staff.ts` and DATA-RIGHTS.md → "A staff member's own
+  account".
+  - **Where:** Settings → **Your account** (new: name, email, how you sign
+    in, and the delete card; open while lapsed). Before a shop exists:
+    **`/onboarding/account`**, linked from the foot of "Create your shop".
+    Both use the shared card, `components/account/delete-account.tsx`.
+  - **Confirming:** the password, or for a Google- or Apple-only account,
+    typing the email.
+  - **Only Owner:** someone who is the only Owner of an open or suspended
+    shop sees those shops with **Members** and **Close the shop** links
+    (through `/o/…` on `b.`). Closed shops don't block.
+  - **The row is kept, not removed,** because `AuditLog.user` and
+    `Order.soldBy` point at it, and those are the shop's records:
+    - the name becomes "Former member";
+    - the email becomes `deleted-{id}@deleted.invalid`;
+    - password, image and platform-staff access are cleared;
+    - the session version moves on, ending every session;
+    - `users.deletedAt` is set (migration
+      `20261015130000_staff_account_deletion`).
+
+    Every "name or email" display therefore reads "Former member" without
+    touching any of them, and the address is free to sign up with again.
+  - **Removed:** OAuth links, sessions, reset and confirm links, every
+    membership, notifications, notification choices, phones and browsers.
+  - **Each shop is told:** its activity gets "Deleted their account and
+    left the workspace".
+  - **Afterwards:** `/login?deleted=1` says so. The privacy page (sections
+    8 and 11) is updated: it no longer says "email us to delete a sign-in".
+- **No buying in the app.**
+  - **How it's decided:** `isBusinessAppRequest()` (the app's user-agent
+    marker), once, in the dashboard layout. It's handed down as
+    `noBuying` (`components/business-app/no-buying.tsx`) rather than
+    worked out in the browser, which would flash a price first. A browser
+    on `b.` is unaffected.
+  - **Upgrade links:** every hand-written `/upgrade` link is now
+    `UpgradeLink`, which renders nothing in the app. That covers the
+    sidebar, locked stores, suppliers, reports, restocking and the
+    activity download (which says "isn't on your plan" there).
+  - **Plan notices:** the trial, grace and lapsed notices and the
+    plan-ended page state facts and dates only.
+  - **`/upgrade`** in the app is "Your plan": the plan, its state and
+    dates, and which feature `?feature=` named. No prices or buttons.
+  - **Billing:** the plan and dates (`lib/billing/status-line.ts`, shared
+    with the web page). No prices, no payment history, no plan button.
+    Cancelling stays.
+  - **Domain:** connect one you own; "registered until"; no buying, no
+    renewal price, no "renew now".
+  - **Mobile app:** an ordered app's progress and "paid until"; nothing to
+    order.
+  - **Server actions refuse in the app** ("This isn't available in the
+    app."): checkout, domain search, buying and renewing a domain, and
+    requesting and paying for a store app.
+- **Review access:** BUSINESS-APP-STORE.md §4 is the checklist. The demo
+  shop is made by signing up in the app, with pay on delivery only and a
+  plan given from the console. The owner does this before 19.6.
+- **Privacy answers:** Apple App Privacy and Google Data safety, in §5.
+  - **Tracking:** none.
+  - **Diagnostics:** "not linked", since the built-in error log stores
+    only page and host.
+  - Keep in step with the privacy page.
+- **Tests:**
+  - **`tests/business-app-store-rules.test.tsx` (15):**
+    - the app marker, and a store's own app not counting;
+    - `UpgradeLink`; the plan notices; the plan line without a price;
+    - every purchase action refused;
+    - `/upgrade`, Billing, Domain and Mobile app rendered in the app
+      against the browser;
+    - deletion: only-Owner blocking (and a closed shop not), a wrong
+      password, everything removed and the records kept as "Former
+      member", the activity entry, the email free again, can't delete
+      twice, Google/Apple confirming by email, the action's messages,
+      open while lapsed.
+- **Checked in a real browser** (production build, the Docker database, a
+  phone-width Chrome, and the app's user agent):
+  - the owner's blocked state with `b.` links;
+  - in the app: `/upgrade` "Your plan" naming the locked feature;
+    Billing, Domain and Mobile app without prices or buy buttons; no
+    `/upgrade` link anywhere;
+  - a staff member: a wrong password refused, then deleted, landing on
+    the "has been deleted" sign-in page, and unable to sign in again.
+
+### 19.4 — Native pieces — CODE DONE (2026-10-13); on a phone with 19.5's first build
+
+**As built.** In a browser nothing changes except one thing: a "Take a
+photo" button next to "Choose images" on touch screens. Everything else
+switches on only inside the business app (`inBusinessApp()`, or the app's
+user agent on the server).
+
+- **Push for staff.**
+  - **A phone belongs to a person:** migration
+    `20261015140000_business_app_push` makes `PushDevice.organizationId`
+    nullable and indexes `(userId, appId)`. A business-app phone has
+    `appId = com.mansaas.business`, a `userId`, and no shop. Shopper
+    queries all filter by shop, so they're unaffected.
+  - **Recipients:** `recipients.ts` gives staff in a shop their
+    business-app phones. That shop's preferences decide, as for browsers.
+  - **The tap:** `notify.ts` sends each phone the path for its own app:
+    `appPathFor` (`/s/{slug}/…`) for shoppers, `businessAppPathFor`
+    (`/o/{slug}/{admin path}`) for staff. So an alert from shop B opens
+    shop B. `NativeShell` follows only `/o/{slug}/…` in the business app
+    (`isBusinessEntryPath`), as a full load because the switch is a route.
+  - **iPhone:** `businessApnsCredentials()` is the platform's own key
+    (`APNS_BUSINESS_KEY`, `_KEY_ID`, `_TEAM_ID` in `.env.example`).
+    Store apps still use each merchant's key. Android goes through the
+    same Firebase project.
+  - **Badge:** the person's unread count across every shop
+    (`staffUnreadEverywhere`). Reading a list in any shop refreshes it
+    (`syncAppBadges`, which now covers staff).
+  - **Turning it on:** `/notifications/native-push` (POST/DELETE
+    `{ token }`).
+    - **Who:** the person from the session, the app from the user agent.
+      Only the business app with push and a configured key, same-origin
+      JSON, 20 changes per 10 minutes (`lib/business-app/push.ts`).
+    - **Ownership:** a token moves to whoever registers it now.
+  - **The screens:** Settings → Notifications' "Alerts on this device" and
+    the bell's offer use the phone's permission in the app
+    (`lib/business-app/phone-alerts.ts`), with phone wording. The
+    "Add to Home Screen" steps never show there.
+  - **Keeping it current:** `PhoneAlertsSync` in the admin frame
+    re-registers on each open, after a reinstall or a new sign-in.
+  - **Signing out** unlinks the phone first (`signOutHere`, used by all
+    three sign-out buttons), so it stops telling the next person about the
+    last one's shops. Deleting an account removes its phones (19.3).
+  - **Not built:** the 18.0 "hide details on the lock screen" preference,
+    which was never built in Phase 18 either. Left for later.
+- **Photos.**
+  - **iPhone permission text:** `NSCameraUsageDescription` and
+    `NSPhotoLibraryUsageDescription` are now in the base `Info.plist`.
+    **This was a live bug:** every store app's visual search offers the
+    camera, and an iPhone app crashes on the first tap without these.
+  - **Per-app wording:** `editIosInfoPlist({ photos })` sets the words for
+    each app. Store apps get `STORE_PHOTO_PURPOSE` now; the business app
+    gets `BUSINESS_PHOTO_PURPOSE` through its build kit profile in 19.5.
+  - **Android:** the WebView offers the camera only to an input that asks
+    for it, so `image-uploader.tsx` has a **"Take a photo"** button
+    (`capture="environment"`) on touch screens, in phone browsers too.
+- **Spreadsheets:** `export-csv-button.tsx` in the app writes the file
+  (`@capacitor/filesystem`, a new dependency) and opens the share sheet
+  (`lib/business-app/share.ts`). Same file, same byte-order mark.
+- **Receipts:** `PrintButton` in the app becomes **Share**. It sends the
+  receipt as plain words (`receiptText`) through the share sheet, which
+  suits WhatsApp. A WebView can't print, and a receipt page needs a
+  sign-in, so its link would be useless to a customer. The public invoice
+  page is on the storefront and is unchanged.
+- **Keyboard and safe areas:** the admin's frame has `data-admin-shell`.
+  - **Layout:** `100dvh` so the resized WebView shrinks it and the
+    keyboard pushes sticky save bars up, the header below the status bar,
+    and the content and sticky bars above the home indicator
+    (`globals.css`).
+  - **Elsewhere:** the insets are 0 in a browser, so desktop is unchanged
+    (checked). An installed iPhone web app benefits too.
+- **Back button (Android):**
+  - an open dialog, sheet, menu or the phone navigation drawer closes
+    first (a synthetic Escape, which Radix and the drawer listen for);
+  - at `/dashboard` the business app exits.
+- **Status bar:** in the business app it follows the admin's own `.dark`
+  class, not the phone's setting. The admin is light unless that class is
+  set.
+- **Not done here:**
+  - **Splash screen and app colours:** these are build settings (19.5).
+  - **Live reload on a phone in development:** set
+    `NEXT_PUBLIC_BUSINESS_DOMAIN` to the LAN address. That's simpler than
+    the user-agent fallback 19.0 sketched, and goes in 19.5's runbook.
+- **Tests:** `tests/business-app-native.test.ts` (9):
+  - **staff phones:** a new order reaches only the owner's phone, with
+    `/o/{slug}/sales/orders/{id}`, a thread and a badge; the badge counts
+    every shop; badge sync for staff; the platform's APNs key;
+  - **the route:** records the phone for no shop; a phone moving to the
+    next person; only the owner can stop it; it refuses a browser, a
+    store's app, another site, a made-up token or no session;
+  - **the small pieces:** entry paths, receipt words, the permission text
+    in `Info.plist` and its per-app wording.
+- **Checked in a browser** (production build, phone width and desktop):
+  - "Take a photo" appears on touch screens and not on desktop;
+  - the desktop admin frame is unchanged;
+  - "Alerts on this device" in a browser is unchanged.
+- **Left for a phone (19.5):** a real push arriving and tapped, on both
+  platforms; the badge; the share sheet with a spreadsheet and a receipt;
+  the camera on Android 13+; the back button; the keyboard over a save
+  bar.
+
+### 19.5 — Building and testing it — DONE (2026-10-13); first install on a real phone is the owner's
+
+**As built.** The runbook is `docs/MOBILE-BUILD.md` §8.
+
+- **The kit has a business profile:** `npm run mobile:business -- init |
+  check | build | listing` runs `scripts/mobile/store-app.ts --business`.
+  - **The folder** is `~/mansaas-store-apps/business` (`business` is a
+    reserved slug, so never a shop's).
+  - **The same code:** the native-project copies, signing, icons and
+    Gradle build are shared with store apps, branching only where the
+    business app differs:
+    - `init` writes `com.mansaas.business` / "{PLATFORM_NAME} Business"
+      (`BUSINESS_APP_NAME`) loading `https://b.{root}`, with no database
+      and no merchant icon;
+    - `check` replaces the registration checks with the platform's
+      (`checkBusiness`). `serverUrl` must be the business host (a hard
+      stop). It warns about the APNs key, `APPLE_TEAM_ID` and the
+      upload-key fingerprint missing from `BUSINESS_APP_ANDROID_SHA256`;
+    - `build` claims the whole business host for links
+      (`editAndroidManifestForAppLinks(…, 'whole-host')`, entitlements
+      `applinks:b.{root}`) and stamps `BUSINESS_PHOTO_PURPOSE`;
+    - `listing` writes `listing/LISTING.md`: ids, URLs, a short
+      description and reviewer notes, pointing to BUSINESS-APP-STORE.md.
+- **Links open the app:** `b.{root}/.well-known/apple-app-site-association`
+  and `assetlinks.json` (`app/business/well-known/`).
+  - **What they claim:** the whole host except `/api`.
+  - **Where the keys come from:** the platform's settings
+    (`businessAppLinkSettings`: `APPLE_TEAM_ID` or
+    `APNS_BUSINESS_TEAM_ID`, and `BUSINESS_APP_ANDROID_SHA256`).
+  - **Serving:** the proxy serves them with or without a session
+    (`kind: 'app-links'`). With no keys set there's a 404 and links
+    simply open the browser.
+- **Fixed while trying it:**
+  - **iOS debug builds couldn't load a laptop:** App Transport Security
+    refuses plain http. `allowHttpForDebug` adds the exception to
+    **debug** builds only (store apps too, whose iPhone build had only
+    been compiled before).
+  - **A phone needs a real domain for the sign-in cookie:** a nip.io root
+    (`b.192-168-1-4.nip.io`) on `next dev` gives one.
+    - `urls.ts` builds `http` addresses for nip.io and sslip.io names in
+      development only. Real domains stay https in every build, and the
+      existing "staging" test still holds.
+    - `next.config.ts` allows `**.nip.io` dev origins.
+- **Checked for real:**
+  - `init` and `check` with production's root (`check` printed the upload
+    key's fingerprint);
+  - a signed release **Android** build: `.apk` and `.aab`, package
+    `com.mansaas.business`, labelled "Notely Business", loading
+    `https://b.getnotely.io` with the `MansaasApp/com.mansaas.business`
+    marker, an App Links filter for `b.getnotely.io` `/`, the Filesystem
+    plugin bundled, signed by the upload key;
+  - **iOS** synced and compiled for the simulator, with the business photo
+    wording and `applinks:b.getnotely.io`;
+  - a debug **iPhone simulator** run against the laptop over nip.io and
+    `next dev`, which **opened the real sign-in page of `b.` inside the
+    app**.
+- **Tests:** `tests/business-app-build.test.ts` (9):
+  - the business app.json;
+  - the whole-host Android filter and iOS associated domain;
+  - the debug http exception (only added once; never in the shared
+    project);
+  - the two link files (claimed paths, team, fingerprints, 404 without
+    settings) and the store's unchanged;
+  - the proxy's no-session pass;
+  - http only for nip.io names in dev.
+- **Left for the owner:** the accounts and settings in §8.1; the first
+  build on their Mac with the real logo and `google-services.json`; and
+  installing it on a real Android phone (`.apk`) and on an iPhone through
+  TestFlight. Then 19.6.
+
+### 19.6 — Phone-first pass, and done — TODO
+
+- **One merchant, one phone, start to finish.** On a mid-range Android
+  (360px wide) and an iPhone, in the app, and again in the phone browser:
+  1. download the app, register (email; then Google; then Apple on iPhone);
+  2. verify the email from the Mail app, then come back;
+  3. create the shop; finish the setup guide (12.5);
+  4. add a product with a photo taken there and then, with a variant;
+  5. connect payments (10.2), set delivery (Phase 9), open the shop;
+  6. take an order from another phone, get the alert, tap it, mark it sent;
+  7. ring up a walk-in sale (Phase 2) and send the receipt on WhatsApp;
+  8. answer a chat (Phase 17) from the notification;
+  9. invite a staff member, who joins from the email link straight into
+     the app;
+  10. switch to a second shop; an alert from the first opens the first;
+  11. export a report to a spreadsheet; edit the homepage (15.3);
+  12. delete a test staff account.
+
+  Every screen that's hard to use at 360px gets fixed for all phone
+  browsers. The list of fixes goes here as it's built.
+- **Store review:** re-check the payments rules, then submit to TestFlight
+  external review and to the Play internal track, and then to production.
+  Record each rejection and its fix here.
+- **Acceptance checklist:** in `docs/BUSINESS-APP-ACCEPTANCE.md`, like
+  NOTIFICATIONS-ACCEPTANCE.md.
+
+### 19.7 — Not in this phase
+
+- **The console in the app:** platform staff use the web.
+- **Shopping in the business app:** shoppers have their own apps.
+- **Offline use** (making sales without signal): it needs a local database
+  and sync, so it's a phase of its own if merchants ask for it.
+- **Barcode scanning with the camera:** a good next step once products have
+  barcodes.
+- **Tablet layouts beyond what the admin already does.**
+- **In-app purchase of plans:** only if the store rules force it, and then
+  as its own decision, since Apple and Google take a cut.
+
+### What the owner provides (Phase 19)
+
+- **Apple Developer Program, as an organisation** ($99 a year; needs a
+  D-U-N-S number, which is free but takes days to weeks). It makes the
+  seller name the business rather than a person, and holds the APNs key.
+- **An APNs key** (.p8, with Key ID and Team ID) from that account, set as
+  `APNS_BUSINESS_KEY`, `APNS_BUSINESS_KEY_ID` and `APNS_BUSINESS_TEAM_ID` in
+  `.env` and Vercel. Never paste it into chat or a commit.
+- **Sign in with Apple:** a Services ID and a Sign in with Apple key from
+  the same account: `AUTH_APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_SIGN_IN_KEY_ID`
+  and `APPLE_SIGN_IN_PRIVATE_KEY` (the `.p8` contents). Steps are in
+  `.env.example`. The return URL is
+  `https://{PLATFORM_HOST}/api/auth/callback/apple`.
+- **Google Play developer account, as an organisation** ($25 once). This
+  avoids the 12-tester, 14-day rule for personal accounts.
+- **Firebase:** in the existing platform project, Add app → Android, package
+  `com.mansaas.business`. Download its `google-services.json` into the
+  business build folder.
+- **DNS:** `b.{root}` on Vercel. The wildcard certificate already covers it.
+- **The demo shop and reviewer login** (19.3).
+- **Testers:** the email addresses of the first merchants and staff who will
+  try it, for TestFlight and the Android install link.
 
 ## Sequencing
 

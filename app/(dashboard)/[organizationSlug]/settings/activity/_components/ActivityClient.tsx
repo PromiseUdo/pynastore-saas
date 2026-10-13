@@ -12,8 +12,8 @@
  * server, so a view can be refreshed, bookmarked or sent to a colleague.
  * This component only ever holds the page it was given.
  */
+import { UpgradeLink, useNoBuying } from '@/components/business-app/no-buying';
 import * as React from 'react';
-import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { History, Lock, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -100,6 +100,7 @@ export function ActivityClient({ result }: { result: ActivityResult }) {
     [member, area, urlQuery, from, to],
   );
 
+  const noBuying = useNoBuying();
   const header = (
     <PageHeader
       title="Activity"
@@ -113,14 +114,21 @@ export function ActivityClient({ result }: { result: ActivityResult }) {
             label="Download CSV"
             disabled={result.historySize === 0}
           />
+        ) : noBuying ? (
+          /* In the business app there's no way to buy it (ROADMAP 19.3):
+           * just say what it is and that the plan doesn't include it. */
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Lock className="size-3.5" aria-hidden />
+            Downloading the activity isn’t on your plan
+          </p>
         ) : (
           /* A plan-gated feature is shown with a way to get it, never hidden
            * from the page (AGENTS §7). */
           <Button asChild variant="outline" size="sm">
-            <Link href="/upgrade">
+            <UpgradeLink>
               <Lock className="size-3.5" />
               Download (upgrade)
-            </Link>
+            </UpgradeLink>
           </Button>
         )
       }

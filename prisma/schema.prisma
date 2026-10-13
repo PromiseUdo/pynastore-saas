@@ -32,6 +32,14 @@ model User {
    */
   isPlatformStaff Boolean @default(false)
 
+  /**
+   * The person deleted their account (ROADMAP 19.3, lib/data-rights/staff.ts).
+   * The row stays — business records still point at it — but everything
+   * that identified or reached them is gone: the name reads "Former member"
+   * and the email is a placeholder that can't receive mail.
+   */
+  deletedAt DateTime?
+
   accounts            Account[]
   sessions            Session[]
   memberships         Membership[]
@@ -1522,6 +1530,26 @@ model CustomerAuthHandoff {
 
   @@index([expiresAt])
   @@map("customer_auth_handoffs")
+}
+
+/**
+ * The business app's one-minute, single-use tickets (ROADMAP 19.2): a
+ * finished Google or Apple sign-in carried from the in-app browser sheet to
+ * the app's WebView, and a signed-in member's "connect Facebook" carried the
+ * other way. Only the id is kept: the ticket itself is a signed token, and
+ * this row is what makes it spendable once. Purged an hour after expiry.
+ */
+model StaffAppTicket {
+  id        String    @id // the token's jti
+  /** what it may be spent on: "sign-in" | "social-connect" */
+  purpose   String
+  usedAt    DateTime?
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("staff_app_tickets")
 }
 
 enum CustomerStatus {
@@ -3692,7 +3720,12 @@ model MobileApp {
  */
 model PushDevice {
   id             String       @id @default(cuid())
-  organizationId String
+  /**
+   * The store whose app it's in. Null for a phone in the business app
+   * (ROADMAP 19.4): that phone belongs to its staff member (`userId`), not to
+   * one shop, and hears about every shop they're in.
+   */
+  organizationId String?
   /**
    * the app it's in — also which credentials send to it
    */
@@ -3719,7 +3752,7 @@ model PushDevice {
   createdAt      DateTime     @default(now())
   lastSeenAt     DateTime     @default(now())
 
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer     Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
   user         User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   watches      PushOrderWatch[]
@@ -3729,6 +3762,7 @@ model PushDevice {
   @@index([organizationId])
   @@index([customerId])
   @@index([userId])
+  @@index([userId, appId])
   @@map("push_devices")
 }
 

@@ -6,7 +6,9 @@
  * plan is running.
  *
  * "Choose a plan" is always one click away for someone who can manage
- * billing; anyone else is told who can.
+ * billing; anyone else is told who can. Inside the business app (`noBuying`,
+ * ROADMAP 19.3) the notice states only the facts: nothing to buy, nowhere to
+ * buy it.
  */
 import Link from 'next/link';
 import { AlertTriangle, Clock, Lock } from 'lucide-react';
@@ -21,12 +23,14 @@ export interface PlanNoticeProps {
   trialEndsAt: Date | null;
   graceEndsAt: Date | null;
   canManageBilling: boolean;
+  /** the business app: facts only, no "choose a plan" */
+  noBuying?: boolean;
   now?: Date;
 }
 
 const days = (n: number) => `${n} day${n === 1 ? '' : 's'}`;
 
-export function PlanNotice({ state, planName, trialEndsAt, graceEndsAt, canManageBilling, now = new Date() }: PlanNoticeProps) {
+export function PlanNotice({ state, planName, trialEndsAt, graceEndsAt, canManageBilling, noBuying = false, now = new Date() }: PlanNoticeProps) {
   if (state === 'active' || state === 'none') return null;
 
   let tone: 'info' | 'warning' | 'danger';
@@ -37,19 +41,18 @@ export function PlanNotice({ state, planName, trialEndsAt, graceEndsAt, canManag
     const left = trialEndsAt ? daysUntil(trialEndsAt, now) : 0;
     tone = left <= 3 ? 'warning' : 'info';
     text = trialEndsAt
-      ? `Your free trial of ${planName} ends in ${days(left)}, on ${formatDate(trialEndsAt)}. Choose a plan to keep everything running.`
+      ? `Your free trial of ${planName} ends in ${days(left)}, on ${formatDate(trialEndsAt)}.${noBuying ? '' : ' Choose a plan to keep everything running.'}`
       : `You’re on a free trial of ${planName}.`;
   } else if (state === 'grace') {
     tone = 'warning';
     Icon = AlertTriangle;
     text = graceEndsAt
-      ? `Your plan has ended. Your shop keeps taking orders for ${days(daysUntil(graceEndsAt, now))}, until ${formatDate(graceEndsAt)} — choose a plan to keep it open.`
-      : 'Your plan has ended. Choose a plan to keep your shop open.';
+      ? `Your plan has ended. Your shop keeps taking orders for ${days(daysUntil(graceEndsAt, now))}, until ${formatDate(graceEndsAt)}${noBuying ? '.' : ' — choose a plan to keep it open.'}`
+      : `Your plan has ended.${noBuying ? '' : ' Choose a plan to keep your shop open.'}`;
   } else {
     tone = 'danger';
     Icon = Lock;
-    text =
-      'Your plan has ended, so your shop is closed to customers. You can still finish the orders you already have. Choose a plan to reopen straight away.';
+    text = `Your plan has ended, so your shop is closed to customers. You can still finish the orders you already have.${noBuying ? '' : ' Choose a plan to reopen straight away.'}`;
   }
 
   return (
@@ -66,7 +69,7 @@ export function PlanNotice({ state, planName, trialEndsAt, graceEndsAt, canManag
         <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
         <span>{text}</span>
       </p>
-      {canManageBilling ? (
+      {noBuying ? null : canManageBilling ? (
         <Link href="/upgrade" className={buttonVariants({ size: 'sm', variant: tone === 'info' ? 'outline' : 'default', className: 'shrink-0 self-start sm:self-auto' })}>
           Choose a plan
         </Link>
@@ -82,7 +85,7 @@ export function PlanNotice({ state, planName, trialEndsAt, graceEndsAt, canManag
  * says what happened and what still works, and never locks the owner out of
  * paying.
  */
-export function PlanEndedPage({ canManageBilling }: { canManageBilling: boolean }) {
+export function PlanEndedPage({ canManageBilling, noBuying = false }: { canManageBilling: boolean; noBuying?: boolean }) {
   return (
     <div className="mx-auto flex max-w-lg flex-col items-center px-6 py-16 text-center">
       <div className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -90,14 +93,15 @@ export function PlanEndedPage({ canManageBilling }: { canManageBilling: boolean 
       </div>
       <h1 className="mt-3 text-lg font-semibold text-foreground">Your plan has ended</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Your shop is closed to customers and this page is unavailable until a plan is chosen. Nothing has been deleted —
-        everything reopens the moment you choose one.
+        {noBuying
+          ? 'Your shop is closed to customers and this page is unavailable. Nothing has been deleted.'
+          : 'Your shop is closed to customers and this page is unavailable until a plan is chosen. Nothing has been deleted — everything reopens the moment you choose one.'}
       </p>
       <p className="mt-2 text-sm text-muted-foreground">
         You can still open your orders to send, deliver or refund what customers have already paid for.
       </p>
       <div className="mt-5 flex flex-wrap justify-center gap-2">
-        {canManageBilling ? (
+        {noBuying ? null : canManageBilling ? (
           <Link href="/upgrade" className={buttonVariants({ size: 'sm' })}>
             Choose a plan
           </Link>

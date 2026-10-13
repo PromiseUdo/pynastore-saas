@@ -10,6 +10,7 @@
  * Telling us about the app needs `settings.edit`; paying needs
  * `billing.manage`, as for a domain.
  */
+import { isBusinessAppRequest, NOT_IN_THE_APP } from '@/lib/business-app/request';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS, PermissionDeniedError } from '@/lib/permissions';
@@ -37,6 +38,8 @@ function failure(error: unknown, fallback: string): { success: false; error: str
 
 /** Saves what the app should be. Allowed until staff start building it. */
 export async function saveMobileAppRequestAction(input: MobileAppRequestInput): Promise<ActionResult> {
+  // Nothing is sold inside the business app (ROADMAP 19.3); the screens don't offer it either.
+  if (await isBusinessAppRequest()) return { success: false, error: NOT_IN_THE_APP };
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SETTINGS_EDIT);
@@ -76,6 +79,8 @@ export async function saveMobileAppRequestAction(input: MobileAppRequestInput): 
 
 /** Starts paying: the setup fee, or a year's renewal. The price is read on the server. */
 export async function payForMobileAppAction(kind: 'SETUP' | 'RENEWAL'): Promise<ActionResult<{ authorizationUrl: string }>> {
+  // Nothing is sold inside the business app (ROADMAP 19.3); the screens don't offer it either.
+  if (await isBusinessAppRequest()) return { success: false, error: NOT_IN_THE_APP };
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.BILLING_MANAGE);

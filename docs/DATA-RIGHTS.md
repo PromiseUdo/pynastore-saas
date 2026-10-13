@@ -53,7 +53,44 @@ A customer with no orders, invoices or quotes at all is deleted outright.
 The merchant's customer page says the account was deleted, and marketing
 can't be switched back on for them.
 
-## Chat with a store (ROADMAP 17)
+## A staff member's own account (Settings → Your account, ROADMAP 19.3)
+
+Anyone with a sign-in (an Owner, any staff member, platform staff) can delete
+it themselves: from Settings → Your account in the dashboard or the business
+app, or from `/onboarding/account` before they've made a shop. App stores
+require it of any app you can sign up in (Apple 5.1.1(v)).
+
+**Confirming.** With their password, or, for a Google- or Apple-only account,
+by typing their email. Same as shoppers.
+
+**One rule first.** The only Owner of an open or suspended store can't delete
+until that store has another Owner (Members → change someone's role to
+Owner) or is closed (Settings → Your data). The page lists those stores with
+both links. Closed stores don't count.
+
+`deleteStaffAccount` (`lib/data-rights/staff.ts`) then acts at once.
+
+Removed:
+- **sign-in:** the password, Google and Apple links, every session (the
+  session version moves on, so a token already issued stops working on its
+  next request), reset links and email-confirmation links;
+- **every membership,** in every store, with its store access;
+- **notifications:** the list, the choices, and the phones and browsers that
+  receive them;
+- **platform staff access,** if they had it.
+
+Kept: **the `users` row**, because orders they rang up, the activity log and
+answered questions are each store's business records and point at it. The
+row keeps nothing that identifies or reaches them: the name becomes
+"Former member", and the email becomes `deleted-{id}@deleted.invalid`, which
+can't receive mail. So every screen that shows "name or email" shows
+"Former member", and the real address is free to sign up with again (as a
+new account).
+
+Each store they were in gets a "Deleted their account and left the
+workspace" entry in its activity.
+
+
 
 - **Signed-in shoppers:** their conversation belongs to their account. It's
   in their download, and it goes when they delete the account (above).
@@ -112,6 +149,9 @@ orders and invoices as spreadsheets from the same page.
   - erasure, proven by **zero rows of that store left in any table** while
     the other store's rows are identical and the users survive.
 - **`lib/data-rights/policy.test.ts`** covers the dates.
+- **`tests/business-app-store-rules.test.tsx`** covers a staff member
+  deleting their own account: the only-Owner rule, confirming, what's
+  removed, the records kept as "Former member", and the email free again.
 - **`tests/chat-data-rights.test.ts`** covers chat:
   - messages in the download;
   - removal on account deletion, both with and without kept orders;

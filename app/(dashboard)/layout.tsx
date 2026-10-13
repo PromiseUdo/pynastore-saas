@@ -9,6 +9,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { PLATFORM_NAME } from '@/lib/brand';
+import { isBusinessAppRequest } from '@/lib/business-app/request';
 
 /* Installable to a Home Screen, so a merchant can get alerts on their phone
  * (ROADMAP 18.3) — on an iPhone, only an installed site can. */
@@ -28,7 +29,13 @@ function getInitials(name: string): string {
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const ctx = await getOrganizationContext();
-  const [session, entitlements, requestHeaders] = await Promise.all([auth(), getOrganizationEntitlements(), headers()]);
+  const [session, entitlements, requestHeaders, noBuying] = await Promise.all([
+    auth(),
+    getOrganizationEntitlements(),
+    headers(),
+    // Nothing is sold, or pointed to, inside the business app (ROADMAP 19.3).
+    isBusinessAppRequest(),
+  ]);
   const { plan, access } = entitlements;
   const canManageBilling = hasPermission(ctx.membership.role.permissions, PERMISSIONS.BILLING_MANAGE);
   const canViewMessages = hasPermission(ctx.membership.role.permissions, PERMISSIONS.MESSAGES_VIEW);
@@ -74,6 +81,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         planState: access.state,
       }}
       orgs={orgs}
+      noBuying={noBuying}
       canViewMessages={canViewMessages && !closed && access.state !== 'lapsed'}
       user={{
         name: session?.user?.name ?? null,
@@ -88,10 +96,11 @@ export default async function Layout({ children }: { children: React.ReactNode }
           trialEndsAt={access.trialEndsAt}
           graceEndsAt={access.graceEndsAt}
           canManageBilling={canManageBilling}
+          noBuying={noBuying}
         />
       }
     >
-      {closed ? <PlanEndedPage canManageBilling={canManageBilling} /> : children}
+      {closed ? <PlanEndedPage canManageBilling={canManageBilling} noBuying={noBuying} /> : children}
     </DashboardLayout>
   );
 }

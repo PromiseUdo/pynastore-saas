@@ -10,6 +10,7 @@
  * (decided 2026-09-30), and needs `settings.edit`. Staff do the rest from
  * the console's domain queue (11.5).
  */
+import { isBusinessAppRequest, NOT_IN_THE_APP } from '@/lib/business-app/request';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
@@ -48,6 +49,8 @@ async function offer(r: { domain: string; priceUsd: number; renewUsd: number }):
 
 /** Is this `.com` free, what does it cost (first year and renewal), and if not, what's close? */
 export async function searchComDomain(query: string): Promise<ActionResult<DomainSearchResult>> {
+  // Nothing is sold inside the business app (ROADMAP 19.3); the screens don't offer it either.
+  if (await isBusinessAppRequest()) return { success: false, error: NOT_IN_THE_APP };
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SETTINGS_VIEW);
@@ -79,6 +82,8 @@ async function payerEmail(userId: string): Promise<string> {
 
 /** Starts paying for a new `.com`. The price is quoted again on the server before charging. */
 export async function buyDomain(domain: string): Promise<ActionResult<{ authorizationUrl: string }>> {
+  // Nothing is sold inside the business app (ROADMAP 19.3); the screens don't offer it either.
+  if (await isBusinessAppRequest()) return { success: false, error: NOT_IN_THE_APP };
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.BILLING_MANAGE);
@@ -98,6 +103,8 @@ export async function buyDomain(domain: string): Promise<ActionResult<{ authoriz
 
 /** Starts paying to renew the shop's registered domain for a year. */
 export async function renewDomain(): Promise<ActionResult<{ authorizationUrl: string }>> {
+  // Nothing is sold inside the business app (ROADMAP 19.3); the screens don't offer it either.
+  if (await isBusinessAppRequest()) return { success: false, error: NOT_IN_THE_APP };
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.BILLING_MANAGE);

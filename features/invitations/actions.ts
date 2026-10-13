@@ -14,7 +14,8 @@ import { createAuditLog } from '@/lib/audit';
 import { requireSeatAvailable, UsageLimitExceededError } from '@/lib/billing/entitlements';
 import { sendInvitationEmail } from '@/lib/email';
 import { updateCurrentOrganization } from '@/lib/session';
-import { getAdminUrl, getMarketingUrl } from '@/lib/tenant/urls';
+import { currentShopUrlHere } from '@/lib/tenant/here';
+import { getMarketingUrl } from '@/lib/tenant/urls';
 import { z } from 'zod';
 import { markEmailVerified } from '@/lib/email-verification';
 
@@ -228,7 +229,7 @@ export async function acceptInvitation(token: string): Promise<ActionResult> {
           invitation.organization.id,
           invitation.organization.slug,
         );
-        redirect(getAdminUrl(invitation.organization.slug, '/dashboard'));
+        redirect(await currentShopUrlHere(invitation.organization.slug, '/dashboard'));
       }
       // Reactivate suspended membership
       await prisma.$transaction([
@@ -278,7 +279,7 @@ export async function acceptInvitation(token: string): Promise<ActionResult> {
       invitation.organization.slug,
     );
 
-    redirect(getAdminUrl(invitation.organization.slug, '/dashboard'));
+    redirect(await currentShopUrlHere(invitation.organization.slug, '/dashboard'));
   } catch (err) {
     // Re-throw Next.js redirect
     if (err instanceof Error && err.message === 'NEXT_REDIRECT') throw err;

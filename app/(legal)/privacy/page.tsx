@@ -392,6 +392,13 @@ export default function PrivacyPolicyPage() {
             those records are {FINANCIAL_RETENTION_YEARS} years old, then they are removed too.
           </li>
           <li>
+            <strong className="font-medium text-foreground">A deleted {PLATFORM_NAME} account</strong> (a merchant’s or
+            staff member’s sign-in). Removed straight away: the sign-in itself, membership of every store, notifications,
+            notification choices, and the phones and browsers that receive them. What the person did in a store — orders they
+            took, entries in its activity — stays with that store as its business records, shown as “Former member”, with
+            their name and email removed.
+          </li>
+          <li>
             <strong className="font-medium text-foreground">A closed store.</strong> It goes offline at once and can be
             restored on request for {CLOSURE_GRACE_DAYS} days. After that we delete its files and photos, store pages,
             staff access, payout details, every chat with shoppers, and every shopper’s account and contact details;
@@ -491,9 +498,11 @@ export default function PrivacyPolicyPage() {
           <li>
             <strong className="font-medium text-foreground">Deletion.</strong> A shopper can delete their account from
             “Your data” in their store account, and a store owner can close their store from Settings → Your data —
-            section 8 says exactly what each removes and what the law requires us to keep. To delete a {PLATFORM_NAME}{' '}
-            sign-in itself, email <LegalContact /> from the address on the account; we will verify that you own it, act
-            on the request, and confirm when it is done.
+            section 8 says exactly what each removes and what the law requires us to keep. Anyone can delete their own{' '}
+            {PLATFORM_NAME} sign-in from Settings → Your account, in the dashboard or the app (or before making a store,
+            from the “Create your shop” page). The only Owner of an open store first makes another member an Owner, or
+            closes the store. If you can’t sign in, email <LegalContact /> from the address on the account; we will verify
+            that you own it, act on the request, and confirm when it is done.
           </li>
           <li>
             <strong className="font-medium text-foreground">Withdrawing consent.</strong> Where we rely on

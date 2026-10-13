@@ -35,3 +35,6 @@ export const PLATFORM_OPERATOR_REGISTRATION = 'CAC business name registration nu
 
 /** Where people write to us — the site footer and the legal pages. */
 export const PLATFORM_CONTACT_EMAIL = 'pynacode@gmail.com';
+
+/** The business app's name in the stores and on the phone (ROADMAP 19): one app for every merchant. */
+export const BUSINESS_APP_NAME = `${PLATFORM_NAME} Business`;

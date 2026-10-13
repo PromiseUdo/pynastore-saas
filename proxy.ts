@@ -17,6 +17,8 @@
  *                                 in local dev the root domain itself.
  *   {slug}.{ROOT_DOMAIN}       -> admin, internally rewritten to /${slug}/...
  *   shop-{slug}.{ROOT_DOMAIN}  -> storefront, rewritten to /store/${slug}/...
+ *   b.{ROOT_DOMAIN}            -> business: the admin of the SESSION's shop,
+ *                                 rewritten to /${slug}/... (ROADMAP 19)
  *   a registered custom domain -> resolved via DB (see resolveTenant.ts)
  *
  * The public URL never shows the org slug — see lib/tenant/resolveHostname.ts
@@ -29,10 +31,11 @@ import { authConfig } from '@/auth.config';
 import { APP_UNAVAILABLE_PATH, resolveMobileRoute } from '@/lib/mobile/app-config';
 import { mobileAppForUserAgent } from '@/lib/mobile/store-apps';
 import { prisma } from '@/lib/prisma';
-import { resolveHostname, isLocalHostname } from '@/lib/tenant/resolveHostname';
+import { BUSINESS_INSTALL_PREFIX, BUSINESS_OPEN_PATH, BUSINESS_SHOP_COOKIE, BUSINESS_WELL_KNOWN, businessShopFor, resolveBusinessRoute } from '@/lib/tenant/business';
+import { getRootDomain, resolveHostname, isLocalHostname } from '@/lib/tenant/resolveHostname';
 import { resolveTenant, resolveTenantBySlug } from '@/lib/tenant/resolveTenant';
 import { getOrgRouting } from '@/lib/tenant/org-status';
-import { getAdminUrl, getMarketingUrl, getStorefrontUrl } from '@/lib/tenant/urls';
+import { getAdminUrl, getBusinessUrl, getMarketingUrl, getStorefrontUrl } from '@/lib/tenant/urls';
 import { buildCsp, cspMode, makeNonce } from '@/lib/security/csp';
 import { PREVIEW_COOKIE } from '@/lib/storefront/design/preview-cookie';
 
@@ -242,6 +245,79 @@ const routeRequest = auth(async function proxy(req: NextRequest & { auth: any })
     return NextResponse.rewrite(rewriteUrl, { request: { headers } });
   }
 
+  // ── 1d. Business host — the admin for ANY shop on one origin (ROADMAP 19)
+  //        The shop is the session's (lib/tenant/business.ts), so the
+  //        admin's slug-free paths rewrite to /{shop}/… exactly as on
+  //        {shop}.{ROOT_DOMAIN}. Sign-in and onboarding are served here too,
+  //        and every redirect stays on this host — the business app can't
+  //        follow one off it.
+  if (hostInfo.siteType === 'business') {
+    const here = (path: string) => new URL(path, requestUrl);
+    const passThrough = () => NextResponse.next({ request: { headers: new Headers(req.headers) } });
+    const userId: string | undefined = session?.user?.id;
+    const route = resolveBusinessRoute(pathname, { signedIn: Boolean(userId), method: req.method, search: req.nextUrl.search });
+
+    switch (route.kind) {
+      case 'pass':
+      case 'open':
+        return passThrough();
+      case 'sign-in': {
+        const loginUrl = here('/login');
+        if (pathname !== '/') loginUrl.searchParams.set('callbackUrl', requestUrl);
+        return NextResponse.redirect(loginUrl);
+      }
+      case 'home':
+      case 'blocked':
+        return NextResponse.redirect(here('/'));
+      case 'app-links':
+        return NextResponse.rewrite(here(`${BUSINESS_WELL_KNOWN}/${pathname.slice('/.well-known/'.length)}`), { request: { headers: new Headers(req.headers) } });
+      case 'install':
+        return NextResponse.rewrite(here(`${BUSINESS_INSTALL_PREFIX}${pathname}`), { request: { headers: new Headers(req.headers) } });
+      case 'entry': {
+        const open = here(`${BUSINESS_OPEN_PATH}/${route.slug}`);
+        open.searchParams.set('to', route.to);
+        return NextResponse.rewrite(open, { request: { headers: new Headers(req.headers) } });
+      }
+    }
+
+    // This browser's shop on this host, falling back to the session's (see BUSINESS_SHOP_COOKIE).
+    const rememberedSlug: string | undefined = req.cookies.get(BUSINESS_SHOP_COOKIE)?.value || session.currentOrgSlug;
+    const shop = await businessShopFor(userId!, rememberedSlug);
+    const isGet = req.method === 'GET' || req.method === 'HEAD';
+    if (!shop) {
+      // In no shop at all: make one (or, from a POST, let the page's own
+      // membership check answer — a redirect would replay the action).
+      if (isGet) return NextResponse.redirect(here('/onboarding'));
+      return passThrough();
+    }
+    if (!shop.remembered && isGet) {
+      // The session's shop is gone or they left it: move the session to one
+      // of theirs (only a route handler can write it) and come back here.
+      return NextResponse.redirect(here(`/o/${shop.slug}${pathname === '/' ? '' : pathname}${req.nextUrl.search}`));
+    }
+    // A POST from a page of a shop they're no longer in still names that
+    // shop, so the action's own membership check refuses it — it must never
+    // run against a different shop than the page it came from.
+    const slug = shop.remembered ? shop.slug : rememberedSlug ?? shop.slug;
+
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set('x-org-slug', slug);
+    requestHeaders.set('x-site-type', 'admin');
+    const internalPrefix = `/${slug}`;
+
+    if (shop.remembered && shop.status === 'SUSPENDED') {
+      if (pathname === '/unavailable/workspace') return NextResponse.next({ request: { headers: requestHeaders } });
+      return NextResponse.rewrite(here('/unavailable/workspace'), { request: { headers: requestHeaders } });
+    }
+
+    const alreadyRewritten = pathname === internalPrefix || pathname.startsWith(`${internalPrefix}/`);
+    requestHeaders.set('x-admin-path', alreadyRewritten ? pathname.slice(internalPrefix.length) || '/' : pathname);
+    if (alreadyRewritten) return NextResponse.next({ request: { headers: requestHeaders } });
+
+    const internalPath = `${internalPrefix}${pathname === '/' ? '/dashboard' : pathname}`;
+    return NextResponse.rewrite(here(`${internalPath}${req.nextUrl.search}`), { request: { headers: requestHeaders } });
+  }
+
   // ── 2. Resolve the tenant from the hostname ─────────────────────────────
   //      Done BEFORE the auth gate: a subdomain / custom-domain storefront
   //      is publicly browsable and must never be bounced to login. Only
@@ -418,9 +494,17 @@ export default async function proxy(req: NextRequest, event: NextFetchEvent) {
     dev: process.env.NODE_ENV === 'development',
     https: req.headers.get('x-forwarded-proto') === 'https' || req.nextUrl.protocol === 'https:',
     // A shop's admin may frame its own storefront — the designer's preview (15.3).
-    frameSrc: hostInfo.siteType === 'admin' && slug ? [new URL(getStorefrontUrl(slug)).origin] : undefined,
-    // …and that storefront, only mid-preview, may be framed by that admin and nothing else.
-    frameAncestors: slug && isDesignPreview(req, hostInfo) ? [new URL(getAdminUrl(slug)).origin] : undefined,
+    // The business host's shop is the session's, unknown here, so it may
+    // frame the platform's own hosts; the storefront still re-checks the member.
+    frameSrc:
+      hostInfo.siteType === 'admin' && slug
+        ? [new URL(getStorefrontUrl(slug)).origin]
+        : hostInfo.siteType === 'business'
+          ? [`${new URL(getBusinessUrl()).protocol}//*.${getRootDomain()}`]
+          : undefined,
+    // …and that storefront, only mid-preview, may be framed by that admin (or
+    // the business host, ROADMAP 19) and nothing else.
+    frameAncestors: slug && isDesignPreview(req, hostInfo) ? [new URL(getAdminUrl(slug)).origin, new URL(getBusinessUrl()).origin] : undefined,
     // The chat's real-time hints (lib/chat/ably.ts) — only when configured.
     realtime: Boolean(process.env.ABLY_API_KEY),
   });

@@ -12,6 +12,7 @@
  * Publish with unsaved edits saves them first, so what goes live is what is
  * on screen.
  */
+import { openPendingTab } from '@/lib/business-app/client';
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -190,7 +191,7 @@ export function LookEditor({ editor }: { editor: DesignEditorData }) {
   async function onPreview() {
     /* Open the tab now, while this is still the click: a window opened after
      * an await is a pop-up most browsers block. */
-    const tab = window.open('', '_blank');
+    const tab = openPendingTab();
     setBusy('preview');
     const savedAt = dirty ? await saveDraft() : 'unchanged';
     const link = savedAt ? await createDesignPreviewLink() : null;
@@ -201,12 +202,8 @@ export function LookEditor({ editor }: { editor: DesignEditorData }) {
       return;
     }
     if (dirty) router.refresh();
-    if (tab) {
-      tab.opener = null;
-      tab.location.href = link.data.url;
-    } else {
-      window.location.href = link.data.url;
-    }
+    if (tab) tab.go(link.data.url);
+    else window.location.href = link.data.url;
   }
 
   const [starting, setStarting] = React.useState<StartingLookId | null>(null);

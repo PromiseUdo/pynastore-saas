@@ -7,8 +7,8 @@
  * expired, or failed. Every price is in naira and quoted again on the
  * server before any charge.
  */
+import { UpgradeLink, useNoBuying } from '@/components/business-app/no-buying';
 import * as React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, Check, Copy, ExternalLink, Globe, Loader2, Lock, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -75,6 +75,8 @@ export interface DomainPageData {
 
 export function DomainClient({ data }: { data: DomainPageData }) {
   const { domain, order } = data;
+  // Inside the business app domains aren't sold; connecting one you own still works (ROADMAP 19.3).
+  const noBuying = useNoBuying();
   const active = domain && ['PENDING', 'LIVE', 'EXPIRED'].includes(domain.status) ? domain : null;
   const expiredGone = active?.status === 'EXPIRED' && active.expiresAt && renewalStage(active.expiresAt, new Date()) === 'released';
 
@@ -104,7 +106,7 @@ export function DomainClient({ data }: { data: DomainPageData }) {
             </a>
             . Give it an address of its own:
           </p>
-          <BuyCard data={data} />
+          {!noBuying && <BuyCard data={data} />}
           <ConnectCard canConnect={data.canConnect} />
         </>
       )}
@@ -157,9 +159,9 @@ function BuyCard({ data }: { data: DomainPageData }) {
             Buying a domain needs a paid plan. You can still connect a domain you already own, below.
           </p>
           {data.canBuy && (
-            <Link href="/upgrade" className={buttonVariants({ size: 'sm', variant: 'outline', className: 'shrink-0' })}>
+            <UpgradeLink className={buttonVariants({ size: 'sm', variant: 'outline', className: 'shrink-0' })}>
               See plans
-            </Link>
+            </UpgradeLink>
           )}
         </div>
       ) : !data.canBuy ? (
@@ -573,6 +575,7 @@ function Renewal({
   hostname: string;
 }) {
   const [paying, setPaying] = React.useState(false);
+  const noBuying = useNoBuying();
   const now = new Date();
   const stage = renewalStage(expiresAt, now);
   const deadline = renewalDeadline(expiresAt);
@@ -589,6 +592,27 @@ function Renewal({
   }
 
   const canRenew = data.canBuy && !data.renewalPaid && (stage === 'renew_soon' || stage === 'past_deadline' || stage === 'grace' || stage === 'ok');
+
+  // Inside the business app: the dates, and what has happened — no price, no "renew now" (ROADMAP 19.3).
+  if (noBuying) {
+    const expired = stage === 'grace' || stage === 'redemption';
+    return (
+      <div className="space-y-3 rounded-md border p-4">
+        <dl className="grid gap-3 text-sm">
+          <div>
+            <dt className="text-xs text-muted-foreground">Registered until</dt>
+            <dd className="font-medium text-foreground">{formatDate(expiresAt)}</dd>
+          </div>
+        </dl>
+        {expired && (
+          <Notice tone="danger" title={`${hostname} expired on ${formatDate(expiresAt)}`}>
+            Your shop is back on its platform address.
+          </Notice>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3 rounded-md border p-4">
       <dl className="grid gap-3 text-sm sm:grid-cols-3">

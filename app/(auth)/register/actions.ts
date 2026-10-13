@@ -1,5 +1,6 @@
 'use server';
 
+import { signInTargetHere } from '@/lib/tenant/here';
 import { hash } from 'bcryptjs';
 import { signIn } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -51,7 +52,7 @@ export async function registerAction(
   // after sign-in. ?auto=1 tells the invite page to accept immediately without
   // requiring an extra button click.
   const inviteToken = formData.get('invite') as string | null;
-  const redirectTo = inviteToken ? `/invite/${inviteToken}?auto=1` : '/onboarding';
+  const redirectTo = await signInTargetHere(inviteToken ? `/invite/${inviteToken}?auto=1` : '/onboarding');
 
   // A new shop owner confirms their email before creating a shop (ROADMAP
   // 12.5); /onboarding waits for it. Someone joining by invitation is
@@ -73,7 +74,15 @@ export async function registerAction(
 }
 
 export async function googleSignInAction(formData: FormData) {
+  await signIn('google', { redirectTo: await providerTarget(formData) });
+}
+
+/** Sign in with Apple (ROADMAP 19.2) — offered only when it's configured. */
+export async function appleSignInAction(formData: FormData) {
+  await signIn('apple', { redirectTo: await providerTarget(formData) });
+}
+
+async function providerTarget(formData: FormData): Promise<string> {
   const inviteToken = formData.get('invite') as string | null;
-  const redirectTo = inviteToken ? `/invite/${inviteToken}?auto=1` : '/onboarding';
-  await signIn('google', { redirectTo });
+  return signInTargetHere(inviteToken ? `/invite/${inviteToken}?auto=1` : '/onboarding');
 }
