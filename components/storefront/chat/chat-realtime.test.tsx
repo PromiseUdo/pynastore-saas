@@ -20,8 +20,8 @@ const rt = vi.hoisted(() => ({
   state: 'off' as 'off' | 'connecting' | 'live' | 'down',
   calls: [] as { enabled: boolean; tokenUrl: string; tokenBody?: unknown; onEvent: (e: unknown) => void; onCatchUp: () => void }[],
 }));
-vi.mock('@/lib/chat/realtime-client', async (original) => ({
-  ...(await original<typeof import('@/lib/chat/realtime-client')>()),
+vi.mock('@/lib/realtime/client', async (original) => ({
+  ...(await original<typeof import('@/lib/realtime/client')>()),
   useRealtimeChannel: (options: (typeof rt.calls)[number]) => {
     rt.calls.push(options);
     return rt.state;

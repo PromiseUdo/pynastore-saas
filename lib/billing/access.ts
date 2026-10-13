@@ -118,7 +118,8 @@ export function storefrontOpen(state: AccessState): boolean {
  * plan, and the orders customers have already paid for — so they can be
  * dispatched, delivered and refunded (ROADMAP 12.1). Not a new counter sale.
  */
-const OPEN_WHILE_LAPSED = ['/settings/billing', '/upgrade', '/sales/orders'];
+// A member's own notifications stay readable: they include what's needed to put things right.
+const OPEN_WHILE_LAPSED = ['/settings/billing', '/upgrade', '/sales/orders', '/notifications', '/settings/notifications'];
 
 export function isOpenWhileLapsed(pathname: string): boolean {
   if (pathname === '/sales/orders/new' || pathname.startsWith('/sales/orders/new/')) return false;

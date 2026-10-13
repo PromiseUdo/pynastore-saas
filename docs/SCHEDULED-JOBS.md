@@ -1,6 +1,6 @@
 # Scheduled jobs
 
-The platform runs four chores on a timer (ROADMAP 13.1). Each one is a web
+The platform runs seven chores on a timer (ROADMAP 13.1). Each one is a web
 address under `/api/cron/` that only answers a caller who sends
 `Authorization: Bearer <CRON_SECRET>`.
 
@@ -8,9 +8,11 @@ address under `/api/cron/` that only answers a caller who sends
 |---|---|---|---|
 | Release unpaid orders | `/api/cron/expire-unpaid-orders` | every 15 minutes | cron-job.org (for now) |
 | Index photos for search by image | `/api/cron/index-product-images` | every 15 minutes | cron-job.org (for now) |
+| Retry notifications | `/api/cron/notification-retries` | every 5 minutes | cron-job.org (for now) |
 | Domain renewals | `/api/cron/domain-lifecycle` | daily, 07:00 UTC | Vercel Cron (`vercel.json`) |
 | Setup and trial reminders | `/api/cron/onboarding-reminders` | daily, 08:00 UTC | Vercel Cron (`vercel.json`) |
 | Store app renewals | `/api/cron/mobile-app-renewals` | daily, 07:30 UTC | Vercel Cron (`vercel.json`) |
+| Data retention | `/api/cron/data-retention` | daily, 03:00 UTC | Vercel Cron (`vercel.json`) |
 
 What each one does is written in `lib/cron/jobs.ts`, and is also shown on the
 console's **Scheduled jobs** page (`/platform/jobs`).
@@ -18,7 +20,7 @@ console's **Scheduled jobs** page (`/platform/jobs`).
 ## Why two schedulers
 
 Vercel's Hobby plan only allows cron jobs that run once a day, and a deploy
-fails if `vercel.json` asks for more. The two 15-minute jobs are therefore
+fails if `vercel.json` asks for more. The frequent jobs are therefore
 called from [cron-job.org](https://cron-job.org) (free) until the project
 moves to Vercel Pro.
 
@@ -40,7 +42,10 @@ moves to Vercel Pro.
      alarm alongside ours, and the one that still works if our database or
      email is the thing that's down.
 4. Do the same for **Index photos for search by image** at
-   `/api/cron/index-product-images`.
+   `/api/cron/index-product-images`, and for **Retry notifications** at
+   `/api/cron/notification-retries` — that one **every 5 minutes**
+   (ROADMAP 18.1). Without it, an email or push that failed for a passing
+   reason is never sent.
 5. Check it worked: use the job's "test run" on cron-job.org and expect
    **200**, or open `/platform/jobs`, where a run appears within 15 minutes.
    A **401** means the header's secret doesn't match `CRON_SECRET`.
@@ -52,15 +57,16 @@ jobs** page records how each run actually ended, so check there.
 
 ## Moving to Vercel Pro
 
-Add the two frequent jobs to `vercel.json`:
+Add the frequent jobs to `vercel.json`:
 
 ```json
 { "path": "/api/cron/expire-unpaid-orders", "schedule": "*/15 * * * *" },
-{ "path": "/api/cron/index-product-images", "schedule": "*/15 * * * *" }
+{ "path": "/api/cron/index-product-images", "schedule": "*/15 * * * *" },
+{ "path": "/api/cron/notification-retries", "schedule": "*/5 * * * *" }
 ```
 
 Deploy, check that runs marked "Schedule" appear on `/platform/jobs`, then
-delete the two jobs on cron-job.org. No application code changes. The one
+delete the jobs on cron-job.org. No application code changes. The one
 test to update is in `tests/cron-runs.test.ts`: it checks that `vercel.json`
 holds only daily schedules, because a Hobby deploy with anything more
 frequent fails.

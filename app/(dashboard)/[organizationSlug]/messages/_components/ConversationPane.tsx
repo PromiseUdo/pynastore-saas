@@ -50,7 +50,7 @@ import { SheetRoot, SheetContent, SheetHeader, SheetTitle, SheetDescription } fr
 import { cn } from '@/lib/utils';
 import { formatDate, formatTime } from '@/lib/format';
 import { useChatFeed } from '@/lib/chat/use-chat-feed';
-import { backupInterval } from '@/lib/chat/realtime-client';
+import { backupInterval } from '@/lib/realtime/client';
 import { fetchFeed, type ChatProductCardView, type InboxSummaryView } from '@/lib/chat/inbox-client';
 import {
   CHAT_MESSAGE_MAX,

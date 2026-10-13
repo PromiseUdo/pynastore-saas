@@ -22,7 +22,7 @@ import {
   listStaffMessages,
 } from '@/lib/chat/service';
 import { CONVERSATION_PAGE_SIZE, parseInboxView } from '@/lib/chat/rules';
-import { ablyConfigured } from '@/lib/chat/ably';
+import { ablyConfigured } from '@/lib/realtime/ably';
 import { MessagesPageClient } from './_components/MessagesPageClient';
 
 export const metadata: Metadata = { title: 'Messages' };

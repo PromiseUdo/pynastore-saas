@@ -10,7 +10,9 @@
  *      delivery details on them are erased;
  *   4. deleted shoppers with nothing left inside the retention period → the
  *      name on the customer record goes too;
- *   5. guest chats nobody has written in for a year → removed (17.5).
+ *   5. guest chats nobody has written in for a year → removed (17.5);
+ *   6. phones' and browsers' order watches past 60 days → ended (16.4, 18.3);
+ *   7. notifications past 90 days, with what was sent for them → removed (18.1).
  *
  * A running shop's own customers and guest orders are the merchant's records
  * and are never touched here. Each workspace is handled on its own, so one
@@ -18,9 +20,10 @@
  * holding up the rest.
  */
 import { purgeOldPushWatches } from '@/lib/mobile/push/watch';
+import { purgeOldBrowserWatches } from '@/lib/notifications/web-push-subscriptions';
 import { prisma } from '@/lib/prisma';
 import { reportCaughtError } from '@/lib/ops/errors';
-import { CLOSURE_GRACE_DAYS, guestChatCutoff, retentionCutoff } from './policy';
+import { CLOSURE_GRACE_DAYS, guestChatCutoff, notificationCutoff, retentionCutoff } from './policy';
 import { eraseOrganization } from './erase';
 import { purgeClosedWorkspace } from './workspace';
 
@@ -34,6 +37,8 @@ export interface RetentionResult {
   pushWatchesRemoved: number;
   /** guest chats with no message for GUEST_CHAT_RETENTION_MONTHS (ROADMAP 17.5) */
   guestChatsRemoved: number;
+  /** notification list entries past NOTIFICATION_RETENTION_DAYS (ROADMAP 18.1) */
+  notificationsRemoved: number;
   failed: number;
 }
 
@@ -44,7 +49,7 @@ export async function runDataRetention(options: { now?: Date; only?: string[] } 
   const scope = options.only ? { id: { in: options.only } } : {};
   const orgScope = options.only ? { organizationId: { in: options.only } } : {};
   const cutoff = retentionCutoff(now);
-  const result: RetentionResult = { workspacesPurged: 0, filesDeleted: 0, workspacesErased: 0, ordersAnonymized: 0, customersAnonymized: 0, pushWatchesRemoved: 0, guestChatsRemoved: 0, failed: 0 };
+  const result: RetentionResult = { workspacesPurged: 0, filesDeleted: 0, workspacesErased: 0, ordersAnonymized: 0, customersAnonymized: 0, pushWatchesRemoved: 0, guestChatsRemoved: 0, notificationsRemoved: 0, failed: 0 };
 
   // 1. Past the grace period: keep only the business records.
   const toPurge = await prisma.organization.findMany({
@@ -126,8 +131,18 @@ export async function runDataRetention(options: { now?: Date; only?: string[] } 
   // 6. Phones stop hearing about an order 60 days after asking (ROADMAP 16.4).
   if (!options.only) {
     const push = await purgeOldPushWatches(now);
-    result.pushWatchesRemoved = push.watches;
+    const browsers = await purgeOldBrowserWatches(now);
+    result.pushWatchesRemoved = push.watches + browsers.watches;
   }
+
+  // 7. Notifications keep 90 days; the event takes its outbox rows with it.
+  //    Platform-wide ones (no shop) only on a full run.
+  const old = { createdAt: { lte: notificationCutoff(now) } };
+  const notifications = await prisma.notification.deleteMany({
+    where: { ...old, ...(options.only ? { organizationId: { in: options.only } } : {}) },
+  });
+  await prisma.notificationEvent.deleteMany({ where: { ...old, ...(options.only ? { organizationId: { in: options.only } } : {}) } });
+  result.notificationsRemoved = notifications.count;
 
   return result;
 }

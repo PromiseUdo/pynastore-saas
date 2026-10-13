@@ -1,25 +1,26 @@
 /*
  * lib/storefront/orders/notifications.ts
  *
- * Emailing a shopper about their order — and the merchant's staff when the
+ * Telling a shopper about their order — and the merchant's staff when the
  * shopper does something they need to answer (cancels, asks for a return).
  * Server only.
  *
+ * This builds what the email says; who hears and how (email, their phone in
+ * the store's app, their browser, their notification list) is decided by the
+ * notification seam (lib/notifications, ROADMAP 18).
+ *
  * Called AFTER the change it describes has committed — never from inside a
- * transaction, so an email can't announce something that then rolled back —
- * and never allowed to fail the operation: sendStorefrontOrderUpdateEmail
- * logs and swallows its own errors.
+ * transaction, so nothing can announce something that then rolled back —
+ * and never allowed to fail the operation: notify() never throws.
  *
  * The link is the order's confirmation page on the store's own front door
  * (custom domain when there is one). It is unlocked by the confirmation
  * token, so it works for guests and signed-in shoppers alike, on any device.
  */
 import { prisma } from '@/lib/prisma';
-import { pushOrderUpdate } from '@/lib/mobile/push/send';
-import { sendStoreOrderAlertEmail, sendStorefrontOrderUpdateEmail } from '@/lib/email';
+import { notify, type NotifyResult } from '@/lib/notifications/notify';
 import type { OrderEmailKind } from '@/emails/storefront-order-update';
 import type { StoreOrderAlertKind } from '@/emails/store-order-alert';
-import { PERMISSIONS, SYSTEM_ROLES } from '@/lib/permissions';
 import { getAdminUrl } from '@/lib/tenant/urls';
 import { storeUrl } from '../account/return-url';
 import { formatMoney } from '../format';
@@ -65,15 +66,17 @@ async function returnSummary(returnId: string, money: (value: { toString(): stri
   };
 }
 
+/** What was sent, or null when there was nobody to tell (a counter sale) or it failed. */
 export async function notifyShopper(
   orderId: string,
   kind: OrderEmailKind,
   detail: NotificationDetail = {},
-): Promise<void> {
+): Promise<NotifyResult | null> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       select: {
+        organizationId: true,
         reference: true,
         confirmationToken: true,
         email: true,
@@ -97,58 +100,69 @@ export async function notifyShopper(
         },
       },
     });
-    if (!order) return;
+    if (!order) return null;
 
     /* Counter sales have nobody to write to: no email, no name, no
      * confirmation page to link at. Nothing to send, so nothing is sent —
      * this is not an error. */
-    if (!order.email || !order.firstName || !order.confirmationToken) return;
+    if (!order.email || !order.firstName || !order.confirmationToken) return null;
 
     const money = (value: { toString(): string }) => formatMoney(minor(value), order.currency);
     const returned = detail.returnId ? await returnSummary(detail.returnId, money) : null;
 
-    await sendStorefrontOrderUpdateEmail({
-      to: order.email,
-      kind,
-      storeName: order.organization.name,
-      firstName: order.firstName,
-      reference: order.reference,
-      orderUrl: storeUrl(
-        order.organization,
-        `/checkout/confirmation?t=${encodeURIComponent(order.confirmationToken)}`,
-      ),
-      total: money(order.totalAmount),
-      /* A return's email lists what is going back, not the whole order. */
-      lines:
-        returned?.lines ??
-        order.lineItems.map((line) => ({
-          name: line.variantName ? `${line.name} (${line.variantName})` : line.name,
-          quantity: line.quantity,
-          total: money(line.totalPrice),
-        })),
-      returnReason: returned?.reason,
-      storeNote: returned?.merchantNote ?? undefined,
-      refundAmount: detail.refundAmount !== undefined ? money(detail.refundAmount) : undefined,
-      deliveryLabel: order.deliveryMethodLabel ?? '',
-      parcels: order.shipments.map((s) => (s.warehouse ? `from ${s.warehouse.name}: ${s.deliveryMethodLabel}` : s.deliveryMethodLabel)),
-      address: [
-        order.shipFullName,
-        order.shipLine1,
-        order.shipLine2,
-        [order.shipCity, order.shipState].filter(Boolean).join(', '),
-        order.shipCountry,
-      ].filter((part): part is string => Boolean(part)),
-      wasPaid: order.paymentStatus === 'PAID',
-      transferAccounts: readTransferDetails(order.transferDetails) ?? undefined,
-      transferHoldHours: TRANSFER_HOLD_HOURS,
+    return await notify({
+      kind: 'order.update',
+      organizationId: order.organizationId,
+      facts: {
+        kind,
+        orderId,
+        reference: order.reference,
+        confirmationToken: order.confirmationToken,
+        returnId: detail.returnId,
+        storeName: order.organization.name,
+      },
+      email: {
+        template: 'storefront-order-update',
+        props: {
+          kind,
+          storeName: order.organization.name,
+          firstName: order.firstName,
+          reference: order.reference,
+          orderUrl: storeUrl(
+            order.organization,
+            `/checkout/confirmation?t=${encodeURIComponent(order.confirmationToken)}`,
+          ),
+          total: money(order.totalAmount),
+          /* A return's email lists what is going back, not the whole order. */
+          lines:
+            returned?.lines ??
+            order.lineItems.map((line) => ({
+              name: line.variantName ? `${line.name} (${line.variantName})` : line.name,
+              quantity: line.quantity,
+              total: money(line.totalPrice),
+            })),
+          returnReason: returned?.reason,
+          storeNote: returned?.merchantNote ?? undefined,
+          refundAmount: detail.refundAmount !== undefined ? money(detail.refundAmount) : undefined,
+          deliveryLabel: order.deliveryMethodLabel ?? '',
+          parcels: order.shipments.map((s) => (s.warehouse ? `from ${s.warehouse.name}: ${s.deliveryMethodLabel}` : s.deliveryMethodLabel)),
+          address: [
+            order.shipFullName,
+            order.shipLine1,
+            order.shipLine2,
+            [order.shipCity, order.shipState].filter(Boolean).join(', '),
+            order.shipCountry,
+          ].filter((part): part is string => Boolean(part)),
+          wasPaid: order.paymentStatus === 'PAID',
+          transferAccounts: readTransferDetails(order.transferDetails) ?? undefined,
+          transferHoldHours: TRANSFER_HOLD_HOURS,
+        },
+      },
     });
   } catch (error) {
-    console.error(`[orders] Could not email the shopper about order ${orderId} (${kind}):`, error);
+    console.error(`[orders] Could not tell the shopper about order ${orderId} (${kind}):`, error);
+    return null;
   }
-
-  /* And any phone that asked, in the store's own app (ROADMAP 16.4) — even
-   * if the email failed. pushOrderUpdate never throws. */
-  await pushOrderUpdate(orderId, kind);
 }
 
 /**
@@ -156,8 +170,9 @@ export async function notifyShopper(
  *
  * Sent to everyone who can act on it — `sales.fulfillment.manage` for a
  * cancellation, `sales.return.manage` for a return — plus the Owner, who
- * holds every permission whatever their stored role says. Like the shopper's
- * emails it never fails the action that caused it.
+ * holds every permission whatever their stored role says (the 'order.alert'
+ * event, lib/notifications/events.ts). It never fails the action that
+ * caused it.
  */
 export async function notifyMerchant(
   orderId: string,
@@ -183,41 +198,31 @@ export async function notifyMerchant(
     });
     if (!order) return;
 
-    const permission =
-      kind === 'customer-cancelled' ? PERMISSIONS.SALES_FULFILLMENT_MANAGE : PERMISSIONS.SALES_RETURN_MANAGE;
-    const members = await prisma.membership.findMany({
-      where: {
-        organizationId: order.organizationId,
-        status: 'ACTIVE',
-        role: {
-          OR: [
-            { rolePermissions: { some: { permission: { key: permission } } } },
-            { isSystem: true, name: SYSTEM_ROLES.OWNER.name },
-          ],
-        },
-      },
-      select: { user: { select: { email: true } } },
-    });
-    const to = [...new Set(members.map((m) => m.user.email).filter((e): e is string => Boolean(e)))];
-    if (to.length === 0) return;
-
     const money = (value: { toString(): string }) => formatMoney(minor(value), order.currency);
     const returned = detail.returnId ? await returnSummary(detail.returnId, money) : null;
+    const customerName = `${order.firstName ?? ''} ${order.lastName ?? ''}`.trim() || order.email || 'A customer';
 
-    await sendStoreOrderAlertEmail({
-      to,
-      kind,
-      storeName: order.organization.name,
-      reference: order.reference,
-      customerName: `${order.firstName ?? ''} ${order.lastName ?? ''}`.trim() || order.email || 'A customer',
-      orderUrl: getAdminUrl(order.organization.slug, `/sales/orders/${order.id}`),
-      total: money(order.totalAmount),
-      wasPaid: order.paymentStatus === 'PAID',
-      customerNote: kind === 'customer-cancelled' ? (order.cancelNote ?? undefined) : (returned?.details ?? undefined),
-      returnReason: returned?.reason,
-      lines: returned?.lines,
+    await notify({
+      kind: 'order.alert',
+      organizationId: order.organizationId,
+      facts: { kind, orderId: order.id, reference: order.reference, returnId: detail.returnId, customerName },
+      email: {
+        template: 'store-order-alert',
+        props: {
+          kind,
+          storeName: order.organization.name,
+          reference: order.reference,
+          customerName,
+          orderUrl: getAdminUrl(order.organization.slug, `/sales/orders/${order.id}`),
+          total: money(order.totalAmount),
+          wasPaid: order.paymentStatus === 'PAID',
+          customerNote: kind === 'customer-cancelled' ? (order.cancelNote ?? undefined) : (returned?.details ?? undefined),
+          returnReason: returned?.reason,
+          lines: returned?.lines,
+        },
+      },
     });
   } catch (error) {
-    console.error(`[orders] Could not email the store about order ${orderId} (${kind}):`, error);
+    console.error(`[orders] Could not tell the store about order ${orderId} (${kind}):`, error);
   }
 }

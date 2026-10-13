@@ -16,7 +16,8 @@ import { getStoreAppListing } from '@/lib/mobile/listing';
 import { StorefrontProviders } from '@/components/storefront/providers';
 import { shopperChatStatus } from '@/lib/chat/storefront';
 import { pushReadyFor } from '@/lib/mobile/push/watch';
-import { ablyConfigured } from '@/lib/chat/ably';
+import { webPushConfigured } from '@/lib/notifications/channels/web-push';
+import { ablyConfigured } from '@/lib/realtime/ably';
 import { StorefrontAnalytics } from '@/components/storefront/layout/storefront-analytics';
 import { getRequestDesign, getStorefrontLook } from '@/lib/storefront/catalog';
 import { parseTheme, themeCookieName } from '@/lib/storefront/theme';
@@ -100,11 +101,8 @@ export async function generateMetadata({
   /* The shop's logo in the browser tab (15.0), shrunk by Cloudinary rather
    * than downloaded at full size. Without a logo the browser keeps its own. */
   const icons = org.logoUrl
-    ? {
-        icon: cloudinaryImage(org.logoUrl, { width: 64, height: 64, crop: 'fit' }),
-        apple: cloudinaryImage(org.logoUrl, { width: 180, height: 180, crop: 'fit' }),
-      }
-    : null;
+    ? { icon: cloudinaryImage(org.logoUrl, { width: 64, height: 64, crop: 'fit' }), apple: '/app-icon/180' }
+    : { apple: '/app-icon/180' };
 
   return {
     metadataBase: new URL((await storefrontUrlFor(organizationSlug))),
@@ -112,7 +110,11 @@ export async function generateMetadata({
     description,
     alternates: { canonical: '/' },
     ...(appListing?.appStoreId ? { itunes: { appId: appListing.appStoreId } } : {}),
-    ...(icons ? { icons } : {}),
+    icons,
+    /* Installable to a Home Screen under the shop's own name and icon
+     * (ROADMAP 18.3) — which is also what lets an iPhone get its notifications. */
+    manifest: '/manifest.webmanifest',
+    appleWebApp: { capable: true, title: org.name, statusBarStyle: 'default' },
     openGraph: {
       type: 'website',
       siteName: org.name,
@@ -235,8 +237,14 @@ export default async function StorefrontRootLayout({
       ? {
           greeting: organization.storefrontChatGreeting,
           ...(await shopperChatStatus({ slug: organization.slug, organizationId: organization.id })),
-          // Replies can be pushed only inside this store's own app (ROADMAP 17.4).
-          pushReady: isMobileRuntime && (await pushReadyFor(requestHeaders.get('user-agent'), organization.slug)),
+          // Replies reach the store's own app (ROADMAP 17.4), or a browser on the website (18.3).
+          push: isMobileRuntime
+            ? (await pushReadyFor(requestHeaders.get('user-agent'), organization.slug))
+              ? ('app' as const)
+              : null
+            : webPushConfigured()
+              ? ('browser' as const)
+              : null,
           realtime: ablyConfigured(),
         }
       : null;

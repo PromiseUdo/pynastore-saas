@@ -18,8 +18,7 @@
 import { Prisma } from '@/lib/generated/prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
-import { PERMISSIONS, SYSTEM_ROLES } from '@/lib/permissions';
-import { sendPaymentDisputeEmail } from '@/lib/email';
+import { notify } from '@/lib/notifications/notify';
 import { getAdminUrl } from '@/lib/tenant/urls';
 import { formatDate, formatMoney } from '@/lib/format';
 
@@ -124,7 +123,7 @@ export async function recordDispute(event: string, raw: unknown): Promise<Disput
 
   // Told on the way in and on the way out — not on every reminder.
   if (outcome === 'recorded' || (resolved && existing?.status !== 'resolved')) {
-    await notify(payment.orderId, outcome === 'recorded' ? 'opened' : 'resolved', {
+    await notifyDispute(disputeId, payment.orderId, outcome === 'recorded' ? 'opened' : 'resolved', {
       amount: fields.amount,
       currency: fields.currency,
       dueAt: fields.dueAt,
@@ -134,7 +133,9 @@ export async function recordDispute(event: string, raw: unknown): Promise<Disput
   return outcome;
 }
 
-async function notify(
+/** The shop's staff who handle orders, the Owner, and the platform ('payment.dispute'). */
+async function notifyDispute(
+  disputeId: string,
   orderId: string,
   kind: 'opened' | 'resolved',
   detail: { amount: Prisma.Decimal; currency: string; dueAt: Date | null; resolution: string | null },
@@ -145,30 +146,24 @@ async function notify(
       select: { id: true, reference: true, organizationId: true, organization: { select: { name: true, slug: true } } },
     });
     if (!order) return;
-    const members = await prisma.membership.findMany({
-      where: {
-        organizationId: order.organizationId,
-        status: 'ACTIVE',
-        role: {
-          OR: [
-            { rolePermissions: { some: { permission: { key: PERMISSIONS.SALES_FULFILLMENT_MANAGE } } } },
-            { isSystem: true, name: SYSTEM_ROLES.OWNER.name },
-          ],
+    const amount = formatMoney(detail.amount.toNumber(), detail.currency);
+    await notify({
+      kind: 'payment.dispute',
+      organizationId: order.organizationId,
+      key: `dispute:${disputeId}:${kind}`,
+      facts: { kind, orderId: order.id, reference: order.reference, amount },
+      email: {
+        template: 'payment-dispute',
+        props: {
+          kind,
+          storeName: order.organization.name,
+          reference: order.reference,
+          amount,
+          dueDate: detail.dueAt ? formatDate(detail.dueAt) : null,
+          resolution: detail.resolution,
+          orderUrl: getAdminUrl(order.organization.slug, `/sales/orders/${order.id}`),
         },
       },
-      select: { user: { select: { email: true } } },
-    });
-    const to = [...new Set(members.map((m) => m.user.email).filter((e): e is string => Boolean(e)))];
-    const platform = process.env.PLATFORM_ADMIN_EMAIL;
-    await sendPaymentDisputeEmail({
-      to: platform && !to.includes(platform) ? [...to, platform] : to,
-      kind,
-      storeName: order.organization.name,
-      reference: order.reference,
-      amount: formatMoney(detail.amount.toNumber(), detail.currency),
-      dueDate: detail.dueAt ? formatDate(detail.dueAt) : null,
-      resolution: detail.resolution,
-      orderUrl: getAdminUrl(order.organization.slug, `/sales/orders/${order.id}`),
     });
   } catch (error) {
     console.error(`[disputes] could not notify about order ${orderId}:`, error);

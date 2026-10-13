@@ -6,9 +6,9 @@
  * it, and the work itself. The routes under app/api/cron/ and the console's
  * "Run now" both go through runCronJob (./run.ts) with a key from here.
  *
- * Who calls them: the daily two from vercel.json (Vercel Cron); the two that
- * run every 15 minutes from cron-job.org while the project is on Vercel's
- * Hobby plan, which only allows daily cron jobs. On Pro, add those two to
+ * Who calls them: the daily ones from vercel.json (Vercel Cron); the ones that
+ * run every few minutes from cron-job.org while the project is on Vercel's
+ * Hobby plan, which only allows daily cron jobs. On Pro, add those to
  * vercel.json and switch cron-job.org off — nothing here changes.
  * docs/SCHEDULED-JOBS.md has the setup.
  */
@@ -19,6 +19,7 @@ import { runDomainLifecycle } from '@/lib/domains/lifecycle';
 import { runOnboardingReminders } from '@/lib/onboarding/reminders';
 import { runDataRetention } from '@/lib/data-rights/retention';
 import { runMobileAppRenewals } from '@/lib/mobile/renewals';
+import { retryDueDeliveries } from '@/lib/notifications/outbox';
 
 export interface CronJob {
   title: string;
@@ -74,6 +75,25 @@ export const CRON_JOBS = {
         .filter(Boolean)
         .join(' · '),
   },
+  'notification-retries': {
+    title: 'Retry notifications',
+    description:
+      'Tries again the emails and phone or browser notifications that failed for a passing reason (the email service or a push service briefly down), up to 5 times. Without it, those notifications are never sent.',
+    schedule: 'Every 5 minutes',
+    everyMinutes: 5,
+    run: () => retryDueDeliveries({ limit: 200 }),
+    describe: (r) =>
+      n(r, 'due') === 0
+        ? 'Nothing to retry'
+        : [
+            `${plural(n(r, 'sent'), 'notification', 'notifications')} sent`,
+            n(r, 'retrying') ? `${n(r, 'retrying')} to try again` : null,
+            n(r, 'failed') ? `${n(r, 'failed')} given up` : null,
+            n(r, 'gone') ? `${plural(n(r, 'gone'), 'device', 'devices')} gone` : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+  },
   'domain-lifecycle': {
     title: 'Domain renewals',
     description:
@@ -123,7 +143,7 @@ export const CRON_JOBS = {
   'data-retention': {
     title: 'Data retention',
     description:
-      'Carries out the retention rules: clears closed shops after 30 days, erases them after 6 years, and removes deleted shoppers’ details from records past 6 years, and removes guest chats nobody has written in for a year. Without it, data is kept longer than the privacy policy says.',
+      'Carries out the retention rules: clears closed shops after 30 days, erases them after 6 years, and removes deleted shoppers’ details from records past 6 years, removes guest chats nobody has written in for a year, and notifications after 90 days. Without it, data is kept longer than the privacy policy says.',
     schedule: 'Daily at 4am Lagos time',
     everyMinutes: 24 * 60,
     run: () => runDataRetention(),
@@ -135,6 +155,7 @@ export const CRON_JOBS = {
         n(r, 'customersAnonymized') ? `${plural(n(r, 'customersAnonymized'), 'customer', 'customers')} anonymised` : null,
         n(r, 'guestChatsRemoved') ? `${plural(n(r, 'guestChatsRemoved'), 'old guest chat', 'old guest chats')} removed` : null,
         n(r, 'pushWatchesRemoved') ? `${plural(n(r, 'pushWatchesRemoved'), 'order notification', 'order notifications')} ended` : null,
+        n(r, 'notificationsRemoved') ? `${plural(n(r, 'notificationsRemoved'), 'old notification', 'old notifications')} removed` : null,
         n(r, 'failed') ? `${n(r, 'failed')} failed` : null,
       ]
         .filter(Boolean)

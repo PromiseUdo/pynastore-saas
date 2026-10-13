@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/layout/empty-state';
 import { useChatFeed } from '@/lib/chat/use-chat-feed';
-import { backupInterval, useRealtimeChannel, type ChatEventView } from '@/lib/chat/realtime-client';
+import { backupInterval, useRealtimeChannel, type ChatEventView } from '@/lib/realtime/client';
 import { ADMIN_BACKUP_POLL_MS, InboxRealtimeContext, type InboxRealtime } from './inbox-realtime';
 import { fetchFeed, useInboxStore, type ChatProductCardView, type InboxSummaryView } from '@/lib/chat/inbox-client';
 import type { InboxView, StaffChatMessage } from '@/lib/chat/rules';

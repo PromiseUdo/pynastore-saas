@@ -51,7 +51,7 @@ class FakeRealtime {
 
 vi.mock('ably', () => ({ Realtime: FakeRealtime }));
 
-const { useRealtimeChannel } = await import('./realtime-client');
+const { useRealtimeChannel } = await import('./client');
 
 const ok = (channel = 'chat:o:c') =>
   new Response(JSON.stringify({ tokenRequest: { keyName: 'k', mac: 'm' }, channel }), { status: 200 });

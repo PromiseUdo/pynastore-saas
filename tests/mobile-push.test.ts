@@ -5,8 +5,8 @@
  *   - offered only in a store app built with push, for its own store, on a
  *     phone the platform holds credentials for;
  *   - a device is linked only to the order it asked about;
- *   - an order change reaches it, and a token the platform calls dead is
- *     deleted;
+ *   - an order change reaches it (through the notification seam, ROADMAP
+ *     18), and a token the platform calls dead is deleted;
  *   - watches end after 60 days.
  */
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
@@ -18,9 +18,14 @@ vi.mock('@/lib/mobile/push/apns', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/mobile/push/apns')>()),
   sendApns: vi.fn(async () => 'sent'),
 }));
+// The order email goes out beside the push; it isn't what's tested here.
+vi.mock('@/lib/email', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/email')>()),
+  sendStorefrontOrderUpdateEmail: vi.fn(async () => true),
+}));
 
 const { pushReadyFor, watchOrder, purgeOldPushWatches } = await import('@/lib/mobile/push/watch');
-const { pushOrderUpdate } = await import('@/lib/mobile/push/send');
+const { notifyShopper } = await import('@/lib/storefront/orders/notifications');
 const { resetFcmTokenCache } = await import('@/lib/mobile/push/fcm');
 const { sendApns } = await import('@/lib/mobile/push/apns');
 const { seal, resetSocialKeyCache } = await import('@/lib/social/crypto');
@@ -58,6 +63,12 @@ async function newOrder(organizationId: string) {
     select: { id: true, reference: true },
   });
   return { ...order, token };
+}
+
+/** An order update, as the order's lifecycle raises it; what reached phones. */
+async function pushOrderUpdate(orderId: string, kind: Parameters<typeof notifyShopper>[1]) {
+  const phones = (await notifyShopper(orderId, kind))!.tally.NATIVE_PUSH;
+  return { sent: phones.sent, gone: phones.gone, failed: phones.failed + phones.retrying };
 }
 
 /** Google's token endpoint and FCM, as fetch sees them. */

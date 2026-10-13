@@ -10,8 +10,9 @@
  *
  *   - gone now: the sign-in (password, Google link, sessions, reset and
  *     email-change links), saved addresses, wishlist, reviews, questions and
- *     "helpful" votes, their chat with the store (ROADMAP 17.5), the
- *     merchant's notes and tags, marketing consent;
+ *     "helpful" votes, their chat with the store (ROADMAP 17.5), their
+ *     notifications, notification choices, phones and browsers (ROADMAP 18),
+ *     the merchant's notes and tags, marketing consent;
  *   - contact details cleared from the customer record, so the store can't
  *     reach them through it, and the email is free to register again;
  *   - kept, for the retention period only: the orders and invoices, with the
@@ -55,6 +56,8 @@ export interface ShopperExport {
   questions: { product: string; question: string; answer: string | null; askedAt: string }[];
   /** their chat with the store (ROADMAP 17.5); the store's side is signed "Store team", as they saw it */
   messages: { from: 'you' | 'Store team'; message: string; sentAt: string }[];
+  /** what they were told about, from their notification list (ROADMAP 18) */
+  notifications: { title: string; message: string; at: string; read: boolean }[];
 }
 
 /** Everything the store holds about this shopper, in plain JSON they can keep. */
@@ -73,6 +76,7 @@ export async function exportShopperData(organizationId: string, customerId: stri
         where: { organizationId },
         select: { messages: { orderBy: { seq: 'asc' }, select: { sender: true, body: true, createdAt: true } } },
       },
+      notifications: { orderBy: { createdAt: 'asc' }, select: { title: true, body: true, createdAt: true, readAt: true } },
     },
   });
   if (!customer) return null;
@@ -128,6 +132,12 @@ export async function exportShopperData(organizationId: string, customerId: stri
         sentAt: m.createdAt.toISOString(),
       })),
     ),
+    notifications: customer.notifications.map((n) => ({
+      title: n.title,
+      message: n.body,
+      at: n.createdAt.toISOString(),
+      read: n.readAt !== null,
+    })),
   };
 }
 
@@ -161,8 +171,13 @@ export async function deleteShopperAccount(organizationId: string, customerId: s
     await tx.productQuestion.deleteMany({ where: { customerId } });
     // Their chat with the store, both sides (ROADMAP 17.5); messages cascade.
     await tx.chatConversation.deleteMany({ where: { organizationId, customerId } });
-    // Their phones stop hearing about their orders (ROADMAP 16.4).
+    // Their phones stop hearing about their orders (ROADMAP 16.4), and
+    // everything the notification seam kept for them goes (ROADMAP 18).
     await tx.pushOrderWatch.deleteMany({ where: { order: { customerId } } });
+    await tx.pushDevice.deleteMany({ where: { organizationId, customerId } });
+    await tx.webPushSubscription.deleteMany({ where: { customerId } });
+    await tx.notificationPreference.deleteMany({ where: { customerId } });
+    await tx.notification.deleteMany({ where: { customerId } });
 
     const c = customer._count;
     if (c.orders + c.invoices + c.quotes + c.dropShipPurchaseOrders + c.mergedFrom === 0) {

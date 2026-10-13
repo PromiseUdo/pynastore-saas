@@ -90,6 +90,9 @@ Shared pieces that already exist — use them:
 - `components/dashboard/export-csv-button.tsx` + `lib/csv.ts` — every report offers its rows as a spreadsheet, matching the filters on screen.
 - `components/ui/toaster.tsx` (mounted in the dashboard layout; call `toast` from `sonner`), `components/ui/switch.tsx`.
 - `components/layout/access-denied.tsx`, `components/layout/route-error.tsx` (pass Next's `unstable_retry` from `error.tsx`).
+- `components/notifications/notification-bell.tsx` and `notification-list.tsx` — the bell and the full list, shared by the admin and the console (ROADMAP 18.2). Anything a person should notice goes through `notify()` (see Notifications rules), not a new badge.
+- `lib/notifications/web-push-client.ts` + `components/notifications/device-alerts.tsx` — turning on alerts in a browser (ask only from a click; iPhone needs the site on the Home Screen). `lib/pwa/` — manifests and generated Home Screen icons; `public/sw.js` is the only service worker.
+- `lib/realtime/` — Ably hints (`ably.ts`, server) and the listening hook (`client.ts`). Every channel is listen-only, one exact name per token, decided by the server.
 - `components/media/image-uploader.tsx` — all merchant image uploads (signed direct uploads to Cloudinary, see `lib/cloudinary/`). Never accept pasted image links for new features.
 - `app/(dashboard)/[organizationSlug]/inventory/_components/CategorySelect.tsx` — any category picker.
 - Reference implementations: `inventory/products` (URL-driven list with views/filters/pagination; full-page editor with checklist and sticky save bar) and `inventory/categories` (tree + sheet form).
@@ -162,6 +165,31 @@ automatic replies.
     reply, and never with the message's words.
 
 
+
+# Notifications rules
+
+Everyone hears about what needs them (ROADMAP Phase 18).
+
+- **One seam.** Anything that tells a person something calls `notify()` in
+  `lib/notifications/notify.ts`. Never call an email sender, `sendFcm` /
+  `sendApns` or `web-push` directly from a feature. A new kind of
+  notification is a new entry in `lib/notifications/events.ts`: who it's
+  for, its category, its channel defaults, its words and its target.
+- **Targets, not URLs.** A notification stores a typed target. Only
+  `lib/notifications/links.ts` turns one into a page, for each surface
+  (admin, store, platform, in-app path).
+- **Call it after the commit**, never inside the transaction it describes.
+  Pass a `key` when the event has a natural one, so a retry sends once.
+  Deciding whether to tell anyone at all (they're looking, they were
+  already told) stays with the caller.
+- **The outbox retries** temporary failures (the `notification-retries`
+  job). A sender used by a channel must report whether the provider
+  accepted it.
+- **What it may say.** A shopper's notification never contains a chat
+  message's words. Every push is about something the person is part of: no
+  marketing.
+- **Data rights.** Lists keep 90 days, and go with a shopper's account and
+  a closed shop.
 
 The customer storefront reads the merchant's real records. These rules keep that safe.
 

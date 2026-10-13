@@ -1,14 +1,16 @@
 /*
  * lib/domains/notify.ts
  *
- * The alert to PLATFORM_ADMIN_EMAIL that domain work is waiting (12.6/11.5).
+ * The alert to platform staff that domain work is waiting (12.6/11.5),
+ * raised as 'platform.domain-order' (lib/notifications): emailed to
+ * PLATFORM_ADMIN_EMAIL and listed for platform staff.
  * The queue at /platform/domains is the record; this is only the nudge. Sent
  * when a registration or renewal is paid (lib/billing/apply-charge.ts) and
  * when a connected domain's records are found correct
  * (features/domains/actions.ts).
  */
 import { prisma } from '@/lib/prisma';
-import { sendDomainOrderNotificationEmail } from '@/lib/email';
+import { notify } from '@/lib/notifications/notify';
 import { getMarketingUrl } from '@/lib/tenant/urls';
 
 export async function notifyPendingDomainOrder(
@@ -21,11 +23,20 @@ export async function notifyPendingDomainOrder(
   });
   if (!organization) return;
 
-  await sendDomainOrderNotificationEmail({
-    orgName: organization.name,
-    orgSlug: organization.slug,
-    domainOrderType: domainOrder.type,
-    domain: domainOrder.domain ?? '',
-    queueUrl: getMarketingUrl('/platform/domains'),
-  }).catch((err) => console.error('[notifyPendingDomainOrder] Notification failed:', err));
+  const domain = domainOrder.domain ?? '';
+  await notify({
+    kind: 'platform.domain-order',
+    organizationId: null,
+    facts: { shopName: organization.name, domain, type: domainOrder.type },
+    email: {
+      template: 'domain-order',
+      props: {
+        orgName: organization.name,
+        orgSlug: organization.slug,
+        domainOrderType: domainOrder.type,
+        domain,
+        queueUrl: getMarketingUrl('/platform/domains'),
+      },
+    },
+  });
 }

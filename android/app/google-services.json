@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "900711937591",
+    "project_id": "pynastore-project",
+    "storage_bucket": "pynastore-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:900711937591:android:83984b213eaa97cfa0b1b2",
+        "android_client_info": {
+          "package_name": "com.pynacode.shop"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDywyKZ6Rmq-L6qScyUvSJz7om0pPzSQbs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

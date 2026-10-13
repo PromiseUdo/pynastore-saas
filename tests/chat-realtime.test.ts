@@ -53,7 +53,8 @@ vi.mock('@/lib/billing/entitlements', () => ({ getOrganizationEntitlements: asyn
 
 import { prisma } from '@/lib/prisma';
 import { createTestStores, pinDomains, storefrontRequest } from './helpers/storefront-requests';
-import { resetAblyClient, chatChannelName, inboxChannelName } from '@/lib/chat/ably';
+import { chatChannelName, inboxChannelName } from '@/lib/chat/ably';
+import { resetAblyClient } from '@/lib/realtime/ably';
 import { discardAfterTasks, flushAfterTasks } from '@/lib/run-after';
 import {
   markReadByCustomer,

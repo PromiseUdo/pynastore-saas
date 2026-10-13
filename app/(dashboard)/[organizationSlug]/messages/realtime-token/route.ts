@@ -12,7 +12,8 @@
 import { getOrganizationContext } from '@/lib/organization';
 import { getOrganizationEntitlements } from '@/lib/billing/entitlements';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { ablyConfigured, inboxChannelName, listenTokenRequest } from '@/lib/chat/ably';
+import { inboxChannelName } from '@/lib/chat/ably';
+import { ablyConfigured, listenTokenRequest } from '@/lib/realtime/ably';
 
 export const dynamic = 'force-dynamic';
 

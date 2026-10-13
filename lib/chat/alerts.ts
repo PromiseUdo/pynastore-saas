@@ -17,12 +17,14 @@
  *                 unread reply, so a burst of three is one buzz. The words
  *                 of the message are never in the notification — a lock
  *                 screen is not a private place.
+ *
+ * Both decide WHETHER to tell anyone; who hears and how is the notification
+ * seam's ('chat.message' and 'chat.reply' in lib/notifications/events.ts).
  */
 import { prisma } from '@/lib/prisma';
-import { PERMISSIONS, SYSTEM_ROLES } from '@/lib/permissions';
 import { getAdminUrl } from '@/lib/tenant/urls';
-import { sendChatMessageAlertEmail } from '@/lib/email';
-import { sendToDevices, type PushTally } from '@/lib/mobile/push/send';
+import { notify } from '@/lib/notifications/notify';
+import type { Tally } from '@/lib/notifications/outbox';
 
 /** Someone who had Messages open this recently is taken to be watching it. */
 export const INBOX_WATCHING_MS = 2 * 60_000;
@@ -39,24 +41,6 @@ export const SHOPPER_WATCHING_MS = 45_000;
 const EMAIL_QUOTE_LENGTH = 300;
 
 export type StaffAlertOutcome = 'sent' | 'inbox-open' | 'already-alerted' | 'no-recipients' | 'not-found' | 'failed';
-
-/** The people an unanswered message is for: active members who can reply, and the Owner. */
-async function replyingMembers(organizationId: string): Promise<string[]> {
-  const members = await prisma.membership.findMany({
-    where: {
-      organizationId,
-      status: 'ACTIVE',
-      role: {
-        OR: [
-          { rolePermissions: { some: { permission: { key: PERMISSIONS.MESSAGES_REPLY } } } },
-          { isSystem: true, name: SYSTEM_ROLES.OWNER.name },
-        ],
-      },
-    },
-    select: { user: { select: { email: true } } },
-  });
-  return [...new Set(members.map((m) => m.user.email).filter((e): e is string => Boolean(e)))];
-}
 
 /**
  * A shopper just wrote. Email the store if nobody is watching and nobody has
@@ -84,30 +68,36 @@ export async function alertStaffAboutMessage(
     });
     if (claimed.count === 0) return 'already-alerted';
 
-    const [to, conversation] = await Promise.all([
-      replyingMembers(organizationId),
-      prisma.chatConversation.findFirst({
-        where: { id: conversationId, organizationId },
-        select: {
-          guestName: true,
-          customer: { select: { name: true } },
-          messages: { where: { sender: 'CUSTOMER' }, orderBy: { seq: 'desc' }, take: 1, select: { body: true } },
-        },
-      }),
-    ]);
-    if (!conversation) return 'not-found';
-    if (to.length === 0) return 'no-recipients';
-
-    const body = conversation.messages[0]?.body ?? '';
-    await sendChatMessageAlertEmail({
-      to,
-      storeName: org.name,
-      shopperName: conversation.customer?.name ?? conversation.guestName ?? null,
-      isGuest: !conversation.customer,
-      message: body.length > EMAIL_QUOTE_LENGTH ? `${body.slice(0, EMAIL_QUOTE_LENGTH).trimEnd()}…` : body,
-      conversationUrl: getAdminUrl(org.slug, `/messages?c=${encodeURIComponent(conversationId)}`),
+    const conversation = await prisma.chatConversation.findFirst({
+      where: { id: conversationId, organizationId },
+      select: {
+        guestName: true,
+        customer: { select: { name: true } },
+        messages: { where: { sender: 'CUSTOMER' }, orderBy: { seq: 'desc' }, take: 1, select: { body: true } },
+      },
     });
-    return 'sent';
+    if (!conversation) return 'not-found';
+
+    // Who: active members who can reply, and the Owner.
+    const shopperName = conversation.customer?.name ?? conversation.guestName ?? null;
+    const body = conversation.messages[0]?.body ?? '';
+    const result = await notify({
+      kind: 'chat.message',
+      organizationId,
+      key: `chat:${conversationId}:staff:${now.getTime()}`,
+      facts: { conversationId, shopperName },
+      email: {
+        template: 'chat-message-alert',
+        props: {
+          storeName: org.name,
+          shopperName,
+          isGuest: !conversation.customer,
+          message: body.length > EMAIL_QUOTE_LENGTH ? `${body.slice(0, EMAIL_QUOTE_LENGTH).trimEnd()}…` : body,
+          conversationUrl: getAdminUrl(org.slug, `/messages?c=${encodeURIComponent(conversationId)}`),
+        },
+      },
+    });
+    return result.listed === 0 ? 'no-recipients' : 'sent';
   } catch (error) {
     console.error(`[chat] Could not email the store about conversation ${conversationId}:`, error);
     return 'failed';
@@ -115,11 +105,6 @@ export async function alertStaffAboutMessage(
 }
 
 export type ShopperPushOutcome = 'sent' | 'no-devices' | 'watching' | 'already-told' | 'not-found' | 'failed';
-
-/** The words of a reply notification. Fixed: never the message itself. */
-export function chatReplyPushMessage(storeName: string) {
-  return { title: storeName, body: 'The store replied to your message.' };
-}
 
 /**
  * The store just replied (message `seq`). Buzz the shopper's phones that
@@ -131,36 +116,61 @@ export async function pushStoreReply(
   conversationId: string,
   seq: number,
   now = new Date(),
-): Promise<{ outcome: ShopperPushOutcome; tally?: PushTally }> {
+): Promise<{ outcome: ShopperPushOutcome; tally?: Tally }> {
   try {
     const conversation = await prisma.chatConversation.findFirst({
       where: { id: conversationId, organizationId, organization: { status: 'ACTIVE' } },
       select: {
+        customerId: true,
+        guestKeyHash: true,
         customerSeenAt: true,
         customerReadSeq: true,
-        organization: { select: { name: true, slug: true } },
-        pushWatches: { select: { device: { select: { id: true, appId: true, platform: true, token: true } } } },
+        organization: { select: { name: true } },
+        _count: { select: { pushWatches: true } },
       },
     });
     if (!conversation) return { outcome: 'not-found' };
-    if (conversation.pushWatches.length === 0) return { outcome: 'no-devices' };
+    if (!(await canReachShopper(organizationId, conversation))) return { outcome: 'no-devices' };
     if (conversation.customerSeenAt && now.getTime() - conversation.customerSeenAt.getTime() < SHOPPER_WATCHING_MS) {
       return { outcome: 'watching' };
     }
     // Only the first reply they haven't seen; later ones in the same stretch stay quiet.
     if (seq - conversation.customerReadSeq !== 1) return { outcome: 'already-told' };
 
-    const tally = await sendToDevices(
+    // Opens the store's chat page: /chat, or /s/{slug}/chat in the app.
+    const { tally } = await notify({
+      kind: 'chat.reply',
       organizationId,
-      conversation.pushWatches.map((w) => w.device),
-      chatReplyPushMessage(conversation.organization.name),
-      // Opens the store's chat page in the app (components/native/native-shell.tsx).
-      { path: `/s/${conversation.organization.slug}/chat` },
-      `conversation ${conversationId}`,
-    );
+      key: `chat:${conversationId}:reply:${seq}`,
+      facts: { conversationId, storeName: conversation.organization.name },
+    });
     return { outcome: 'sent', tally };
   } catch (error) {
     console.error(`[chat] Could not push the store's reply in conversation ${conversationId}:`, error);
     return { outcome: 'failed' };
   }
+}
+
+/**
+ * Whether the shopper asked to hear about replies anywhere: a phone watching
+ * this chat, or (signed in) a phone or browser of their own, or (a guest) a
+ * browser with their chat cookie.
+ */
+async function canReachShopper(
+  organizationId: string,
+  conversation: { customerId: string | null; guestKeyHash: string | null; _count: { pushWatches: number } },
+): Promise<boolean> {
+  if (conversation._count.pushWatches > 0) return true;
+  if (conversation.customerId) {
+    const owned = { organizationId, customerId: conversation.customerId };
+    const [devices, browsers] = await Promise.all([
+      prisma.pushDevice.count({ where: owned }),
+      prisma.webPushSubscription.count({ where: owned }),
+    ]);
+    return devices + browsers > 0;
+  }
+  if (conversation.guestKeyHash) {
+    return (await prisma.webPushSubscription.count({ where: { organizationId, guestKeyHash: conversation.guestKeyHash } })) > 0;
+  }
+  return false;
 }

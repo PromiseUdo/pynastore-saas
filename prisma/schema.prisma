@@ -41,8 +41,14 @@ model User {
   passwordResetTokens PasswordResetToken[]
   counterSales        Order[]
   chatMessages        ChatMessage[]
-  resolvedChats       ChatConversation[] @relation("ChatResolvedBy")
-  blockedChats        ChatConversation[] @relation("ChatBlockedBy")
+  resolvedChats       ChatConversation[]   @relation("ChatResolvedBy")
+  blockedChats        ChatConversation[]   @relation("ChatBlockedBy")
+
+  // Notifications (ROADMAP 18)
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  webPushSubscriptions    WebPushSubscription[]
+  pushDevices             PushDevice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -156,7 +162,7 @@ model Organization {
    * Closing again later (a holiday) is the same switch. Separate from a
    * lapsed plan (12.1) and a suspension (11.4).
    */
-  storefrontOpen        Boolean   @default(true)
+  storefrontOpen        Boolean           @default(true)
   storefrontOpenedAt    DateTime?
   /**
    * What the merchant told us at sign-up — only used to order the setup
@@ -165,7 +171,9 @@ model Organization {
    */
   businessType          String?
   salesChannels         String?
-  /** The setup guide was hidden from the dashboard; it stays in Settings. */
+  /**
+   * The setup guide was hidden from the dashboard; it stays in Settings.
+   */
   setupGuideDismissedAt DateTime?
   onboardingEmails      OnboardingEmail[]
 
@@ -334,6 +342,12 @@ model Organization {
   // Messages (ROADMAP 17)
   chatConversations ChatConversation[]
   chatMessages      ChatMessage[]
+
+  // Notifications (ROADMAP 18)
+  notificationEvents      NotificationEvent[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  webPushSubscriptions    WebPushSubscription[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1350,8 +1364,14 @@ model Customer {
   reviewVotes            ProductReviewVote[]
   questions              ProductQuestion[]
   chatConversations      ChatConversation[]
-  mergedInto             Customer?                    @relation("CustomerMerge", fields: [mergedIntoId], references: [id])
-  mergedFrom             Customer[]                   @relation("CustomerMerge")
+
+  // Notifications (ROADMAP 18)
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  webPushSubscriptions    WebPushSubscription[]
+  pushDevices             PushDevice[]
+  mergedInto              Customer?                @relation("CustomerMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom              Customer[]               @relation("CustomerMerge")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1670,7 +1690,9 @@ model Order {
    */
   transferDetails Json?
 
-  /** The contact and delivery details were erased once the retention period ran out (ROADMAP 13.8). */
+  /**
+   * The contact and delivery details were erased once the retention period ran out (ROADMAP 13.8).
+   */
   anonymizedAt DateTime?
 
   organization    Organization           @relation(fields: [organizationId], references: [id])
@@ -1688,6 +1710,7 @@ model Order {
   lineItems       OrderLineItem[]
   payments        OrderPayment[]
   pushWatches     PushOrderWatch[]
+  webPushWatches  WebPushOrderWatch[]
   disputes        PaymentDispute[]
   allocations     OrderStockAllocation[]
   shipments       OrderShipment[]
@@ -3230,11 +3253,13 @@ model BillingTransaction {
   // or set up a second Paystack recurring subscription for that charge.
   isPlanChange   Boolean                  @default(true)
 
-  organization Organization  @relation(fields: [organizationId], references: [id])
-  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
-  plan         BillingPlan?  @relation(fields: [planId], references: [id])
-  domainOrder  DomainOrder?
-  /** a payment for the store's own phone app (ROADMAP 16.2) */
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  subscription     Subscription?     @relation(fields: [subscriptionId], references: [id])
+  plan             BillingPlan?      @relation(fields: [planId], references: [id])
+  domainOrder      DomainOrder?
+  /**
+   * a payment for the store's own phone app (ROADMAP 16.2)
+   */
   mobileAppPayment MobileAppPayment?
 
   createdAt DateTime @default(now())
@@ -3250,29 +3275,45 @@ model BillingTransaction {
 
 enum DomainOrderType {
   FREE
-  /** connect a domain the merchant already owns (12.6) */
+  /**
+   * connect a domain the merchant already owns (12.6)
+   */
   EXISTING
   REGISTER
-  /** renew a domain registered through us (12.6) */
+  /**
+   * renew a domain registered through us (12.6)
+   */
   RENEW
 }
 
 enum ShopDomainSource {
-  /** bought through us; we renew it at Namecheap when the merchant pays */
+  /**
+   * bought through us; we renew it at Namecheap when the merchant pays
+   */
   REGISTERED
-  /** the merchant's own, at their registrar */
+  /**
+   * the merchant's own, at their registrar
+   */
   CONNECTED
 }
 
 enum ShopDomainStatus {
-  /** waiting: DNS records (connect) or staff (register/connect) */
+  /**
+   * waiting: DNS records (connect) or staff (register/connect)
+   */
   PENDING
   LIVE
-  /** registered and not renewed: out of routing, recoverable for a while */
+  /**
+   * registered and not renewed: out of routing, recoverable for a while
+   */
   EXPIRED
-  /** removed by the merchant */
+  /**
+   * removed by the merchant
+   */
   DISCONNECTED
-  /** couldn't be done — see the order's failure reason */
+  /**
+   * couldn't be done — see the order's failure reason
+   */
   FAILED
 }
 
@@ -3302,17 +3343,25 @@ model DomainOrder {
    * When the work became due — payment confirmed, or (connect) the DNS
    * records found correct. The 24-hour promise runs from here (11.5).
    */
-  readyAt         DateTime?
-  /** fulfilment checklist, ticked by staff (11.5); drives the merchant's timeline */
+  readyAt          DateTime?
+  /**
+   * fulfilment checklist, ticked by staff (11.5); drives the merchant's timeline
+   */
   stepRegisteredAt DateTime?
   stepDnsAt        DateTime?
   stepHostAt       DateTime?
   stepCheckedAt    DateTime?
-  /** the registrar expiry staff recorded (register / renew) */
+  /**
+   * the registrar expiry staff recorded (register / renew)
+   */
   expiresAt        DateTime?
-  /** why it couldn't be done — shown to the merchant */
+  /**
+   * why it couldn't be done — shown to the merchant
+   */
   failureReason    String?
-  /** a paid order that failed is refunded by staff in Paystack's dashboard, and recorded here */
+  /**
+   * a paid order that failed is refunded by staff in Paystack's dashboard, and recorded here
+   */
   refundedAt       DateTime?
   refundAmount     Decimal?  @db.Decimal(12, 2)
   refundReference  String?
@@ -3430,7 +3479,9 @@ model ErrorGroup {
   @@map("error_groups")
 }
 
-/** One occurrence of an ErrorGroup, kept 14 days — for "how often lately" and spikes. */
+/**
+ * One occurrence of an ErrorGroup, kept 14 days — for "how often lately" and spikes.
+ */
 model ErrorEvent {
   id         String   @id @default(cuid())
   groupId    String
@@ -3488,16 +3539,24 @@ model OnboardingEmail {
 model ShopDomain {
   id             String           @id @default(cuid())
   organizationId String           @unique
-  /** the bare domain, e.g. pncollections.com */
+  /**
+   * the bare domain, e.g. pncollections.com
+   */
   hostname       String           @unique
-  /** where shoppers are sent: www.pncollections.com (decided 2026-09-30) */
+  /**
+   * where shoppers are sent: www.pncollections.com (decided 2026-09-30)
+   */
   canonicalHost  String
   source         ShopDomainSource
   status         ShopDomainStatus @default(PENDING)
-  /** registrar expiry, recorded by staff (registered domains only) */
+  /**
+   * registrar expiry, recorded by staff (registered domains only)
+   */
   expiresAt      DateTime?
   liveAt         DateTime?
-  /** the last "Check my domain" (connected domains) */
+  /**
+   * the last "Check my domain" (connected domains)
+   */
   dnsCheckedAt   DateTime?
   dnsOk          Boolean          @default(false)
 
@@ -3513,7 +3572,6 @@ model ShopDomain {
 
 /**
  * A store's own phone app — the paid add-on (ROADMAP 16). One per store.
- *
  * The app adds `MansaasApp/{appId}` to its user agent; on the mobile origin
  * proxy.ts looks the id up here and locks the app to this store. `appId` is
  * also the app's URL scheme, so payments and Google sign-in deep-link back to
@@ -3523,9 +3581,13 @@ model ShopDomain {
 model MobileApp {
   id             String          @id @default(cuid())
   organizationId String          @unique
-  /** reverse-DNS, e.g. com.pynacode.shop — permanent once published */
+  /**
+   * reverse-DNS, e.g. com.pynacode.shop — permanent once published
+   */
   appId          String          @unique
-  /** the name under the icon */
+  /**
+   * the name under the icon
+   */
   name           String
   status         MobileAppStatus @default(ACTIVE)
 
@@ -3537,7 +3599,9 @@ model MobileApp {
    */
   appStoreId       String?
   onGooglePlay     Boolean @default(false)
-  /** the "Get our app" banner and page on the store's website; the merchant can turn it off */
+  /**
+   * the "Get our app" banner and page on the store's website; the merchant can turn it off
+   */
   promoteOnWebsite Boolean @default(true)
 
   /**
@@ -3547,9 +3611,9 @@ model MobileApp {
    * Android needs nothing here: one platform Firebase project sends to every
    * store's Android app.
    */
-  apnsTeamId       String?
-  apnsKeyId        String?
-  apnsKeySealed    String?
+  apnsTeamId    String?
+  apnsKeyId     String?
+  apnsKeySealed String?
 
   /**
    * The order (ROADMAP 16.2). A merchant asks for an app in Settings → Mobile
@@ -3559,26 +3623,36 @@ model MobileApp {
   stage            MobileAppStage @default(REQUESTED)
   wantsAndroid     Boolean        @default(true)
   wantsIos         Boolean        @default(true)
-  /** the merchant's square app icon, uploaded to Cloudinary (≥ 1024 px) */
+  /**
+   * the merchant's square app icon, uploaded to Cloudinary (≥ 1024 px)
+   */
   iconUrl          String?
   iconPublicId     String?
-  /** behind the icon and on the splash screen, #rrggbb */
+  /**
+   * behind the icon and on the splash screen, #rrggbb
+   */
   backgroundColor  String?
-  /** one line for the store listings, in the merchant's words */
+  /**
+   * one line for the store listings, in the merchant's words
+   */
   shortDescription String?
   requestedById    String?
 
-  paidAt      DateTime?
-  buildingAt  DateTime?
-  deliveredAt DateTime?
-  liveAt      DateTime?
-  /** the latest delivered build */
-  versionName      String?
-  buildNumber      Int?
-  /** where staff put the Android files for the merchant */
-  downloadUrl      String?
-  deliveryNote     String?
-  handledById      String?
+  paidAt       DateTime?
+  buildingAt   DateTime?
+  deliveredAt  DateTime?
+  liveAt       DateTime?
+  /**
+   * the latest delivered build
+   */
+  versionName  String?
+  buildNumber  Int?
+  /**
+   * where staff put the Android files for the merchant
+   */
+  downloadUrl  String?
+  deliveryNote String?
+  handledById  String?
 
   /**
    * The add-on is paid a year at a time. Past this date the app gets the
@@ -3608,24 +3682,41 @@ model MobileApp {
 model PushDevice {
   id             String       @id @default(cuid())
   organizationId String
-  /** the app it's in — also which credentials send to it */
+  /**
+   * the app it's in — also which credentials send to it
+   */
   appId          String
   platform       PushPlatform
-  /** FCM registration token (Android) or APNs device token (iOS) */
+  /**
+   * FCM registration token (Android) or APNs device token (iOS)
+   */
   token          String
+  /**
+   * Whose phone it is, once a signed-in shopper (or staff member) allowed
+   * notifications on it (ROADMAP 18): it then hears everything that belongs
+   * to them, not only the orders and chats it watches. Null for a guest's.
+   */
+  customerId     String?
+  userId         String?
   createdAt      DateTime     @default(now())
   lastSeenAt     DateTime     @default(now())
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  user         User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   watches      PushOrderWatch[]
   chatWatches  PushChatWatch[]
 
   @@unique([appId, token])
   @@index([organizationId])
+  @@index([customerId])
+  @@index([userId])
   @@map("push_devices")
 }
 
-/** One device asking about one order. Removed 60 days on (lib/mobile/push/watch.ts). */
+/**
+ * One device asking about one order. Removed 60 days on (lib/mobile/push/watch.ts).
+ */
 model PushOrderWatch {
   deviceId  String
   orderId   String
@@ -3646,27 +3737,41 @@ enum PushPlatform {
 }
 
 enum MobileAppStage {
-  /** asked for, not paid yet */
+  /**
+   * asked for, not paid yet
+   */
   REQUESTED
-  /** paid: waiting for staff to build it */
+  /**
+   * paid: waiting for staff to build it
+   */
   PAID
   BUILDING
-  /** files handed to the merchant to publish */
+  /**
+   * files handed to the merchant to publish
+   */
   DELIVERED
-  /** in the App Store and/or Google Play */
+  /**
+   * in the App Store and/or Google Play
+   */
   LIVE
 }
 
-/** The setup fee (the first year included) or a year's renewal (ROADMAP 16.2). */
+/**
+ * The setup fee (the first year included) or a year's renewal (ROADMAP 16.2).
+ */
 model MobileAppPayment {
   id                   String               @id @default(cuid())
   mobileAppId          String
   billingTransactionId String               @unique
   kind                 MobileAppPaymentKind
   amount               Decimal              @db.Decimal(12, 2)
-  /** set once Paystack confirms it — the charge is applied exactly once */
+  /**
+   * set once Paystack confirms it — the charge is applied exactly once
+   */
   paidAt               DateTime?
-  /** the paid-through date this payment set */
+  /**
+   * the paid-through date this payment set
+   */
   coversUntil          DateTime?
   createdAt            DateTime             @default(now())
 
@@ -3682,11 +3787,15 @@ enum MobileAppPaymentKind {
   RENEWAL
 }
 
-/** A renewal reminder sent for one paid-through date — claimed before sending, so each goes once. */
+/**
+ * A renewal reminder sent for one paid-through date — claimed before sending, so each goes once.
+ */
 model MobileAppReminder {
   id          String   @id @default(cuid())
   mobileAppId String
-  /** e.g. "before_30:2027-10-04" */
+  /**
+   * e.g. "before_30:2027-10-04"
+   */
   kind        String
   sentAt      DateTime @default(now())
 
@@ -3697,17 +3806,25 @@ model MobileAppReminder {
 }
 
 enum MobileAppStatus {
-  /** opens the store */
+  /**
+   * opens the store
+   */
   ACTIVE
-  /** add-on not renewed: the app opens a "no longer available" page */
+  /**
+   * add-on not renewed: the app opens a "no longer available" page
+   */
   LAPSED
 }
 
-/** A renewal reminder sent for one expiry — claimed before sending, so each goes once (12.6). */
+/**
+ * A renewal reminder sent for one expiry — claimed before sending, so each goes once (12.6).
+ */
 model DomainReminder {
   id           String   @id @default(cuid())
   shopDomainId String
-  /** e.g. "before_30:2027-03-01" — the day count and the expiry it's for */
+  /**
+   * e.g. "before_30:2027-03-01" — the day count and the expiry it's for
+   */
   kind         String
   sentAt       DateTime @default(now())
 
@@ -3725,7 +3842,9 @@ model DomainReminder {
  */
 model UnmatchedPayment {
   id             String    @id @default(cuid())
-  /** "charge" | "dispute" */
+  /**
+   * "charge" | "dispute"
+   */
   kind           String
   event          String
   reference      String
@@ -4134,11 +4253,9 @@ model StorefrontHeroSlide {
  * what shoppers see (`published`) and what the merchant is trying out
  * (`draft`). Both are a versioned JSON document validated by
  * lib/storefront/design/schema.ts — never markup, never CSS.
- *
  * No row, or no `published`, means Classic: today's storefront, built from
  * the older storefrontAccent / storefrontDarkByDefault columns. Nothing is
  * backfilled; a row appears the first time a merchant saves a draft.
- *
  * Publishing copies the draft into `published` in ONE update, so a shop is
  * never half-changed. Content (slides, pages, products) is not in here: it
  * still saves live. Only design waits for Publish.
@@ -4146,13 +4263,15 @@ model StorefrontHeroSlide {
 model StorefrontDesign {
   organizationId String @id
 
-  draft            Json?
-  /** set on every draft save; publish names the one it saw, so nobody publishes a draft changed under them */
-  draftSavedAt     DateTime?
-  draftSavedById   String?
-  published        Json?
-  publishedAt      DateTime?
-  publishedById    String?
+  draft          Json?
+  /**
+   * set on every draft save; publish names the one it saw, so nobody publishes a draft changed under them
+   */
+  draftSavedAt   DateTime?
+  draftSavedById String?
+  published      Json?
+  publishedAt    DateTime?
+  publishedById  String?
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -4434,10 +4553,10 @@ model ChatConversation {
    */
   listChangedAt DateTime @default(now())
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customer     Customer?     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  resolvedBy   User?         @relation("ChatResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
-  blockedBy    User?         @relation("ChatBlockedBy", fields: [blockedByUserId], references: [id], onDelete: SetNull)
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer?       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  resolvedBy   User?           @relation("ChatResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  blockedBy    User?           @relation("ChatBlockedBy", fields: [blockedByUserId], references: [id], onDelete: SetNull)
   messages     ChatMessage[]
   pushWatches  PushChatWatch[]
 
@@ -4532,4 +4651,220 @@ enum ChatConversationStatus {
 enum ChatSender {
   CUSTOMER
   STAFF
+}
+
+// ─── Notifications (ROADMAP 18) ─────────────────────────────────────────────
+//
+// One seam, lib/notifications/: something happened (an event), the people it
+// is for each get a row in their in-app list (Notification), and every way of
+// reaching them — an email, a browser, a phone — is a row in the outbox
+// (NotificationDelivery) that is sent at once and retried if it failed.
+
+/**
+ * Something worth telling people about, raised once. `key` makes raising it
+ * twice a no-op (a retried webhook, a double-click): the second notify()
+ * finds the first and sends nothing.
+ */
+model NotificationEvent {
+  id             String   @id @default(cuid())
+  /**
+   * the idempotency key: natural ("chat:{id}:reply:{seq}") or random
+   */
+  key            String   @unique
+  /**
+   * a kind from lib/notifications/events.ts
+   */
+  kind           String
+  /**
+   * the shop it happened in; null for platform-wide events
+   */
+  organizationId String?
+  createdAt      DateTime @default(now())
+
+  organization  Organization?          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+  deliveries    NotificationDelivery[]
+
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("notification_events")
+}
+
+/**
+ * One entry in one person's notification list. Staff and platform staff are
+ * `userId` (staff scoped to `organizationId`; platform staff with none), a
+ * signed-in shopper is `customerId`. Guests have no list. Kept 90 days.
+ */
+model Notification {
+  id             String    @id @default(cuid())
+  eventId        String
+  userId         String?
+  customerId     String?
+  organizationId String?
+  kind           String
+  title          String
+  body           String
+  /**
+   * what it's about, as a typed target (lib/notifications/links.ts) — never a URL
+   */
+  target         Json
+  /**
+   * notifications about the same thing collapse together ("order:{id}")
+   */
+  threadKey      String?
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  event        NotificationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user         User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer     Customer?         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, organizationId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([eventId])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationChannel {
+  EMAIL
+  WEB_PUSH
+  NATIVE_PUSH
+}
+
+/**
+ * A person turning a category on or off for one channel. Only a choice that
+ * differs from the event's default is stored. `scope` is the shop's id for
+ * staff and shoppers, or "platform" for platform staff — a column of its
+ * own so the unique key never involves a null.
+ */
+model NotificationPreference {
+  id             String              @id @default(cuid())
+  userId         String?
+  customerId     String?
+  organizationId String?
+  scope          String
+  category       String
+  channel        NotificationChannel
+  enabled        Boolean
+  updatedAt      DateTime            @updatedAt
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer     Customer?     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scope, category, channel])
+  @@unique([customerId, scope, category, channel])
+  @@index([organizationId])
+  @@map("notification_preferences")
+}
+
+enum NotificationAudience {
+  STAFF
+  SHOPPER
+  PLATFORM
+}
+
+/**
+ * A browser that allowed notifications (Web Push, ROADMAP 18.3). Belongs to
+ * one origin — a shop's domain, an admin host, the platform host — and to
+ * whoever was signed in there, or a guest. Deleted when the browser's push
+ * service says it's gone (404/410).
+ */
+model WebPushSubscription {
+  id             String               @id @default(cuid())
+  endpoint       String               @unique
+  p256dh         String
+  auth           String
+  origin         String
+  /**
+   * "Chrome on Android", for the person's list of devices
+   */
+  label          String
+  audience       NotificationAudience
+  userId         String?
+  customerId     String?
+  /**
+   * a guest's chat cookie, hashed (lib/chat/identity.ts)
+   */
+  guestKeyHash   String?
+  organizationId String?
+  createdAt      DateTime             @default(now())
+  lastSeenAt     DateTime             @default(now())
+
+  user         User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer     Customer?           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  organization Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  orderWatches WebPushOrderWatch[]
+
+  @@index([userId])
+  @@index([customerId])
+  @@index([organizationId])
+  @@map("web_push_subscriptions")
+}
+
+/**
+ * A guest's browser asking about one order (ROADMAP 18.3) — the browser's
+ * PushOrderWatch. A signed-in shopper's browser hears about all their orders
+ * instead. Removed 60 days on, with the phones' watches.
+ */
+model WebPushOrderWatch {
+  subscriptionId String
+  orderId        String
+  createdAt      DateTime @default(now())
+
+  subscription WebPushSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  order        Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@id([subscriptionId, orderId])
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("web_push_order_watches")
+}
+
+enum NotificationDeliveryStatus {
+  /**
+   * not sent yet, or waiting for its next try
+   */
+  PENDING
+  SENT
+  /**
+   * gave up: a permanent refusal, or out of tries
+   */
+  FAILED
+  /**
+   * the device or browser no longer exists; it was removed
+   */
+  GONE
+}
+
+/**
+ * The outbox: one way of reaching someone about one event — an email (to
+ * one or more addresses, as one message), one phone, one browser. Sent the
+ * moment the event is raised; a temporary failure is retried by the
+ * "notification-retries" job with backoff, up to 5 tries. `payload` is
+ * exactly what to send, and is cleared once it has gone.
+ */
+model NotificationDelivery {
+  id            String                     @id @default(cuid())
+  eventId       String
+  channel       NotificationChannel
+  /**
+   * what it goes to: email addresses, a PushDevice id, a WebPushSubscription id
+   */
+  recipient     String
+  payload       Json?
+  status        NotificationDeliveryStatus @default(PENDING)
+  attempts      Int                        @default(0)
+  nextAttemptAt DateTime                   @default(now())
+  lastError     String?
+  sentAt        DateTime?
+  createdAt     DateTime                   @default(now())
+
+  event NotificationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([eventId])
+  @@map("notification_deliveries")
 }

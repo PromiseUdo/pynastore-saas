@@ -18,8 +18,12 @@ export interface StorefrontChatConfig {
   exists: boolean;
   /** the store's messages they hadn't seen, as of the server render */
   unread: number;
-  /** inside this store's own app, which can be reached by push (ROADMAP 17.4) */
-  pushReady?: boolean;
+  /**
+   * How replies can reach this shopper: inside this store's own app, which
+   * can be reached by push (ROADMAP 17.4), or in the browser (18.3). Absent
+   * when neither.
+   */
+  push?: 'app' | 'browser' | null;
   /** real-time hints are set up (ABLY_API_KEY); otherwise the panel only polls */
   realtime?: boolean;
 }

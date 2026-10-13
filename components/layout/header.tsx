@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Menu } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSidebar } from './sidebar';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import type { UserInfo } from './dashboard-layout';
 
 type Breadcrumb = { label: string; href?: string };
@@ -71,13 +72,12 @@ export function Header({ breadcrumbs, actions, user, className }: HeaderProps) {
 
       {!breadcrumbs && <div className="flex-1" />}
 
-      {/* Right controls.
-        *
-        * A global search box and a notification bell used to sit here doing
-        * nothing — the bell even showed a permanent unread dot. AGENTS §7:
-        * build a control or leave it out. Search and notifications are
-        * Phase 7 in docs/ROADMAP.md, and this is where they go. */}
+      {/* Right controls. The bell is this member's notifications in this shop
+        * (ROADMAP 18.2). A global search box once sat here doing nothing —
+        * AGENTS §7: build a control or leave it out. */}
       <div className="ml-auto flex items-center gap-1.5">
+        <NotificationBell base="/notifications" />
+
         {/* User avatar */}
         <div
           aria-label="User menu"

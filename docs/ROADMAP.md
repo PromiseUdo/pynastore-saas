@@ -4362,7 +4362,7 @@ launch blockers, but a merchant will feel each within weeks.
     cost; existing SKUs skipped on a second run).
   - **Not built:** updating existing products by import, importing images
     by URL (AGENTS: merchant images are uploaded, never linked).
-- **14.3 Notifications.** A `Notification` model, the header bell (removed in 0.4),
+- **14.3 Notifications — moved to Phase 18 (2026-10-12).** A `Notification` model, the header bell (removed in 0.4),
   and per-member email preferences. New-order and low-stock emails already send
   but are neither visible in the app nor configurable.
 - **14.4 SMS/WhatsApp order updates** for shoppers, alongside email, with the
@@ -5846,6 +5846,604 @@ editing or deleting messages, assigning a conversation to one staff member,
 typing indicators, read receipts shown to the shopper, emailing guests,
 SMS/WhatsApp/Instagram DMs, and analytics such as response times.
 
+## Phase 18 — Notifications everywhere (vendors, shoppers, platform staff) — IN PROGRESS (18.1, 18.2 done 2026-10-12; 18.3 done 2026-10-13)
+
+Agreed 2026-10-12. Replaces 14.3. The goal: everyone hears about what needs
+them, on whatever they use (a phone or a computer, in the app or in a
+browser). Tapping any notification opens the exact thing it is about.
+
+**Where we are (audit 2026-10-12):**
+- **Built:**
+  - native push to **shoppers** in a store's own app, for order updates
+    (16.4) and chat replies (17.4). The phone is linked to one order or one
+    chat at a time.
+  - emails to shoppers about orders, and a few emails to staff: customer
+    cancelled, return requested, unanswered chat, low stock, payment dispute.
+  - platform staff are told about ops alerts, domain orders and mobile-app
+    orders by email only, to `PLATFORM_ADMIN_EMAIL`.
+- **Never tested:** a real notification on a real phone (16.4 says so).
+- **Missing:**
+  - browser notifications (no service worker, no Web Push, no web app
+    manifest);
+  - an in-app list of notifications (no `Notification` model; the admin bell
+    was removed in 0.4);
+  - any push to vendors or platform staff;
+  - per-person preferences;
+  - links that open the app from outside it (iOS Universal Links, Android
+    App Links).
+  - **merchants get no alert at all for a new order.** The 2026-09-29 note
+    that "new-order emails already send" is wrong. `StoreOrderAlertKind` is
+    only `customer-cancelled | return-requested`.
+
+### 18.0 — Decisions — DECIDED (2026-10-12)
+
+- **One seam: `lib/notifications/`.** Code that has something to say calls
+  `notify(organizationId, event)` and nothing else. The seam:
+  - saves the notification in the recipients' in-app lists;
+  - decides which channels each recipient gets (their preferences, the
+    event's defaults, and whether they are looking at it right now);
+  - sends after the response (`runAfter`), through an outbox that retries.
+
+  No page, action or job calls a push or email sender directly. The
+  existing direct calls (`pushOrderUpdate`, `pushStoreReply`, the staff chat
+  email, low-stock and store-order alerts) move behind it.
+- **Four channels, one message.**
+  - **In-app list:** the bell, always on.
+  - **Email:** the existing Resend templates.
+  - **Web Push:** browsers, including phones.
+  - **Native push:** store apps.
+
+  Every event in the catalogue (`lib/notifications/events.ts`, pure) states:
+  - who receives it;
+  - the staff permission needed to receive it;
+  - its preference category;
+  - which channels are on by default;
+  - its title and body;
+  - a typed **target** (what it's about), never a URL.
+- **Browsers use standard Web Push with our own VAPID keys** (the `web-push`
+  library), not Firebase Cloud Messaging for web:
+  - no Google script on any page, which keeps the "no tracking" promise (13.9);
+  - it works in Safari, Chrome, Edge and Firefox;
+  - it works on every storefront host, custom domains included.
+
+  One key pair serves every origin. A subscription belongs to one origin (one
+  shop's domain, one admin host, the platform host), and that's how we store
+  it.
+- **Native push stays as built:**
+  - **Android:** FCM HTTP v1 through the platform's single Firebase project.
+  - **iPhone:** direct to APNs with the merchant's own key. Their Apple team
+    owns the app, so routing iOS through our Firebase project would mean
+    holding every merchant's key in Firebase too. That's more custody for no
+    gain.
+- **Vendors and platform staff get notifications on their phones through the
+  admin as an installable web app (PWA) with Web Push.**
+  - **Android:** this works in Chrome, installed or not.
+  - **iPhone (iOS 16.4+):** it works only after "Add to Home Screen". The
+    admin shows step-by-step help at the moment of asking.
+  - **Why not a native app now:** the admin can't run inside the current
+    app. It is blocked from the mobile host by design (MOBILE.md), and it is
+    multi-host (`{slug}.`), which Capacitor's single-origin bridge can't
+    follow.
+  - **Later:** a platform-owned native "business" app is 18.9, a separate
+    decision. It would plug into the same seam as one more channel.
+- **Deep links: built by us, no Airbridge.** We need two things:
+  1. **A tap opens the exact page.** One link builder
+     (`lib/notifications/links.ts`) turns a target into:
+     - the admin URL (`getAdminUrl`);
+     - the store URL, on the custom domain when there is one;
+     - the in-app path (`/s/{slug}/…`).
+  2. **Store links open the store's app when it's installed.** These are the
+     links in emails, SMS and shares. We add iOS Universal Links and Android
+     App Links: two small files served per store host, plus
+     associated-domain and intent-filter entries that the build kit stamps.
+     Both are free, standard, and need no SDK.
+
+  Airbridge (like Branch or AppsFlyer) mainly sells **install attribution**
+  and **deferred** deep links (install, then land on the page). Neither
+  matters for notifications, since a notification means the app is already
+  installed. Its SDK would also change every app's privacy and data-safety
+  answers to "tracking", against 13.9. Firebase Dynamic Links shut down in
+  August 2025. Revisit only if merchants run install-ad campaigns.
+- **Asking for permission.**
+  - **Timing:** never on page load. Only at a moment that explains itself:
+    - after placing an order ("Get updates about this order");
+    - after a first chat message;
+    - from the admin bell's "Get alerts on this device";
+    - from Settings → Notifications.
+  - **Our prompt comes first:** our own soft prompt always shows before the
+    browser's or the phone's. A browser "Block" is permanent, so we spend it
+    carefully.
+  - **"Not now"** is remembered on that device.
+- **One permission covers everything for a signed-in person.** Once a
+  signed-in shopper or staff member allows notifications on a device, that
+  device gets everything they're entitled to and opted into. Guests keep
+  today's per-order and per-chat links.
+- **What a notification may say.**
+  - **Shoppers:** never the text of a chat message (17.4 rule kept).
+  - **Staff:** a notification may name the order reference and amount. It's
+    their own business data. A per-person "hide details on lock screen"
+    setting covers shared phones.
+  - **Platform staff:** a notification never includes a merchant's
+    customer data.
+- **Don't notify:**
+  - the person who did the thing;
+  - someone already looking at it (the existing seen-at signals:
+    `chatInboxSeenAt`, `customerSeenAt`, and a new "open on this page" for
+    the bell);
+  - staff without the event's permission, or without access to the store
+    the event happened in (8.6).
+- **Bursts collapse.**
+  - **The rule:** one thread is one notification on the device. The tag is
+    `order:{id}`, `chat:{conversationId}` or `lowstock:{storeId}`, sent as
+    web `tag`, Android `tag` and APNs `apns-collapse-id`.
+  - **Low stock** is one daily summary by default, not one alert per item.
+- **No marketing pushes in this phase.** Campaigns need consent records and
+  rules of their own (Phase 5). Every push here is about something the
+  person is already part of.
+
+### 18.1 — The seam, the list, the outbox — DONE (2026-10-12)
+
+**As built.** Nobody receives anything different yet: the same emails, to
+the same people, and the same phone notifications. What changed is the path
+they take, and that each one is now recorded and retried.
+
+- **Data:** migration `20261012180000_notifications`.
+  - **`NotificationEvent`** (not in the plan above). It's the one row per
+    thing that happened. Its unique `key` is the idempotency key, so raising
+    an event twice sends once (a `P2002` means "already raised"). It owns
+    the list entries and the outbox rows, so deleting it removes both.
+  - **`Notification`:** one row per person. It stores a typed `target`,
+    never a URL, plus `threadKey`, `readAt` and `createdAt`.
+  - **`NotificationPreference`:** a `scope` column (the shop's id, or
+    `"platform"`) keeps nulls out of the unique keys. No screens yet (18.6).
+  - **`WebPushSubscription`:** the table and the sending code are ready.
+    Browsers start subscribing in 18.3.
+  - **`PushDevice`** gains `customerId` and `userId`, both nullable. Nothing
+    sets them yet (18.4).
+  - **`NotificationDelivery`:** the outbox.
+- **`lib/notifications/`:**
+  - **`events.ts`:** the catalogue of 9 kinds: `order.update`,
+    `order.alert`, `chat.message`, `chat.reply`, `stock.low`,
+    `payment.dispute`, `platform.alert`, `platform.domain-order` and
+    `platform.mobile-app-paid`.
+  - **`links.ts`:** gained a `dispute` target, which opens the order for the
+    shop and `/platform/payments?tab=disputes` for platform staff.
+  - **The rest:** `recipients.ts`, `preferences.ts`, `notify.ts`,
+    `outbox.ts`, and `channels/email|native-push|web-push.ts`.
+- **When it sends:** `notify()` sends straight away, after its own
+  transaction commits. Callers still call it where they used to call the
+  email: after the change has committed, and inside `runAfter` for chat.
+  Moving the order calls into `runAfter` is left for later, because it
+  changes nothing anyone sees.
+- **Retries:**
+  - **Claiming:** each delivery is claimed with one conditional update that
+    also counts the attempt and holds it for 10 minutes. The immediate send
+    and the job can't both send the same one.
+  - **Backoff:** 1, 5, 30 and 120 minutes. After 5 tries it's `FAILED`.
+  - **Cleanup:** a finished delivery's `payload` is cleared.
+  - **New job:** `notification-retries`, every 5 minutes
+    (`/api/cron/notification-retries`). **The owner must add it on
+    cron-job.org** (docs/SCHEDULED-JOBS.md).
+- **Emails:**
+  - **Results:** the senders the seam uses now return whether Resend
+    accepted the message (`handOver` in `lib/email.ts`). Before, they ignored
+    Resend's `{ error }`.
+  - **Grouping:** one delivery is one message to every address it names, as
+    before. A shopper's own order email is one message per address.
+- **Phones:**
+  - **Transport:** `lib/mobile/push/send.ts` is now only the transport,
+    `sendToDevice`. `pushOrderUpdate` and `sendToDevices` are gone.
+  - **Fresh reads:** the device is read again at send time, so a retry finds
+    a changed or deleted token.
+  - **Results:** a missing APNs key is `FAILED`, not retried. A dead token
+    still deletes the device.
+- **Who receives it:**
+  - **Staff:** the same queries as before, moved into `recipients.ts`. Low
+    stock still goes to `inventory.create` holders, not to the Owner by role.
+  - **Platform staff:** email still goes to `PLATFORM_ADMIN_EMAIL` (now split
+    on commas everywhere). Every `isPlatformStaff` user also gets the entry
+    in their list.
+  - **Store access is not applied yet.** Filtering by store (8.6) would
+    change who gets low-stock alerts, so it comes with 18.6.
+- **Data rights:**
+  - **Retention:** the daily job removes notifications and events after 90
+    days (`NOTIFICATION_RETENTION_DAYS`, step 7).
+  - **Shopper deletion** removes their list, preferences, browsers and owned
+    phones.
+  - **The shopper's export** includes their notifications.
+  - **A closed shop's purge** removes all of its notification data.
+- **Tests:**
+  - **`tests/notifications.test.ts` (14):**
+    - every kind leads somewhere on every surface it's sent to;
+    - staff are chosen by permission, plus the Owner, with one email;
+    - a choice turns an email off, but not a required one;
+    - an event raised twice (even at the same moment) sends once;
+    - retry, then give up;
+    - a browser opens the page on its own origin, and a 410 forgets it;
+    - platform staff, a signed-in shopper and a guest each get theirs;
+    - 90-day retention, and a shopper's deletion.
+  - **Existing suites:** all pass unchanged, except
+    `tests/mobile-push.test.ts`, which now raises the update through
+    `notifyShopper`.
+
+### 18.2 — The bell — DONE (2026-10-12)
+
+**As built.**
+- **Admin:**
+  - **The bell** (`components/notifications/notification-bell.tsx`) sits in
+    the header on every page. It shows an unread badge ("9+" past nine), and
+    its dropdown holds the latest 8, "Mark all read" and "See all
+    notifications".
+  - **`/notifications`** is the full list. It has All and Unread tabs
+    (`show=unread`), 20 to a page with the page number in the URL, an empty
+    state, a "You're all caught up" state, and its own loading and error
+    pages.
+  - **One list per shop:** the reader is the member *in this shop*, so
+    switching shop switches the list. No permission is needed to read your
+    own list.
+  - **Plan ended:** `/notifications` stays open in a workspace whose plan
+    has lapsed (`OPEN_WHILE_LAPSED`).
+- **Console:** the same component, with the same full list at
+  `/platform/notifications`. The bell sits beside the mark in the sidebar
+  on a wide screen, and in the top bar on a phone. Only the one on screen
+  is mounted (`useIsWide`), so there is never a second poller.
+- **Shopper:**
+  - **The list** is at `/account/notifications`, in the account navigation,
+    and in the phone's `/account/menu` with an unread count. It uses the
+    storefront's own look, with a "Mark all as read" button and
+    Newer/Older pages.
+  - **Opening an entry** goes through a server action
+    (`features/shop-account/notification-actions.ts`).
+  - **Links:** a signed-in shopper's entries go to their account's order
+    page, not the emailed confirmation link (the token is dropped when
+    reading).
+  - **No bell and no live channel for shoppers:** nothing on a storefront
+    page shows a count that could go stale. The menu reads it fresh.
+- **Reading:**
+  - **Readers** (`lib/notifications/readers.ts`): staff in a shop, platform
+    staff, or a shopper in a shop. A reader is always built from the
+    session.
+  - **The list** (`lib/notifications/inbox.ts`): `latestNotifications`,
+    `listNotifications`, `markNotificationRead` and
+    `markAllNotificationsRead`.
+  - **Ids from the browser** are only used together with the reader.
+  - **Unknown targets:** an entry whose target isn't recognised gets no
+    link.
+- **Routes:**
+  - **Feed:** `POST /notifications/feed` (admin) and
+    `POST /platform/notifications/feed` (console; anyone else gets 404).
+    These are route handlers, not server actions, because the bell polls.
+    JSON only. The body may carry `read`, `readAll` or `latest`.
+  - **Tokens:** `/notifications/realtime-token` and
+    `/platform/notifications/realtime-token`.
+  - **Shared code:** both are thin wrappers over
+    `lib/notifications/routes.ts`.
+- **Live updates:**
+  - **Channels:** one per person and list, so a member's lists in two shops
+    are two channels (`lib/notifications/realtime.ts`):
+    - `notifications:{orgId}:user:{userId}`;
+    - `notifications:platform:user:{userId}`;
+    - `notifications:{orgId}:customer:{customerId}`.
+  - **Events:** carry `{ unread }` only. They're published by `notify()`
+    after the response, and on every read or mark-all, so another open tab
+    updates too.
+  - **Polling:** the bell polls every 1–2 minutes. While Ably is live it
+    polls only every 5 minutes, as a backup. It also asks again when the
+    tab comes back.
+- **Refactor:** the Ably client, tokens and publishing moved to
+  `lib/realtime/ably.ts`, and the browser hook to `lib/realtime/client.ts`,
+  which now takes an `accept` guard. Chat keeps only its channel names and
+  events in `lib/chat/ably.ts`.
+- **Tests:**
+  - **`tests/notification-bell.test.ts` (11):**
+    - lists kept apart per shop and from the console;
+    - shopper links;
+    - unknown targets;
+    - someone else's id;
+    - the unread filter, pages and mark-all;
+    - the feed is JSON only and for your own list;
+    - the console feed is a 404 for non-staff;
+    - the token is for exactly one channel, subscribe only;
+    - the published hint is `{ unread }` only, and after the response.
+  - **`components/notifications/notification-bell.test.tsx` (3):** the
+    badge, the dropdown and its links, mark-all, and opening an entry.
+- **Not checked yet:** how it looks in a browser (light and dark, phone
+  width). Check it on the deployed site.
+
+### 18.3 — Web Push and installable apps — DONE (2026-10-13)
+
+**As built.** Browser notifications work on every surface once the owner
+sets the three VAPID settings (`.env.example`). Without them, nothing
+offers notifications.
+
+- **Service worker:** `public/sw.js`, a static file. `proxy.ts`'s matcher
+  skips it, so it's served as-is on every host. It shows the notification
+  (title, body, tag, `renotify` for a thread) and sets the app badge. A tap
+  focuses a tab of this site and navigates it, or opens one. Only links on
+  its own origin; anything else opens the home page. No caching, no offline
+  pages.
+- **Installable:**
+  - **Manifests:**
+    - **Admin:** `/manifest.webmanifest`. Platform name, starts at `/`.
+      Names no shop.
+    - **Console:** `/platform/manifest.webmanifest`. Covers `/platform`.
+    - **Each store:** its name, short name and brand colour.
+  - **Icons:** generated per surface at `/app-icon/{180|192|512}` with
+    `next/og` (`lib/pwa/app-icon.tsx`). A store's logo is shown on white
+    inside the safe zone, or the store's initial on its brand colour if it
+    has no logo or the logo can't be fetched.
+  - **Layouts:** the three layouts link the manifest, the Apple touch icon
+    and `appleWebApp`.
+  - **No session needed:** browsers fetch manifests and icons without
+    cookies, so they skip the proxy's sign-in gate (`INSTALL_ASSET`, which
+    also matches the admin's rewritten `/{slug}/…` pass).
+- **Subscribing:** one route per surface, not the single `/api` route
+  planned. The owner always comes from that surface's session and
+  hostname, and `/api` is outside the tenant routing.
+  - **Admin:** `/notifications/web-push`.
+  - **Console:** `/platform/notifications/web-push`. 404 for non-staff.
+  - **Storefront:** `/api/storefront/notifications/web-push`. The store
+    comes from `resolveRequestStore`, on the shop's own host only.
+    - **Signed-in shopper:** the browser is theirs.
+    - **Guest:** their chat cookie, and/or the order they're on (its
+      confirmation token, checked against the store). This uses the new
+      `WebPushOrderWatch` (migration
+      `20261012200000_web_push_order_watches`), the browser's
+      `PushOrderWatch`, purged at 60 days with guest browsers left
+      watching nothing.
+  - **Shared code:** `lib/notifications/web-push-route.ts`. Requests must be
+    JSON, the Origin must equal the Host, and each person and address is
+    limited to 20 changes per 10 minutes.
+  - **Only real push services:** `parseSubscription` accepts only Google,
+    Mozilla, Apple and Microsoft push hosts over https, with well-formed
+    keys. The server POSTs to whatever is saved, so an arbitrary URL would
+    let anyone make it call any address.
+  - **One browser, one person:** the same browser re-subscribing moves to
+    whoever is signed in now. Removing is only ever by the owner, by
+    endpoint or by id.
+- **Asking:** the browser's prompt only ever comes from a click, after our
+  own explanation (`lib/notifications/web-push-client.ts`).
+  - **Admin and console:**
+    - **Settings → Notifications** (`/settings/notifications`, in the
+      sidebar, open while lapsed) and `/platform/settings/notifications`
+      show "Alerts on this device" (`components/notifications/device-alerts.tsx`):
+      - on, off, and blocked (with where to allow it);
+      - an old browser;
+      - the iPhone "Add to Home Screen" steps;
+      - your other devices, with Remove.
+    - **The bell** offers "Get alerts on this device" while this browser
+      could have them and hasn't been asked. "Not now" is remembered on the
+      browser. The lists link to their settings page.
+  - **Shoppers:**
+    - **Account page:** `/account/notifications` has "Notifications on this
+      device".
+    - **Existing prompts:** the order page's "Get updates on this order"
+      and the chat's "Get a notification when the store replies" now take
+      a channel (`lib/storefront/push-optin.ts`): the app's phone push
+      inside a store app, or the browser on the website. The chat config's
+      `pushReady` became `push: 'app' | 'browser' | null`.
+    - **Shoppers on iPhone** aren't asked to install a shop for one order;
+      the prompt just doesn't show.
+- **Tests:**
+  - **`tests/web-push.test.ts` (10):**
+    - accepted push hosts, and refused addresses (another host, http, a
+      port, a metadata IP);
+    - bad keys;
+    - device labels;
+    - the admin route: saves for this member, and refuses another site, a
+      made-up subscription and non-JSON;
+    - 503 without keys;
+    - a browser moves to the new person, and only its owner removes it;
+    - the console route is a 404 for non-staff;
+    - a guest with nothing to hear about, or a foreign token, is refused;
+    - a guest's watched order pushes the confirmation link on the shop's
+      own host;
+    - manifests.
+  - **`chat.test.tsx`:** updated for `push`.
+- **Not checked yet:**
+  - on a real phone and browser: install, permission, a delivered push, and
+    a tap;
+  - how the new cards look (light, dark, phone width).
+
+  Do this on the deployed site with the keys set (18.7). Subscriptions
+  belong to an origin, and localhost isn't one a phone can reach.
+
+### 18.4 — Native push, complete — TODO
+
+- **One permission per device:** a signed-in shopper allowing notifications
+  in a store app links the device to their account (18.0). The order-page
+  and chat prompts become a single "Get notified about your orders and
+  replies" prompt.
+- **More shopper events** go through the same channel (18.6's catalogue).
+- **App icon badge:**
+  - **iPhone:** APNs sends a `badge` with the unread count.
+  - **Android:** the launcher's dot follows the notifications we show.
+- **Collapse ids:** `apns-collapse-id` and the Android `tag` per thread.
+- **APNs sandbox:**
+  - **The problem:** builds run straight from Xcode get sandbox tokens. They
+    fail against `api.push.apple.com` today, which only uses the
+    production host.
+  - **The fix:** record the APNs environment with the token (the app reports
+    its build type), and send to `api.sandbox.push.apple.com` when needed.
+  - **Until then:** test iPhone push through TestFlight.
+- **Foreground taps and cold starts:** the existing listener in
+  `native-shell.tsx` stays. Its allow-list widens to every store page a
+  link can name (orders, account, chat, product).
+
+### 18.5 — Deep links — TODO
+
+- **`links.ts` covers every target** in the catalogue (table in 18.6). One
+  test asserts that every event kind has a link on every surface it's sent
+  to.
+- **Notification taps:**
+  - **Web:** handled by the service worker (18.3).
+  - **Native:** the `path` in the payload (as today).
+  - **In-app list:** a normal `<Link>`.
+
+  If the page needs sign-in, the person lands on sign-in with a return
+  address and arrives at the page after signing in.
+- **Universal Links (iOS) and App Links (Android) for store apps:**
+  - **iOS file:** `/.well-known/apple-app-site-association`, served by a
+    route handler on store hosts, from the store's `MobileApp` record
+    (Team ID + bundle id, paths `/*` minus checkout-return paths).
+  - **Android file:** `/.well-known/assetlinks.json`, from new
+    `MobileApp.androidCertSha256` values.
+  - **No redirects:** both must be served on the exact host, with no
+    redirect, so on the apex as well as `www`. The 12.6 canonical 308
+    skips them.
+  - **Build kit:** stamps `applinks:` associated domains (iOS entitlements)
+    and an `autoVerify` intent filter (Android) for:
+    - `shop-{slug}.{root}`;
+    - the custom domain, if the store has one at build time;
+    - a domain added later, which needs a rebuild. The console says so.
+  - **In the app:** `appUrlOpen` turns an `https://` store link into the
+    in-app path. The custom-scheme links for payments and sign-in
+    (`lib/mobile/deep-link.ts`) stay as they are.
+- **The shared app** (`com.mansaas.app`) gets Universal Links only when the
+  real store picker fixes bare paths (MOBILE.md). Until then it uses
+  in-app paths only.
+
+### 18.6 — What each person hears about — TODO
+
+Every row lands in the list. "Push" means web or native, whichever the
+person has. Defaults are shown; each can be changed in preferences, except
+items marked **required**.
+
+| Who | Event | Default | Opens |
+|---|---|---|---|
+| Shopper | Payment received, shipped, delivered, cancelled by store, payment timed out | push + email | order page |
+| Shopper | Return approved / rejected, refund recorded | push + email | order page |
+| Shopper | Store replied in chat | push | `/chat` |
+| Shopper | Password, email change, sign-in security | email, **required** | account |
+| Staff (sales.fulfillment.manage) | **New online order** (new) | push + list | `/sales/orders/{id}` |
+| Staff (sales.fulfillment.manage) | Bank transfer awaiting confirmation (new) | push + list | order |
+| Staff (sales.return.manage) | Customer cancelled; return requested | push + email | order / return |
+| Staff (messages.reply) | New chat message (no push or email while Messages is open) | push + email | `/messages?c=` |
+| Staff (sales.question.answer) | New product question (new) | list + daily email | `/sales/questions` |
+| Staff (inventory.view) | Low stock (daily summary per store) | email + list | low-stock list |
+| Staff (procurement.approve) | Purchase order awaiting approval (new) | push + list | the PO |
+| Owner / billing.manage | Trial ending, payment failed, grace, shop closing (new as notifications) | email **required** + push | `/settings/billing` |
+| Owner | Payment dispute | email **required** + push | payments |
+| Owner | Domain and mobile-app status changes | email + list | settings page |
+| Staff (social.manage) | A post failed to publish (new) | list | post history |
+| Platform staff | New merchant signed up; verification submitted (new) | push + list | `/platform/merchants/…`, `/platform/verification` |
+| Platform staff | Custom domain ordered; mobile app ordered or paid | push + email | `/platform/domains`, `/platform/mobile-apps/{id}` |
+| Platform staff | Webhook failures, error spike, payment problems | push + email | `/platform/errors`, `/platform/payments` |
+
+- Preferences are per person and per organization, by category ×
+  channel. They live in the Settings and account pages from 18.3.
+- "New" rows add the producer call at the point that event already
+  happens. No new workflow is invented to have something to say.
+
+### 18.7 — On real phones, and done — TODO
+
+- **Tests (vitest, on the Docker database):**
+  - the catalogue and links (pure);
+  - recipients, covering permission, store access, the actor and someone
+    looking;
+  - outbox retry and no doubles;
+  - dead-endpoint cleanup;
+  - the subscription route's refusals;
+  - the service worker's click routing (unit-tested as a module).
+- **Acceptance on physical devices, deployed (not localhost: push services
+  can't reach it, and Safari needs HTTPS):**
+  - **Android phone, Chrome:**
+    - admin push for a new order. Tapping it opens the order (app closed,
+      and in the background).
+    - storefront push for "shipped".
+  - **iPhone, Safari:** the admin added to the Home Screen gets the
+    new-order push, and tapping it opens the order. Not installed, it shows
+    the install steps instead of a broken prompt.
+  - **Android store app:** order and chat pushes, tap → page from cold
+    start. A shared store link opens in the app (App Links verified).
+  - **iPhone store app (TestFlight):** the same, plus the badge count and a
+    Universal Link from an email.
+  - **Desktop Chrome and Safari:** platform staff get the error-spike push,
+    and tapping it opens `/platform/errors`.
+  - **Dark mode and phone width** for the bell and the settings pages.
+
+### 18.8 — Not in this phase
+
+SMS and WhatsApp (14.4), marketing pushes and campaigns (Phase 5),
+back-in-stock alerts (a shopper-facing feature of its own), quiet hours, and
+install attribution or deferred deep links (see 18.0).
+
+### 18.9 — Later, a separate decision: a native business app
+
+A platform-owned app ("{PLATFORM_NAME} Business", one for all merchants)
+makes vendor push on iPhone work without the Home Screen step.
+- **What it needs:**
+  - a business host that keeps the admin on one origin, the way `m.` does
+    for stores (`b.{root}/o/{slug}/…`);
+  - App Store review of a wrapped admin;
+  - FCM for both platforms with the PLATFORM's own APNs key, uploaded to
+    Firebase.
+- **What it reuses:** the seam, preferences and links from 18.1–18.6. It
+  plugs in as another device type.
+- **When:** only if merchants find "Add to Home Screen" too hard.
+
+### What the owner provides
+
+Keys go **straight into `.env` locally and Vercel's environment settings
+(Production, and Preview if you test there)**. Never paste a private key
+into chat or a commit.
+
+**Firebase (Android push), once for the platform:**
+1. Firebase console → **Add project**. Use the existing one if Android push
+   was set up for 16.4. **Google Analytics: off** (13.9, no tracking).
+2. Project settings → **Cloud Messaging**: check that **Firebase Cloud
+   Messaging API (V1)** says *Enabled*. The legacy API is gone and isn't
+   needed.
+3. Project settings → **Service accounts** → **Generate new private key**.
+   The downloaded JSON goes in `FIREBASE_SERVICE_ACCOUNT`, either as-is or
+   base64-encoded (both are read by `lib/mobile/push/fcm.ts`).
+4. **For each store's Android app** (and one test store app now): Project
+   settings → **Add app → Android**, package name = the app id (e.g.
+   `com.pynacode.shop`). Download **google-services.json** into that
+   store's build folder (docs/MOBILE-BUILD.md §2). No SHA key is needed for
+   push.
+5. **Not needed:** Firebase's "Web Push certificates", the Firebase JS SDK,
+   Analytics, Crashlytics, Dynamic Links.
+
+**Web Push (all browsers), not Firebase:** one VAPID key pair. Generate it
+once with `npx web-push generate-vapid-keys`, then set:
+- `NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY`;
+- `WEB_PUSH_PRIVATE_KEY`;
+- `WEB_PUSH_SUBJECT` (`mailto:` a platform address).
+
+Changing these later unsubscribes every browser, so set them once.
+
+**Apple (iPhone store app), per app, from the account that owns it:**
+- **APNs key:** a `.p8` key with Key ID and Team ID (Keys → +, tick APNs),
+  recorded with `npx tsx prisma/mobile-app.ts apns …`. This is the flow
+  that already exists.
+- **Associated Domains:** turned on for the App ID (Identifiers → the app →
+  Associated Domains). Automatic signing in Xcode usually does this.
+- **TestFlight:** a build to test with.
+
+**Google Play (Android App Links), per app, NOT needed to build or test
+notifications** (decided 2026-10-12; no Play account yet):
+- **Push:** works on a sideloaded `.apk` (`adb install`, or sent to the
+  phone, docs/MOBILE-BUILD.md). FCM needs only the Firebase items above.
+- **App Links:** can be built and tested without Play, using the upload
+  key's fingerprint, which the kit reads from the local keystore
+  (`keytool`). An app installed from Play is re-signed by Google, so its
+  links fall back to opening the browser until the **app signing key's**
+  SHA-256 is added. That comes from Play Console → Test and release → App
+  integrity → App signing, once the store is published.
+- **Testing track:** an internal testing track only when an app goes to
+  Play.
+
+**Already set, keep:** `ABLY_API_KEY` (live bell), `PLATFORM_ADMIN_EMAIL`
+(platform email alerts until each staff member sets preferences), the
+cron-job.org account (one new 5-minute job for the outbox).
+
+**Devices for 18.7:**
+- an Android phone, Android 13 or newer (it has the notification permission
+  prompt);
+- an iPhone on iOS 16.4 or newer (17+ preferred);
+- a deployed environment over HTTPS.
+
 ## Sequencing
 
 **Phase 2 before Phases 4 and 7.** If walk-in sales land on `Order` with a `channel`
@@ -5917,6 +6515,14 @@ reasoning behind it.
   nobody can answer. 17.5's limits and data rights ship in the same release as
   the storefront panel, because that is when strangers start writing. 17.4
   can follow within days. 17.6's tests are written alongside each part.
+
+- **Phase 18: 18.1 → 18.2 → 18.3 → 18.5 with 18.4 → 18.6 → 18.7.** The seam
+  and outbox come first, moving today's alerts behind them with nothing
+  changing for anyone. The bell makes every later event visible. Web Push
+  reaches all three audiences on any device. Deep links and native work need
+  the owner's Firebase, Apple and Play items ("What the owner provides"), so
+  start collecting those now. 18.6's new events come once taps land in the
+  right place.
 
 ## Smaller cleanups — DONE (2026-09-25)
 

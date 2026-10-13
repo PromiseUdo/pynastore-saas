@@ -23,6 +23,8 @@
 export const FINANCIAL_RETENTION_YEARS = 6;
 export const CLOSURE_GRACE_DAYS = 30;
 export const GUEST_CHAT_RETENTION_MONTHS = 12;
+/** Notification lists keep 90 days (ROADMAP 18.1). */
+export const NOTIFICATION_RETENTION_DAYS = 90;
 
 const DAY = 86_400_000;
 
@@ -37,6 +39,11 @@ export function guestChatCutoff(now: Date): Date {
   const cutoff = new Date(now);
   cutoff.setUTCMonth(cutoff.getUTCMonth() - GUEST_CHAT_RETENTION_MONTHS);
   return cutoff;
+}
+
+/** A notification raised on or before this moment is due for removal at `now`. */
+export function notificationCutoff(now: Date): Date {
+  return new Date(now.getTime() - NOTIFICATION_RETENTION_DAYS * DAY);
 }
 
 /** Records made on or before this moment are past the retention period at `now`. */

@@ -12,8 +12,9 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ChevronRight, LayoutGrid, Mail, MapPin, Package, PackageSearch, Phone, ShieldCheck, UserRound } from 'lucide-react';
+import { Bell, ChevronRight, LayoutGrid, Mail, MapPin, Package, PackageSearch, Phone, ShieldCheck, UserRound } from 'lucide-react';
 import { getShopper } from '@/lib/storefront/account/session';
+import { unreadCount } from '@/lib/notifications/inbox';
 import { getStorePages, getStorefrontLook } from '@/lib/storefront/catalog';
 import { footerPageLinks } from '@/lib/storefront/pages/rules';
 import { ThemeToggle } from '@/components/storefront/layout/theme-toggle';
@@ -31,6 +32,7 @@ export default async function AccountMenuPage({ params }: Props) {
     getStorePages({ organizationSlug }),
     getStorefrontLook({ organizationSlug }),
   ]);
+  const unread = shopper ? await unreadCount({ kind: 'shopper', customerId: shopper.id, organizationId: shopper.organizationId }) : 0;
   const { help, about } = footerPageLinks(pages);
   const shopPages = [...help, ...about];
   const { email, phone } = look.contact;
@@ -46,6 +48,7 @@ export default async function AccountMenuPage({ params }: Props) {
             <Group title="Your account">
               <Row href="/account" icon={LayoutGrid}>Overview</Row>
               <Row href="/account/orders" icon={Package}>Orders</Row>
+              <Row href="/account/notifications" icon={Bell} count={unread}>Notifications</Row>
               <Row href="/account/addresses" icon={MapPin}>Addresses</Row>
               <Row href="/account/profile" icon={UserRound}>Profile</Row>
               <Row href="/account/privacy" icon={ShieldCheck}>Your data</Row>
@@ -124,17 +127,26 @@ function Row({
   href,
   icon: Icon,
   external = false,
+  count = 0,
   children,
 }: {
   href: string;
   icon?: React.ComponentType<{ className?: string }>;
   external?: boolean;
+  /** something waiting there, e.g. unread notifications */
+  count?: number;
   children: React.ReactNode;
 }) {
   const inner = (
     <>
       {Icon && <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />}
       <span className="min-w-0 flex-1 truncate">{children}</span>
+      {count > 0 && (
+        <span className="rounded-full bg-brand px-2 text-xs font-semibold leading-5 text-primary-foreground tabular-nums">
+          {count > 99 ? '99+' : count}
+          <span className="sr-only"> unread</span>
+        </span>
+      )}
       {!external && <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" />}
     </>
   );

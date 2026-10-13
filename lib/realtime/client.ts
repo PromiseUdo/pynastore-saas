@@ -1,10 +1,12 @@
 'use client';
 
 /*
- * lib/chat/realtime-client.ts
+ * lib/realtime/client.ts
  *
- * The browser's end of the real-time hint channel (lib/chat/ably.ts). One
- * hook, used by the storefront chat panel and the merchant's Messages page.
+ * The browser's end of the real-time hint channels (./ably.ts). One hook,
+ * used by the storefront chat panel, the merchant's Messages page and the
+ * notification bell (ROADMAP 18.2). Chat events are what it accepts unless a
+ * caller says otherwise (`accept`).
  *
  * What it does — and doesn't:
  *   - asks OUR server for a listen-only token (the route decides the channel
@@ -22,8 +24,8 @@
  *     to a backup interval. Anything else — not configured, no token,
  *     disconnected, suspended, failed — and polling runs at its normal pace.
  *
- * The SDK is loaded only when a chat is actually open, so no other page
- * carries it.
+ * The SDK is loaded only when a channel is actually listened to, so no
+ * other page carries it.
  */
 import * as React from 'react';
 
@@ -62,13 +64,15 @@ function isChatEvent(value: unknown): value is ChatEventView {
   return (v.type === 'message' || v.type === 'status') && typeof v.conversationId === 'string';
 }
 
-export function useRealtimeChannel(options: {
+export function useRealtimeChannel<E = ChatEventView>(options: {
   /** false while there's nothing to listen to (no conversation yet, chat closed, Ably off) */
   enabled: boolean;
   /** our token route */
   tokenUrl: string;
   tokenBody?: Record<string, unknown>;
-  onEvent: (event: ChatEventView) => void;
+  /** which messages are this channel's events (default: chat events) */
+  accept?: (data: unknown) => data is E;
+  onEvent: (event: E) => void;
   onCatchUp: () => void;
 }): RealtimeState {
   const { enabled, tokenUrl } = options;
@@ -77,9 +81,11 @@ export function useRealtimeChannel(options: {
 
   const onEvent = React.useRef(options.onEvent);
   const onCatchUp = React.useRef(options.onCatchUp);
+  const accept = React.useRef<(data: unknown) => boolean>(options.accept ?? isChatEvent);
   React.useEffect(() => {
     onEvent.current = options.onEvent;
     onCatchUp.current = options.onCatchUp;
+    accept.current = options.accept ?? isChatEvent;
   });
 
   React.useEffect(() => {
@@ -155,7 +161,7 @@ export function useRealtimeChannel(options: {
 
       try {
         await channel.subscribe('change', (message) => {
-          if (!cancelled && isChatEvent(message.data)) onEvent.current(message.data);
+          if (!cancelled && accept.current(message.data)) onEvent.current(message.data as E);
         });
       } catch {
         if (!cancelled) setState('down');

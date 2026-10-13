@@ -22,7 +22,7 @@ import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
 import { initializeTransaction } from '@/lib/billing/paystack';
 import { getMobileAppPricing } from '@/lib/settings';
-import { sendPlatformNoticeEmail } from '@/lib/email';
+import { notify } from '@/lib/notifications/notify';
 import { getMarketingUrl } from '@/lib/tenant/urls';
 import { isValidAppId, SHARED_APP_ID } from './app-config';
 import { appPaidStaffEmail } from './emails';
@@ -273,15 +273,21 @@ export async function applyMobileAppPayment(billingTransactionId: string, now = 
   });
 
   // New work for staff: the setup fee means an app to build.
-  if (payment.kind === 'SETUP' && process.env.PLATFORM_ADMIN_EMAIL) {
-    await sendPlatformNoticeEmail({
-      to: process.env.PLATFORM_ADMIN_EMAIL,
-      ...appPaidStaffEmail({
-        shopName: app.organization.name,
-        appName: app.name,
-        platforms: { android: app.wantsAndroid, ios: app.wantsIos },
-        queueUrl: getMarketingUrl(`/platform/mobile-apps/${app.id}`),
-      }),
-    }).catch((error) => console.error('[mobile-app] Couldn’t tell staff about a paid app:', error));
+  if (payment.kind === 'SETUP') {
+    await notify({
+      kind: 'platform.mobile-app-paid',
+      organizationId: null,
+      key: `mobile-app:${app.id}:paid:${payment.id}`,
+      facts: { appOrderId: app.id, shopName: app.organization.name, appName: app.name },
+      email: {
+        template: 'platform-notice',
+        props: appPaidStaffEmail({
+          shopName: app.organization.name,
+          appName: app.name,
+          platforms: { android: app.wantsAndroid, ios: app.wantsIos },
+          queueUrl: getMarketingUrl(`/platform/mobile-apps/${app.id}`),
+        }),
+      },
+    });
   }
 }

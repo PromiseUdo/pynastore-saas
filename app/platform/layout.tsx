@@ -25,6 +25,10 @@ import { errorsAttentionCount } from '@/features/platform/errors';
 export const metadata: Metadata = {
   title: { default: 'Platform console', template: `%s · Platform console · ${PLATFORM_NAME}` },
   robots: { index: false, follow: false },
+  // Installable, so staff can get alerts on their phone (ROADMAP 18.3).
+  manifest: '/platform/manifest.webmanifest',
+  appleWebApp: { capable: true, title: `${PLATFORM_NAME} console`, statusBarStyle: 'default' },
+  icons: { apple: '/platform/app-icon/180' },
 };
 
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {

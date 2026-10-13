@@ -17,7 +17,8 @@ import { NextResponse } from 'next/server';
 import { chatStoreFromRequest } from '@/lib/chat/storefront';
 import { currentChatIdentity } from '@/lib/chat/identity';
 import { shopperConversationId } from '@/lib/chat/service';
-import { ablyConfigured, chatChannelName, listenTokenRequest } from '@/lib/chat/ably';
+import { chatChannelName } from '@/lib/chat/ably';
+import { ablyConfigured, listenTokenRequest } from '@/lib/realtime/ably';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { requestIdentity } from '@/lib/storefront/request-identity';
 

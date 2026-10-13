@@ -2,41 +2,41 @@
 
 /*
  * "Get updates on this order" — on the order's page, inside a store's own
- * app (ROADMAP 16.4).
+ * app (ROADMAP 16.4) or, on the shop's website, in the browser (18.3).
  *
  * Asked here, about this order, rather than when the app opens: a shopper who
  * has just paid knows exactly what they'd be notified about, and both stores'
  * reviewers expect the question in context. Already allowed → this order is
  * added quietly. Refused → nothing is shown; we don't ask twice.
  *
- * Rendered only when the server has checked the app can be reached
- * (lib/mobile/push/watch.ts, pushReadyFor).
+ * Rendered only when the server has checked it can be reached: the app
+ * (lib/mobile/push/watch.ts, pushReadyFor), or the platform's browser keys
+ * are set. A browser that can't (an iPhone that hasn't installed the shop)
+ * shows nothing.
  */
 import * as React from 'react';
 import { Bell, Loader2 } from 'lucide-react';
-import { pushPermission, registerForPush } from '@/lib/mobile/push-client';
+import { optIn, optInPermission, type PushChannel } from '@/lib/storefront/push-optin';
 import { watchOrderUpdatesAction } from '@/features/shop-orders/actions';
 
 type State = 'checking' | 'offer' | 'working' | 'on' | 'blocked' | 'failed' | 'hidden';
 
-export function OrderUpdatesPrompt({ confirmationToken }: { confirmationToken: string }) {
+export function OrderUpdatesPrompt({ confirmationToken, channel = 'app' }: { confirmationToken: string; channel?: PushChannel }) {
   const [state, setState] = React.useState<State>('checking');
 
   const enable = React.useCallback(async () => {
     setState('working');
-    const token = await registerForPush().catch(() => null);
-    if (!token) {
-      setState((await pushPermission().catch(() => 'unavailable')) === 'denied' ? 'blocked' : 'failed');
-      return;
-    }
-    const result = await watchOrderUpdatesAction(confirmationToken, token).catch(() => ({ ok: false as const }));
-    setState(result.ok ? 'on' : 'failed');
-  }, [confirmationToken]);
+    const result = await optIn(
+      channel,
+      async (deviceToken) => (await watchOrderUpdatesAction(confirmationToken, deviceToken)).ok,
+      { order: confirmationToken },
+    );
+    setState(result);
+  }, [channel, confirmationToken]);
 
   React.useEffect(() => {
     let cancelled = false;
-    void pushPermission()
-      .catch(() => 'unavailable' as const)
+    void optInPermission(channel)
       .then((permission) => {
         if (cancelled) return;
         if (permission === 'granted') void enable();
@@ -45,7 +45,7 @@ export function OrderUpdatesPrompt({ confirmationToken }: { confirmationToken: s
     return () => {
       cancelled = true;
     };
-  }, [enable]);
+  }, [channel, enable]);
 
   if (state === 'checking' || state === 'hidden') return null;
 
@@ -66,7 +66,9 @@ export function OrderUpdatesPrompt({ confirmationToken }: { confirmationToken: s
           <p className="font-semibold">Get updates on this order</p>
           {state === 'blocked' ? (
             <p className="mt-1 text-sm text-muted-foreground">
-              Notifications are off for this app. You can turn them on in your phone&apos;s Settings.
+              {channel === 'app'
+                ? 'Notifications are off for this app. You can turn them on in your phone’s Settings.'
+                : 'Notifications are blocked for this site. You can allow them in your browser’s site settings.'}
             </p>
           ) : (
             <p className="mt-1 text-sm text-muted-foreground">

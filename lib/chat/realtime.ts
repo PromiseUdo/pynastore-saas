@@ -22,7 +22,8 @@
  * leak than a database.
  */
 import { runAfter } from '@/lib/run-after';
-import { ablyConfigured, publishChatEvent } from './ably';
+import { ablyConfigured } from '@/lib/realtime/ably';
+import { publishChatEvent } from './ably';
 
 export type ChatChange =
   | { kind: 'message'; organizationId: string; conversationId: string; seq: number; sender: 'CUSTOMER' | 'STAFF' }

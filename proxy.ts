@@ -82,6 +82,15 @@ const PUBLIC_PREFIXES = ['/invite', '/verify-email'];
  * platform staff is checked by the console itself (lib/platform-staff.ts). */
 const AUTH_ONLY_PREFIXES = ['/onboarding', '/platform'];
 
+/* What a browser fetches to install a site as an app (ROADMAP 18.3): the
+ * manifest and its icons, for the admin (/…), the console (/platform/…) and
+ * a store. Browsers fetch them WITHOUT cookies, so they must load without a
+ * session; none of them says anything about a shop beyond its public name.
+ * (The service worker, /sw.js, is a static file the matcher skips.) */
+// One leading segment allowed: /platform, and the admin's internal /{slug}
+// on the rewritten second pass through here.
+const INSTALL_ASSET = /^(\/[^/]+)?\/(manifest\.webmanifest|app-icon\/\d+)$/;
+
 /*
  * next-auth's auth() wrapper rewrites req.url/req.nextUrl's ORIGIN to
  * AUTH_URL before calling this function (see reqWithEnvURL in
@@ -244,7 +253,7 @@ const routeRequest = auth(async function proxy(req: NextRequest & { auth: any })
   //      the callback so auth.config.ts's redirect callback can send the
   //      user back there after sign-in.
   const needsSession = isMarketing || tenant?.siteType === 'admin';
-  if (needsSession && !session?.user?.id) {
+  if (needsSession && !session?.user?.id && !INSTALL_ASSET.test(pathname)) {
     const loginUrl = new URL(getMarketingUrl('/login'));
     loginUrl.searchParams.set('callbackUrl', requestUrl);
     return NextResponse.redirect(loginUrl);
@@ -401,5 +410,5 @@ export default async function proxy(req: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.svg$).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|sw\\.js$|.*\\.svg$).*)'],
 };

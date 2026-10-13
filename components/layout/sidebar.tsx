@@ -133,6 +133,7 @@ const navGroups: NavGroup[] = [
           { title: 'Mobile app', href: '/settings/mobile-app' },
           { title: 'Billing', href: '/settings/billing' },
           { title: 'Your data', href: '/settings/data' },
+          { title: 'Notifications', href: '/settings/notifications' },
         ],
       },
     ],

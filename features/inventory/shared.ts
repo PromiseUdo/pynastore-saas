@@ -2,8 +2,7 @@
 // Shared types/helpers for the inventory feature's server actions.
 
 import { prisma } from '@/lib/prisma';
-import { PERMISSIONS } from '@/lib/permissions';
-import { sendLowStockAlertEmail } from '@/lib/email';
+import { notify } from '@/lib/notifications/notify';
 import { getAdminUrl } from '@/lib/tenant/urls';
 
 export type ActionResult<T = void> =
@@ -81,7 +80,8 @@ export function computeMovingAverageCost(
 }
 
 /**
- * Edge-triggered low-stock email: fires only when `previousQty` was above
+ * Edge-triggered low-stock alert ('stock.low', lib/notifications): fires
+ * only when `previousQty` was above
  * `threshold` and `newQty` is now at or below it. No cron/background worker
  * in this app — every store-quantity decrease evaluates this inline.
  * Shared by features/inventory/stock.ts, features/inventory/cycle-counts.ts,
@@ -106,28 +106,23 @@ export async function maybeSendLowStockAlert(params: {
   const { organizationId, organizationSlug, itemName, itemSku, warehouseId, warehouseName, previousQty, newQty, threshold } = params;
   if (threshold === null || previousQty <= threshold || newQty > threshold) return;
 
-  const recipients = await prisma.membership.findMany({
-    where: {
-      organizationId,
-      status: 'ACTIVE',
-      role: {
-        rolePermissions: {
-          some: { permission: { key: PERMISSIONS.INVENTORY_CREATE } },
-        },
+  // Who: members who can add stock (`inventory.create`).
+  await notify({
+    kind: 'stock.low',
+    organizationId,
+    facts: { warehouseId, warehouseName, itemName, quantity: newQty },
+    email: {
+      template: 'low-stock-alert',
+      props: {
+        itemName,
+        sku: itemSku,
+        warehouseName,
+        quantity: newQty,
+        reorderPoint: threshold,
+        thresholdSource: await thresholdSourceFor(warehouseId, params),
+        storeUrl: getAdminUrl(organizationSlug, `/inventory/warehouses/${warehouseId}?tab=inventory&stock=low`),
       },
     },
-    select: { user: { select: { email: true } } },
-  });
-
-  await sendLowStockAlertEmail({
-    to: recipients.map((r) => r.user.email).filter((e): e is string => !!e),
-    itemName,
-    sku: itemSku,
-    warehouseName,
-    quantity: newQty,
-    reorderPoint: threshold,
-    thresholdSource: await thresholdSourceFor(warehouseId, params),
-    storeUrl: getAdminUrl(organizationSlug, `/inventory/warehouses/${warehouseId}?tab=inventory&stock=low`),
   });
 }
 

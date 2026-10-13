@@ -258,7 +258,7 @@ describe('reply notifications in the store’s app (17.4)', () => {
 
   it('offers them once there is a conversation, and turns them on when asked', async () => {
     client.fetchShopperChat.mockResolvedValue(WITH_CONVERSATION);
-    wrap(<ChatPanel />, { ...ON, exists: true, pushReady: true }, ADA);
+    wrap(<ChatPanel />, { ...ON, exists: true, push: 'app' }, ADA);
     const button = await screen.findByRole('button', { name: 'Turn on notifications' });
     await userEvent.click(button);
     await waitFor(() => expect(client.notifyChatReplies).toHaveBeenCalledWith('acme', 'fcm-token'));
@@ -268,19 +268,19 @@ describe('reply notifications in the store’s app (17.4)', () => {
   it('adds the conversation quietly when the app is already allowed to notify', async () => {
     push.pushPermission.mockResolvedValueOnce('granted');
     client.fetchShopperChat.mockResolvedValue(WITH_CONVERSATION);
-    wrap(<ChatPanel />, { ...ON, exists: true, pushReady: true }, ADA);
+    wrap(<ChatPanel />, { ...ON, exists: true, push: 'app' }, ADA);
     await waitFor(() => expect(client.notifyChatReplies).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: 'Turn on notifications' })).toBeNull();
   });
 
   it('never offers them in a browser, or before the first message', async () => {
     client.fetchShopperChat.mockResolvedValue(WITH_CONVERSATION);
-    wrap(<ChatPanel />, { ...ON, exists: true, pushReady: false }, ADA);
+    wrap(<ChatPanel />, { ...ON, exists: true, push: null }, ADA);
     await waitFor(() => expect(client.fetchShopperChat).toHaveBeenCalled());
     expect(screen.queryByText(/notification when the store replies/)).toBeNull();
     cleanup();
     client.fetchShopperChat.mockResolvedValue(EMPTY);
-    wrap(<ChatPanel />, { ...ON, pushReady: true }, ADA);
+    wrap(<ChatPanel />, { ...ON, push: 'app' }, ADA);
     await waitFor(() => expect(screen.getByLabelText('Your message')).toBeTruthy());
     expect(screen.queryByText(/notification when the store replies/)).toBeNull();
   });

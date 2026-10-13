@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { PlanEndedPage, PlanNotice, planLabel } from '@/components/layout/plan-notice';
@@ -7,6 +8,15 @@ import { isOpenWhileLapsed } from '@/lib/billing/access';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { PLATFORM_NAME } from '@/lib/brand';
+
+/* Installable to a Home Screen, so a merchant can get alerts on their phone
+ * (ROADMAP 18.3) — on an iPhone, only an installed site can. */
+export const metadata: Metadata = {
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, title: PLATFORM_NAME, statusBarStyle: 'default' },
+  icons: { apple: '/app-icon/180' },
+};
 
 function getInitials(name: string): string {
   return name

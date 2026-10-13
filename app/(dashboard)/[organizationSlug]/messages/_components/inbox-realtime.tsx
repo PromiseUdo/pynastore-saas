@@ -5,7 +5,7 @@
  * MessagesPageClient, which owns it, and ConversationPane, which listens).
  */
 import * as React from 'react';
-import type { ChatEventView, RealtimeState } from '@/lib/chat/realtime-client';
+import type { ChatEventView, RealtimeState } from '@/lib/realtime/client';
 
 /**
  * How often the Messages page still polls while real-time is live. Each poll

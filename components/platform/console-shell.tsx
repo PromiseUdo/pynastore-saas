@@ -18,6 +18,7 @@ import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { SheetContent, SheetRoot, SheetTitle } from '@/components/ui/sheet';
 import { getMarketingUrl } from '@/lib/tenant/urls';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 
 type NavItem = { title: string; href: string; icon: React.ElementType };
 type NavGroup = { label?: string; items: NavItem[] };
@@ -76,6 +77,7 @@ export function ConsoleShell({
 }) {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
+  const wide = useIsWide();
 
   // Close the drawer after navigating.
   React.useEffect(() => setOpen(false), [pathname]);
@@ -86,6 +88,7 @@ export function ConsoleShell({
         staff={staff}
         counts={counts}
         platformName={platformName}
+        bell={wide === true}
         className="hidden w-[232px] shrink-0 border-r lg:flex"
       />
 
@@ -108,11 +111,30 @@ export function ConsoleShell({
             <Menu className="size-4" />
           </button>
           <ConsoleMark platformName={platformName} />
+          {wide === false && <NotificationBell base="/platform/notifications" className="ml-auto size-9" />}
         </header>
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );
+}
+
+/**
+ * Whether the screen is wide enough for the sidebar (Tailwind's `lg`);
+ * undefined until the browser says. The sidebar and the phone's top bar are
+ * both rendered and one is hidden by CSS, so the bell — which polls and
+ * listens — is mounted only in the one on screen.
+ */
+function useIsWide(): boolean | undefined {
+  const [wide, setWide] = React.useState<boolean | undefined>(undefined);
+  React.useEffect(() => {
+    const query = window.matchMedia('(min-width: 1024px)');
+    const update = () => setWide(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return wide;
 }
 
 function ConsoleMark({ platformName }: { platformName: string }) {
@@ -135,11 +157,14 @@ function ConsoleSidebar({
   staff,
   counts,
   platformName,
+  bell = false,
   className,
 }: {
   staff: ConsoleStaff;
   counts: ConsoleCounts;
   platformName: string;
+  /** show the notification bell beside the mark (the desktop sidebar) */
+  bell?: boolean;
   className?: string;
 }) {
   const pathname = usePathname();
@@ -148,8 +173,10 @@ function ConsoleSidebar({
 
   return (
     <aside className={cn('flex-col bg-sidebar', className)}>
-      <div className="flex h-14 shrink-0 items-center border-b px-3">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b px-3">
         <ConsoleMark platformName={platformName} />
+        {/* On a phone the top bar carries the bell instead (one per screen). */}
+        {bell && <NotificationBell base="/platform/notifications" className="ml-auto" />}
       </div>
 
       <nav aria-label="Console" className="flex-1 overflow-y-auto py-3">

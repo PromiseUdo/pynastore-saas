@@ -63,6 +63,27 @@ function sendFrom(): string | null {
   return FROM;
 }
 
+/**
+ * Hand one message to Resend; whether it was accepted. Used by the senders
+ * the notification outbox goes through (lib/notifications/channels/email.ts),
+ * which retries a `false`. Never throws.
+ */
+async function handOver(what: string, message: Omit<Parameters<typeof resend.emails.send>[0], 'from'>): Promise<boolean> {
+  try {
+    const from = sendFrom();
+    if (!from) return false;
+    const { error } = await resend.emails.send({ ...message, from } as Parameters<typeof resend.emails.send>[0]);
+    if (error) {
+      console.error(`[email] Failed to send ${what}:`, error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error(`[email] Failed to send ${what}:`, err);
+    return false;
+  }
+}
+
 type InvitationEmailPayload = {
   to: string;
   orgName: string;
@@ -190,42 +211,20 @@ export async function sendStorefrontEmailChangeNotice(
 }
 
 /** A customer cancelled, or asked to return items — sent to the store's staff. */
-export async function sendStoreOrderAlertEmail(payload: StoreOrderAlertEmailProps & { to: string[] }): Promise<void> {
-  if (payload.to.length === 0) return;
-  try {
-    const from = sendFrom();
-    if (!from) return;
-    const { to, ...props } = payload;
-    await resend.emails.send({
-      from,
-      to,
-      subject: storeOrderAlertSubject(props),
-      react: StoreOrderAlertEmail(props),
-    });
-  } catch (err) {
-    console.error('[email] Failed to send store order alert email:', err);
-  }
+export async function sendStoreOrderAlertEmail(payload: StoreOrderAlertEmailProps & { to: string[] }): Promise<boolean> {
+  if (payload.to.length === 0) return false;
+  const { to, ...props } = payload;
+  return handOver('store order alert email', { to, subject: storeOrderAlertSubject(props), react: StoreOrderAlertEmail(props) });
 }
 
 /** A shopper is waiting for a reply in Messages (ROADMAP 17.4) — sent to the store's staff. */
-export async function sendChatMessageAlertEmail(payload: ChatMessageAlertEmailProps & { to: string[] }): Promise<void> {
-  if (payload.to.length === 0) return;
-  try {
-    const from = sendFrom();
-    if (!from) return;
-    const { to, ...props } = payload;
-    await resend.emails.send({
-      from,
-      to,
-      subject: chatMessageAlertSubject(props),
-      react: ChatMessageAlertEmail(props),
-    });
-  } catch (err) {
-    console.error('[email] Failed to send chat message alert email:', err);
-  }
+export async function sendChatMessageAlertEmail(payload: ChatMessageAlertEmailProps & { to: string[] }): Promise<boolean> {
+  if (payload.to.length === 0) return false;
+  const { to, ...props } = payload;
+  return handOver('chat message alert email', { to, subject: chatMessageAlertSubject(props), react: ChatMessageAlertEmail(props) });
 }
 
-type LowStockAlertEmailPayload = {
+export type LowStockAlertEmailPayload = {
   to: string[];
   itemName: string;
   sku: string;
@@ -238,25 +237,18 @@ type LowStockAlertEmailPayload = {
   storeUrl: string;
 };
 
-export async function sendLowStockAlertEmail(
-  payload: LowStockAlertEmailPayload,
-): Promise<void> {
-  if (payload.to.length === 0) return;
-  try {
-    const from = sendFrom();
-    if (!from) return;
-    await resend.emails.send({
-      from,
-      to: payload.to,
-      subject: `Low stock: ${payload.itemName} at ${payload.warehouseName}`,
-      react: LowStockAlertEmail(payload),
-    });
-  } catch (err) {
-    console.error('[email] Failed to send low stock alert email:', err);
-  }
+export async function sendLowStockAlertEmail(payload: LowStockAlertEmailPayload): Promise<boolean> {
+  if (payload.to.length === 0) return false;
+  return handOver('low stock alert email', {
+    to: payload.to,
+    subject: `Low stock: ${payload.itemName} at ${payload.warehouseName}`,
+    react: LowStockAlertEmail(payload),
+  });
 }
 
-type DomainOrderNotificationEmailPayload = {
+export type DomainOrderNotificationEmailPayload = {
+  /** who to tell; PLATFORM_ADMIN_EMAIL when not given */
+  to?: string[];
   orgName: string;
   orgSlug: string;
   domainOrderType: 'EXISTING' | 'REGISTER' | 'RENEW';
@@ -267,24 +259,18 @@ type DomainOrderNotificationEmailPayload = {
 /** Notifies platform admins that a new domain order needs manual fulfillment (registration/DNS). */
 export async function sendDomainOrderNotificationEmail(
   payload: DomainOrderNotificationEmailPayload,
-): Promise<void> {
-  const to = process.env.PLATFORM_ADMIN_EMAIL;
-  if (!to) {
+): Promise<boolean> {
+  const { to: given, ...props } = payload;
+  const to = given ?? (process.env.PLATFORM_ADMIN_EMAIL ? [process.env.PLATFORM_ADMIN_EMAIL] : []);
+  if (to.length === 0) {
     console.warn('[email] PLATFORM_ADMIN_EMAIL is not configured — skipping domain order notification.');
-    return;
+    return false;
   }
-  try {
-    const from = sendFrom();
-    if (!from) return;
-    await resend.emails.send({
-      from,
-      to,
-      subject: `New domain order: ${payload.domain} (${payload.orgName})`,
-      react: DomainOrderNotificationEmail(payload),
-    });
-  } catch (err) {
-    console.error('[email] Failed to send domain order notification email:', err);
-  }
+  return handOver('domain order notification email', {
+    to,
+    subject: `New domain order: ${props.domain} (${props.orgName})`,
+    react: DomainOrderNotificationEmail(props),
+  });
 }
 
 /** Tells a shopper where their order has got to — see lib/storefront/orders/notifications.ts. */
@@ -314,20 +300,13 @@ export async function sendInvoiceEmail(payload: InvoiceEmailProps & { to: string
 
 export async function sendStorefrontOrderUpdateEmail(
   payload: StorefrontOrderUpdateEmailProps & { to: string },
-): Promise<void> {
-  try {
-    const from = sendFrom();
-    if (!from) return;
-    const { to, ...props } = payload;
-    await resend.emails.send({
-      from,
-      to,
-      subject: orderEmailSubject(props.kind, props.storeName, props.reference),
-      react: StorefrontOrderUpdateEmail(props),
-    });
-  } catch (err) {
-    console.error('[email] Failed to send storefront order update email:', err);
-  }
+): Promise<boolean> {
+  const { to, ...props } = payload;
+  return handOver('storefront order update email', {
+    to,
+    subject: orderEmailSubject(props.kind, props.storeName, props.reference),
+    react: StorefrontOrderUpdateEmail(props),
+  });
 }
 
 /** The outcome of our check of a merchant's business (ROADMAP 10.8 / 11.3). */
@@ -350,16 +329,10 @@ export async function sendPaymentVerificationResultEmail(
 }
 
 /** A chargeback opened or settled on an online payment (ROADMAP 10.5). */
-export async function sendPaymentDisputeEmail(payload: PaymentDisputeEmailProps & { to: string[] }): Promise<void> {
-  if (payload.to.length === 0) return;
-  try {
-    const from = sendFrom();
-    if (!from) return;
-    const { to, ...props } = payload;
-    await resend.emails.send({ from, to, subject: paymentDisputeSubject(props), react: PaymentDisputeEmail(props) });
-  } catch (err) {
-    console.error('[email] Failed to send payment dispute email:', err);
-  }
+export async function sendPaymentDisputeEmail(payload: PaymentDisputeEmailProps & { to: string[] }): Promise<boolean> {
+  if (payload.to.length === 0) return false;
+  const { to, ...props } = payload;
+  return handOver('payment dispute email', { to, subject: paymentDisputeSubject(props), react: PaymentDisputeEmail(props) });
 }
 
 /** A workspace suspended or restored by platform staff, to its owners (ROADMAP 11.4). */

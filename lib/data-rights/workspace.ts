@@ -193,6 +193,11 @@ export async function purgeClosedWorkspace(organizationId: string, now: Date = n
       await tx.visualSearchQuery.deleteMany({ where });
       await tx.onboardingEmail.deleteMany({ where });
       await tx.pushDevice.deleteMany({ where }); // order notifications cascade (16.4)
+      // Notifications (ROADMAP 18): lists and outbox go with their events.
+      await tx.notificationEvent.deleteMany({ where });
+      await tx.notification.deleteMany({ where });
+      await tx.notificationPreference.deleteMany({ where });
+      await tx.webPushSubscription.deleteMany({ where });
       await tx.mobileApp.deleteMany({ where }); // the sealed APNs key goes with it
       await tx.merchantPaymentAccount.deleteMany({ where }); // verification documents cascade
       await tx.merchantVerificationDocument.deleteMany({ where });

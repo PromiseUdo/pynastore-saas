@@ -26,6 +26,7 @@ import { confirmationPath, storePathPrefix } from '@/lib/storefront/store-path';
 import { ConfirmationView, NoOrder } from '@/components/storefront/checkout/confirmation-view';
 import { OrderUpdatesPrompt } from '@/components/storefront/checkout/order-updates-prompt';
 import { pushReadyFor } from '@/lib/mobile/push/watch';
+import { webPushConfigured } from '@/lib/notifications/channels/web-push';
 import { headers } from 'next/headers';
 
 export const metadata: Metadata = {
@@ -81,8 +82,17 @@ export default async function ConfirmationPage({
 
   if (!order) return <NoOrder />;
 
-  // Inside a store's own app that can be reached by push (ROADMAP 16.4).
-  const pushReady = await pushReadyFor((await headers()).get('user-agent'), organizationSlug);
+  /* Updates by notification: inside a store's own app that can be reached
+   * by push (ROADMAP 16.4), or in the browser on the shop's website (18.3). */
+  const requestHeaders = await headers();
+  const channel =
+    requestHeaders.get('x-runtime') === 'mobile'
+      ? (await pushReadyFor(requestHeaders.get('user-agent'), organizationSlug))
+        ? ('app' as const)
+        : null
+      : webPushConfigured()
+        ? ('browser' as const)
+        : null;
 
   return (
     <ConfirmationView
@@ -90,7 +100,7 @@ export default async function ConfirmationPage({
       config={config}
       signedIn={Boolean(shopper)}
       payment={{ ...payment, confirmationToken: token, confirmationPath: confirmationPath(prefix, token) }}
-      updatesPrompt={pushReady ? <OrderUpdatesPrompt confirmationToken={token} /> : null}
+      updatesPrompt={channel ? <OrderUpdatesPrompt confirmationToken={token} channel={channel} /> : null}
     />
   );
 }

@@ -28,7 +28,7 @@ import { usePublicPathname } from '@/lib/storefront/use-public-pathname';
 import { formatDate, formatTime } from '@/lib/storefront/format';
 import { useChatStore } from '@/lib/storefront/stores/chat-store';
 import { useChatFeed } from '@/lib/chat/use-chat-feed';
-import { backupInterval, useRealtimeChannel } from '@/lib/chat/realtime-client';
+import { backupInterval, useRealtimeChannel } from '@/lib/realtime/client';
 import {
   CHAT_MESSAGE_MAX,
   GUEST_NAME_MAX,
@@ -244,7 +244,7 @@ export function ChatPanel() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* In the store's own app, once there's a conversation to be told about (17.4). */}
-      {config?.pushReady && conversation && !blocked && <ChatRepliesPrompt org={org.slug} />}
+      {config?.push && conversation && !blocked && <ChatRepliesPrompt org={org.slug} channel={config.push} />}
       {feedStatus === 'reconnecting' && (
         <p role="status" className="flex items-center gap-2 border-b bg-secondary/60 px-5 py-2 text-xs text-muted-foreground">
           <WifiOff aria-hidden className="size-3.5" />
