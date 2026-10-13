@@ -63,3 +63,6 @@ capacitor.settings.gradle
 *.keystore
 *.jks
 *.aab
+
+# Firebase config belongs to each store-app build (~/mansaas-store-apps/), never the shared template (docs/MOBILE-BUILD.md §1).
+android/app/google-services.json
