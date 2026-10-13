@@ -321,7 +321,11 @@ export function ChatPanel() {
         )}
       </div>
 
-      <div className="safe-bottom border-t px-5 py-3">
+      {/* Its own padding PLUS the phone's bottom inset (home bar, gesture bar):
+        * `safe-bottom` alone replaced the padding and left the row flush with
+        * the edge wherever the inset is 0 — most Android phones, and whenever
+        * the keyboard is up (globals.css). */}
+      <div className="safe-pb-4 border-t px-5 pt-3">
         {blocked ? (
           <p className="text-sm text-muted-foreground">You can’t send messages to this store.</p>
         ) : !available ? (
