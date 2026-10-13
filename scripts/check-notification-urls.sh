@@ -14,6 +14,10 @@
 #   --custom-domain <host>
 #                  the shop's own domain: its pages must redirect from the
 #                  platform address, but the well-known files must not
+#   --platform-host <host>
+#                  where sign-in and the console live (NEXT_PUBLIC_PLATFORM_HOST).
+#                  Default: app.<root-domain> — as in production — or the root
+#                  domain itself for a local *.localhost build
 #   OWN_DOMAIN_REACHABLE=0 (environment) skips requests to the own domain
 #                  itself — for a local build, where it doesn't resolve
 #
@@ -21,18 +25,23 @@
 set -uo pipefail
 
 SCHEME=${1:?scheme}; ROOT=${2:?root domain}; SLUG=${3:?shop slug}; shift 3
-APP=0; CUSTOM=""
+APP=0; CUSTOM=""; PLATFORM=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --app) APP=1 ;;
     --custom-domain) CUSTOM=$2; shift ;;
+    --platform-host) PLATFORM=$2; shift ;;
   esac
   shift
 done
 
 ADMIN="$SLUG.$ROOT"
 SHOP="shop-$SLUG.$ROOT"
-PLATFORM="$ROOT"
+# The bare domain is the public site (and often redirects to www); the
+# console is on the platform host.
+if [ -z "$PLATFORM" ]; then
+  case "$ROOT" in *localhost*) PLATFORM="$ROOT" ;; *) PLATFORM="app.$ROOT" ;; esac
+fi
 FAILED=0
 
 # status and content type of one address, without following redirects
