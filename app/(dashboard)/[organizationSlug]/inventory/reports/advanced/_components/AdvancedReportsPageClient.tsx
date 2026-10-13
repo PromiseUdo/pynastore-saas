@@ -190,7 +190,7 @@ export function AdvancedReportsPageClient({ view, days, periods, aging, sellThro
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableColumnHeader>Product</TableColumnHeader>
+                      <TableColumnHeader primary>Product</TableColumnHeader>
                       <TableColumnHeader>Store</TableColumnHeader>
                       <TableColumnHeader align="right">On hand</TableColumnHeader>
                       <TableColumnHeader align="right">Days still</TableColumnHeader>
@@ -246,7 +246,7 @@ export function AdvancedReportsPageClient({ view, days, periods, aging, sellThro
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableColumnHeader>Product</TableColumnHeader>
+                      <TableColumnHeader primary>Product</TableColumnHeader>
                       <TableColumnHeader>Store</TableColumnHeader>
                       <TableColumnHeader align="right">Received</TableColumnHeader>
                       <TableColumnHeader align="right">Sold</TableColumnHeader>
@@ -306,7 +306,7 @@ export function AdvancedReportsPageClient({ view, days, periods, aging, sellThro
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableColumnHeader>Product</TableColumnHeader>
+                        <TableColumnHeader primary>Product</TableColumnHeader>
                         <TableColumnHeader align="right">Units sold</TableColumnHeader>
                         <TableColumnHeader align="right">Revenue</TableColumnHeader>
                         <TableColumnHeader align="right">Cost</TableColumnHeader>

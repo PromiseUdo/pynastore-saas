@@ -83,7 +83,7 @@ export function PurchaseOrdersPageClient({
               <TableHead>
                 <TableRow>
                   <TableColumnHeader>PO #</TableColumnHeader>
-                  <TableColumnHeader>Supplier</TableColumnHeader>
+                  <TableColumnHeader primary>Supplier</TableColumnHeader>
                   <TableColumnHeader>Store</TableColumnHeader>
                   <TableColumnHeader>Status</TableColumnHeader>
                   <TableColumnHeader align="right">Total</TableColumnHeader>

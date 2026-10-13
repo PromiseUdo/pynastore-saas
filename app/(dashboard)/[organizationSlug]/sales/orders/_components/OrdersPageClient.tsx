@@ -218,7 +218,7 @@ export function OrdersPageClient({
                 <TableHead>
                   <TableRow>
                     <TableColumnHeader>Order</TableColumnHeader>
-                    <TableColumnHeader>Customer</TableColumnHeader>
+                    <TableColumnHeader primary>Customer</TableColumnHeader>
                     <TableColumnHeader>Placed</TableColumnHeader>
                     <TableColumnHeader>Status</TableColumnHeader>
                     <TableColumnHeader>Payment</TableColumnHeader>

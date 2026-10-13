@@ -95,7 +95,7 @@ export function QuoteDetailClient({ quote, warehouses, can }: QuoteDetailClientP
           <Table>
             <TableHead>
               <TableRow>
-                <TableColumnHeader>Item</TableColumnHeader>
+                <TableColumnHeader primary>Item</TableColumnHeader>
                 <TableColumnHeader align="right">Qty</TableColumnHeader>
                 <TableColumnHeader align="right">Unit price</TableColumnHeader>
                 <TableColumnHeader align="right">Total</TableColumnHeader>

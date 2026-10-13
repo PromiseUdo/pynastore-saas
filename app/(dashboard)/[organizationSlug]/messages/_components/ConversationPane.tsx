@@ -287,7 +287,11 @@ export function ConversationPane({
     <div className="flex min-h-0 flex-1">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* ── Header ───────────────────────────────────────────────────── */}
-        <div className="flex flex-wrap items-start gap-x-3 gap-y-2 border-b px-4 py-3 sm:px-6">
+        {/* One line on every width: who it is on the left, the actions on the
+            right. The status sits under the name, beside the hint it explains
+            ("Open · Waiting for the customer"), so a phone never wraps the
+            actions onto a ragged second row. */}
+        <div className="flex items-start gap-3 border-b px-4 py-3 sm:px-6">
           <Link
             href={backHref}
             scroll={false}
@@ -297,9 +301,8 @@ export function ConversationPane({
             <ArrowLeft className="size-4" />
           </Link>
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-sm font-semibold">{name}</h2>
-              {conversation.isGuest && <Badge variant="muted">Guest</Badge>}
+            <h2 className="truncate text-sm font-semibold leading-8">{name}</h2>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {conversation.blocked ? (
                 <Badge variant="destructive">Blocked</Badge>
               ) : resolved ? (
@@ -307,8 +310,9 @@ export function ConversationPane({
               ) : (
                 <Badge variant="info">Open</Badge>
               )}
+              {conversation.isGuest && <Badge variant="muted">Guest</Badge>}
+              <p className="text-xs text-muted-foreground">{conversationHint(conversation)}</p>
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">{conversationHint(conversation)}</p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <Button
@@ -316,9 +320,11 @@ export function ConversationPane({
               size="sm"
               className="xl:hidden"
               onClick={() => setDetailsOpen(true)}
+              aria-label="Customer details"
             >
               <UserRound className="size-3.5" />
-              Customer details
+              {/* An icon on a phone, so the actions stay on the name's line. */}
+              <span className="hidden sm:inline">Customer details</span>
             </Button>
             {can.reply && (
               <>

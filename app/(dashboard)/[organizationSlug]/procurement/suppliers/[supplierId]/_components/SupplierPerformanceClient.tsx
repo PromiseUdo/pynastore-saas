@@ -62,7 +62,7 @@ export function SupplierPerformanceClient({ performance }: { performance: Suppli
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableColumnHeader>Item</TableColumnHeader>
+                  <TableColumnHeader primary>Item</TableColumnHeader>
                   <TableColumnHeader>Date</TableColumnHeader>
                   <TableColumnHeader align="right">Unit price</TableColumnHeader>
                 </TableRow>

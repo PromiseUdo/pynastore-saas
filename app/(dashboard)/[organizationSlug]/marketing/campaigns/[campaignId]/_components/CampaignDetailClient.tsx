@@ -162,21 +162,38 @@ export function CampaignDetailClient({
         )}
 
         {/* ── A page for the sale ─────────────────────────────────── */}
+        {/* The same shape as the Prices card below: a title, what it is in a
+            sentence, its facts as labelled values, then the actions on their
+            own row — full width on a phone. */}
         {(phase === 'ACTIVE' || phase === 'SCHEDULED' || campaign.collection) && (
-          <section className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
-            <FolderOpen className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <div className="min-w-0 flex-1">
+          <section className="rounded-lg border bg-card">
+            <h2 className="flex items-center gap-1.5 border-b px-4 py-3 text-sm font-semibold">
+              <FolderOpen className="size-4" aria-hidden />
+              Sale page
+            </h2>
+            <div className="space-y-3 px-4 py-4">
               {campaign.collection ? (
                 <>
-                  <p className="text-sm font-medium">
-                    Everything in this sale is in the{' '}
-                    <span className="text-foreground">{campaign.collection.name}</span> collection
+                  <p className="text-sm">
+                    Everything in this sale is in the <span className="font-medium">{campaign.collection.name}</span> collection.
                   </p>
+                  <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-1 text-sm">
+                    <dt className="text-xs text-muted-foreground">Web address</dt>
+                    <dt className="text-right text-xs text-muted-foreground">Products</dt>
+                    <dd className="min-w-0">
+                      <a
+                        href={collectionUrl(storeUrl, campaign.collection.slug)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="break-all font-mono text-xs text-primary hover:underline"
+                      >
+                        /collections/{campaign.collection.slug}
+                      </a>
+                    </dd>
+                    <dd className="text-right tabular-nums">{formatNumber(campaign.collection.productCount)}</dd>
+                  </dl>
                   <p className="text-xs text-muted-foreground">
-                    /collections/{campaign.collection.slug} ·{' '}
-                    {formatNumber(campaign.collection.productCount)}{' '}
-                    {campaign.collection.productCount === 1 ? 'product' : 'products'} · you can rename it,
-                    add a picture or reorder it like any other collection
+                    You can rename it, add a picture or reorder it like any other collection.
                   </p>
                 </>
               ) : (
@@ -191,35 +208,36 @@ export function CampaignDetailClient({
             </div>
 
             {canManage && (
-              <div className="flex shrink-0 flex-wrap gap-2">
+              <div className="flex flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:justify-end">
                 {campaign.collection && (
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/inventory/collections/${campaign.collection.id}`}>Edit it</Link>
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto" asChild>
+                    <Link href={`/inventory/collections/${campaign.collection.id}`}>Edit the collection</Link>
                   </Button>
                 )}
-                <Button
-                  variant={campaign.collection ? 'outline' : 'default'}
-                  size="sm"
-                  disabled={pending !== null}
-                  onClick={async () => {
-                    setPending('collection');
-                    const result = await createCampaignCollection(campaign.id);
-                    setPending(null);
-                    if (!result.success) {
-                      toast.error(result.error);
-                      return;
-                    }
-                    toast.success(
-                      result.data.created
-                        ? `“${result.data.name}” created with ${result.data.productCount} products`
-                        : `“${result.data.name}” updated — ${result.data.productCount} products`,
-                    );
-                    router.refresh();
-                  }}
-                >
-                  {pending === 'collection' && <Loader2 className="size-3.5 animate-spin" />}
-                  {campaign.collection ? 'Update its products' : 'Create the collection'}
-                </Button>
+              <Button
+                variant={campaign.collection ? 'outline' : 'default'}
+                size="sm"
+                className="w-full sm:w-auto"
+                disabled={pending !== null}
+                onClick={async () => {
+                  setPending('collection');
+                  const result = await createCampaignCollection(campaign.id);
+                  setPending(null);
+                  if (!result.success) {
+                    toast.error(result.error);
+                    return;
+                  }
+                  toast.success(
+                    result.data.created
+                      ? `“${result.data.name}” created with ${result.data.productCount} products`
+                      : `“${result.data.name}” updated — ${result.data.productCount} products`,
+                  );
+                  router.refresh();
+                }}
+              >
+                {pending === 'collection' && <Loader2 className="size-3.5 animate-spin" />}
+                {campaign.collection ? 'Update its products' : 'Create the collection'}
+              </Button>
               </div>
             )}
           </section>
@@ -253,23 +271,23 @@ export function CampaignDetailClient({
               their prices.
             </p>
           ) : (
-            <TableWrapper>
+            <TableWrapper flush>
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableColumnHeader>Product</TableColumnHeader>
-                    <TableColumnHeader>SKU</TableColumnHeader>
+                    <TableColumnHeader primary>Product</TableColumnHeader>
                     <TableColumnHeader align="right">Usual price</TableColumnHeader>
                     <TableColumnHeader align="right">Sale price</TableColumnHeader>
-                    <TableColumnHeader align="right">Off</TableColumnHeader>
+                    <TableColumnHeader align="right">Discount</TableColumnHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {campaign.prices.map((price) => (
                     <TableRow key={price.inventoryItemId}>
-                      <TableCell className="font-medium text-foreground">{price.name}</TableCell>
-                      <TableCell muted className="text-xs">
-                        {price.sku}
+                      {/* The SKU under the name, as Stock movements does: one column fewer, so the name has room on a phone. */}
+                      <TableCell className="py-2">
+                        <span className="font-medium text-foreground">{price.name}</span>
+                        <p className="font-mono text-xs text-muted-foreground">{price.sku}</p>
                       </TableCell>
                       <TableCell align="right" className="tabular-nums text-muted-foreground line-through">
                         {money(price.originalPrice)}
@@ -409,4 +427,9 @@ function Metric({ label, value, note }: { label: string; value: string; note?: s
       {note && <p className="mt-0.5 text-[11px] text-muted-foreground">{note}</p>}
     </div>
   );
+}
+
+/** The sale's collection on the shop itself. */
+function collectionUrl(storeUrl: string, slug: string): string {
+  return `${storeUrl.replace(/\/$/, '')}/collections/${encodeURIComponent(slug)}`;
 }

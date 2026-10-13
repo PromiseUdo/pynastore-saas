@@ -207,7 +207,7 @@ export function MovementsPageClient({ result, params, items, warehouses, canReco
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableColumnHeader>Item</TableColumnHeader>
+                  <TableColumnHeader primary>Item</TableColumnHeader>
                   <TableColumnHeader>What happened</TableColumnHeader>
                   <TableColumnHeader>Store</TableColumnHeader>
                   <TableColumnHeader align="right">Quantity</TableColumnHeader>

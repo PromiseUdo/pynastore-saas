@@ -101,7 +101,7 @@ export function CollectionsPageClient({ collections, canManage }: Props) {
                 <TableRow>
                   <TableColumnHeader>Collection</TableColumnHeader>
                   <TableColumnHeader className="hidden sm:table-cell">Type</TableColumnHeader>
-                  <TableColumnHeader align="right">Products</TableColumnHeader>
+                  <TableColumnHeader primary align="right">Products</TableColumnHeader>
                   <TableColumnHeader>
                     <span className="sr-only">Actions</span>
                   </TableColumnHeader>

@@ -134,7 +134,7 @@ export function MembersTable({
       <Table>
         <TableHead>
           <TableRow>
-            <TableColumnHeader>Name</TableColumnHeader>
+            <TableColumnHeader primary>Name</TableColumnHeader>
             <TableColumnHeader>Email</TableColumnHeader>
             <TableColumnHeader>Role</TableColumnHeader>
             <TableColumnHeader>Stores</TableColumnHeader>

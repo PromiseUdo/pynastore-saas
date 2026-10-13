@@ -116,7 +116,7 @@ export function StoreOrdersTable({ storeName, list }: { storeName: string; list:
               <TableHead>
                 <TableRow>
                   <TableColumnHeader>Order</TableColumnHeader>
-                  <TableColumnHeader>Customer</TableColumnHeader>
+                  <TableColumnHeader primary>Customer</TableColumnHeader>
                   <TableColumnHeader>Placed</TableColumnHeader>
                   <TableColumnHeader>Status</TableColumnHeader>
                   <TableColumnHeader className="hidden sm:table-cell">Payment</TableColumnHeader>

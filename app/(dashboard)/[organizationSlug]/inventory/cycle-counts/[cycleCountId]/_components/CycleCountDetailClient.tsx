@@ -189,7 +189,7 @@ export function CycleCountDetailClient({ cycleCount, canManage }: CycleCountDeta
           <Table>
             <TableHead>
               <TableRow>
-                <TableColumnHeader>Item</TableColumnHeader>
+                <TableColumnHeader primary>Item</TableColumnHeader>
                 <TableColumnHeader align="right">System says</TableColumnHeader>
                 <TableColumnHeader align="right">You counted</TableColumnHeader>
                 <TableColumnHeader align="right">Difference</TableColumnHeader>

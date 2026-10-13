@@ -70,7 +70,7 @@ export function QuotesPageClient({ quotes, customers, items, canCreate }: Quotes
               <TableHead>
                 <TableRow>
                   <TableColumnHeader>Quote #</TableColumnHeader>
-                  <TableColumnHeader>Customer</TableColumnHeader>
+                  <TableColumnHeader primary>Customer</TableColumnHeader>
                   <TableColumnHeader>Status</TableColumnHeader>
                   <TableColumnHeader align="right">Total</TableColumnHeader>
                   <TableColumnHeader>Valid until</TableColumnHeader>

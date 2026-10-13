@@ -194,7 +194,9 @@ export function NotificationBell({ base, className }: { base: '/notifications' |
         </button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-[22rem] max-w-[calc(100vw-2rem)] p-0">
+      {/* On a phone the bell isn't at the screen's edge, so the panel keeps an even
+          12px from both sides rather than running into the left one. */}
+      <DropdownMenuContent align="end" collisionPadding={12} className="w-[calc(100vw-1.5rem)] p-0 sm:w-[22rem]">
         <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
           <p className="text-sm font-semibold">Notifications</p>
           {unread > 0 && (

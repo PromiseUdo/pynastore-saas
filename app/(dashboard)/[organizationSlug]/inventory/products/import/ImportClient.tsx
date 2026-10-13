@@ -264,7 +264,7 @@ function PreviewView({
                 <TableHead>
                   <TableRow>
                     <TableColumnHeader>Rows</TableColumnHeader>
-                    <TableColumnHeader>Product</TableColumnHeader>
+                    <TableColumnHeader primary>Product</TableColumnHeader>
                     <TableColumnHeader align="right">Variants</TableColumnHeader>
                     <TableColumnHeader align="right">Price</TableColumnHeader>
                     <TableColumnHeader align="right">Opening stock</TableColumnHeader>
@@ -361,7 +361,7 @@ function FormatGuide({ storeNames, canRecordStock }: { storeNames: string[]; can
             <Table dense>
               <TableHead>
                 <TableRow>
-                  <TableColumnHeader>Name</TableColumnHeader>
+                  <TableColumnHeader primary>Name</TableColumnHeader>
                   <TableColumnHeader>SKU</TableColumnHeader>
                   <TableColumnHeader>Option 1 name</TableColumnHeader>
                   <TableColumnHeader>Option 1 value</TableColumnHeader>

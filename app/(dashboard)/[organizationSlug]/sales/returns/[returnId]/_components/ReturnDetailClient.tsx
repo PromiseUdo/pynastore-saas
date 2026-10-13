@@ -80,7 +80,7 @@ export function ReturnDetailClient({ returnRequest, canManage }: ReturnDetailCli
           <Table>
             <TableHead>
               <TableRow>
-                <TableColumnHeader>Item</TableColumnHeader>
+                <TableColumnHeader primary>Item</TableColumnHeader>
                 <TableColumnHeader align="right">Quantity</TableColumnHeader>
               </TableRow>
             </TableHead>

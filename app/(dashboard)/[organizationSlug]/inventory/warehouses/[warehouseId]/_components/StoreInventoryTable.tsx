@@ -264,7 +264,7 @@ export function StoreInventoryTable({
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableColumnHeader>Product</TableColumnHeader>
+                  <TableColumnHeader primary>Product</TableColumnHeader>
                   <TableColumnHeader className="hidden md:table-cell">Shelf</TableColumnHeader>
                   <TableColumnHeader align="right">On hand</TableColumnHeader>
                   <TableColumnHeader align="right" className="hidden sm:table-cell">

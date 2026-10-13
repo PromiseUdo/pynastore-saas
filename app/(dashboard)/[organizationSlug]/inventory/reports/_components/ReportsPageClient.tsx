@@ -206,7 +206,7 @@ export function ReportsPageClient({
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableColumnHeader>Product</TableColumnHeader>
+                      <TableColumnHeader primary>Product</TableColumnHeader>
                       <TableColumnHeader>Store</TableColumnHeader>
                       <TableColumnHeader align="right">On hand</TableColumnHeader>
                     </TableRow>
@@ -249,7 +249,7 @@ export function ReportsPageClient({
                 <Table>
                   <TableHead>
                     <TableRow>
-                      <TableColumnHeader>Product</TableColumnHeader>
+                      <TableColumnHeader primary>Product</TableColumnHeader>
                       <TableColumnHeader>Store</TableColumnHeader>
                       <TableColumnHeader align="right">On hand</TableColumnHeader>
                       <TableColumnHeader align="right">Average cost</TableColumnHeader>
@@ -305,7 +305,7 @@ export function ReportsPageClient({
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableColumnHeader>Product</TableColumnHeader>
+                        <TableColumnHeader primary>Product</TableColumnHeader>
                         <TableColumnHeader>Store</TableColumnHeader>
                         <TableColumnHeader align="right">On hand</TableColumnHeader>
                         <TableColumnHeader align="right">Reorder point</TableColumnHeader>

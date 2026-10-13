@@ -138,7 +138,7 @@ export function PutawayPageClient({ rows, warehouses, canManage }: PutawayPageCl
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableColumnHeader>Item</TableColumnHeader>
+                  <TableColumnHeader primary>Item</TableColumnHeader>
                   <TableColumnHeader>Store</TableColumnHeader>
                   <TableColumnHeader align="right">On hand</TableColumnHeader>
                   <TableColumnHeader>Location</TableColumnHeader>

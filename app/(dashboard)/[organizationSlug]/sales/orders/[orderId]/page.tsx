@@ -390,7 +390,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableColumnHeader>Product</TableColumnHeader>
+                  <TableColumnHeader primary>Product</TableColumnHeader>
                   {splitAcrossStores && <TableColumnHeader>From</TableColumnHeader>}
                   <TableColumnHeader align="right">Qty</TableColumnHeader>
                   <TableColumnHeader align="right">Unit price</TableColumnHeader>

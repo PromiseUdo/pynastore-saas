@@ -91,7 +91,7 @@ export function SuppliersPageClient({ suppliers, canManage, performanceEnabled, 
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableColumnHeader>Name</TableColumnHeader>
+                  <TableColumnHeader primary>Name</TableColumnHeader>
                   <TableColumnHeader>Contact</TableColumnHeader>
                   <TableColumnHeader align="right">Purchase orders</TableColumnHeader>
                   <TableColumnHeader>Status</TableColumnHeader>

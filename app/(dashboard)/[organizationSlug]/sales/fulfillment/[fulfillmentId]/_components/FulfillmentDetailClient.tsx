@@ -117,7 +117,7 @@ export function FulfillmentDetailClient({ fulfillment, canManage }: FulfillmentD
           <Table>
             <TableHead>
               <TableRow>
-                <TableColumnHeader>Item</TableColumnHeader>
+                <TableColumnHeader primary>Item</TableColumnHeader>
                 <TableColumnHeader align="right">Ordered</TableColumnHeader>
                 <TableColumnHeader align="right">{isPicking ? 'Picked (enter)' : 'Picked'}</TableColumnHeader>
                 <TableColumnHeader align="right">{isPacking ? 'Packed (enter)' : 'Packed'}</TableColumnHeader>

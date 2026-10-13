@@ -223,7 +223,7 @@ export function CustomersPageClient({
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableColumnHeader>Customer</TableColumnHeader>
+                    <TableColumnHeader primary>Customer</TableColumnHeader>
                     <TableColumnHeader align="right">Orders</TableColumnHeader>
                     <TableColumnHeader align="right">Spent</TableColumnHeader>
                     <TableColumnHeader align="right">Average order</TableColumnHeader>

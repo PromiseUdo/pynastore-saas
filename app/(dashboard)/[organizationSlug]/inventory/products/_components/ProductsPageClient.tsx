@@ -329,7 +329,7 @@ export function ProductsPageClient({
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableColumnHeader>Product</TableColumnHeader>
+                  <TableColumnHeader primary>Product</TableColumnHeader>
                   <TableColumnHeader className="hidden lg:table-cell">Category</TableColumnHeader>
                   <TableColumnHeader align="right">Price</TableColumnHeader>
                   <TableColumnHeader align="right">Available</TableColumnHeader>

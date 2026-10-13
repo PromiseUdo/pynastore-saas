@@ -114,6 +114,12 @@ type TableColumnHeaderProps = React.ComponentProps<"th"> & {
   align?: "left" | "center" | "right";
   sortable?: boolean;
   sorted?: "asc" | "desc" | false;
+  /**
+   * The column that names each row — the item, product, customer. It keeps
+   * a readable width, so on a phone the table scrolls sideways (TableWrapper)
+   * instead of squeezing the names into a sliver.
+   */
+  primary?: boolean;
 };
 
 function TableColumnHeader({
@@ -121,6 +127,7 @@ function TableColumnHeader({
   align = "left",
   sortable,
   sorted,
+  primary,
   children,
   onClick,
   ...props
@@ -133,6 +140,7 @@ function TableColumnHeader({
         align === "right" && "text-right",
         align === "center" && "text-center",
         sortable && "cursor-pointer hover:text-foreground transition-colors",
+        primary && "min-w-44",
         className
       )}
       onClick={onClick}

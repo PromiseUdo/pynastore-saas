@@ -249,7 +249,7 @@ export default async function DashboardPage() {
                   <TableHead>
                     <TableRow>
                       <TableColumnHeader>Order</TableColumnHeader>
-                      <TableColumnHeader>Customer</TableColumnHeader>
+                      <TableColumnHeader primary>Customer</TableColumnHeader>
                       <TableColumnHeader>Status</TableColumnHeader>
                       <TableColumnHeader>Payment</TableColumnHeader>
                       <TableColumnHeader className="text-right">Items</TableColumnHeader>

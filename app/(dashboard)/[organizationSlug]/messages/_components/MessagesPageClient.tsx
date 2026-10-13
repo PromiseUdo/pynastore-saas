@@ -223,7 +223,9 @@ export function MessagesPageClient({
           </div>
         ) : (
           <div className="grid min-h-0 flex-1 lg:grid-cols-[320px_minmax(0,1fr)]">
-            <div className={selectedId ? 'hidden min-h-0 border-r lg:flex lg:flex-col' : 'flex min-h-0 flex-col lg:border-r'}>
+            {/* min-w-0 on both columns: a grid item otherwise grows to its content's
+                width, and on a phone the conversation ran off the right edge. */}
+            <div className={selectedId ? 'hidden min-h-0 min-w-0 border-r lg:flex lg:flex-col' : 'flex min-h-0 min-w-0 flex-col lg:border-r'}>
               <ConversationList
                 rows={rows}
                 total={total}
@@ -236,7 +238,7 @@ export function MessagesPageClient({
                 setParams={setParams}
               />
             </div>
-            <div className={selectedId ? 'flex min-h-0 flex-col' : 'hidden min-h-0 lg:flex lg:flex-col'}>
+            <div className={selectedId ? 'flex min-h-0 min-w-0 flex-col' : 'hidden min-h-0 min-w-0 lg:flex lg:flex-col'}>
               {selected ? (
                 <ConversationPane
                   key={selected.conversation.id}

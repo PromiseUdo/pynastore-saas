@@ -97,7 +97,7 @@ export function BrandsPageClient({ brands, canManage }: { brands: BrandRow[]; ca
                 <TableRow>
                   <TableColumnHeader>Brand</TableColumnHeader>
                   <TableColumnHeader className="hidden sm:table-cell">Web address</TableColumnHeader>
-                  <TableColumnHeader align="right">Products</TableColumnHeader>
+                  <TableColumnHeader primary align="right">Products</TableColumnHeader>
                   <TableColumnHeader>
                     <span className="sr-only">Actions</span>
                   </TableColumnHeader>

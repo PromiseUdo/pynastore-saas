@@ -146,7 +146,7 @@ export function TransfersPageClient({ transfers, items, warehouses, canManage }:
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableColumnHeader>Item</TableColumnHeader>
+                  <TableColumnHeader primary>Item</TableColumnHeader>
                   <TableColumnHeader>Route</TableColumnHeader>
                   <TableColumnHeader align="right">Quantity</TableColumnHeader>
                   <TableColumnHeader>Status</TableColumnHeader>

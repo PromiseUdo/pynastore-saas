@@ -138,7 +138,7 @@ export function InvoicesPageClient({ invoices, view, canCreate }: InvoicesPageCl
                 <TableHead>
                   <TableRow>
                     <TableColumnHeader>Invoice</TableColumnHeader>
-                    <TableColumnHeader>Customer</TableColumnHeader>
+                    <TableColumnHeader primary>Customer</TableColumnHeader>
                     <TableColumnHeader>Status</TableColumnHeader>
                     <TableColumnHeader align="right">Total</TableColumnHeader>
                     <TableColumnHeader align="right">Outstanding</TableColumnHeader>
