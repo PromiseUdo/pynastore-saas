@@ -24,6 +24,7 @@
 import { purgeExpiredAppTickets } from '@/lib/business-app/tickets';
 import { purgeOldPushWatches } from '@/lib/mobile/push/watch';
 import { purgeExpiredHandoffs } from '@/lib/storefront/account/handoff';
+import { purgeExpiredAuthTickets } from '@/lib/account-security/renew';
 import { purgeOldBrowserWatches } from '@/lib/notifications/web-push-subscriptions';
 import { prisma } from '@/lib/prisma';
 import { reportCaughtError } from '@/lib/ops/errors';
@@ -149,7 +150,7 @@ export async function runDataRetention(options: { now?: Date; only?: string[] } 
   result.notificationsRemoved = notifications.count;
 
   // 8. Tickets are worthless after their minute; only their ids are kept.
-  if (!options.only) await Promise.all([purgeExpiredHandoffs(), purgeExpiredAppTickets()]);
+  if (!options.only) await Promise.all([purgeExpiredHandoffs(), purgeExpiredAppTickets(), purgeExpiredAuthTickets()]);
 
   return result;
 }

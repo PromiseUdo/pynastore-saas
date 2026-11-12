@@ -88,9 +88,11 @@ export interface CheckoutCountry {
  *
  * `provider` says who takes the money: 'paystack' sends the shopper to
  * Paystack's hosted page after the order exists, and the money settles to the
- * shop's own subaccount (lib/storefront/checkout/payment-service.ts); 'manual'
- * is settled outside the app (a transfer the merchant checks, cash on
- * delivery). Components don't branch on it — the server does.
+ * shop's own subaccount (lib/storefront/checkout/payment-service.ts);
+ * 'edupay' moves it from the shopper's wallet to the shop's once the order
+ * exists (./wallet-payment.ts); 'manual' is settled outside the app (a
+ * transfer the merchant checks, cash on delivery). Components don't branch on
+ * it — the server does.
  */
 export interface PaymentMethodOption {
   id: string;
@@ -98,7 +100,7 @@ export interface PaymentMethodOption {
   description: string;
   /** what happens after Place Order, in the shopper's words */
   handoffNote: string;
-  provider: 'paystack' | 'manual';
+  provider: 'paystack' | 'edupay' | 'manual';
   /**
    * The money is collected when the goods arrive, not before.
    *
@@ -108,6 +110,12 @@ export interface PaymentMethodOption {
    */
   settlesOnDelivery: boolean;
   enabled: boolean;
+  /**
+   * Offered by the store but not to this shopper yet, and why ("Sign in to
+   * pay from your wallet."). Shown greyed out with the reason; the server
+   * refuses it the same way.
+   */
+  unavailableReason?: string | null;
 }
 
 /** A merchant bank account as a shopper is shown it (no ids, nothing internal). */
@@ -140,9 +148,12 @@ export interface CheckoutConfig {
   paymentMethods: PaymentMethodOption[];
   /** the store's active bank accounts; the 'transfer' method is offered only when there are some */
   transferAccounts: TransferAccount[];
-  /** when false, checkout shows no tax line at all */
-  taxEnabled: boolean;
-  /** false would gate checkout behind sign-in; today every store allows guests */
+  /**
+   * The store's VAT when it is VAT registered (ROADMAP 14.1), else null and
+   * checkout shows no VAT at all. Always included in prices, never added.
+   */
+  vat: { ratePct: number; vatNumber: string | null } | null;
+  /** false: only a signed-in shopper may order (the merchant's choice) */
   guestCheckoutEnabled: boolean;
   orderNotesEnabled: boolean;
 }

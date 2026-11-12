@@ -43,6 +43,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ orderI
     ...(order.soldByName ? [{ label: 'Served by', value: order.soldByName }] : []),
     ...(order.customerName ? [{ label: 'Customer', value: order.customerName }] : []),
     { label: 'Sale', value: ORDER_CHANNEL_LABEL[order.channel] ?? order.channel },
+    ...(order.vatNumber ? [{ label: 'VAT number', value: order.vatNumber }] : []),
   ];
 
   const totals: ReceiptFact[] = [{ label: 'Subtotal', value: money(order.subtotal) }];
@@ -50,7 +51,6 @@ export default async function ReceiptPage({ params }: { params: Promise<{ orderI
   if (order.deliveryFee !== null && order.deliveryFee > 0) {
     totals.push({ label: 'Delivery', value: money(order.deliveryFee) });
   }
-  if (order.taxAmount > 0) totals.push({ label: 'Tax', value: money(order.taxAmount) });
 
   return (
     <ReceiptDocument
@@ -69,6 +69,8 @@ export default async function ReceiptPage({ params }: { params: Promise<{ orderI
       totals={totals}
       total={{ label: 'Total', value: money(order.totalAmount) }}
       footerFacts={[
+        // VAT is in the prices (ROADMAP 14.1): stated under the total, never a line that looks added.
+        ...(order.taxAmount > 0 ? [{ label: 'Includes VAT', value: money(order.taxAmount) }] : []),
         { label: 'Paid by', value: paymentLabel },
         {
           label: 'Status',

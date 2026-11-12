@@ -20,7 +20,6 @@ import { SHIPPING_METHODS } from '../pricing';
 import {
   CHECKOUT_COUNTRIES,
   CHECKOUT_PAYMENT_METHODS,
-  CHECKOUT_TAX_ENABLED,
   GUEST_CHECKOUT_ENABLED,
   ORDER_NOTES_ENABLED,
 } from '../mock/checkout';
@@ -52,7 +51,8 @@ export async function getCheckoutConfig(_scope?: StoreScope): Promise<CheckoutCo
     // server can read — see ./store-config.ts, which adds it when there are some.
     paymentMethods: CHECKOUT_PAYMENT_METHODS.filter((m) => m.enabled),
     transferAccounts: [],
-    taxEnabled: CHECKOUT_TAX_ENABLED,
+    // A store's own VAT setting is added by ./store-config.ts.
+    vat: null,
     guestCheckoutEnabled: GUEST_CHECKOUT_ENABLED,
     orderNotesEnabled: ORDER_NOTES_ENABLED,
   });

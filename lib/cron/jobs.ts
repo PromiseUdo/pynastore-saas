@@ -21,6 +21,7 @@ import { runDataRetention } from '@/lib/data-rights/retention';
 import { runMobileAppRenewals } from '@/lib/mobile/renewals';
 import { retryDueDeliveries } from '@/lib/notifications/outbox';
 import { sendDailyDigests } from '@/lib/notifications/digest';
+import { runWalletJob } from '@/lib/wallet/jobs';
 
 export interface CronJob {
   title: string;
@@ -91,6 +92,27 @@ export const CRON_JOBS = {
             n(r, 'retrying') ? `${n(r, 'retrying')} to try again` : null,
             n(r, 'failed') ? `${n(r, 'failed')} given up` : null,
             n(r, 'gone') ? `${plural(n(r, 'gone'), 'device', 'devices')} gone` : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+  },
+  'wallet-setup': {
+    title: 'Finish wallets, top-ups, wallet refunds and withdrawals',
+    description:
+      'Tries again to set up shoppers’ and shops’ EduPay wallets when EduPay didn’t answer the first time (longer waits between tries, up to 10), and settles wallet top-ups whose payer didn’t stay to see them land, refunds to a customer’s wallet EduPay didn’t clearly answer, and withdrawals to a shop’s bank (including any that came back). Without it, those wallets only appear once someone opens their wallet page, paid top-ups keep saying “adding”, such refunds and withdrawals stay “being checked” until someone opens them, and nobody is told a withdrawal came back.',
+    schedule: 'Every 15 minutes',
+    everyMinutes: 15,
+    run: () => runWalletJob({ limit: 50 }),
+    describe: (r) =>
+      n(r, 'due') === 0 && n(r, 'topUpsChecked') === 0 && n(r, 'refundsChecked') === 0 && n(r, 'withdrawalsChecked') === 0
+        ? 'Nothing waiting'
+        : [
+            n(r, 'due') ? `${plural(n(r, 'active'), 'wallet', 'wallets')} set up` : null,
+            n(r, 'waiting') ? `${n(r, 'waiting')} to try again` : null,
+            n(r, 'failed') ? `${n(r, 'failed')} need a look` : null,
+            n(r, 'topUpsChecked') ? `${plural(n(r, 'topUpsCompleted'), 'top-up', 'top-ups')} landed of ${n(r, 'topUpsChecked')} checked` : null,
+            n(r, 'refundsChecked') ? `${plural(n(r, 'refundsSent'), 'wallet refund', 'wallet refunds')} confirmed of ${n(r, 'refundsChecked')} checked` : null,
+            n(r, 'withdrawalsChecked') ? `${n(r, 'withdrawalsChecked')} withdrawals checked${n(r, 'withdrawalsReturned') ? `, ${n(r, 'withdrawalsReturned')} came back` : ''}` : null,
           ]
             .filter(Boolean)
             .join(' · '),

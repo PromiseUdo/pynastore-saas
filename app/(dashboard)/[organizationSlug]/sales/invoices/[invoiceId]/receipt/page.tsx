@@ -49,6 +49,7 @@ export default async function InvoiceReceiptPage({ params }: { params: Promise<{
         { label: 'Receipt for', value: invoice.invoiceNumber },
         { label: 'Date', value: formatDate(lastPayment.createdAt) },
         { label: 'Customer', value: invoice.customerName },
+        ...(business?.vatRegistered && business.vatNumber ? [{ label: 'VAT number', value: business.vatNumber }] : []),
       ]}
       lines={invoice.lineItems.map((line) => ({
         name: line.description,

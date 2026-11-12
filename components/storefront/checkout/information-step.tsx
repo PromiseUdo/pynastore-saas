@@ -7,9 +7,10 @@
  * act ("tell us where to send it"), and splitting them buys a progress dot
  * at the cost of a page load. Four short fields, then the address.
  *
- * GUEST CHECKOUT. There is still no sign-in gate. An email address is all an
- * order needs; signing in is offered as a shortcut in one line at the top,
- * and a shopper who ignores it sees exactly the form they saw before.
+ * GUEST CHECKOUT. Unless the merchant requires an account (then CheckoutView
+ * asks for sign-in before this step), an email address is all an order
+ * needs; signing in is offered as a shortcut in one line at the top, and a
+ * shopper who ignores it sees exactly the form they saw before.
  *
  * SIGNED IN. Saved addresses appear as a "Deliver to" choice with the
  * default preselected, and the address fields stay hidden until someone
@@ -20,7 +21,7 @@
  * THE ADDRESS FORM LABELS ITSELF. "State" vs "Region" vs "County", whether
  * there's a list of regions to choose from, and whether a postal code is
  * required all come from the selected country's record in the store's
- * config (see lib/storefront/mock/checkout.ts). No component branches on a
+ * config (see lib/storefront/mock/checkout.ts — countries). No component branches on a
  * country code.
  *
  * The recipient's name and phone are NOT asked for again — the address

@@ -19,6 +19,7 @@ import {
   ArrowUpCircle,
   Store,
   MessagesSquare,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { OrgInfo, UserInfo } from './dashboard-layout';
@@ -75,7 +76,7 @@ const navGroups: NavGroup[] = [
           { title: 'Transfers', href: '/inventory/transfers' },
           { title: 'Shelf locations', href: '/inventory/putaway' },
           { title: 'Stock counts', href: '/inventory/cycle-counts' },
-          { title: 'Reports', href: '/inventory/reports' },
+          { title: 'Stock reports', href: '/inventory/reports' },
           { title: 'Sales-based reports', href: '/inventory/reports/advanced' },
         ],
       },
@@ -103,9 +104,8 @@ const navGroups: NavGroup[] = [
     items: [
       /* Every entry here must lead to a real page (AGENTS §7). "Suppliers"
        * and "Staff" used to sit here pointing at routes that never existed —
-       * they live at /procurement/suppliers and /settings/members. A
-       * business-wide Reports hub is Phase 7 in docs/ROADMAP.md; it goes back
-       * in when the page exists, not before. */
+       * they live at /procurement/suppliers and /settings/members. */
+      { title: 'Reports', href: '/reports', icon: BarChart3 },
       { title: 'Online store', href: '/online-store/customize', icon: Store },
       { title: 'Messages', href: '/messages', icon: MessagesSquare, count: 'messages' },
       { title: 'Marketing', href: '/marketing/campaigns', icon: Megaphone },

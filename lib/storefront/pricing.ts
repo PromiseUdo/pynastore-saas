@@ -4,6 +4,7 @@
  * cart store, checkout, and the mock order API all call `computeTotals`.
  */
 import type { AppliedCoupon, CartItem, Money, OrderTotals, ShippingMethod } from './types';
+import { includedVat } from '@/lib/tax';
 
 /*
  * Delivery prices belong to each merchant and depend on the address
@@ -13,7 +14,6 @@ import type { AppliedCoupon, CartItem, Money, OrderTotals, ShippingMethod } from
  * quoting a price nobody set. The methods below are demo fixtures only.
  */
 export const DEFAULT_SHIPPING: Money = 250_000; // ₦2,500 — demo fixture price
-export const VAT_RATE = 0.075; // 7.5%
 
 export const SHIPPING_METHODS: ShippingMethod[] = [
   {
@@ -82,6 +82,11 @@ export interface ComputeTotalsInput {
   coupon?: AppliedCoupon | null;
   shippingMethod?: ShippingMethod | null;
   currency?: string;
+  /**
+   * The store's VAT rate as a percentage when it is VAT registered, else
+   * null — then there is no VAT in the total at all (lib/tax.ts, ROADMAP 14.1).
+   */
+  vatRatePct?: number | null;
 }
 
 export function computeTotals({
@@ -89,6 +94,7 @@ export function computeTotals({
   coupon = null,
   shippingMethod = null,
   currency = 'NGN',
+  vatRatePct = null,
 }: ComputeTotalsInput): OrderTotals {
   const subtotal = cartSubtotal(items);
 
@@ -100,8 +106,8 @@ export function computeTotals({
    * says so. A discount applies to goods, never to delivery. */
   const shipping = shippingMethod?.price ?? 0;
 
-  // VAT modelled as already included in listed prices → shown for info only
-  const tax = Math.round((discountedSubtotal * VAT_RATE) / (1 + VAT_RATE));
+  // VAT is already in the listed prices — stated, never added.
+  const tax = includedVat(discountedSubtotal, vatRatePct);
 
   const total = discountedSubtotal + shipping;
 

@@ -69,8 +69,8 @@ beforeAll(async () => {
   store.id = (await prisma.organization.create({ data: { name: 'Chat Store', slug: store.slug, storefrontChatEnabled: true } })).id;
   other.id = (await prisma.organization.create({ data: { name: 'Other Store', slug: other.slug, storefrontChatEnabled: true } })).id;
 
-  ada = (await prisma.customer.create({ data: { organizationId: store.id, name: 'Ada Okafor', email: `ada-chat-${suffix}@example.com` } })).id;
-  tunde = (await prisma.customer.create({ data: { organizationId: store.id, name: 'Tunde Bello', email: `tunde-chat-${suffix}@example.com` } })).id;
+  ada = (await prisma.customer.create({ data: { organizationId: store.id, name: 'Ada Okafor', email: `ada-chat-${suffix}@example.com`, emailVerifiedAt: new Date() } })).id;
+  tunde = (await prisma.customer.create({ data: { organizationId: store.id, name: 'Tunde Bello', email: `tunde-chat-${suffix}@example.com`, emailVerifiedAt: new Date() } })).id;
   staffId = (await prisma.user.create({ data: { email: `staff-chat-${suffix}@example.com`, name: 'Kemi from the shop' } })).id;
 
   productId = (

@@ -1,6 +1,16 @@
 import 'dotenv/config';
 
 /*
+ * Tests never reach EduPay (ROADMAP 20). A developer's .env may hold the
+ * test server's settings for running the app; without this, any test that
+ * approves a shop or proves an email would start setting up real wallets.
+ * The wallet tests fake the client instead (vi.mock('@/lib/wallet/edupay')).
+ */
+delete process.env.EDUPAY_SERVICE_URL;
+delete process.env.EDUPAY_SERVICE_KEY;
+delete process.env.EDUPAY_MODE;
+
+/*
  * jsdom gaps that Radix primitives depend on.
  *
  * Radix measures its own elements (`@radix-ui/react-use-size`) and jsdom

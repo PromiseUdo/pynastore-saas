@@ -107,6 +107,7 @@ const ORDER_SELECT = {
   discount: true,
   discountCode: true,
   taxAmount: true,
+  vatNumber: true,
   totalAmount: true,
   note: true,
   organization: { select: { returnWindowDays: true } },
@@ -294,6 +295,7 @@ function toStorefrontOrder(row: OrderRow, now = new Date()): StorefrontOrder {
       total: toMinor(row.totalAmount),
     },
     discountCode: row.discountCode,
+    vatNumber: row.vatNumber,
 
     note: row.note,
     lines,

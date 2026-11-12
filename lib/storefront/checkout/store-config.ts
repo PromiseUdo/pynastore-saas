@@ -9,8 +9,16 @@
  *   - "Pay online" (Paystack), listed first, only while the shop may take
  *     online payments — verified by us, subaccount active, not suspended
  *     (onlinePaymentReadiness, ROADMAP 10.8);
+ *   - "Pay from wallet" (EduPay, ROADMAP 20.5), second, on the same
+ *     condition and only while the shop's wallet is active — greyed out,
+ *     with the reason, for a shopper who can't use it yet (pass `customerId`);
+ *   - pay on delivery, unless the merchant turned it off;
  *   - bank transfer, listed last, only while the merchant has an active bank
- *     account (Settings → Payments).
+ *     account (Settings → Payments);
+ *   - whether shoppers may order without an account, and leave a note — the
+ *     merchant's checkout rules (Settings → Payments → Checkout);
+ *   - the shop's VAT, only when it is VAT registered (Settings → General,
+ *     ROADMAP 14.1).
  *
  * Use this, not getCheckoutConfig, anywhere payment methods matter: the
  * checkout page, the confirmation page, and placing the order — so a shopper
@@ -18,9 +26,11 @@
  */
 import { prisma } from '@/lib/prisma';
 import type { StoreScope } from '../types';
-import { BANK_TRANSFER_METHOD, ONLINE_PAYMENT_METHOD } from '../mock/checkout';
+import { BANK_TRANSFER_METHOD, ONLINE_PAYMENT_METHOD, PAY_ON_DELIVERY_METHOD, WALLET_PAYMENT_METHOD } from './payment-methods';
+import { walletCheckoutAvailability, type WalletCheckoutAvailability } from './wallet-payment';
 import { onlinePaymentReadiness } from '@/lib/payments/payment-setup';
 import { getCheckoutConfig } from './config';
+import { shopVatBySlug } from '@/lib/tax-settings';
 import { useFixtures } from '../data/current';
 import { storeHasDelivery } from '../delivery/quote';
 import type { CheckoutConfig, TransferAccount } from './types';
@@ -43,12 +53,44 @@ export async function onlinePaymentsReady(organizationSlug: string): Promise<boo
   return onlinePaymentReadiness({ account: organization.paymentAccount, organizationStatus: organization.status }).ready;
 }
 
-export async function getStoreCheckoutConfig(scope: StoreScope): Promise<CheckoutConfig> {
-  const [base, transferAccounts, hasDelivery, onlineReady] = await Promise.all([
+export interface CheckoutRules {
+  payOnDelivery: boolean;
+  guestAllowed: boolean;
+  orderNotes: boolean;
+}
+
+/** The merchant's checkout rules. A store with no record (the demo fixtures)
+ *  keeps the defaults, which are every shop's until its merchant changes them. */
+export async function storeCheckoutRules(organizationSlug: string): Promise<CheckoutRules> {
+  const organization = await prisma.organization.findUnique({
+    where: { slug: organizationSlug },
+    select: { checkoutPayOnDelivery: true, checkoutGuestAllowed: true, checkoutOrderNotes: true },
+  });
+  return {
+    payOnDelivery: organization?.checkoutPayOnDelivery ?? true,
+    guestAllowed: organization?.checkoutGuestAllowed ?? true,
+    orderNotes: organization?.checkoutOrderNotes ?? true,
+  };
+}
+
+async function walletFor(organizationSlug: string, customerId: string | null): Promise<WalletCheckoutAvailability> {
+  const organization = await prisma.organization.findUnique({ where: { slug: organizationSlug }, select: { id: true } });
+  return organization ? walletCheckoutAvailability(organization.id, customerId) : { offered: false };
+}
+
+export async function getStoreCheckoutConfig(
+  scope: StoreScope,
+  /** the signed-in shopper, so "Pay from wallet" can say whether they can use it */
+  { customerId = null }: { customerId?: string | null } = {},
+): Promise<CheckoutConfig> {
+  const [base, transferAccounts, hasDelivery, onlineReady, rules, wallet, vat] = await Promise.all([
     getCheckoutConfig(scope),
     activeTransferAccounts(scope.organizationSlug),
     storeHasDelivery(scope.organizationSlug),
     onlinePaymentsReady(scope.organizationSlug),
+    storeCheckoutRules(scope.organizationSlug),
+    walletFor(scope.organizationSlug, customerId),
+    shopVatBySlug(scope.organizationSlug),
   ]);
 
   /* Under the demo fixtures the store keeps the fixed demo delivery list, so a
@@ -68,9 +110,13 @@ export async function getStoreCheckoutConfig(scope: StoreScope): Promise<Checkou
     ...delivery,
     paymentMethods: [
       ...(onlineReady ? [ONLINE_PAYMENT_METHOD] : []),
-      ...base.paymentMethods,
+      ...(onlineReady && wallet.offered ? [{ ...WALLET_PAYMENT_METHOD, unavailableReason: wallet.reason }] : []),
+      ...base.paymentMethods.filter((method) => rules.payOnDelivery || method.id !== PAY_ON_DELIVERY_METHOD.id),
       ...(transferAccounts.length ? [BANK_TRANSFER_METHOD] : []),
     ],
     transferAccounts,
+    vat,
+    guestCheckoutEnabled: base.guestCheckoutEnabled && rules.guestAllowed,
+    orderNotesEnabled: base.orderNotesEnabled && rules.orderNotes,
   };
 }

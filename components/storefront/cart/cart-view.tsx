@@ -42,7 +42,12 @@ import { describeNotice, lineKey } from '@/lib/storefront/cart';
 import { formatMoney } from '@/lib/storefront/format';
 import { computeTotals } from '@/lib/storefront/pricing';
 
-export function CartView() {
+export function CartView({
+  vatRatePct = null,
+}: {
+  /** the store's VAT rate when it is VAT registered (ROADMAP 14.1), else null */
+  vatRatePct?: number | null;
+} = {}) {
   const hydrated = useCartStore((s) => s.hydrated);
   const items = useCartStore((s) => s.items);
   const savedForLater = useCartStore((s) => s.savedForLater);
@@ -53,7 +58,7 @@ export function CartView() {
    * returns a fresh object, and a selector that returns a new object every
    * call re-renders forever under zustand's snapshot checks. The numbers
    * still come from exactly one place (lib/storefront/pricing.ts). */
-  const totals = React.useMemo(() => computeTotals({ items, coupon }), [items, coupon]);
+  const totals = React.useMemo(() => computeTotals({ items, coupon, vatRatePct }), [items, coupon, vatRatePct]);
 
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);

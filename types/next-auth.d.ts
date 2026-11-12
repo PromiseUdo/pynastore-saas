@@ -11,6 +11,8 @@ declare module 'next-auth' {
     } & DefaultSession['user'];
     currentOrganizationId?: string;
     currentOrgSlug?: string;
+    /** how this session signed in (ROADMAP 14.5); null on sessions from before it was recorded */
+    signInMethod?: string | null;
   }
 }
 
@@ -20,6 +22,7 @@ declare module 'next-auth/jwt' {
     sessionVersion?: number;
     currentOrganizationId?: string;
     currentOrgSlug?: string;
+    signInMethod?: string;
   }
 }
 
@@ -33,5 +36,6 @@ declare module '@auth/core/jwt' {
     sessionVersion?: number;
     currentOrganizationId?: string;
     currentOrgSlug?: string;
+    signInMethod?: string;
   }
 }

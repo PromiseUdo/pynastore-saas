@@ -97,3 +97,17 @@ export function storeUrl(store: StoreOrigins, path = '/'): string {
   const protocol = isLocalHostname(host) ? 'http' : 'https';
   return `${protocol}://${host}${suffix}`;
 }
+
+/**
+ * The same store origin, at /account/phone, carrying the original path as
+ * `next`. On the mobile origin every page sits under /s/{slug}, and `next`
+ * is store-relative, so the prefix stays on the page and off `next`.
+ */
+export function phoneStepUrl(returnUrl: string, slug: string): string {
+  const url = new URL(returnUrl);
+  const prefix = url.pathname === `/s/${slug}` || url.pathname.startsWith(`/s/${slug}/`) ? `/s/${slug}` : '';
+  const next = (url.pathname.slice(prefix.length) || '/') + url.search;
+  url.pathname = `${prefix}/account/phone`;
+  url.search = `?next=${encodeURIComponent(next)}`;
+  return url.toString();
+}

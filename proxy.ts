@@ -78,7 +78,8 @@ const PUBLIC_PATHS = new Set([
 ]);
 
 /* Route prefixes that are fully public (no auth required to load). */
-const PUBLIC_PREFIXES = ['/invite', '/verify-email'];
+// /confirm-email: a staff member's new address, from the link sent to it (ROADMAP 14.5).
+const PUBLIC_PREFIXES = ['/invite', '/verify-email', '/confirm-email'];
 
 /* Routes that need a session but no tenant. `/platform` is the platform
  * console (ROADMAP 11): the session is checked here, and whether the user is
@@ -118,6 +119,38 @@ function currentUrl(req: NextRequest, hostname: string): string {
   return `${protocol}://${hostname}${req.nextUrl.pathname}${req.nextUrl.search}`;
 }
 
+/*
+ * A staff session for someone who no longer exists — their account deleted
+ * (13.8), or a development database started afresh. The cookie is still
+ * validly signed, so without this the marketing host bounces them between
+ * /login ("already signed in"), / ("no shop") and /onboarding ("no such
+ * user") forever: ERR_TOO_MANY_REDIRECTS. Asked only where a signed-in
+ * person is about to be redirected, so it costs one lookup on those pages.
+ */
+const SESSION_COOKIE = /^(__Secure-)?authjs\.session-token(\.\d+)?$/;
+
+async function sessionPersonGone(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { deletedAt: true } });
+  return !user || user.deletedAt !== null;
+}
+
+/**
+ * Serve this request as signed out: the dead session cookie is taken off the
+ * request, so the page renders signed out, with no redirect to loop on.
+ *
+ * The cookie itself isn't deleted — Auth.js re-sends it on every response
+ * (the same behaviour noted in lib/tenant/business.ts), so a deletion here
+ * would be overwritten. It does no harm: these pages are served signed out
+ * each time, and signing in replaces it.
+ */
+function asSignedOut(req: NextRequest): NextResponse {
+  const headers = new Headers(req.headers);
+  const kept = req.cookies.getAll().filter((c) => !SESSION_COOKIE.test(c.name));
+  if (kept.length) headers.set('cookie', kept.map((c) => `${c.name}=${c.value}`).join('; '));
+  else headers.delete('cookie');
+  return NextResponse.next({ request: { headers } });
+}
+
 const routeRequest = auth(async function proxy(req: NextRequest & { auth: any }) {
   const { pathname } = req.nextUrl;
   const session = req.auth;
@@ -128,6 +161,10 @@ const routeRequest = auth(async function proxy(req: NextRequest & { auth: any })
 
   // ── 1. Public paths (exact match) — marketing domain only ───────────────
   if (isMarketing && PUBLIC_PATHS.has(pathname)) {
+    const bounces =
+      req.method === 'GET' && session?.user?.id && (pathname === '/login' || pathname === '/register' || pathname === '/');
+    if (bounces && (await sessionPersonGone(session.user.id))) return asSignedOut(req);
+
     // Already signed in — bounce away from login/register.
     //
     // GET only: server actions POST back to the page that rendered them, and
@@ -507,6 +544,10 @@ export default async function proxy(req: NextRequest, event: NextFetchEvent) {
     frameAncestors: slug && isDesignPreview(req, hostInfo) ? [new URL(getAdminUrl(slug)).origin, new URL(getBusinessUrl()).origin] : undefined,
     // The chat's real-time hints (lib/chat/ably.ts) — only when configured.
     realtime: Boolean(process.env.ABLY_API_KEY),
+    // Wallet top-ups open Paystack's window on the page (ROADMAP 20.3) — only
+    // when EduPay wallets are switched on (the same three settings as
+    // lib/wallet/edupay.ts edupayConfigured, read here without its imports).
+    paystackPopup: Boolean(process.env.EDUPAY_SERVICE_URL && process.env.EDUPAY_SERVICE_KEY && process.env.EDUPAY_MODE),
   });
   req.headers.set('x-nonce', nonce);
   req.headers.set('content-security-policy', policy);

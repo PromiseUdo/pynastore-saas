@@ -94,6 +94,19 @@ export async function updateProfile(input: {
   });
 }
 
+/** Just the phone — the one-time step for accounts that have none (ROADMAP 20.2). */
+export async function setPhone(input: {
+  organizationId: string;
+  customerId: string;
+  phone: string;
+}): Promise<boolean> {
+  const updated = await prisma.customer.updateMany({
+    where: { id: input.customerId, organizationId: input.organizationId },
+    data: { phone: input.phone },
+  });
+  return updated.count === 1;
+}
+
 /* ---------------- password ---------------- */
 
 export type PasswordResult =

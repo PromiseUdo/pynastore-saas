@@ -35,6 +35,7 @@ afterAll(async () => {
   for (const org of [acme, zed]) {
     await prisma.customerOAuthAccount.deleteMany({ where: { organizationId: org.id } });
     await prisma.customerPasswordResetToken.deleteMany({ where: { customer: { organizationId: org.id } } });
+    await prisma.customerEmailVerification.deleteMany({ where: { customer: { organizationId: org.id } } });
     await prisma.customerAddress.deleteMany({ where: { customer: { organizationId: org.id } } });
     await prisma.customer.deleteMany({ where: { organizationId: org.id } });
     await prisma.organization.delete({ where: { id: org.id } });
@@ -190,6 +191,12 @@ describe('Google sign-in', () => {
   });
 
   it('links to the existing password account rather than colliding with it', async () => {
+    // Ada proved her address (ROADMAP 20.1) before she ever pressed Google.
+    await prisma.customer.update({
+      where: { organizationId_email: { organizationId: acme.id, email: normalizeEmail(EMAIL) } },
+      data: { emailVerifiedAt: new Date() },
+    });
+
     const linked = await upsertShopperFromGoogle({
       organizationId: acme.id,
       googleSub: `sub-existing-${suffix}`,
@@ -206,6 +213,44 @@ describe('Google sign-in', () => {
 
     // One person, one record — and the password still works afterwards.
     expect(linked.id).toBe(byPassword!.id);
+  });
+
+  it('drops a password nobody proved when Google vouches for the address', async () => {
+    const email = `squatted-${suffix}@example.com`;
+    // A stranger registered with this address and never typed the code.
+    const squatted = await registerShopper({ organizationId: acme.id, name: 'Not Ada', email, password: PASSWORD });
+    expect(squatted.ok).toBe(true);
+    if (!squatted.ok) return;
+
+    const linked = await upsertShopperFromGoogle({
+      organizationId: acme.id,
+      googleSub: `sub-squatted-${suffix}`,
+      email,
+      name: 'Real Owner',
+      emailVerified: true,
+    });
+
+    expect(linked.id).toBe(squatted.customer.id);
+    expect(linked.emailVerifiedAt).not.toBeNull();
+    expect(linked.passwordHash).toBeNull();
+    expect(linked.sessionVersion).toBe(squatted.customer.sessionVersion + 1);
+    await expect(
+      verifyShopperCredentials({ organizationId: acme.id, email, password: PASSWORD }),
+    ).resolves.toBeNull();
+  });
+
+  it('will not let a registration claim an account whose address is proved', async () => {
+    const email = `google-only-${suffix}@example.com`;
+    await upsertShopperFromGoogle({
+      organizationId: acme.id,
+      googleSub: `sub-google-only-${suffix}`,
+      email,
+      name: 'Google Only',
+      emailVerified: true,
+    });
+
+    const claim = await registerShopper({ organizationId: acme.id, name: 'Intruder', email, password: PASSWORD });
+    expect(claim).toEqual({ ok: false, reason: 'email-taken' });
   });
 
   it('gives the same Google identity a separate account at each store', async () => {

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { SwitchRoot } from '@/components/ui/switch';
 import { Field, FieldDescription, FieldError, FormGrid, FormSection } from '@/components/ui/form-field';
 import { PageHeader, PageBody } from '@/components/layout/page-header';
 import { ImageUploader, type UploadedImage } from '@/components/media/image-uploader';
@@ -38,6 +39,9 @@ export function GeneralSettingsClient({
   const [supportEmail, setSupportEmail] = React.useState(settings.supportEmail ?? '');
   const [supportPhone, setSupportPhone] = React.useState(settings.supportPhone ?? '');
   const [businessAddress, setBusinessAddress] = React.useState(settings.businessAddress ?? '');
+  const [vatRegistered, setVatRegistered] = React.useState(settings.vatRegistered);
+  const [vatRate, setVatRate] = React.useState(String(settings.vatRate));
+  const [vatNumber, setVatNumber] = React.useState(settings.vatNumber ?? '');
   const [socialLinks, setSocialLinks] = React.useState<Record<SocialPlatform, string>>(settings.socialLinks);
   const [logo, setLogo] = React.useState<UploadedImage[]>(
     settings.logoUrl && settings.logoPublicId
@@ -67,6 +71,10 @@ export function GeneralSettingsClient({
       supportPhone,
       businessAddress,
       socialLinks,
+      vatRegistered,
+      // Only checked when VAT is on; off, the saved rate is kept for next time.
+      vatRate: vatRegistered ? Number(vatRate.replace('%', '').trim()) : undefined,
+      vatNumber,
     });
     setPending(false);
 
@@ -84,7 +92,7 @@ export function GeneralSettingsClient({
     <form onSubmit={onSubmit}>
       <PageHeader
         title="General"
-        description="Your business name, logo, contact details and social media."
+        description="Your business name, logo, contact details, VAT and social media."
         actions={
           canManage ? (
             <Button type="submit" size="sm" disabled={pending || uploading}>
@@ -203,6 +211,66 @@ export function GeneralSettingsClient({
             />
             {fieldErrors.businessAddress && <FieldError>{fieldErrors.businessAddress}</FieldError>}
           </Field>
+        </FormSection>
+
+        <FormSection
+          title="Tax"
+          description="Whether your shop charges VAT. It applies to orders from now on; orders already placed keep what they had."
+        >
+          <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+            <div>
+              <Label htmlFor="vat-registered">VAT registered</Label>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Turn on only if your business is registered for VAT. While it’s off, no VAT appears on your shop, receipts or
+                orders.
+              </p>
+            </div>
+            <SwitchRoot id="vat-registered" checked={vatRegistered} onCheckedChange={setVatRegistered} disabled={!canManage} />
+          </div>
+
+          {vatRegistered && (
+            <FormGrid>
+              <Field>
+                <Label htmlFor="vat-rate">
+                  VAT rate (%) <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="vat-rate"
+                  inputMode="decimal"
+                  value={vatRate}
+                  onChange={(e) => setVatRate(e.target.value)}
+                  disabled={!canManage}
+                  aria-invalid={Boolean(fieldErrors.vatRate)}
+                  className="w-28 tabular-nums"
+                />
+                {fieldErrors.vatRate ? (
+                  <FieldError>{fieldErrors.vatRate}</FieldError>
+                ) : (
+                  <FieldDescription>7.5% is Nigeria’s standard rate.</FieldDescription>
+                )}
+              </Field>
+              <Field>
+                <Label htmlFor="vat-number">VAT number</Label>
+                <Input
+                  id="vat-number"
+                  value={vatNumber}
+                  onChange={(e) => setVatNumber(e.target.value)}
+                  disabled={!canManage}
+                  aria-invalid={Boolean(fieldErrors.vatNumber)}
+                />
+                {fieldErrors.vatNumber ? (
+                  <FieldError>{fieldErrors.vatNumber}</FieldError>
+                ) : (
+                  <FieldDescription>Printed on receipts and orders.</FieldDescription>
+                )}
+              </Field>
+            </FormGrid>
+          )}
+          {vatRegistered && (
+            <p className="text-xs text-muted-foreground">
+              Your prices already include VAT: customers pay the price they see, and receipts show how much of it is VAT.
+            </p>
+          )}
         </FormSection>
 
         <FormSection

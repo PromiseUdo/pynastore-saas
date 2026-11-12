@@ -1,5 +1,15 @@
 'use client';
 
+/*
+ * Opening the link confirms the email — no second press. It happens from
+ * the browser once the page has loaded, not when the server sends the page:
+ * the mail scanners that open links ahead of people mostly fetch without
+ * running scripts, so they don't use the link up. One that does still only
+ * proves what the link proves — that it reached that inbox — and the person
+ * then sees "confirmed" (./actions.ts), not a dead link. The button stays
+ * for a browser where the automatic step didn't run.
+ */
+import * as React from 'react';
 import { useActionState } from 'react';
 import { CheckCircle2, Loader2, MailWarning } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,6 +18,18 @@ import { confirmEmailAction, type ConfirmState } from './actions';
 
 export function ConfirmEmailForm({ token }: { token: string }) {
   const [state, action, pending] = useActionState<ConfirmState, FormData>(confirmEmailAction, null);
+  const started = React.useRef(false);
+  const [autoTried, setAutoTried] = React.useState(false);
+
+  React.useEffect(() => {
+    // Once, even when React runs effects twice in development.
+    if (started.current) return;
+    started.current = true;
+    const data = new FormData();
+    data.set('token', token);
+    React.startTransition(() => action(data));
+    setAutoTried(true);
+  }, [action, token]);
 
   if (state?.ok) {
     return (
@@ -37,6 +59,15 @@ export function ConfirmEmailForm({ token }: { token: string }) {
         <a href="/onboarding" className={buttonVariants({ variant: 'outline', className: 'mt-5 w-full' })}>
           Continue
         </a>
+      </div>
+    );
+  }
+
+  if (pending || !autoTried) {
+    return (
+      <div role="status" className="p-8 text-center">
+        <Loader2 className="mx-auto size-8 animate-spin text-muted-foreground" aria-hidden />
+        <h1 className="mt-3 text-lg font-semibold text-foreground">Confirming your email…</h1>
       </div>
     );
   }

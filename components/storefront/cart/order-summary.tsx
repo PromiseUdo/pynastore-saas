@@ -81,7 +81,8 @@ export function OrderSummary({
 
         <div className="border-t pt-3">
           <Row label={totals.shippingPending ? 'Total before delivery' : 'Total'} value={formatMoney(total, currency)} strong />
-          <p className="mt-1 text-xs text-muted-foreground">Includes {formatMoney(tax, currency)} VAT</p>
+          {/* Only a VAT-registered store has any (ROADMAP 14.1): stated, never added. */}
+          {tax > 0 && <p className="mt-1 text-xs text-muted-foreground">Includes {formatMoney(tax, currency)} VAT</p>}
         </div>
       </div>
 

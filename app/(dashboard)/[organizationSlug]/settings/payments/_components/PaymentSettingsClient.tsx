@@ -4,9 +4,10 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowRight, Banknote, CircleCheck, CreditCard, Landmark, Loader2, MoreHorizontal, Pencil, Plus, RotateCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { ArrowRight, Banknote, CircleCheck, CreditCard, Landmark, Loader2, MoreHorizontal, Pencil, Plus, RotateCw, ShieldCheck, Trash2, TriangleAlert, Wallet } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import type { ShopWalletState } from '@/lib/wallet/shop';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SwitchRoot } from '@/components/ui/switch';
@@ -47,6 +48,8 @@ import {
   type BankAccountFieldErrors,
   type BankAccountRow,
 } from '@/features/settings/bank-accounts';
+import { saveCheckoutRules, type CheckoutRulesInput } from '@/features/settings/checkout-rules';
+import { LAST_WAY_TO_PAY_MESSAGE, shopperCanPay } from '@/lib/storefront/checkout/checkout-rules';
 import { BankPicker, bankCodeForName } from '@/components/dashboard/bank-picker';
 import type { PaystackBank } from '@/lib/payments/paystack';
 import { maskAccountNumber, type SetupState } from '@/lib/payments/payment-setup';
@@ -63,6 +66,9 @@ export function PaymentSettingsClient({
   canManage,
   transferHoldHours,
   onlineSetup,
+  walletState,
+  checkoutRules,
+  onlineReady,
   banks,
   banksError,
   testMode = false,
@@ -71,6 +77,12 @@ export function PaymentSettingsClient({
   canManage: boolean;
   transferHoldHours: number;
   onlineSetup: OnlineSetupSummary;
+  /** Where the shop's EduPay wallet stands (ROADMAP 20.4); 'unavailable' hides the card */
+  walletState: ShopWalletState;
+  /** the merchant's checkout rules, as saved */
+  checkoutRules: CheckoutRulesInput;
+  /** online payments are on at checkout right now */
+  onlineReady: boolean;
   /** Paystack's bank list, for the account dialog — empty for someone who can't manage */
   banks: PaystackBank[];
   banksError: string | null;
@@ -83,7 +95,27 @@ export function PaymentSettingsClient({
   const [deleting, setDeleting] = React.useState<BankAccountRow | null>(null);
   const [pending, setPending] = React.useState(false);
 
+  const [rules, setRules] = React.useState(checkoutRules);
+  const [savingRule, setSavingRule] = React.useState<keyof CheckoutRulesInput | null>(null);
+
   const activeCount = accounts.filter((a) => a.isActive).length;
+  const canPay = shopperCanPay({ payOnDelivery: rules.payOnDelivery, onlineReady, activeBankAccounts: activeCount });
+  // Turning pay on delivery off would leave shoppers nothing to pay with.
+  const podIsLastWay = rules.payOnDelivery && !shopperCanPay({ payOnDelivery: false, onlineReady, activeBankAccounts: activeCount });
+
+  async function changeRule(key: keyof CheckoutRulesInput, value: boolean) {
+    const next = { ...rules, [key]: value };
+    setSavingRule(key);
+    const result = await saveCheckoutRules(next);
+    setSavingRule(null);
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+    setRules(next);
+    toast.success(RULE_SAVED[key](value));
+    router.refresh();
+  }
 
   function open(account: BankAccountRow | null) {
     setEditing(account);
@@ -130,7 +162,20 @@ export function PaymentSettingsClient({
       />
 
       <PageBody>
+        {!canPay && (
+          <div role="alert" className="mb-6 flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+            <div>
+              <p className="font-medium text-foreground">Shoppers can’t pay you right now</p>
+              <p className="text-xs text-muted-foreground">
+                Every way to pay is off, so your online store can’t take orders. Turn on pay on delivery, add a bank
+                account, or finish Get paid online.
+              </p>
+            </div>
+          </div>
+        )}
         <OnlineSetupCard setup={onlineSetup} canManage={canManage} />
+        {walletState !== 'unavailable' && <ShopWalletCard state={walletState} />}
 
         <section className="mt-6 rounded-lg border bg-card">
           <h2 className="border-b px-4 py-3 text-sm font-semibold">Payment options at checkout</h2>
@@ -151,12 +196,27 @@ export function PaymentSettingsClient({
             <li className="flex items-start gap-3 px-4 py-3">
               <Banknote className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
               <div className="min-w-0 flex-1">
-                <p className="font-medium">Pay on delivery</p>
+                <label htmlFor="checkout-pay-on-delivery" className="font-medium">
+                  Pay on delivery
+                </label>
                 <p className="text-xs text-muted-foreground">
                   The customer pays the courier. You record the payment when you mark the order delivered.
                 </p>
+                {canManage && podIsLastWay && (
+                  <p className="mt-1 text-xs text-muted-foreground">{LAST_WAY_TO_PAY_MESSAGE}</p>
+                )}
               </div>
-              <Badge variant="success">On</Badge>
+              {canManage ? (
+                <RuleSwitch
+                  id="checkout-pay-on-delivery"
+                  checked={rules.payOnDelivery}
+                  saving={savingRule === 'payOnDelivery'}
+                  disabled={savingRule !== null || podIsLastWay}
+                  onChange={(value) => void changeRule('payOnDelivery', value)}
+                />
+              ) : (
+                <OnOffBadge on={rules.payOnDelivery} />
+              )}
             </li>
             <li className="flex items-start gap-3 px-4 py-3">
               <Landmark className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -171,6 +231,33 @@ export function PaymentSettingsClient({
                 {activeCount > 0 ? 'On' : 'Off — add an account'}
               </Badge>
             </li>
+          </ul>
+        </section>
+
+        <section className="mt-6 rounded-lg border bg-card">
+          <h2 className="border-b px-4 py-3 text-sm font-semibold">Checkout</h2>
+          <ul className="divide-y text-sm">
+            {CHECKOUT_RULE_ROWS.map((row) => (
+              <li key={row.key} className="flex items-start gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <label htmlFor={`checkout-${row.key}`} className="font-medium">
+                    {row.label}
+                  </label>
+                  <p className="text-xs text-muted-foreground">{row.help}</p>
+                </div>
+                {canManage ? (
+                  <RuleSwitch
+                    id={`checkout-${row.key}`}
+                    checked={rules[row.key]}
+                    saving={savingRule === row.key}
+                    disabled={savingRule !== null}
+                    onChange={(value) => void changeRule(row.key, value)}
+                  />
+                ) : (
+                  <OnOffBadge on={rules[row.key]} />
+                )}
+              </li>
+            ))}
           </ul>
         </section>
 
@@ -310,6 +397,50 @@ export function PaymentSettingsClient({
  * Where "Get paid online" stands, and the one thing to do next. The details
  * live on their own page (./online); this card only points there.
  */
+const RULE_SAVED: Record<keyof CheckoutRulesInput, (on: boolean) => string> = {
+  payOnDelivery: (on) => (on ? 'Pay on delivery is on' : 'Pay on delivery is off'),
+  guestAllowed: (on) => (on ? 'Shoppers can order without an account' : 'Shoppers now sign in to order'),
+  orderNotes: (on) => (on ? 'Order notes are on' : 'Order notes are off'),
+};
+
+const CHECKOUT_RULE_ROWS: { key: 'guestAllowed' | 'orderNotes'; label: string; help: string }[] = [
+  {
+    key: 'guestAllowed',
+    label: 'Let shoppers order without an account',
+    help: 'Off: shoppers sign in or create an account before they can order. Fewer people finish checkout, but every order has an account behind it.',
+  },
+  {
+    key: 'orderNotes',
+    label: 'Let shoppers add a note to their order',
+    help: 'A box at the last step for things like “Call before you come”. The note shows on the order.',
+  },
+];
+
+function RuleSwitch({
+  id,
+  checked,
+  saving,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  checked: boolean;
+  saving: boolean;
+  disabled: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-2 pt-0.5">
+      {saving && <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden />}
+      <SwitchRoot id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
+    </div>
+  );
+}
+
+function OnOffBadge({ on }: { on: boolean }) {
+  return <Badge variant={on ? 'success' : 'draft'}>{on ? 'On' : 'Off'}</Badge>;
+}
+
 function OnlineSetupCard({ setup, canManage }: { setup: OnlineSetupSummary; canManage: boolean }) {
   const { state } = setup;
   const action =
@@ -355,6 +486,44 @@ function OnlineSetupCard({ setup, canManage }: { setup: OnlineSetupSummary; canM
             className={buttonVariants({ variant: primary ? 'default' : 'outline', size: 'sm', className: 'shrink-0 self-start' })}
           >
             {action}
+            <ArrowRight className="size-3.5" />
+          </Link>
+        )}
+      </div>
+    </section>
+  );
+}
+
+const WALLET_STATUS: Record<Exclude<ShopWalletState, 'unavailable'>, { label: string; variant: 'success' | 'pending' | 'destructive' | 'draft'; hint: string }> = {
+  'not-approved': { label: 'After approval', variant: 'draft', hint: 'Your shop gets an EduPay wallet once you’re approved for online payments.' },
+  'setting-up': { label: 'Setting up', variant: 'pending', hint: 'Your EduPay wallet is being set up. This usually takes a moment.' },
+  problem: { label: 'Needs attention', variant: 'destructive', hint: 'We couldn’t set up your wallet. Please try again later.' },
+  active: { label: 'Active', variant: 'success', hint: 'Its balance and every payment in and out are on the wallet page.' },
+};
+
+/** The shop's EduPay wallet (ROADMAP 20.4): where it stands, and a way to its page. */
+function ShopWalletCard({ state }: { state: Exclude<ShopWalletState, 'unavailable'> }) {
+  const status = WALLET_STATUS[state];
+  return (
+    <section className="mt-6 rounded-lg border bg-card p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <Wallet className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-semibold">Shop wallet</h2>
+              <Badge variant={status.variant}>{status.label}</Badge>
+            </div>
+            <p className="mt-0.5 text-sm text-muted-foreground">{status.hint}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Provided by EduPay.</p>
+          </div>
+        </div>
+        {state !== 'not-approved' && (
+          <Link
+            href="/settings/payments/wallet"
+            className={buttonVariants({ variant: 'outline', size: 'sm', className: 'shrink-0 self-start' })}
+          >
+            View wallet
             <ArrowRight className="size-3.5" />
           </Link>
         )}

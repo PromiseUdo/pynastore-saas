@@ -61,6 +61,8 @@ export type StorefrontOrderUpdateEmailProps = {
   storeNote?: string;
   /** refund emails: the amount the store recorded, formatted */
   refundAmount?: string;
+  /** refund emails: sent to the shopper's wallet, and EduPay confirmed it — a fact, not the store's word */
+  refundToWallet?: boolean;
 };
 
 const COPY: Record<OrderEmailKind, { subject: string; heading: string }> = {
@@ -129,6 +131,11 @@ function body(props: StorefrontOrderUpdateEmailProps): string[] {
     case 'return-rejected':
       return [`${props.storeName} can’t accept the return of the items below. Here’s what they said:`];
     case 'refunded':
+      if (props.refundToWallet) {
+        return [
+          `${props.storeName} has sent ${props.refundAmount ?? 'your refund'} back to your wallet. It’s there now — you can see it in your account, under Wallet.`,
+        ];
+      }
       return [
         props.refundAmount
           ? `${props.storeName} says they’ve sent ${props.refundAmount} back to you.`

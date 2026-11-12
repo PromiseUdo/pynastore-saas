@@ -14,11 +14,15 @@
  * A return can be refunded straight from REQUESTED — a broken item the store
  * doesn't want back needs no approval step first.
  *
- * MONEY: the app moves none. There is no refund API; the merchant sends the
- * money from their own bank and records it here (refunds through Paystack
- * are paused, ROADMAP 10.7), and the
- * shopper is told it was sent. An OrderRefund row is that record, and the
- * order's payment status follows the sum (./policy.ts).
+ * MONEY: mostly the app moves none. The merchant sends the money from their
+ * own bank and records it here (refunds through Paystack are paused, ROADMAP
+ * 10.7), and the shopper is told it was sent. An OrderRefund row is that
+ * record, and the order's payment status follows the sum (./policy.ts).
+ * The exception is an order paid from the shopper's EduPay wallet (20.6):
+ * ./wallet-refunds.ts sends the money back to that wallet first and, once
+ * EduPay confirms it, records it through these same functions — so the
+ * totals, statuses, restocking and email are the same either way. A wallet
+ * refund still in flight holds its amount (`walletRefundId`).
  *
  * RACES: every write locks the order row first, so two requests can't both
  * claim the last unit of a line and two refunds can't both take the last naira.
@@ -148,6 +152,10 @@ export async function withdrawReturn(input: {
   customerId: string;
   returnId: string;
 }): Promise<ReturnResult> {
+  // The store is sending the money to their wallet right now (ROADMAP 20.6).
+  if (await prisma.walletRefund.count({ where: { returnId: input.returnId, status: 'PENDING' } })) {
+    return { ok: false, error: 'The store is sending your refund right now, so this request can’t be withdrawn.' };
+  }
   const claimed = await prisma.orderReturn.updateMany({
     where: {
       id: input.returnId,
@@ -223,22 +231,35 @@ async function recordRefund(
     amount: number;
     note: string | null;
     performedById: string | null;
+    /** recording a wallet refund EduPay has just confirmed (./wallet-refunds.ts) */
+    walletRefundId?: string | null;
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await lockOrder(tx, input.orderId);
   const order = await tx.order.findUnique({
     where: { id: input.orderId },
-    select: { paymentStatus: true, totalAmount: true, currency: true, refunds: { select: { amount: true } } },
+    select: {
+      paymentStatus: true,
+      totalAmount: true,
+      currency: true,
+      refunds: { select: { amount: true } },
+      // Wallet refunds still in flight hold their amount — except the one being recorded.
+      walletRefunds: { where: { status: 'PENDING', id: { not: input.walletRefundId ?? '' } }, select: { amount: true } },
+    },
   });
   if (!order) return { ok: false, error: 'Order not found' };
 
   const total = Number(order.totalAmount);
   const refunded = order.refunds.reduce((sum, r) => sum + Number(r.amount), 0);
+  const inFlight = order.walletRefunds.reduce((sum, r) => sum + Number(r.amount), 0);
 
   if (order.paymentStatus === 'DUE_ON_DELIVERY') {
     return { ok: false, error: 'This order’s payment hasn’t been recorded yet. Record the payment first.' };
   }
-  const left = refundableAmount({ paymentStatus: order.paymentStatus, total, refunded });
+  const left = Math.max(0, Math.round((refundableAmount({ paymentStatus: order.paymentStatus, total, refunded }) - inFlight) * 100) / 100);
+  if (left <= 0 && inFlight > 0) {
+    return { ok: false, error: 'A refund to the customer’s wallet is still being checked with EduPay. Try again in a few minutes.' };
+  }
   if (left <= 0) return { ok: false, error: 'There’s nothing left to refund on this order.' };
 
   const amount = Math.round(input.amount * 100) / 100;
@@ -250,7 +271,7 @@ async function recordRefund(
     };
   }
 
-  await tx.orderRefund.create({
+  const refund = await tx.orderRefund.create({
     data: {
       organizationId: input.organizationId,
       orderId: input.orderId,
@@ -259,7 +280,16 @@ async function recordRefund(
       note: input.note,
       recordedById: input.performedById,
     },
+    select: { id: true },
   });
+  if (input.walletRefundId) {
+    // Recorded once: a second finish of the same transfer finds it already SENT.
+    const claimed = await tx.walletRefund.updateMany({
+      where: { id: input.walletRefundId, status: 'PENDING' },
+      data: { status: 'SENT', orderRefundId: refund.id, settledAt: new Date(), lastError: null },
+    });
+    if (!claimed.count) return { ok: false, error: 'This refund has already been recorded.' };
+  }
   await tx.order.update({
     where: { id: input.orderId },
     data: { paymentStatus: paymentStatusAfterRefund(total, refunded + amount) },
@@ -326,7 +356,14 @@ async function restockReturn(
 
 /** The return is settled: money recorded, and — if the merchant says so — the items back in stock. */
 export async function refundReturn(
-  scope: MerchantScope & { amount: number; note?: string | null; restock: boolean; performedById: string | null },
+  scope: MerchantScope & {
+    amount: number;
+    note?: string | null;
+    restock: boolean;
+    performedById: string | null;
+    /** a wallet refund EduPay has confirmed, being recorded (./wallet-refunds.ts) */
+    walletRefundId?: string | null;
+  },
 ): Promise<ReturnResult> {
   const found = await loadReturn(scope);
   if (!found) return NOT_FOUND;
@@ -348,6 +385,7 @@ export async function refundReturn(
       amount: scope.amount,
       note: scope.note?.trim().slice(0, 500) || null,
       performedById: scope.performedById,
+      walletRefundId: scope.walletRefundId,
     });
     // Throwing rolls the status change back with it.
     if (!refunded.ok) throw new RefundRefused(refunded.error);
@@ -361,7 +399,9 @@ export async function refundReturn(
     throw error;
   });
 
-  if (result.ok) await notifyShopper(found.orderId, 'refunded', { returnId: found.id, refundAmount: scope.amount });
+  if (result.ok) {
+    await notifyShopper(found.orderId, 'refunded', { returnId: found.id, refundAmount: scope.amount, toWallet: Boolean(scope.walletRefundId) });
+  }
   return result;
 }
 
@@ -372,6 +412,8 @@ export async function refundCancelledOrder(input: {
   amount: number;
   note?: string | null;
   performedById: string | null;
+  /** a wallet refund EduPay has confirmed, being recorded (./wallet-refunds.ts) */
+  walletRefundId?: string | null;
 }): Promise<ReturnResult> {
   const order = await prisma.order.findFirst({
     where: { id: input.orderId, organizationId: input.organizationId },
@@ -390,11 +432,19 @@ export async function refundCancelledOrder(input: {
       amount: input.amount,
       note: input.note?.trim().slice(0, 500) || null,
       performedById: input.performedById,
+      walletRefundId: input.walletRefundId,
+    }).then((recorded) => {
+      // Throwing rolls the refund row back with the wallet claim.
+      if (!recorded.ok) throw new RefundRefused(recorded.error);
+      return recorded;
     }),
-  );
+  ).catch((error) => {
+    if (error instanceof RefundRefused) return { ok: false as const, error: error.message };
+    throw error;
+  });
   if (!result.ok) return result;
 
-  await notifyShopper(order.id, 'refunded', { refundAmount: input.amount });
+  await notifyShopper(order.id, 'refunded', { refundAmount: input.amount, toWallet: Boolean(input.walletRefundId) });
   return { ok: true, data: undefined };
 }
 

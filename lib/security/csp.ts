@@ -23,6 +23,9 @@
  * CSP_MODE: "enforce" (default) blocks and reports; "report" only reports —
  * the switch to flip if a live page breaks; "off" sends no policy.
  * Violations are reported to /api/csp-report, into the error log.
+ *
+ * PAYSTACK'S WINDOW (ROADMAP 20.3) is the one frame a page opens for itself:
+ * wallet top-ups show Paystack's checkout on our page, never a redirect.
  */
 
 export type CspMode = 'enforce' | 'report' | 'off';
@@ -57,6 +60,15 @@ export const ABLY_CONNECT = [
 ];
 const CLOUDINARY_UPLOADS = 'https://api.cloudinary.com';
 
+/*
+ * Paystack's payment window, opened ON our page for wallet top-ups
+ * (ROADMAP 20.3, @paystack/inline-js) — added only when EduPay wallets are
+ * switched on. The library frames checkout.paystack.com and calls
+ * api.paystack.co; everything after that (cards, 3-D Secure, bank pages)
+ * happens inside Paystack's frame, under Paystack's own policy.
+ */
+export const PAYSTACK_POPUP = { frame: 'https://checkout.paystack.com', connect: 'https://api.paystack.co' };
+
 /* What the merchant-enabled measurement tags need (storefront only). */
 const ANALYTICS = {
   img: ['https://www.googletagmanager.com', 'https://*.google-analytics.com', 'https://www.facebook.com'],
@@ -89,9 +101,12 @@ export function buildCsp(options: {
   frameAncestors?: string[];
   /** the chat's real-time connection (Ably) is configured */
   realtime?: boolean;
+  /** wallet top-ups open Paystack's window on the page (EduPay configured) */
+  paystackPopup?: boolean;
 }): string {
   const { nonce, storefront, dev, https } = options;
-  const frameSrc = options.frameSrc?.length ? options.frameSrc : ["'none'"];
+  const frames = [...(options.frameSrc ?? []), ...(options.paystackPopup ? [PAYSTACK_POPUP.frame] : [])];
+  const frameSrc = frames.length ? frames : ["'none'"];
   const frameAncestors = options.frameAncestors?.length ? options.frameAncestors : ["'none'"];
   const directives: Record<string, string[]> = {
     'default-src': ["'self'"],
@@ -113,6 +128,7 @@ export function buildCsp(options: {
       CLOUDINARY_UPLOADS,
       ...(storefront ? ANALYTICS.connect : []),
       ...(options.realtime ? ABLY_CONNECT : []),
+      ...(options.paystackPopup ? [PAYSTACK_POPUP.connect] : []),
       ...(dev ? ['ws:', 'wss:'] : []),
     ],
     'media-src': ["'self'", 'blob:', CLOUDINARY_IMAGES],

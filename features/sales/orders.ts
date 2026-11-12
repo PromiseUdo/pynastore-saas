@@ -150,6 +150,8 @@ export interface StoreOrderDetail extends StoreOrderRow {
   /** the code the shopper used, as it was when they used it */
   discountCode: string | null;
   taxAmount: number;
+  /** the shop's VAT number when it was placed; null when no VAT was charged (ROADMAP 14.1) */
+  vatNumber: string | null;
   note: string | null;
   lines: {
     id: string;
@@ -662,6 +664,7 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
         discount: Number(order.discount),
         discountCode: order.discountCode,
         taxAmount: Number(order.taxAmount),
+        vatNumber: order.vatNumber,
         totalAmount: Number(order.totalAmount),
         itemCount: order.lineItems.reduce((sum, line) => sum + line.quantity, 0),
         note: order.note,

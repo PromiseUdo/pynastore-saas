@@ -7,7 +7,7 @@
  * a live session to whoever wrote the link.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { safeNextPath, storeReturnUrl, allowedStoreHosts, storeUrl } from './return-url';
+import { safeNextPath, storeReturnUrl, allowedStoreHosts, storeUrl, phoneStepUrl } from './return-url';
 
 const ACME = { slug: 'acme', customStoreDomain: 'shop.acme.com' };
 
@@ -104,5 +104,22 @@ describe('storeUrl', () => {
 
   it('falls back to the platform subdomain, in its current one-label shape', () => {
     expect(storeUrl({ slug: 'acme' }, '/account')).toBe('https://shop-acme.example.com/account');
+  });
+});
+
+describe('phoneStepUrl', () => {
+  it('asks for the phone on the same origin, carrying where they were going', () => {
+    expect(phoneStepUrl('https://shop.acme.com/checkout?step=2', 'acme')).toBe(
+      'https://shop.acme.com/account/phone?next=%2Fcheckout%3Fstep%3D2',
+    );
+  });
+
+  it('keeps the /s/{slug} prefix on the page and off `next` on the mobile origin', () => {
+    expect(phoneStepUrl('https://m.example.com/s/acme/wishlist', 'acme')).toBe(
+      'https://m.example.com/s/acme/account/phone?next=%2Fwishlist',
+    );
+    expect(phoneStepUrl('https://m.example.com/s/acme', 'acme')).toBe(
+      'https://m.example.com/s/acme/account/phone?next=%2F',
+    );
   });
 });

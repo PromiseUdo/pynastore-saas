@@ -155,12 +155,12 @@ export default async function StorePage({ params, searchParams }: Props) {
       : { href: '/procurement/purchase-orders', label: 'Order more', upgradeHint: true }
     : null;
 
-  /* Comparing stores is part of the Pro reports, so the link is only offered
-     where it leads somewhere (AGENTS §7 — and the store's own figures above
-     are not gated). */
+  /* Comparing stores is part of the Pro reports (now in the reports hub,
+     ROADMAP 14.6), so the link is only offered where it leads somewhere
+     (AGENTS §7 — and the store's own figures above are not gated). */
   const comparisonHref =
-    hasFeature(plan, FEATURES.REPORTS_ADVANCED) && hasPermission(perms, PERMISSIONS.INVENTORY_VIEW)
-      ? '/inventory/reports/advanced?view=by-store'
+    hasFeature(plan, FEATURES.REPORTS_ADVANCED) && hasPermission(perms, PERMISSIONS.SALES_VIEW)
+      ? '/reports?view=by-store'
       : null;
 
   return (

@@ -93,12 +93,8 @@ export function normalizeCacNumber(raw: string, type: BusinessType | null | unde
   return `${expected}${match[2]}`;
 }
 
-/** Nigerian mobile numbers, as +234XXXXXXXXXX. Null when it isn't one. */
-export function normalizeNigerianPhone(raw: string): string | null {
-  const digits = raw.replace(/[\s\-()]/g, '');
-  const match = /^(?:\+?234|0)([789][01]\d{8})$/.exec(digits);
-  return match ? `+234${match[1]}` : null;
-}
+/** Nigerian mobile numbers, as +234XXXXXXXXXX — shared with shopper accounts (lib/phone.ts). */
+export { normalizeNigerianPhone } from '@/lib/phone';
 
 export function isAccountNumber(value: string): boolean {
   return /^\d{10}$/.test(value.replace(/\s+/g, ''));

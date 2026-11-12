@@ -11,6 +11,20 @@ import { isEmailConfirmed, resendVerificationEmail } from './actions';
 /** Shown on /onboarding until the owner has confirmed their email (ROADMAP 12.5). */
 export function VerifyEmailGate({ email }: { email: string }) {
   const [pending, setPending] = React.useState(false);
+  const [checking, setChecking] = React.useState(false);
+  const [notYet, setNotYet] = React.useState(false);
+
+  /* "I've confirmed it" asks before reloading, so a press before the link
+   * was opened says so — instead of reloading into the same screen and
+   * looking like nothing happened. */
+  async function checkNow() {
+    setChecking(true);
+    setNotYet(false);
+    const confirmed = await isEmailConfirmed().catch(() => false);
+    if (confirmed) return window.location.reload();
+    setChecking(false);
+    setNotYet(true);
+  }
 
   /* Confirming happens elsewhere — in the Mail app, or a browser tab the
    * link opened — so check again whenever this screen comes back into view
@@ -47,8 +61,17 @@ export function VerifyEmailGate({ email }: { email: string }) {
         address, then come back here to create your shop.
       </p>
       <p className="mt-2 text-xs text-muted-foreground">Can’t find it? Check your spam or promotions folder.</p>
+      {notYet && (
+        <p role="alert" className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-foreground">
+          Your email isn’t confirmed yet. Open the link in the email we sent to {email}, then come back — or send the link
+          again below.
+        </p>
+      )}
       <div className="mt-6 flex flex-col gap-2">
-        <Button onClick={() => window.location.reload()}>I’ve confirmed it</Button>
+        <Button onClick={checkNow} disabled={checking}>
+          {checking && <Loader2 className="size-3.5 animate-spin" />}
+          I’ve confirmed it
+        </Button>
         <Button variant="outline" onClick={resend} disabled={pending}>
           {pending && <Loader2 className="size-3.5 animate-spin" />}
           Send the link again

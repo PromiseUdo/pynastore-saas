@@ -44,6 +44,13 @@
  * now" is its own OrderPayment row with its own reference. The order keeps its
  * shopper-facing ORD- reference throughout.
  *
+ * WALLETS (ROADMAP 20.5). A shopper may also pay from their EduPay wallet
+ * (lib/storefront/checkout/wallet-payment.ts): one `debit_wallet` from
+ * their wallet to the shop's. Its attempts are OrderPayment rows too
+ * (provider 'edupay'), settled by the same `markAttemptPaid`, and an attempt
+ * EduPay never clearly answered is settled here, from the wallet's own
+ * transactions, like a Paystack payment nobody heard about.
+ *
  * Money: the order stores major units; providers take minor units (kobo).
  */
 import { subaccountMatchesMode } from '@/lib/payments/subaccounts';
@@ -60,13 +67,16 @@ import { OutOfStockError, reReserveOrderStock } from '../orders/stock';
 import { requestGatheringTransfers } from '../orders/gather';
 import { reclaimDiscountUse } from '../discounts/usage';
 import { notifyShopper, notifyStoreOfOrder } from '../orders/notifications';
+import { WALLET_PROVIDER, walletAttemptVerdict } from '@/lib/wallet/order-payment';
 
 /** The checkout method (and attempt provider) for paying online. */
 export const ONLINE_PAYMENT_METHOD = 'paystack';
 /** Orders placed before checkout moved to Paystack; Squad is retired (ROADMAP 10.9). History only. */
 export const LEGACY_SQUAD_METHOD = 'squad';
+/** The checkout method for paying from an EduPay wallet (ROADMAP 20.5). */
+export const WALLET_PAYMENT_METHOD = 'wallet';
 /** Every method whose money is taken online by a provider, past or present. */
-export const ONLINE_PAYMENT_METHODS = [ONLINE_PAYMENT_METHOD, LEGACY_SQUAD_METHOD] as const;
+export const ONLINE_PAYMENT_METHODS = [ONLINE_PAYMENT_METHOD, LEGACY_SQUAD_METHOD, WALLET_PAYMENT_METHOD] as const;
 
 export function isOnlinePaymentMethod(method: string): boolean {
   return (ONLINE_PAYMENT_METHODS as readonly string[]).includes(method);
@@ -272,6 +282,7 @@ export async function reconcilePayment(reference: string): Promise<ReconcileOutc
   });
   if (!attempt) return 'unknown-reference';
   if (attempt.status === 'SUCCESS') return 'already-paid';
+  if (attempt.provider === WALLET_PROVIDER) return reconcileWalletAttempt(attempt);
   if (attempt.provider !== ONLINE_PAYMENT_METHOD) return 'unverifiable';
 
   let transaction: VerifiedPayment | null;
@@ -323,27 +334,61 @@ export async function reconcilePayment(reference: string): Promise<ReconcileOutc
     return 'mismatch';
   }
 
+  return markAttemptPaid(attempt, {
+    channel: transaction.channel,
+    gatewayRef: transaction.gatewayRef,
+    // Paystack's own split, as it reported it — shown to the merchant (10.6).
+    ...(transaction.split
+      ? {
+          merchantAmount: new Prisma.Decimal(transaction.split.merchant).dividedBy(100),
+          platformAmount: new Prisma.Decimal(transaction.split.platform).dividedBy(100),
+          feeAmount: new Prisma.Decimal(transaction.split.fee).dividedBy(100),
+        }
+      : {}),
+    providerPayload: payload,
+  });
+}
+
+/**
+ * A wallet attempt EduPay never clearly answered: look for the transfer in
+ * the shopper's wallet. Found and completed → paid; found and failed, or
+ * still nowhere long after → closed, so the shopper may try again.
+ */
+async function reconcileWalletAttempt(attempt: { id: string; orderId: string }): Promise<ReconcileOutcome> {
+  const verdict = await walletAttemptVerdict(attempt.id);
+  switch (verdict.kind) {
+    case 'paid':
+      return markAttemptPaid(attempt, { channel: 'Wallet', gatewayRef: verdict.gatewayRef });
+    case 'failed':
+    case 'abandoned':
+      await prisma.orderPayment.updateMany({
+        where: { id: attempt.id, status: 'PENDING' },
+        data: { status: verdict.kind === 'failed' ? 'FAILED' : 'ABANDONED', verifiedAt: new Date() },
+      });
+      return 'failed';
+    case 'pending':
+      return 'pending';
+    case 'unavailable':
+      return 'error';
+  }
+}
+
+/**
+ * The provider said paid: record it, and the order with it. Shared by every
+ * provider, so a wallet payment confirms an order exactly as Paystack does.
+ * The guard on the attempt's status is what makes two doors racing each
+ * other (a webhook and a redirect, a reply and the expiry job) settle the
+ * order exactly once.
+ */
+export async function markAttemptPaid(
+  attempt: { id: string; orderId: string },
+  data: Omit<Prisma.OrderPaymentUpdateManyMutationInput, 'status' | 'verifiedAt'>,
+): Promise<'paid' | 'already-paid'> {
   const now = new Date();
   const settled = await prisma.$transaction(async (tx) => {
-    // The guard on status is what makes a webhook and a redirect racing each
-    // other settle the order exactly once.
     const claimed = await tx.orderPayment.updateMany({
       where: { id: attempt.id, status: { not: 'SUCCESS' } },
-      data: {
-        status: 'SUCCESS',
-        channel: transaction.channel,
-        gatewayRef: transaction.gatewayRef,
-        // Paystack's own split, as it reported it — shown to the merchant (10.6).
-        ...(transaction.split
-          ? {
-              merchantAmount: new Prisma.Decimal(transaction.split.merchant).dividedBy(100),
-              platformAmount: new Prisma.Decimal(transaction.split.platform).dividedBy(100),
-              feeAmount: new Prisma.Decimal(transaction.split.fee).dividedBy(100),
-            }
-          : {}),
-        providerPayload: payload,
-        verifiedAt: now,
-      },
+      data: { ...data, status: 'SUCCESS', verifiedAt: now },
     });
     if (claimed.count === 0) return null;
 
@@ -463,8 +508,15 @@ export async function reconcileOpenAttempts(orderId: string): Promise<void> {
 /* ---------------- reading ---------------- */
 
 export interface OrderPaymentState {
-  /** the shopper can (still) pay this order online */
+  /** the shopper can (still) pay this order online — with `method` */
   canPay: boolean;
+  /** how: Paystack's window, or the shopper's EduPay wallet (20.5) */
+  method: 'paystack' | 'wallet';
+  /**
+   * A wallet payment EduPay hasn't clearly answered yet: don't offer another
+   * until it's settled (it may have gone through).
+   */
+  checking: boolean;
   /** the latest attempt didn't go through — say so, and offer another go */
   lastAttemptFailed: boolean;
   /** 'payment-timeout' | 'merchant' when the order was cancelled */
@@ -482,16 +534,19 @@ export async function getOrderPaymentState(orderId: string): Promise<OrderPaymen
       payments: { select: { status: true }, orderBy: { createdAt: 'desc' }, take: 1 },
     },
   });
-  if (!order) return { canPay: false, lastAttemptFailed: false, cancelReason: null };
+  if (!order) return { canPay: false, method: 'paystack', checking: false, lastAttemptFailed: false, cancelReason: null };
 
+  const method = order.paymentMethod === WALLET_PAYMENT_METHOD ? 'wallet' : 'paystack';
   const canPay =
-    order.paymentMethod === ONLINE_PAYMENT_METHOD &&
+    (order.paymentMethod === ONLINE_PAYMENT_METHOD || order.paymentMethod === WALLET_PAYMENT_METHOD) &&
     order.paymentStatus === 'AWAITING_PAYMENT' &&
     (PAYABLE_ORDER_STATUSES as readonly string[]).includes(order.status);
 
   const last = order.payments[0]?.status;
   return {
     canPay,
+    method,
+    checking: canPay && method === 'wallet' && last === 'PENDING',
     lastAttemptFailed: canPay && (last === 'FAILED' || last === 'ABANDONED'),
     cancelReason: order.status === 'CANCELLED' ? order.cancelReason : null,
   };

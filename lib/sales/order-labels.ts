@@ -114,6 +114,9 @@ export function returnNextStep(status: string): string | null {
 export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   paystack: 'Online (Paystack)',
   squad: 'Online (Squad)',
+  // The order's method is 'wallet'; its payment attempts' provider is 'edupay' (ROADMAP 20.5).
+  wallet: 'Wallet (EduPay)',
+  edupay: 'Wallet (EduPay)',
   pod: 'Pay on delivery',
   transfer: 'Bank transfer to you',
   card: 'Card',

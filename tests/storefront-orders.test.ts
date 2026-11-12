@@ -11,7 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { giveStoreDelivery, quotedDeliveryId } from './helpers/delivery';
 import { registerShopper } from '@/lib/storefront/account/shopper';
 import { getCheckoutConfig } from '@/lib/storefront/checkout/config';
-import { ONLINE_PAYMENT_METHOD } from '@/lib/storefront/mock/checkout';
+import { ONLINE_PAYMENT_METHOD } from '@/lib/storefront/checkout/payment-methods';
 import { placeOrder } from '@/lib/storefront/orders/create';
 import { releaseOrderStock } from '@/lib/storefront/orders/stock';
 import { cancelOrder } from '@/lib/storefront/orders/lifecycle';
@@ -175,8 +175,24 @@ describe('placing an order', () => {
     expect(order!.totals.total).toBe(
       order!.totals.subtotal - order!.totals.discount + order!.totals.shipping,
     );
-    expect(order!.totals.tax).toBeGreaterThan(0);
-    expect(order!.totals.tax).toBeLessThan(order!.totals.subtotal);
+    // Not VAT registered (the default, ROADMAP 14.1): no VAT at all.
+    expect(order!.totals.tax).toBe(0);
+    expect(order!.vatNumber).toBeNull();
+  });
+
+  it('states the VAT inside the price for a VAT-registered store, with its number — never adds it', async () => {
+    const result = await placeOrder({
+      ...baseInput(),
+      customerId,
+      config: { ...config, vat: { ratePct: 7.5, vatNumber: 'VAT-12345678' } },
+    });
+    if (!result.ok) throw new Error('order failed');
+
+    const order = await getOrderForCustomer({ organizationId: store.id }, customerId, result.reference);
+    // ₦10,000 of goods at 7.5% includes ₦697.67.
+    expect(order!.totals.tax).toBe(69_767);
+    expect(order!.totals.total).toBe(order!.totals.subtotal - order!.totals.discount + order!.totals.shipping);
+    expect(order!.vatNumber).toBe('VAT-12345678');
   });
 
   it('keeps a snapshot of what was bought and where it was sent', async () => {

@@ -23,6 +23,8 @@ import { currentStoreSlug, getShopper, getShopperForStore } from '@/lib/storefro
 import { placeOrder, resolveLines, type OrderLineRequest, type PlaceOrderFailure } from '@/lib/storefront/orders/create';
 import { findOrderByReferenceAndEmail } from '@/lib/storefront/orders/read';
 import { startOrderPayment } from '@/lib/storefront/checkout/payment-service';
+import { payOrderFromWallet, type WalletPayResult } from '@/lib/storefront/checkout/wallet-payment';
+import { formatMoney } from '@/lib/storefront/format';
 import { deepLinkSchemeFor } from '@/lib/mobile/store-apps';
 import { watchOrder } from '@/lib/mobile/push/watch';
 import { prisma } from '@/lib/prisma';
@@ -105,10 +107,9 @@ export async function placeOrderAction(
     return { ok: false, message: 'Too many attempts. Please wait a moment and try again.' };
   }
 
-  const [config, shopper] = await Promise.all([
-    getStoreCheckoutConfig({ organizationSlug: slug }),
-    getShopper(),
-  ]);
+  const shopper = await getShopper();
+  // With the shopper, so "Pay from wallet" is refused to one who can't use it.
+  const config = await getStoreCheckoutConfig({ organizationSlug: slug }, { customerId: shopper?.id ?? null });
 
   const result = await placeOrder({
     organizationSlug: slug,
@@ -131,7 +132,10 @@ export async function placeOrderAction(
 
   let paymentUrl: string | null = null;
 
-  if (method?.provider === 'paystack') {
+  if (method?.provider === 'edupay') {
+    // Paid from the wallet on the confirmation page, with the PIN; the
+    // emails go out once it's paid, as for Paystack.
+  } else if (method?.provider === 'paystack') {
     /* The order exists whatever happens next. If Paystack can't be reached,
      * the shopper still lands on their confirmation, which offers "Pay now". */
     const started = await startOrderPayment({
@@ -257,6 +261,82 @@ export async function payForMyOrderAction(
         : Promise.resolve(null),
     Boolean(options.nativeApp),
   );
+}
+
+/* ---------------- paying from the wallet (ROADMAP 20.5) ---------------- */
+
+export type PayFromWalletResult =
+  | { ok: true }
+  /** `checking`: EduPay hasn't answered this try yet — the page shows that, not a form */
+  | { ok: false; message: string; field?: 'pin'; checking?: boolean };
+
+const WALLET_FAILURE: Record<Extract<WalletPayResult, { ok: false }>['reason'], { message: string; field?: 'pin' }> = {
+  'already-paid': { message: 'This order is already paid — there’s nothing more to pay.' },
+  'not-payable': { message: 'This order can’t be paid from a wallet. Please contact the store.' },
+  'not-yours': { message: 'Sign in with the account that placed this order to pay from its wallet.' },
+  'no-wallet': { message: 'Your wallet isn’t ready yet. Please try again in a minute.' },
+  'shop-unavailable': { message: 'This store can’t take wallet payments just now. Please contact the store.' },
+  'same-wallet': { message: 'This is the store’s own wallet, so it can’t pay the store.' },
+  'bad-pin': { message: 'Enter your 4-digit wallet PIN.', field: 'pin' },
+  'pin-not-set': { message: 'Create your wallet PIN first (Account → Wallet).' },
+  'wrong-pin': { message: 'That PIN isn’t right. Please try again.', field: 'pin' },
+  locked: { message: 'Your wallet PIN is locked after too many wrong tries. Please try again later.' },
+  insufficient: { message: 'There isn’t enough in your wallet for this order. Add money, then pay.' },
+  checking: {
+    message: 'We’re still checking your last payment with EduPay. Please don’t pay again — refresh this page in a minute.',
+  },
+  unavailable: { message: 'We couldn’t reach EduPay just now. You haven’t been charged — please try again in a minute.' },
+  rejected: { message: 'EduPay couldn’t take this payment. You haven’t been charged.' },
+};
+
+/**
+ * "Pay ₦… from wallet" on the confirmation page or the shopper's own order
+ * page. The order is found WITH the signed-in shopper's id, so only the
+ * shopper who placed it can pay it from their wallet; the PIN goes straight
+ * on to EduPay (lib/storefront/checkout/wallet-payment.ts).
+ */
+export async function payFromWalletAction(
+  target: { confirmationToken: string } | { reference: string },
+  pin: string,
+): Promise<PayFromWalletResult> {
+  const slug = await currentStoreSlug();
+  const [store, shopper] = await Promise.all([slug ? findStoreBySlug(slug) : null, getShopper()]);
+  if (!slug || !store) return { ok: false, message: 'We couldn’t reach the store. Please try again.' };
+  if (!shopper || shopper.organizationId !== store.id) return { ok: false, ...WALLET_FAILURE['not-yours'] };
+
+  // A wrong PIN costs a try at EduPay; this is about a script, not a person.
+  if (!(await checkRateLimit(`wallet-pay:${shopper.id}`, 10, 15 * 60 * 1000))) {
+    return { ok: false, message: 'Too many attempts. Please wait a few minutes and try again.' };
+  }
+
+  const order = await prisma.order.findFirst({
+    where: {
+      organizationId: store.id,
+      customerId: shopper.id,
+      ...('confirmationToken' in target
+        ? { confirmationToken: String(target.confirmationToken ?? '').trim() }
+        : { reference: String(target.reference ?? '').trim() }),
+    },
+    select: { id: true, confirmationToken: true, totalAmount: true },
+  });
+  if (!order || !order.confirmationToken) return { ok: false, ...WALLET_FAILURE['not-yours'] };
+
+  const { pathPrefix } = await storeLocation(slug);
+  const result = await payOrderFromWallet({
+    organizationId: store.id,
+    orderId: order.id,
+    customerId: shopper.id,
+    pin: String(pin ?? '').trim(),
+    returnUrl: confirmationPathFor(pathPrefix, order.confirmationToken),
+  });
+  if (result.ok) return { ok: true };
+  if (result.reason === 'insufficient') {
+    return {
+      ok: false,
+      message: `There isn’t enough in your wallet for this order (${formatMoney(order.totalAmount.times(100).toNumber())}). Add money, then pay.`,
+    };
+  }
+  return { ok: false, ...WALLET_FAILURE[result.reason], checking: result.reason === 'checking' };
 }
 
 export type QuoteDeliveryResult =

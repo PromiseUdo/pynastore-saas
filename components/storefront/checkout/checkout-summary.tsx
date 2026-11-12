@@ -147,16 +147,11 @@ function SummaryBody({
           }
         />
 
-        {/* Tax is a tenant setting, not a hardcoded row — and this store's
-         * prices already include VAT, so by default there is no line here
-         * at all rather than a decorative ₦0. */}
-        {config.taxEnabled && (
-          <Row label="VAT" hint="Included in the prices shown" value={formatMoney(tax, currency)} />
-        )}
-
         <div className="border-t pt-3">
           <Row label={totals.shippingPending ? 'Total before delivery' : 'Total'} value={formatMoney(total, currency)} strong />
-          {!config.taxEnabled && (
+          {/* Only a VAT-registered store has any (ROADMAP 14.1), and it is in
+           * the prices — stated, never added, so the column still adds up. */}
+          {config.vat && tax > 0 && (
             <p className="mt-1 text-xs text-muted-foreground">
               Includes {formatMoney(tax, currency)} VAT
             </p>

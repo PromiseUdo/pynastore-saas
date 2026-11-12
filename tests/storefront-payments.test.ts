@@ -344,6 +344,8 @@ describe('settling a payment', () => {
 
     expect(await getOrderPaymentState(order.orderId)).toEqual({
       canPay: false,
+      method: 'paystack',
+      checking: false,
       lastAttemptFailed: false,
       cancelReason: null,
     });
@@ -394,6 +396,8 @@ describe('settling a payment', () => {
     expect(await reconcilePayment(attempt.reference)).toBe('failed');
     expect(await getOrderPaymentState(order.orderId)).toEqual({
       canPay: true,
+      method: 'paystack',
+      checking: false,
       lastAttemptFailed: true,
       cancelReason: null,
     });

@@ -19,7 +19,7 @@
  * a phone it renders under the content instead (see <SignOutButton />).
  */
 import Link from 'next/link';
-import { Bell, LayoutGrid, LogOut, MapPin, Package, ShieldCheck, UserRound } from 'lucide-react';
+import { Bell, LayoutGrid, LogOut, MapPin, Package, ShieldCheck, UserRound, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePublicPathname } from '@/lib/storefront/use-public-pathname';
 import { signOutAction } from '@/features/shop-account/actions';
@@ -27,19 +27,21 @@ import { signOutAction } from '@/features/shop-account/actions';
 const ITEMS = [
   { href: '/account', label: 'Overview', icon: LayoutGrid },
   { href: '/account/orders', label: 'Orders', icon: Package },
+  { href: '/account/wallet', label: 'Wallet', icon: Wallet },
   { href: '/account/notifications', label: 'Notifications', icon: Bell },
   { href: '/account/addresses', label: 'Addresses', icon: MapPin },
   { href: '/account/profile', label: 'Profile', icon: UserRound },
   { href: '/account/privacy', label: 'Your data', icon: ShieldCheck },
 ];
 
-export function AccountNav() {
+/** `wallet` is false while wallets aren't switched on (no EduPay settings). */
+export function AccountNav({ wallet = false }: { wallet?: boolean }) {
   const pathname = usePublicPathname();
 
   return (
     <nav aria-label="Account" className="min-w-0 lg:sticky lg:top-24 lg:self-start">
       <ul className="sf-no-scrollbar -mx-5 flex min-w-0 gap-2 overflow-x-auto px-5 pb-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0 lg:pb-0">
-        {ITEMS.map(({ href, label, icon: Icon }) => {
+        {ITEMS.filter((item) => wallet || item.href !== '/account/wallet').map(({ href, label, icon: Icon }) => {
           // /account/addresses/new is still "Addresses"; /account is only
           // itself, or every tab would light up at once.
           const active = href === '/account' ? pathname === href : pathname.startsWith(href);

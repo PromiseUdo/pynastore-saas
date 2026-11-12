@@ -9,6 +9,7 @@ import { InvitationEmail } from '@/emails/invitation';
 import { ResetPasswordEmail } from '@/emails/reset-password';
 import { StorefrontResetPasswordEmail } from '@/emails/storefront-reset-password';
 import { StorefrontConfirmEmailChangeEmail } from '@/emails/storefront-confirm-email';
+import { StorefrontVerifyEmail } from '@/emails/storefront-verify-email';
 import { StorefrontEmailChangeNoticeEmail } from '@/emails/storefront-email-change-notice';
 import {
   StoreOrderAlertEmail,
@@ -39,6 +40,7 @@ import {
   chatMessageAlertSubject,
   type ChatMessageAlertEmailProps,
 } from '@/emails/chat-message-alert';
+import { AccountSecurityEmail, type AccountSecurityEmailProps } from '@/emails/account-security';
 import { PLATFORM_NAME } from '@/lib/brand';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -131,6 +133,22 @@ export async function sendPasswordResetEmail(
   }
 }
 
+/**
+ * A change to someone's own sign-in (ROADMAP 14.5). Sent here, not through
+ * notify(): it is account security, like the reset email above — it must
+ * arrive whatever their notification settings, and only by email.
+ */
+export async function sendAccountSecurityEmail(payload: AccountSecurityEmailProps & { to: string; subject: string }): Promise<void> {
+  try {
+    const from = sendFrom();
+    if (!from) return;
+    const { to, subject, ...props } = payload;
+    await resend.emails.send({ from, to, subject, react: AccountSecurityEmail(props) });
+  } catch (err) {
+    console.error('[email] Failed to send account security email:', err);
+  }
+}
+
 type StorefrontPasswordResetPayload = {
   to: string;
   storeName: string;
@@ -157,6 +175,24 @@ export async function sendStorefrontPasswordResetEmail(
   } catch (err) {
     console.error('[email] Failed to send storefront password reset email:', err);
   }
+}
+
+/**
+ * The six-digit code that proves a shopper owns their address (ROADMAP
+ * 20.1). Returns whether it was handed over, so the page can say so.
+ */
+export async function sendStorefrontVerificationCodeEmail(payload: {
+  to: string;
+  storeName: string;
+  code: string;
+  expiresInMinutes: number;
+}): Promise<boolean> {
+  const { to, ...props } = payload;
+  return handOver('storefront verification code', {
+    to,
+    subject: `${props.code} is your ${props.storeName} code`,
+    react: StorefrontVerifyEmail(props),
+  });
 }
 
 type ConfirmEmailChangePayload = {

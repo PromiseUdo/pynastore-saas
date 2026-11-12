@@ -5,6 +5,8 @@
  * (ROADMAP 10.2, its own page under ./online), and the bank accounts behind
  * the "Bank transfer" option. Online payment and pay on delivery need no setup;
  * bank transfer appears at checkout as soon as there is an active account here.
+ * The checkout rules (pay on delivery, ordering without an account, notes)
+ * are the merchant's choice too: features/settings/checkout-rules.ts.
  */
 import type { Metadata } from 'next';
 import { getOrganizationContext } from '@/lib/organization';
@@ -16,6 +18,9 @@ import { isPaystackTestMode } from '@/lib/payments/paystack';
 import { syncSubaccount } from '@/lib/payments/subaccounts';
 import { paymentSetupState, requiredDocuments, setupChecklist } from '@/lib/payments/payment-setup';
 import { TRANSFER_HOLD_HOURS } from '@/lib/storefront/orders/holds';
+import { shopWalletState } from '@/lib/wallet/shop';
+import { prisma } from '@/lib/prisma';
+import { getOnlinePaymentReadiness } from '@/lib/payments/online-readiness';
 import { PaymentSettingsClient } from './_components/PaymentSettingsClient';
 
 export const metadata: Metadata = { title: 'Payments' };
@@ -29,11 +34,19 @@ export default async function PaymentSettingsPage() {
   // so a subaccount Paystack switched off shows as such (ROADMAP 10.3).
   await syncSubaccount(ctx.organization.id);
   const canManage = hasPermission(perms, PERMISSIONS.SETTINGS_EDIT);
-  const [result, setup, banks] = await Promise.all([
+  const [result, setup, banks, walletState, rules, online] = await Promise.all([
     listBankAccounts(),
     getPaymentSetup(),
     // Only someone who can add an account needs the bank list.
     canManage ? listSettlementBanks() : null,
+    // Our records only — the balance is read on the wallet's own page.
+    shopWalletState(ctx.organization.id),
+    prisma.organization.findUniqueOrThrow({
+      where: { id: ctx.organization.id },
+      select: { checkoutPayOnDelivery: true, checkoutGuestAllowed: true, checkoutOrderNotes: true },
+    }),
+    // The same rule checkout's "Pay online" and the pay-on-delivery switch use.
+    getOnlinePaymentReadiness(ctx.organization.id),
   ]);
   if (!result.success) throw new Error(result.error);
   if (!setup.success) throw new Error(setup.error);
@@ -54,6 +67,13 @@ export default async function PaymentSettingsPage() {
       banksError={banks && !banks.success ? banks.error : null}
       testMode={isPaystackTestMode()}
       transferHoldHours={TRANSFER_HOLD_HOURS}
+      walletState={walletState}
+      checkoutRules={{
+        payOnDelivery: rules.checkoutPayOnDelivery,
+        guestAllowed: rules.checkoutGuestAllowed,
+        orderNotes: rules.checkoutOrderNotes,
+      }}
+      onlineReady={online.ready}
       onlineSetup={{
         state: paymentSetupState(account),
         done: checklist?.filter((i) => i.done).length ?? 0,

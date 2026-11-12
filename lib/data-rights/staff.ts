@@ -98,6 +98,10 @@ export async function deleteStaffAccount(userId: string, confirmation: string, n
     prisma.account.deleteMany({ where: { userId } }),
     prisma.session.deleteMany({ where: { userId } }),
     prisma.passwordResetToken.deleteMany({ where: { userId } }),
+    // Two-step sign-in and email changes (ROADMAP 14.5).
+    prisma.userRecoveryCode.deleteMany({ where: { userId } }),
+    prisma.authTicket.deleteMany({ where: { userId } }),
+    prisma.userEmailChange.deleteMany({ where: { userId } }),
     prisma.verificationToken.deleteMany({ where: { identifier: `verify-email:${userId}` } }),
     prisma.notification.deleteMany({ where: { userId } }),
     prisma.notificationPreference.deleteMany({ where: { userId } }),
@@ -113,6 +117,10 @@ export async function deleteStaffAccount(userId: string, confirmation: string, n
         emailVerified: null,
         image: null,
         password: null,
+        twoFactorSecret: null,
+        twoFactorPendingSecret: null,
+        twoFactorEnabledAt: null,
+        twoFactorLastStep: null,
         isPlatformStaff: false,
         // Every session already issued ends on its next request (lib/session-version.ts).
         sessionVersion: { increment: 1 },

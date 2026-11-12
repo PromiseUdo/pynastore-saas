@@ -1,9 +1,11 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type PageTab = { key: string; label: string };
+/** `locked`: the plan doesn't include it — still shown, with a lock (AGENTS §7). */
+export type PageTab = { key: string; label: string; locked?: boolean };
 
 /**
  * Tabs whose selection lives in the URL (AGENTS.md §3), so a report can be
@@ -42,13 +44,19 @@ export function PageTabs({
           aria-current={current === tab.key ? 'page' : undefined}
           onClick={() => select(tab.key)}
           className={cn(
-            'whitespace-nowrap border-b-2 px-2.5 pb-2 pt-1 text-sm transition-colors',
+            'inline-flex items-center gap-1 whitespace-nowrap border-b-2 px-2.5 pb-2 pt-1 text-sm transition-colors',
             current === tab.key
               ? 'border-primary font-medium text-foreground'
               : 'border-transparent text-muted-foreground hover:text-foreground',
           )}
         >
           {tab.label}
+          {tab.locked && (
+            <>
+              <Lock className="size-3" aria-hidden />
+              <span className="sr-only">(not on your plan)</span>
+            </>
+          )}
         </button>
       ))}
     </nav>

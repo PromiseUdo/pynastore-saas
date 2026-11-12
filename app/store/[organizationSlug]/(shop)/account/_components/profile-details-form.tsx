@@ -7,6 +7,7 @@
 import { useActionState } from 'react';
 import { updateProfileAction, type ProfileFormState } from '@/features/shop-account/profile-actions';
 import { TextField, FieldRow } from '@/components/storefront/checkout/checkout-fields';
+import { formatNigerianPhone } from '@/lib/phone';
 import { SubmitButton } from './submit-button';
 import { FormNotice } from './form-notice';
 
@@ -33,15 +34,14 @@ export function ProfileDetailsForm({ name, phone }: { name: string; phone: strin
         <TextField
           id="profile-phone"
           name="phone"
-          label="Phone"
+          label="Phone number"
           type="tel"
           inputMode="tel"
-          autoComplete="tel"
-          placeholder="+234 800 000 0000"
-          optional
-          hint="So we can reach you about a delivery."
-          defaultValue={state?.values?.phone ?? phone}
+          autoComplete="tel-national"
+          placeholder="0803 123 4567"
+          defaultValue={state?.values?.phone ?? formatNigerianPhone(phone)}
           error={state?.fieldErrors?.phone}
+          required
         />
       </FieldRow>
 

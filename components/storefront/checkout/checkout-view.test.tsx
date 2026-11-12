@@ -29,7 +29,7 @@ import { useUIStore } from '@/lib/storefront/stores/ui-store';
 import { toCartLine } from '@/lib/storefront/cart';
 import { formatMoney } from '@/lib/storefront/format';
 import { getCheckoutConfig } from '@/lib/storefront/checkout/config';
-import { ONLINE_PAYMENT_METHOD } from '@/lib/storefront/mock/checkout';
+import { ONLINE_PAYMENT_METHOD } from '@/lib/storefront/checkout/payment-methods';
 import { calculateCheckoutTotals } from '@/lib/storefront/checkout/totals';
 import { PRODUCTS } from '@/lib/storefront/mock/products';
 
@@ -218,6 +218,30 @@ describe('getting into checkout', () => {
 
     expect(screen.getByRole('heading', { name: /your details/i })).toBeDefined();
     expect(screen.getByLabelText('Email address')).toBeDefined();
+  });
+
+  it('asks a guest to sign in first when the store needs an account, keeping the way back', () => {
+    addToBag(SIMPLE, 1);
+    renderIn(<CheckoutView config={{ ...config, guestCheckoutEnabled: false }} account={null} />);
+
+    expect(screen.getByText(/sign in to order/i)).toBeDefined();
+    expect(screen.queryByLabelText('Email address')).toBeNull();
+    expect(screen.getByRole('link', { name: /^sign in$/i }).getAttribute('href')).toBe('/account/sign-in?next=%2Fcheckout');
+    expect(screen.getByRole('link', { name: /create an account/i }).getAttribute('href')).toBe(
+      '/account/register?next=%2Fcheckout',
+    );
+  });
+
+  it('lets a signed-in shopper straight through when the store needs an account', () => {
+    addToBag(SIMPLE, 1);
+    const account = {
+      contact: { firstName: 'Ada', lastName: 'Okoro', email: 'ada@example.com', phone: '08012345678' },
+      addresses: [],
+    };
+    renderIn(<CheckoutView config={{ ...config, guestCheckoutEnabled: false }} account={account} />);
+
+    expect(screen.queryByText(/sign in to order/i)).toBeNull();
+    expect(screen.getByRole('heading', { name: /your details/i })).toBeDefined();
   });
 
   it('waits for the bag to rehydrate instead of flashing the empty state', () => {
@@ -947,6 +971,7 @@ describe('confirmation', () => {
     currency: 'NGN',
     totals: { subtotal: 1_000_000, discount: 0, shipping: 250_000, tax: 0, total: 1_250_000 },
     discountCode: null,
+    vatNumber: null,
     note: null,
     lines: [
       {
@@ -971,8 +996,8 @@ describe('confirmation', () => {
   };
 
   const paths = { confirmationToken: 'token-abc', confirmationPath: '/checkout/confirmation?t=token-abc' };
-  const unpaid = { canPay: true, lastAttemptFailed: false, cancelReason: null, ...paths };
-  const settled = { canPay: false, lastAttemptFailed: false, cancelReason: null, ...paths };
+  const unpaid = { canPay: true, method: 'paystack' as const, checking: false, lastAttemptFailed: false, cancelReason: null, ...paths };
+  const settled = { canPay: false, method: 'paystack' as const, checking: false, lastAttemptFailed: false, cancelReason: null, ...paths };
   const paidOrder: StorefrontOrder = { ...order, status: 'CONFIRMED', paymentStatus: 'PAID' };
 
   it('shows the order reference, the email and the totals', () => {

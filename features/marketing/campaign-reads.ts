@@ -21,6 +21,7 @@ import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { campaignPhase, type CampaignPhase } from '@/lib/marketing/campaign-rules';
 import type { ActionResult } from '@/features/sales/shared';
+import { measureCampaign, type CampaignPerformance } from '@/lib/marketing/campaign-performance';
 
 export interface CampaignRow {
   id: string;
@@ -36,13 +37,6 @@ export interface CampaignRow {
   codeCount: number;
 }
 
-export interface CampaignPerformance {
-  orders: number;
-  revenue: number;
-  unitsSold: number;
-  discountGiven: number;
-  codeRedemptions: number;
-}
 
 export interface CampaignDetail extends CampaignRow {
   targetIds: string[];
@@ -178,7 +172,7 @@ export async function getCampaign(campaignId: string): Promise<ActionResult<Camp
 
     const started = phase === 'ACTIVE' || phase === 'ENDED';
     const performance = started
-      ? await measure(
+      ? await measureCampaign(
           organizationId,
           campaign.startsAt,
           campaign.endsAt ?? now,
@@ -247,60 +241,4 @@ export async function getCampaign(campaignId: string): Promise<ActionResult<Camp
   } catch (error) {
     return failure(error, 'We couldn’t load that campaign');
   }
-}
-
-/** What the campaign's products sold while it was on. */
-async function measure(
-  organizationId: string,
-  from: Date,
-  to: Date,
-  priced: { id: string; originalPrice: number }[],
-  codeRedemptions: number,
-): Promise<CampaignPerformance> {
-  if (priced.length === 0) {
-    return { orders: 0, revenue: 0, unitsSold: 0, discountGiven: 0, codeRedemptions };
-  }
-
-  const ids = priced.map((p) => p.id);
-  const originalById = new Map(priced.map((p) => [p.id, p.originalPrice]));
-
-  const lines = await prisma.orderLineItem.findMany({
-    where: {
-      order: {
-        organizationId,
-        placedAt: { gte: from, lte: to },
-        // A cancelled order sold nothing, here as everywhere else.
-        status: { not: 'CANCELLED' },
-      },
-      OR: [{ variantId: { in: ids } }, { AND: [{ variantId: null }, { productId: { in: ids } }] }],
-    },
-    select: { orderId: true, variantId: true, productId: true, quantity: true, totalPrice: true, unitPrice: true },
-  });
-
-  const orders = new Set<string>();
-  let revenue = 0;
-  let unitsSold = 0;
-  let discountGiven = 0;
-
-  for (const line of lines) {
-    const itemId = line.variantId ?? line.productId;
-    const original = itemId ? originalById.get(itemId) : undefined;
-    if (original === undefined) continue;
-
-    orders.add(line.orderId);
-    revenue += Number(line.totalPrice);
-    unitsSold += line.quantity;
-    /* What the sale cost: the gap between the old price and what was
-     * actually charged. Never negative — a line sold ABOVE its old price
-     * (a counter override, say) did not cost the campaign anything. */
-    discountGiven += Math.max(0, (original - Number(line.unitPrice)) * line.quantity);
-  }
-
-  return {
-    orders: orders.size,
-    revenue,
-    unitsSold,
-    discountGiven,
-    codeRedemptions,
-  };
 }

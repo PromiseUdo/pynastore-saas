@@ -11,13 +11,16 @@
 import type { Metadata } from 'next';
 import { Breadcrumbs } from '@/components/storefront/common/breadcrumbs';
 import { CartView } from '@/components/storefront/cart/cart-view';
+import { shopVatBySlug } from '@/lib/tax-settings';
 
 export const metadata: Metadata = {
   title: 'Your bag',
   robots: { index: false, follow: true },
 };
 
-export default function CartPage() {
+export default async function CartPage({ params }: { params: Promise<{ organizationSlug: string }> }) {
+  // Only a VAT-registered store states any VAT (ROADMAP 14.1).
+  const vat = await shopVatBySlug((await params).organizationSlug);
   return (
     <div className="sf-container py-6 lg:py-10">
       <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Bag' }]} className="mb-4" />
@@ -29,7 +32,7 @@ export default function CartPage() {
         </p>
       </header>
 
-      <CartView />
+      <CartView vatRatePct={vat?.ratePct ?? null} />
     </div>
   );
 }

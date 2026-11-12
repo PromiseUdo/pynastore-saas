@@ -24,7 +24,7 @@ import { prisma } from '@/lib/prisma';
 import { consumeHandoffToken } from '@/lib/storefront/account/handoff';
 import { signSessionToken, sessionCookieName, SESSION_TTL_DAYS } from '@/lib/storefront/account/session';
 import { adoptGuestChatOnSignIn } from '@/lib/chat/storefront';
-import { storeReturnUrl, storeUrl } from '@/lib/storefront/account/return-url';
+import { phoneStepUrl, storeReturnUrl, storeUrl } from '@/lib/storefront/account/return-url';
 
 /**
  * The slug this origin serves.
@@ -68,7 +68,14 @@ export async function GET(request: Request) {
   });
   if (!store) return NextResponse.redirect(getMarketingUrl('/'));
 
-  const destination = storeReturnUrl(to, store) ?? storeUrl(store, '/account');
+  const returnUrl = storeReturnUrl(to, store) ?? storeUrl(store, '/account');
+  // Google shares no phone number, and every account's wallet needs one
+  // (ROADMAP 20.2): a shopper without one is asked for it once, first.
+  const customer = await prisma.customer.findFirst({
+    where: { id: claims.customerId, organizationId: store.id },
+    select: { phone: true },
+  });
+  const destination = customer?.phone ? returnUrl : phoneStepUrl(returnUrl, slug);
   const sessionToken = await signSessionToken(claims);
   // A guest who messaged the store first keeps that conversation (ROADMAP 17.3).
   await adoptGuestChatOnSignIn(store, claims.customerId);

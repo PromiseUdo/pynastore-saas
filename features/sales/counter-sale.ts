@@ -31,6 +31,8 @@
  *
  * Needs `sales.order.create`.
  */
+import { includedVat } from '@/lib/tax';
+import { shopVatById } from '@/lib/tax-settings';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
@@ -307,6 +309,10 @@ export async function recordCounterSale(
     const subtotal = lines.reduce((sum, l) => sum + l.totalPrice, 0);
     const discount = Math.min(data.discount, subtotal);
     const totalAmount = subtotal - discount;
+    /* VAT as the shop has it set (ROADMAP 14.1): none unless VAT registered,
+     * and then already in the prices — the same rule as the online shop. */
+    const vat = await shopVatById(ctx.organization.id);
+    const taxAmount = includedVat(Math.round(totalAmount * 100), vat?.ratePct) / 100;
 
     const now = new Date();
     const paidNow = data.paymentMethod !== 'later';
@@ -350,10 +356,8 @@ export async function recordCounterSale(
               currency: ctx.organization.currency,
               subtotal,
               discount,
-              /* Tax is not charged at the counter until an org can say
-               * whether it is registered for VAT — Phase 7. Zero is the
-               * honest value, not a guess. */
-              taxAmount: 0,
+              taxAmount,
+              vatNumber: taxAmount > 0 ? (vat?.vatNumber ?? null) : null,
               totalAmount,
 
               note: data.note?.trim() || null,

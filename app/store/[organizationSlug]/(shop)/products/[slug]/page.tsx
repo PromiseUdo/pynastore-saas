@@ -42,6 +42,7 @@ import { Recommendations } from '@/components/storefront/recommendations/recomme
 import { recommendProducts } from '@/lib/storefront/recommendations/service';
 import { BOUGHT_TOGETHER_TITLE } from '@/lib/storefront/recommendations/complements';
 import { storefrontUrlFor } from '@/lib/domains/storefront-url';
+import { storeCheckoutRules } from '@/lib/storefront/checkout/store-config';
 
 type Props = {
   params: Promise<{ organizationSlug: string; slug: string }>;
@@ -122,6 +123,10 @@ export default async function ProductDetailPage({ params }: Props) {
     questions.items.length ? { id: 'ask', href: '#questions', label: 'Common questions', icon: 'ask' as const } : null,
   ].filter((s): s is DecisionShortcut => s !== null);
 
+  /* "Pay on delivery isn't available for this item" means nothing in a shop
+   * that doesn't offer pay on delivery at all. */
+  const { payOnDelivery } = await storeCheckoutRules(organizationSlug);
+
   return (
     <div className="sf-container py-4 lg:py-8">
       {/* One scrollable line on a phone: a wrapped trail ending in a long
@@ -133,7 +138,7 @@ export default async function ProductDetailPage({ params }: Props) {
 
       <ProductPurchase
         product={product}
-        deliveryPanel={<ProductDelivery delivery={delivery} requiresPrepayment={product.requiresPrepayment} />}
+        deliveryPanel={<ProductDelivery delivery={delivery} requiresPrepayment={product.requiresPrepayment && payOnDelivery} />}
         deliverySummary={deliverySummary(delivery.options)}
         sizeGuideHref={sizeGuide?.href ?? null}
         shareUrl={await storefrontUrlFor(organizationSlug, `/products/${product.slug}`)}

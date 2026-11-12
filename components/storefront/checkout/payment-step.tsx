@@ -13,7 +13,7 @@
  * dangerous thing this phase could ship, so the card option says plainly
  * what happens next instead.
  *
- * Each method's `handoffNote` (lib/storefront/mock/checkout.ts) is the
+ * Each method's `handoffNote` (lib/storefront/checkout/payment-methods.ts) is the
  * sentence shown once it's picked. It is written in the future tense on
  * purpose — "will be completed", "you'll get account details" — because
  * that is the truth, and the day the provider is wired in the sentence is
@@ -30,9 +30,13 @@
  * before they can decide to pay online or drop the item. The rule itself is
  * in lib/storefront/checkout/payment-terms.ts, and the server applies the
  * same one to the order it actually writes.
+ *
+ * WHO'S PAYING can rule one out too: "Pay from wallet" needs a signed-in
+ * shopper with an active wallet. It stays on screen with the store's reason
+ * (`unavailableReason`), for the same reason.
  */
 import { useWatch, type UseFormReturn } from 'react-hook-form';
-import { Banknote, CreditCard, Landmark, Lock, ShieldCheck } from 'lucide-react';
+import { Banknote, CreditCard, Landmark, Lock, ShieldCheck, Wallet } from 'lucide-react';
 import type { CheckoutConfig } from '@/lib/storefront/checkout/types';
 import type { CheckoutFormValues } from '@/lib/storefront/checkout/schema';
 import type { CartItem } from '@/lib/storefront/types';
@@ -51,6 +55,7 @@ const ICONS: Record<string, typeof CreditCard> = {
   card: CreditCard,
   transfer: Landmark,
   pod: Banknote,
+  wallet: Wallet,
 };
 
 export function PaymentStep({
@@ -89,7 +94,7 @@ export function PaymentStep({
       >
         {config.paymentMethods.map((method) => {
           const Icon = ICONS[method.id];
-          const allowed = isPaymentMethodAllowed(method, items);
+          const allowed = isPaymentMethodAllowed(method, items) && !method.unavailableReason;
           return (
             <RadioGroupCard
               key={method.id}
@@ -102,15 +107,19 @@ export function PaymentStep({
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold">{method.label}</span>
                   <span className="mt-0.5 block text-sm text-muted-foreground">
-                    {allowed ? method.description : 'Not available for this order'}
+                    {allowed || method.unavailableReason ? method.description : 'Not available for this order'}
                   </span>
                   {!allowed && (
                     <span className="mt-2 flex items-start gap-2 text-sm text-foreground">
                       <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                      <span>
-                        {PREPAYMENT_REQUIRED_MESSAGE}
-                        {reason && <span className="mt-1 block text-muted-foreground">{reason}</span>}
-                      </span>
+                      {method.unavailableReason ? (
+                        <span>{method.unavailableReason}</span>
+                      ) : (
+                        <span>
+                          {PREPAYMENT_REQUIRED_MESSAGE}
+                          {reason && <span className="mt-1 block text-muted-foreground">{reason}</span>}
+                        </span>
+                      )}
                     </span>
                   )}
                 </span>
@@ -127,7 +136,7 @@ export function PaymentStep({
       )}
 
       {/* The honest sentence, in place of a fake card form. */}
-      {selected && isPaymentMethodAllowed(selected, items) && (
+      {selected && isPaymentMethodAllowed(selected, items) && !selected.unavailableReason && (
         <p
           role="status"
           className="mt-5 flex items-start gap-2.5 rounded-xl border bg-secondary/40 p-4 text-sm leading-relaxed text-muted-foreground"

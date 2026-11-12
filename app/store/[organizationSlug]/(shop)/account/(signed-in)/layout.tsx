@@ -17,6 +17,7 @@
  */
 import { headers } from 'next/headers';
 import { requireShopper } from '@/lib/storefront/account/session';
+import { edupayConfigured } from '@/lib/wallet/edupay';
 import { safeNextPath } from '@/lib/storefront/account/return-url';
 import { AccountNav, SignOutButton } from '../_components/account-nav';
 import { AccountGreeting } from '../_components/account-greeting';
@@ -36,7 +37,7 @@ export default async function SignedInAccountLayout({ children }: { children: Re
           * takes its width from its widest content, which let the nav strip
           * push every account page sideways on a phone. */}
         <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5 sm:mt-7 sm:gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
-          <AccountNav />
+          <AccountNav wallet={edupayConfigured()} />
           <div className="min-w-0">{children}</div>
         </div>
 

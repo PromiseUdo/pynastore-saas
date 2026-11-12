@@ -208,6 +208,24 @@ describe('recordCounterSale', () => {
     expect(allocations).toEqual([{ status: 'DISPATCHED', warehouseId: shopFloorId }]);
   });
 
+  it('records no VAT for a shop that isn’t VAT registered, and the VAT inside the price for one that is (14.1)', async () => {
+    const id = await product('VAT Shirt', 10, shopFloorId, 10_750);
+    const plain = unwrap(await recordCounterSale({ warehouseId: shopFloorId, paymentMethod: 'cash', lines: [{ inventoryItemId: id, quantity: 1 }] }));
+    await expect(prisma.order.findUniqueOrThrow({ where: { id: plain.orderId } })).resolves.toMatchObject({ vatNumber: null });
+    expect(Number((await prisma.order.findUniqueOrThrow({ where: { id: plain.orderId } })).taxAmount)).toBe(0);
+
+    await prisma.organization.update({ where: { id: ctx.organization.id }, data: { vatRegistered: true, vatRate: 7.5, vatNumber: 'VAT-COUNTER' } });
+    try {
+      const taxed = unwrap(await recordCounterSale({ warehouseId: shopFloorId, paymentMethod: 'cash', lines: [{ inventoryItemId: id, quantity: 1 }] }));
+      expect(taxed.totalAmount).toBe(10_750); // the shelf price, nothing added
+      const row = await prisma.order.findUniqueOrThrow({ where: { id: taxed.orderId } });
+      expect(Number(row.taxAmount)).toBe(750);
+      expect(row.vatNumber).toBe('VAT-COUNTER');
+    } finally {
+      await prisma.organization.update({ where: { id: ctx.organization.id }, data: { vatRegistered: false, vatNumber: null } });
+    }
+  });
+
   it('takes stock only from the store it was sold in', async () => {
     const id = await product('Split Stock', 2);
     await prisma.inventoryLevel.create({

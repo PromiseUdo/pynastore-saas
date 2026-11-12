@@ -17,8 +17,10 @@
  * as a failure.
  */
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { setPassword, updateProfile } from '@/lib/storefront/account/profile';
+import { NIGERIAN_PHONE_ERROR, normalizeNigerianPhone } from '@/lib/phone';
+import { setPassword, setPhone, updateProfile } from '@/lib/storefront/account/profile';
 import {
   EMAIL_CHANGE_TTL_MINUTES,
   confirmEmailChange,
@@ -28,7 +30,8 @@ import {
   sendStorefrontConfirmEmailChange,
   sendStorefrontEmailChangeNotice,
 } from '@/lib/email';
-import { storeUrl } from '@/lib/storefront/account/return-url';
+import { safeNextPath, storeUrl } from '@/lib/storefront/account/return-url';
+import { retryAfterPhoneChange } from '@/lib/wallet/shopper';
 import { findStoreBySlug, issueSessionToken } from '@/lib/storefront/account/shopper';
 import { currentStoreSlug, getShopper, setSessionCookie } from '@/lib/storefront/account/session';
 
@@ -61,14 +64,20 @@ async function keepSignedIn(
 
 /* ---------------- name and phone ---------------- */
 
+/** Required: every account's wallet needs one (ROADMAP 20.2). Stored as +234…. */
+const PHONE = z
+  .string()
+  .trim()
+  .min(1, 'Enter your phone number')
+  .transform((value, ctx) => {
+    const phone = normalizeNigerianPhone(value);
+    if (!phone) ctx.addIssue({ code: 'custom', message: NIGERIAN_PHONE_ERROR });
+    return phone ?? '';
+  });
+
 const ProfileSchema = z.object({
   name: z.string().trim().min(2, 'Tell us what to call you'),
-  phone: z
-    .string()
-    .trim()
-    .max(32, 'That looks too long for a phone number')
-    .optional()
-    .or(z.literal('')),
+  phone: PHONE,
 });
 
 export async function updateProfileAction(
@@ -92,19 +101,45 @@ export async function updateProfileAction(
     return { fieldErrors, values };
   }
 
+  const phoneChanged = parsed.data.phone !== ctx.shopper.phone;
   const updated = await updateProfile({
     organizationId: ctx.store.id,
     customerId: ctx.shopper.id,
     name: parsed.data.name,
-    phone: parsed.data.phone || null,
+    phone: parsed.data.phone,
   });
 
   if (!updated) return { error: NOT_SIGNED_IN };
+  // A wallet held up by the old number tries again with this one (ROADMAP 20.2).
+  if (phoneChanged) await retryAfterPhoneChange(ctx.shopper.id);
 
   // The header greets by first name, so the whole shell has to catch up.
   revalidatePath('/', 'layout');
 
   return { message: 'Saved.' };
+}
+
+/* ---------------- add a phone (one-time step) ---------------- */
+
+export async function addPhoneAction(
+  _prev: ProfileFormState,
+  formData: FormData,
+): Promise<ProfileFormState> {
+  const ctx = await context();
+  if (!ctx) return { error: NOT_SIGNED_IN };
+
+  const rawPhone = String(formData.get('phone') ?? '');
+  const parsed = PHONE.safeParse(rawPhone);
+  if (!parsed.success) {
+    return { fieldErrors: { phone: parsed.error.issues[0]?.message }, values: { phone: rawPhone } };
+  }
+
+  const saved = await setPhone({ organizationId: ctx.store.id, customerId: ctx.shopper.id, phone: parsed.data });
+  if (!saved) return { error: NOT_SIGNED_IN };
+  // The last thing the account's wallet was waiting for (ROADMAP 20.2).
+  await retryAfterPhoneChange(ctx.shopper.id);
+
+  redirect(safeNextPath(formData.get('next') as string | null));
 }
 
 /* ---------------- password ---------------- */

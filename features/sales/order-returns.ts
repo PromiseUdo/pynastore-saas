@@ -11,16 +11,20 @@
  * audit-logged. What's allowed (which state, how much) is decided in
  * lib/storefront/orders/returns.ts; this only checks who is asking.
  *
- * Money is MAJOR units here, like the rest of the admin. The app sends no
- * money: the merchant sends it back from their own bank (online payments
- * settle there through Paystack), then
- * records it, and the customer is emailed that the store says it's sent.
+ * Money is MAJOR units here, like the rest of the admin. Mostly the app sends
+ * no money: the merchant sends it back from their own bank (online payments
+ * settle there through Paystack), then records it, and the customer is
+ * emailed that the store says it's sent. An order paid from the shopper's
+ * wallet is the exception (ROADMAP 20.6): `sendWalletRefund` sends it from
+ * the shop wallet with its PIN, and records it once EduPay confirms.
  */
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { sendWalletRefund } from '@/lib/storefront/orders/wallet-refunds';
 import {
   approveReturn,
   refundCancelledOrder,
@@ -137,6 +141,56 @@ export async function refundCancelledStoreOrder(
     });
   } catch (error) {
     return denied(error, 'We couldn’t record this refund. Please try again.');
+  }
+}
+
+/* ---------------- refunds to the customer's wallet (ROADMAP 20.6) ---------------- */
+
+const WalletRefundSchema = RefundSchema.extend({
+  pin: z.string().regex(/^\d{4}$/, 'Enter the shop wallet’s 4-digit PIN'),
+  restock: z.boolean().optional(),
+});
+
+/**
+ * Send money back to the customer's wallet from the shop wallet. `checking`:
+ * EduPay didn't clearly answer — it's being checked, and must not be sent
+ * again.
+ */
+export async function sendWalletRefundAction(
+  target: { kind: 'return'; returnId: string } | { kind: 'order'; orderId: string },
+  input: { amount: number; note?: string; restock?: boolean; pin: string },
+): Promise<ActionResult<{ checking: boolean }>> {
+  try {
+    const ctx = await manage();
+    const parsed = WalletRefundSchema.safeParse(input);
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? 'Check the amount' };
+    // A wrong PIN costs a try at EduPay; this is about a script, not a person.
+    if (!(await checkRateLimit(`wallet-refund:${ctx.organization.id}:${ctx.userId}`, 10, 15 * 60 * 1000))) {
+      return { success: false, error: 'Too many attempts. Please wait a few minutes and try again.' };
+    }
+
+    const result = await sendWalletRefund({
+      organizationId: ctx.organization.id,
+      target,
+      amount: parsed.data.amount,
+      note: parsed.data.note,
+      restock: Boolean(parsed.data.restock),
+      pin: parsed.data.pin,
+      performedById: ctx.userId,
+    });
+    if (!result.ok) return { success: false, error: result.error };
+
+    await createAuditLog({
+      organizationId: ctx.organization.id,
+      userId: ctx.userId,
+      ...(target.kind === 'return'
+        ? { action: 'sales.order_return.refunded', entityType: 'OrderReturn', entityId: target.returnId }
+        : { action: 'sales.order.refunded', entityType: 'Order', entityId: target.orderId }),
+      metadata: { amount: parsed.data.amount, toWallet: true, confirmed: result.data === 'sent' },
+    });
+    return { success: true, data: { checking: result.data === 'checking' } };
+  } catch (error) {
+    return denied(error, 'We couldn’t send this refund. Please try again.');
   }
 }
 

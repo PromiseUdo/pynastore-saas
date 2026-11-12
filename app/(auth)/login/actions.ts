@@ -1,21 +1,37 @@
 'use server';
 
+import { cookies } from 'next/headers';
+import { compare } from 'bcryptjs';
 import { signIn } from '@/lib/auth';
 import { AuthError } from 'next-auth';
 import { z } from 'zod';
+import { prisma } from '@/lib/prisma';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { signInTargetHere } from '@/lib/tenant/here';
+import { answerSignInChallenge, createSignInChallenge } from '@/lib/account-security/two-factor';
+
+/* Two-step sign-in (ROADMAP 14.5): after a right password, the ticket that
+ * waits for the code lives here — httpOnly, so no page script can read it. */
+const CHALLENGE_COOKIE = 'two-factor-challenge';
 
 const LoginSchema = z.object({
   email: z.email(),
   password: z.string().min(1, 'Password is required'),
 });
 
-export type LoginState = { error: string } | null;
+export type LoginState =
+  | { error: string }
+  /** the password was right; now the code from their authenticator app */
+  | { step: 'code'; callbackUrl: string | null; error?: string }
+  | null;
 
 export async function loginAction(
-  _prev: LoginState,
+  prev: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
+  // The code step posts to the same action, so the page always shows the latest answer.
+  if (formData.get('intent') === 'code') return verifyTwoFactor(prev, formData);
+
   const parsed = LoginSchema.safeParse({
     email: formData.get('email'),
     password: formData.get('password'),
@@ -29,6 +45,25 @@ export async function loginAction(
   const callbackUrl = formData.get('callbackUrl') as string | null;
   // On the business host a relative target is made absolute there (ROADMAP 19).
   const redirectTo = await signInTargetHere(callbackUrl || '/');
+
+  /* Two-step sign-in on: check the password here, then ask for the code.
+   * (The password provider refuses such an account, so this is the only way in.) */
+  const user = await prisma.user.findUnique({
+    where: { email: parsed.data.email },
+    select: { id: true, password: true, twoFactorEnabledAt: true, deletedAt: true },
+  });
+  if (user?.twoFactorEnabledAt && user.password && !user.deletedAt) {
+    if (!(await compare(parsed.data.password, user.password))) return { error: 'Invalid email or password.' };
+    const token = await createSignInChallenge(user.id);
+    (await cookies()).set(CHALLENGE_COOKIE, token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 10 * 60,
+    });
+    return { step: 'code', callbackUrl };
+  }
 
   try {
     await signIn('credentials', {
@@ -49,6 +84,34 @@ export async function loginAction(
     throw err;
   }
 
+  return null;
+}
+
+/** Step two: the code from the authenticator app, or a backup code. */
+async function verifyTwoFactor(_prev: LoginState, formData: FormData): Promise<LoginState> {
+  const jar = await cookies();
+  const token = jar.get(CHALLENGE_COOKIE)?.value;
+  const callbackUrl = (formData.get('callbackUrl') as string | null) || null;
+  if (!token) return { error: 'Your sign-in timed out. Please enter your password again.' };
+  if (!(await checkRateLimit(`two-factor-sign-in:${token.slice(0, 16)}`, 10, 10 * 60 * 1000))) {
+    return { error: 'Too many attempts. Please wait a few minutes and try again.' };
+  }
+
+  const code = String(formData.get('code') ?? '').trim();
+  const answer = await answerSignInChallenge(token, code);
+  if (answer === 'expired') {
+    jar.delete(CHALLENGE_COOKIE);
+    return { error: 'Your sign-in timed out. Please enter your password again.' };
+  }
+  if (answer === 'wrong-code') return { step: 'code', callbackUrl, error: 'That code isn’t right. Try the newest one in your app.' };
+
+  jar.delete(CHALLENGE_COOKIE);
+  try {
+    await signIn('two-factor', { ticket: token, redirectTo: await signInTargetHere(callbackUrl || '/') });
+  } catch (err) {
+    if (err instanceof AuthError) return { error: 'Something went wrong. Please sign in again.' };
+    throw err;
+  }
   return null;
 }
 

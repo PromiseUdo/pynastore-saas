@@ -55,7 +55,7 @@ beforeAll(async () => {
   [store, other] = stores;
   await prisma.organization.updateMany({ where: { id: { in: [store.id, other.id] } }, data: { storefrontChatEnabled: true } });
   staffId = (await prisma.user.create({ data: { email: `sfchat-${Date.now()}@example.com`, name: 'Kemi' } })).id;
-  ada = (await prisma.customer.create({ data: { organizationId: store.id, name: 'Ada Okafor', email: `ada-sfchat-${Date.now()}@example.com` } })).id;
+  ada = (await prisma.customer.create({ data: { organizationId: store.id, name: 'Ada Okafor', email: `ada-sfchat-${Date.now()}@example.com`, emailVerifiedAt: new Date() } })).id;
 });
 
 beforeEach(async () => {
@@ -277,7 +277,7 @@ describe('how fast a shopper may send (17.5)', () => {
     jar.clear();
     expect((await send({ body: 'Third guest this hour' }, other.slug)).status).toBe(429);
 
-    const tunde = (await prisma.customer.create({ data: { organizationId: other.id, name: 'Tunde', email: `tunde-cap-${Date.now()}@example.com` } })).id;
+    const tunde = (await prisma.customer.create({ data: { organizationId: other.id, name: 'Tunde', email: `tunde-cap-${Date.now()}@example.com`, emailVerifiedAt: new Date() } })).id;
     jar.set(sessionCookieName(other.slug), await signSessionToken({ customerId: tunde, organizationId: other.id, slug: other.slug, sessionVersion: 0 }));
     expect((await send({ body: 'Signed in, not capped' }, other.slug)).status).toBe(200);
   });

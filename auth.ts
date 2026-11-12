@@ -9,9 +9,13 @@
  *  - "app-handoff": spends a business-app sign-in ticket (ROADMAP 19.2,
  *    lib/business-app/tickets.ts) — how a Google or Apple sign-in finished
  *    in the app's browser sheet reaches the app's own WebView
+ *  - "two-factor": spends a verified two-step sign-in ticket (ROADMAP 14.5,
+ *    lib/account-security/two-factor.ts). The password provider refuses an
+ *    account with two-step sign-in on, so a password alone never signs it in
  *  - JWT callbacks that embed currentOrganizationId + currentOrgSlug,
- *    and enforce sessionVersion (see lib/session-version.ts) so a
- *    password reset invalidates every previously issued JWT
+ *    record how the session signed in (`signInMethod`), and enforce
+ *    sessionVersion (see lib/session-version.ts) so a password reset or
+ *    "sign out other devices" invalidates every previously issued JWT
  *
  * Never import this file from proxy.ts — use auth.config.ts there.
  */
@@ -20,22 +24,18 @@ import Google from 'next-auth/providers/google';
 import Apple from 'next-auth/providers/apple';
 import Credentials from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
-import { compare } from 'bcryptjs';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { authConfig } from '@/auth.config';
 import { isSessionVersionValid } from '@/lib/session-version';
 import { markEmailVerified } from '@/lib/email-verification';
 import { appleClientId, appleClientSecret } from '@/lib/apple-sign-in';
 import { userForAppTicket } from '@/lib/business-app/handoff-user';
+import { spendSignInChallenge } from '@/lib/account-security/two-factor';
+import { userForPassword } from '@/lib/account-security/password-sign-in';
+import { spendRenewTicket } from '@/lib/account-security/renew';
 
 /** Only when every Apple setting is present; otherwise there is no button either. */
 const appleSecret = appleClientSecret();
-
-const credentialsSchema = z.object({
-  email: z.email(),
-  password: z.string().min(1),
-});
 
 export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
@@ -74,39 +74,25 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
       authorize: (raw) => userForAppTicket(raw?.token, raw?.verifier),
     }),
 
+    /* Two-step sign-in's second step: the password was checked by the login
+     * action, the code by answerSignInChallenge; this spends the ticket once. */
     Credentials({
+      id: 'two-factor',
+      credentials: { ticket: {} },
       async authorize(raw) {
-        const parsed = credentialsSchema.safeParse(raw);
-        if (!parsed.success) return null;
-
-        const { email, password } = parsed.data;
-
-        const user = await prisma.user.findUnique({
-          where: { email },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            image: true,
-            password: true,
-            sessionVersion: true,
-          },
+        const userId = await spendSignInChallenge(raw?.ticket);
+        if (!userId) return null;
+        const user = await prisma.user.findFirst({
+          where: { id: userId, deletedAt: null },
+          select: { id: true, email: true, name: true, image: true, sessionVersion: true },
         });
-
-        // Reject OAuth-only accounts that have no stored password
-        if (!user?.password) return null;
-
-        const valid = await compare(password, user.password);
-        if (!valid) return null;
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-          sessionVersion: user.sessionVersion,
-        };
+        return user ?? null;
       },
+    }),
+
+    // A password alone — refused for an account with two-step sign-in on.
+    Credentials({
+      authorize: (raw) => userForPassword(raw),
     }),
   ],
 
@@ -125,11 +111,13 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
     // authConfig.callbacks wholesale rather than merging into it.
     redirect: authConfig.callbacks.redirect,
 
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, account, trigger, session }) {
       // On initial sign-in, user is provided
       if (user?.id) {
         token.userId = user.id;
         token.sessionVersion = user.sessionVersion ?? 0;
+        // 'credentials' (a password alone), 'two-factor', 'google', 'apple' or 'app-handoff' (ROADMAP 14.5).
+        token.signInMethod = account?.provider ?? 'credentials';
 
         // Embed the user's first active org into the JWT
         const membership = await prisma.membership.findFirst({
@@ -150,6 +138,15 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
           token.currentOrgSlug = membership.organization.slug;
         }
       } else if (token.userId) {
+        // "Sign out other devices" keeps this one: a RENEW ticket only a
+        // server action can make (lib/account-security/sessions.ts).
+        if (trigger === 'update' && session && typeof session === 'object' && 'renewTicket' in session) {
+          const renewed = await spendRenewTicket(token.userId as string, (session as { renewTicket?: unknown }).renewTicket);
+          if (renewed) {
+            token.sessionVersion = renewed.version;
+            if (renewed.provedSecondFactor) token.signInMethod = 'two-factor';
+          }
+        }
         // Re-validated on every request (session.strategy: 'jwt' means
         // Auth.js calls this callback on every auth() check, not just at
         // sign-in). If the user's sessionVersion has moved on — e.g. a
@@ -186,6 +183,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
       if (token.currentOrgSlug) {
         session.currentOrgSlug = token.currentOrgSlug as string;
       }
+      session.signInMethod = token.signInMethod ?? null;
       return session;
     },
   },

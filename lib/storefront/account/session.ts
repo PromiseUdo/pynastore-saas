@@ -220,6 +220,10 @@ const loadShopper = cache(async (slug: string, token: string): Promise<Shopper |
   // why the database gets the last word.
   if (!customer?.email) return null;
   if (customer.sessionVersion !== claims.sessionVersion) return null;
+  // No session for an address nobody has proved (ROADMAP 20.1). Sessions
+  // issued before that rule read as signed out; signing in again sends the
+  // code (./email-verification.ts).
+  if (!customer.emailVerifiedAt) return null;
 
   return {
     id: customer.id,
@@ -271,5 +275,8 @@ export async function getShopperForStore(slug: string): Promise<Shopper | null> 
 export async function requireShopper(returnTo: string): Promise<Shopper> {
   const shopper = await getShopper();
   if (!shopper) redirect(`/account/sign-in?next=${encodeURIComponent(returnTo)}`);
+  // Every account's wallet needs a phone (ROADMAP 20.2). Google gives us
+  // none, and older accounts may predate the rule: ask once, then carry on.
+  if (!shopper.phone) redirect(`/account/phone?next=${encodeURIComponent(returnTo)}`);
   return shopper;
 }

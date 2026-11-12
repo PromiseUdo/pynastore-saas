@@ -95,8 +95,14 @@ export type RegisterResult =
  * customer the merchant would have to merge by hand later.
  *
  * The claim is not treated as proof of the address: `emailVerifiedAt` stays
- * null for a credentials registration. When order history lands it must
- * check that flag before showing a claimed record's past orders.
+ * null for a credentials registration, and no session is issued until the
+ * shopper types the code sent to it (./email-verification.ts) — so claiming
+ * a record shows nobody its orders until the inbox is proved.
+ *
+ * A record whose address IS proved (a Google sign-in, a confirmed email) is
+ * never claimed: setting a password on it would let anyone who typed that
+ * address into this form into a real account. It reads as taken, and its
+ * owner adds a password from their profile or with a reset.
  */
 export async function registerShopper(input: {
   organizationId: string;
@@ -110,7 +116,7 @@ export async function registerShopper(input: {
 
   const existing = await findByEmail(input.organizationId, email);
 
-  if (existing?.passwordHash) return { ok: false, reason: 'email-taken' };
+  if (existing?.passwordHash || existing?.emailVerifiedAt) return { ok: false, reason: 'email-taken' };
 
   if (existing) {
     const customer = await prisma.customer.update({
@@ -177,6 +183,11 @@ export async function verifyShopperCredentials(input: {
  * it would not be for an unverified provider — and it is what makes "I made
  * my account with a password, now I'm clicking the Google button" work
  * rather than fail with "email already taken".
+ *
+ * Linking to a record whose address was never proved drops its password and
+ * signs out its sessions: whoever chose that password never showed they own
+ * the inbox Google just vouched for. Its owner can set a new one from their
+ * profile.
  */
 export async function upsertShopperFromGoogle(input: {
   organizationId: string;
@@ -215,6 +226,9 @@ export async function upsertShopperFromGoogle(input: {
           name: existing.name || input.name,
           status: 'ACTIVE',
           emailVerifiedAt: input.emailVerified ? (existing.emailVerifiedAt ?? new Date()) : existing.emailVerifiedAt,
+          ...(input.emailVerified && !existing.emailVerifiedAt && existing.passwordHash
+            ? { passwordHash: null, sessionVersion: { increment: 1 } }
+            : {}),
         },
         select: AUTH_SELECT,
       })

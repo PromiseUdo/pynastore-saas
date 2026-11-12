@@ -51,6 +51,35 @@ data the moment they're applied.
 From then on, `main` is production only. To refresh development with
 current data, reset the branch from its parent in the console.
 
+## Developing without Neon
+
+When Neon is out of reach (its free plan's monthly allowance used up, say),
+develop against a local Postgres instead — the same pgvector image the tests
+use, kept between runs in the Docker volume `notely-dev-data`:
+
+1. Start Docker (`colima start` on this Mac), then `npm run db:local`. The
+   first time it creates the container `notely-dev-db` on port 55432, applies
+   every migration and seeds the permissions; after that it starts it and
+   applies any new migrations.
+2. In `.env`, point all three addresses at it (keep the Neon ones commented
+   to switch back):
+   - `DATABASE_URL` and `DIRECT_URL` = `postgresql://postgres:dev@localhost:55432/notely`
+   - `SHADOW_DATABASE_URL` = `postgresql://postgres:dev@localhost:55432/shadow`
+3. Restart `npm run dev`.
+
+To start again from nothing, `npm run db:local -- --reset` wipes it (every
+account, shop and order) and rebuilds it. It starts empty: sign up and
+create a shop in the app as a merchant would,
+and `npx tsx prisma/platform-staff.ts grant <your email>` for the console.
+Its data never reaches Neon, and Neon's never reaches it.
+
+**Neon's free plan sleeps the database when nothing queries it, and counts
+the hours it is awake.** A dev server or an admin tab left open keeps it
+awake around the clock and uses the month's allowance in days — which is
+how it ran out on 2026-10-25. Production belongs on a paid plan (GO-LIVE.md),
+and development on its own allowance: this local database, or a separate
+Neon project.
+
 ## Changing the schema
 
 1. Edit `prisma/schema.prisma`.

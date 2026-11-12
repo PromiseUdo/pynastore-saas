@@ -16,6 +16,7 @@
  *
  * Viewing needs `settings.view`; changing needs `settings.edit`.
  */
+import { DEFAULT_VAT_RATE_PCT, MAX_VAT_RATE_PCT } from '@/lib/tax';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@/lib/generated/prisma/client';
@@ -40,12 +41,17 @@ export interface OrganizationSettings {
   supportEmail: string | null;
   supportPhone: string | null;
   businessAddress: string | null;
+  /** VAT (ROADMAP 14.1): off until the business is registered; prices always include it */
+  vatRegistered: boolean;
+  /** a percentage: 7.5 = 7.5% */
+  vatRate: number;
+  vatNumber: string | null;
   /** each platform's link as stored, or '' — see lib/storefront/social-links.ts */
   socialLinks: Record<SocialPlatform, string>;
 }
 
 export type OrganizationFieldErrors = Partial<
-  Record<'name' | 'supportEmail' | 'supportPhone' | 'businessAddress' | `social.${SocialPlatform}`, string>
+  Record<'name' | 'supportEmail' | 'supportPhone' | 'businessAddress' | 'vatRate' | 'vatNumber' | `social.${SocialPlatform}`, string>
 >;
 
 const OrganizationSchema = z.object({
@@ -66,6 +72,13 @@ const OrganizationSchema = z.object({
   businessAddress: z.string().trim().max(300, 'Keep the address under 300 characters').optional(),
   /** what the merchant typed per platform; normalised after parsing */
   socialLinks: z.record(z.string(), z.string().max(400)).optional(),
+  vatRegistered: z.boolean().optional(),
+  vatRate: z
+    .number({ message: 'Enter the VAT rate as a number' })
+    .gt(0, 'Enter the VAT rate, e.g. 7.5')
+    .max(MAX_VAT_RATE_PCT, `The VAT rate can’t be more than ${MAX_VAT_RATE_PCT}%`)
+    .optional(),
+  vatNumber: z.string().trim().max(40, 'Keep the VAT number under 40 characters').optional(),
 });
 
 export type OrganizationInput = z.input<typeof OrganizationSchema>;
@@ -95,12 +108,15 @@ export async function getOrganizationSettings(): Promise<ActionResult<Organizati
         supportPhone: true,
         businessAddress: true,
         storefrontSocialLinks: true,
+        vatRegistered: true,
+        vatRate: true,
+        vatNumber: true,
       },
     });
     if (!org) return { success: false, error: 'We couldn’t load your business details' };
 
-    const { storefrontSocialLinks, ...rest } = org;
-    return { success: true, data: { ...rest, socialLinks: socialLinksForForm(storefrontSocialLinks) } };
+    const { storefrontSocialLinks, vatRate, ...rest } = org;
+    return { success: true, data: { ...rest, vatRate: Number(vatRate), socialLinks: socialLinksForForm(storefrontSocialLinks) } };
   } catch (error) {
     return failure(error, 'We couldn’t load your business details');
   }
@@ -142,8 +158,10 @@ export async function saveOrganizationSettings(
 
     const current = await prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { logoPublicId: true },
+      select: { logoPublicId: true, vatRegistered: true, vatRate: true },
     });
+    const vatRegistered = data.vatRegistered ?? current?.vatRegistered ?? false;
+    const vatRate = data.vatRate ?? Number(current?.vatRate ?? DEFAULT_VAT_RATE_PCT);
 
     const logoUrl = data.logo?.url ?? null;
     const logoPublicId = data.logo?.publicId ?? null;
@@ -157,6 +175,10 @@ export async function saveOrganizationSettings(
         supportEmail: data.supportEmail?.trim() || null,
         supportPhone: data.supportPhone?.trim() || null,
         businessAddress: data.businessAddress?.trim() || null,
+        // VAT (ROADMAP 14.1): applies to orders placed from now; placed ones keep what they had.
+        vatRegistered,
+        vatRate,
+        ...(data.vatNumber !== undefined ? { vatNumber: data.vatNumber.trim() || null } : {}),
         // An empty object would read as "set, but nothing" — store null instead.
         storefrontSocialLinks: Object.keys(social.links).length ? social.links : Prisma.DbNull,
       },
@@ -178,6 +200,8 @@ export async function saveOrganizationSettings(
         name: data.name,
         logoChanged: (current?.logoPublicId ?? null) !== logoPublicId,
         socialLinks: Object.keys(social.links),
+        vatRegistered,
+        vatRate,
       },
     });
 

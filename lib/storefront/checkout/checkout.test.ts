@@ -15,7 +15,7 @@
  * real form.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ONLINE_PAYMENT_METHOD } from '../mock/checkout';
+import { ONLINE_PAYMENT_METHOD } from './payment-methods';
 import { getCheckoutConfig, deliveryEstimate, findDeliveryMethod, findPaymentMethod } from './config';
 import { calculateCheckoutTotals, checkoutItemCount } from './totals';
 import { checkoutSchema, contactSchema, phoneDigits } from './schema';

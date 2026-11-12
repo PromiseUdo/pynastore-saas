@@ -465,6 +465,34 @@ export function CheckoutView({
     );
   }
 
+  /* The merchant takes orders only from shoppers with an account (Settings →
+   * Payments → Checkout). Said before any typing; the server refuses a guest
+   * order anyway. `next` brings them straight back, and the bag is kept. */
+  if (!config.guestCheckoutEnabled && !account && status !== 'placed') {
+    return (
+      <div role="status" className="mx-auto max-w-md rounded-2xl border bg-card px-6 py-12 text-center">
+        <p className="font-display text-xl">Sign in to order</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This store takes orders from shoppers with an account. Sign in, or create one in a minute — your bag is saved.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <Link
+            href="/account/sign-in?next=%2Fcheckout"
+            className="inline-flex h-11 items-center rounded-[var(--sf-radius-button,999px)] bg-brand px-6 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/account/register?next=%2Fcheckout"
+            className="inline-flex h-11 items-center rounded-[var(--sf-radius-button,999px)] border px-6 text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
+          >
+            Create an account
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (status === 'placed') {
     return (
       <div role="status" className="mx-auto max-w-md py-20 text-center">
@@ -536,7 +564,9 @@ export function CheckoutView({
             <StepShell
               id="step-information"
               title="Your details"
-              description="No account needed — we’ll email your receipt and tracking."
+              description={
+                account ? 'We’ll email your receipt and tracking.' : 'No account needed — we’ll email your receipt and tracking.'
+              }
               onNext={advance}
               nextLabel="Continue to delivery"
             >

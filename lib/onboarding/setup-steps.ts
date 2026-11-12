@@ -9,7 +9,9 @@
  *
  * Required steps are the ones a shop can't take an online order without;
  * "Open your shop" is offered once they're all done. Being paid online is
- * recommended rather than required, because pay on delivery always works.
+ * recommended rather than required: pay on delivery is on from the start, and
+ * can only be turned off once there is another way to pay
+ * (lib/storefront/checkout/checkout-rules.ts).
  */
 import type { PermissionKey } from '@/lib/permissions';
 import type { SalesChannels } from './business';
@@ -80,7 +82,7 @@ export const SETUP_STEPS: Record<SetupStepKey, SetupStepInfo> = {
   },
   payment: {
     title: 'Choose how you get paid',
-    why: 'Pay on delivery always works. Add online payments or a bank account so shoppers can pay before delivery.',
+    why: 'Pay on delivery is on from the start. Add online payments or a bank account so shoppers can pay before delivery.',
     href: '/settings/payments',
     action: 'Set up payments',
     required: false,

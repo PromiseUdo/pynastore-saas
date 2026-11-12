@@ -162,6 +162,7 @@ export function OrderDetail({
           {totals.tax > 0 && (
             <p className="text-xs text-muted-foreground">
               Includes {formatMoney(totals.tax, order.currency)} VAT
+              {order.vatNumber ? ` · VAT number ${order.vatNumber}` : ''}
             </p>
           )}
         </dl>

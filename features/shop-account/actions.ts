@@ -4,7 +4,13 @@
  * features/shop-account/actions.ts
  *
  * Everything a shopper can do with their own account from a form: sign in,
- * register, ask for a reset link, set a new password, sign out.
+ * register, confirm their email with a code, ask for a reset link, set a new
+ * password, sign out.
+ *
+ * NO SESSION WITHOUT A PROVED ADDRESS (ROADMAP 20.1). Registering, or signing
+ * in to an account whose address was never proved, emails a six-digit code
+ * and goes to /account/verify instead of signing in. The session is issued
+ * only once the code is typed back (`verifyEmailAction`).
  *
  * WHICH STORE. These run on the store's own origin, so proxy.ts has already
  * stamped `x-org-slug` on the request — the same header the catalogue reads
@@ -25,8 +31,10 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { prisma } from '@/lib/prisma';
+import { NIGERIAN_PHONE_ERROR, normalizeNigerianPhone } from '@/lib/phone';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { sendStorefrontPasswordResetEmail } from '@/lib/email';
+import { sendStorefrontPasswordResetEmail, sendStorefrontVerificationCodeEmail } from '@/lib/email';
 import {
   RESET_TOKEN_TTL_MINUTES,
   createPasswordResetToken,
@@ -40,11 +48,21 @@ import {
 import { clearSessionCookie, setSessionCookie, currentStoreSlug } from '@/lib/storefront/account/session';
 import { safeNextPath, storeUrl } from '@/lib/storefront/account/return-url';
 import { adoptGuestChatOnSignIn } from '@/lib/chat/storefront';
+import { requestShopperWallet } from '@/lib/wallet/shopper';
+import {
+  CODE_TTL_MINUTES,
+  clearVerifyCookie,
+  confirmVerificationCode,
+  findPendingVerification,
+  issueVerificationCode,
+  readVerifyCookie,
+  setVerifyCookie,
+} from '@/lib/storefront/account/email-verification';
 
 export type AccountFormState = {
   error?: string;
-  fieldErrors?: Partial<Record<'name' | 'email' | 'password' | 'confirmPassword' | 'token', string>>;
-  values?: { name?: string; email?: string };
+  fieldErrors?: Partial<Record<'name' | 'email' | 'phone' | 'password' | 'confirmPassword' | 'token' | 'code', string>>;
+  values?: { name?: string; email?: string; phone?: string };
   message?: string;
 } | null;
 
@@ -53,6 +71,17 @@ const RESET_SENT_MESSAGE =
   'If there’s an account for that email address, a link to choose a new password is on its way.';
 
 const PASSWORD = z.string().min(8, 'Use at least 8 characters');
+
+/** Required: the wallet every account gets needs one (ROADMAP 20.2). Stored as +234…. */
+const PHONE = z
+  .string()
+  .trim()
+  .min(1, 'Enter your phone number')
+  .transform((value, ctx) => {
+    const phone = normalizeNigerianPhone(value);
+    if (!phone) ctx.addIssue({ code: 'custom', message: NIGERIAN_PHONE_ERROR });
+    return phone ?? '';
+  });
 
 async function requireStore(): Promise<StoreRecord> {
   const slug = await currentStoreSlug();
@@ -76,6 +105,28 @@ async function withinSignInLimit(store: StoreRecord, email: string): Promise<boo
   const byIp = await checkRateLimit(`sf-auth:ip:${store.id}:${ip}`, 20, 15 * 60 * 1000);
   const byEmail = await checkRateLimit(`sf-auth:email:${store.id}:${email.toLowerCase()}`, 8, 15 * 60 * 1000);
   return byIp && byEmail;
+}
+
+/**
+ * Email a code for this account and send the browser to type it in. Never
+ * returns. If the email didn't go, "Send a new code" on that page retries.
+ */
+async function beginVerification(
+  store: StoreRecord,
+  customer: { id: string; email: string | null },
+  next: string,
+): Promise<never> {
+  const issued = await issueVerificationCode(customer.id, { cooldown: false });
+  if (issued && customer.email) {
+    await setVerifyCookie(store.slug, issued.rawToken);
+    await sendStorefrontVerificationCodeEmail({
+      to: customer.email,
+      storeName: store.name,
+      code: issued.code,
+      expiresInMinutes: CODE_TTL_MINUTES,
+    });
+  }
+  redirect(`/account/verify?next=${encodeURIComponent(next)}`);
 }
 
 /* ---------------- sign in ---------------- */
@@ -124,6 +175,9 @@ export async function signInAction(
     return { error: GENERIC_CREDENTIALS_ERROR, values: { email: rawEmail } };
   }
 
+  // The right password on an address nobody has proved yet: prove it first.
+  if (!customer.emailVerifiedAt) return beginVerification(store, customer, next);
+
   const token = await issueSessionToken(store.slug, customer);
   await setSessionCookie(store.slug, token);
   // A guest who messaged the store first keeps that conversation (ROADMAP 17.3).
@@ -137,6 +191,7 @@ export async function signInAction(
 const RegisterSchema = z.object({
   name: z.string().trim().min(2, 'Tell us what to call you'),
   email: z.email('Enter a valid email address'),
+  phone: PHONE,
   password: PASSWORD,
 });
 
@@ -148,18 +203,20 @@ export async function registerAction(
   const next = safeNextPath(formData.get('next') as string | null);
   const rawName = String(formData.get('name') ?? '');
   const rawEmail = String(formData.get('email') ?? '');
-  const values = { name: rawName, email: rawEmail };
+  const rawPhone = String(formData.get('phone') ?? '');
+  const values = { name: rawName, email: rawEmail, phone: rawPhone };
 
   const parsed = RegisterSchema.safeParse({
     name: rawName,
     email: rawEmail,
+    phone: rawPhone,
     password: formData.get('password'),
   });
 
   if (!parsed.success) {
     const fieldErrors: NonNullable<AccountFormState>['fieldErrors'] = {};
     for (const issue of parsed.error.issues) {
-      const field = issue.path[0] as 'name' | 'email' | 'password';
+      const field = issue.path[0] as 'name' | 'email' | 'phone' | 'password';
       fieldErrors[field] ??= issue.message;
     }
     return { fieldErrors, values };
@@ -173,21 +230,88 @@ export async function registerAction(
     organizationId: store.id,
     name: parsed.data.name,
     email: parsed.data.email,
+    phone: parsed.data.phone,
     password: parsed.data.password,
   });
 
   if (!result.ok) {
     return {
-      fieldErrors: { email: 'There’s already an account with this email. Sign in instead.' },
+      fieldErrors: {
+        email: 'There’s already an account with this email. Sign in, or use “Forgot password” if you can’t.',
+      },
       values,
     };
   }
 
-  const token = await issueSessionToken(store.slug, result.customer);
-  await setSessionCookie(store.slug, token);
-  await adoptGuestChatOnSignIn(store, result.customer.id);
+  return beginVerification(store, result.customer, next);
+}
+
+/* ---------------- confirm the email ---------------- */
+
+const CODE_ERRORS = {
+  'wrong-code': 'That code isn’t right. Check the email and try again.',
+  expired: 'That code has expired. Send yourself a new one below.',
+  locked: 'Too many tries. Send yourself a new code below.',
+  'no-challenge': 'We couldn’t find a code for this device. Please sign in again.',
+} as const;
+
+export async function verifyEmailAction(
+  _prev: AccountFormState,
+  formData: FormData,
+): Promise<AccountFormState> {
+  const store = await requireStore();
+  const next = safeNextPath(formData.get('next') as string | null);
+  const rawToken = await readVerifyCookie(store.slug);
+  if (!rawToken) return { error: CODE_ERRORS['no-challenge'] };
+
+  const ip = await clientIp();
+  if (!(await checkRateLimit(`sf-verify:ip:${store.id}:${ip}`, 30, 15 * 60 * 1000))) {
+    return { error: 'Too many attempts. Please wait a few minutes and try again.' };
+  }
+
+  const result = await confirmVerificationCode(store.id, rawToken, String(formData.get('code') ?? ''));
+  if (!result.ok) {
+    return result.reason === 'wrong-code'
+      ? { fieldErrors: { code: CODE_ERRORS['wrong-code'] } }
+      : { error: CODE_ERRORS[result.reason] };
+  }
+
+  const customer = await prisma.customer.findUniqueOrThrow({
+    where: { id: result.customerId },
+    select: { id: true, organizationId: true, sessionVersion: true },
+  });
+  await setSessionCookie(store.slug, await issueSessionToken(store.slug, customer));
+  await clearVerifyCookie(store.slug);
+  await adoptGuestChatOnSignIn(store, customer.id);
+  // The proved email is what the wallet hangs on (ROADMAP 20.2).
+  await requestShopperWallet(customer.id);
 
   redirect(next);
+}
+
+export async function resendVerificationCodeAction(
+  _prev: AccountFormState,
+  _formData: FormData,
+): Promise<AccountFormState> {
+  const store = await requireStore();
+  const rawToken = await readVerifyCookie(store.slug);
+  const pending = rawToken ? await findPendingVerification(store.id, rawToken) : null;
+  if (!pending) return { error: CODE_ERRORS['no-challenge'] };
+
+  const allowed = await checkRateLimit(`sf-verify-send:${pending.customerId}`, 5, 60 * 60 * 1000);
+  const issued = allowed ? await issueVerificationCode(pending.customerId) : null;
+  if (!issued) return { error: 'A code was sent a moment ago. Please wait a minute before asking for another.' };
+
+  await setVerifyCookie(store.slug, issued.rawToken);
+  const sent = await sendStorefrontVerificationCodeEmail({
+    to: pending.email,
+    storeName: store.name,
+    code: issued.code,
+    expiresInMinutes: CODE_TTL_MINUTES,
+  });
+  return sent
+    ? { message: `A new code is on its way to ${pending.email}.` }
+    : { error: 'We couldn’t send the email just now. Please try again in a minute.' };
 }
 
 /* ---------------- forgot password ---------------- */

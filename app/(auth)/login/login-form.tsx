@@ -30,6 +30,55 @@ export function LoginForm({ apple }: { apple: boolean }) {
   const providerError = providerErrorMessage(searchParams.get('error'));
   const deleted = searchParams.get('deleted') === '1';
 
+  // Two-step sign-in (ROADMAP 14.5): the password was right, now the code.
+  if (state && 'step' in state) {
+    const error = state.error;
+    return (
+      <div className="p-8">
+        <div className="mb-6">
+          <h1 className="text-xl font-semibold tracking-tight">Two-step sign-in</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Enter the 6-digit code from your authenticator app.</p>
+        </div>
+        <form action={action} className="space-y-4">
+          <input type="hidden" name="intent" value="code" />
+          {callbackUrl && <input type="hidden" name="callbackUrl" value={callbackUrl} />}
+          <div className="space-y-1.5">
+            <Label htmlFor="code">Code</Label>
+            <Input
+              id="code"
+              name="code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              required
+              aria-invalid={error ? true : undefined}
+              aria-describedby="code-help"
+              className="tracking-[0.3em] tabular-nums"
+            />
+            <p id="code-help" className="text-xs text-muted-foreground">
+              Lost your phone? Enter one of your backup codes instead.
+            </p>
+          </div>
+          {error && (
+            <p role="alert" className="text-xs font-medium text-destructive">
+              {error}
+            </p>
+          )}
+          <Button type="submit" className="w-full" size="sm" disabled={pending}>
+            {pending ? 'Checking…' : 'Sign in'}
+          </Button>
+        </form>
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          <a href={callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : '/login'} className="underline underline-offset-4 hover:text-foreground">
+            Start again
+          </a>
+        </p>
+      </div>
+    );
+  }
+  // Including "timed out" from the code step: back to the password, with why.
+  const signInError = state && 'error' in state ? state.error : undefined;
+
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -105,9 +154,9 @@ export function LoginForm({ apple }: { apple: boolean }) {
           />
         </div>
 
-        {state?.error && (
+        {signInError && (
           <p role="alert" className="text-xs font-medium text-destructive">
-            {state.error}
+            {signInError}
           </p>
         )}
 

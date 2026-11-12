@@ -19,7 +19,7 @@ import { setActiveOrg } from '@/lib/storefront/stores/storage';
 import { useCheckoutStore } from '@/lib/storefront/stores/checkout-store';
 import { toCartLine } from '@/lib/storefront/cart';
 import { getCheckoutConfig } from '@/lib/storefront/checkout/config';
-import { ONLINE_PAYMENT_METHOD } from '@/lib/storefront/mock/checkout';
+import { ONLINE_PAYMENT_METHOD } from '@/lib/storefront/checkout/payment-methods';
 import type { CheckoutAccount } from '@/lib/storefront/checkout/types';
 import { PRODUCTS } from '@/lib/storefront/mock/products';
 

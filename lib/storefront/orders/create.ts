@@ -86,6 +86,7 @@ export type PlaceOrderFailure =
   | 'store-unavailable'
   | 'store-closed'
   | 'store-not-open'
+  | 'sign-in-required'
   | 'order-failed';
 
 export type PlaceOrderResult =
@@ -104,6 +105,7 @@ const MESSAGES: Record<PlaceOrderFailure, string> = {
   'store-unavailable': 'This store isn’t taking orders right now.',
   'store-closed': 'This shop is closed for now, so it can’t take orders. Nothing has been charged.',
   'store-not-open': 'This shop isn’t open yet, so it can’t take orders. Nothing has been charged.',
+  'sign-in-required': 'Sign in or create an account to order from this shop. Your bag is saved.',
   'order-failed': 'We couldn’t place your order. Nothing has been charged — please try again.',
 };
 
@@ -203,12 +205,17 @@ async function stillInStock(organizationSlug: string, items: CartItem[]): Promis
   );
 }
 
-/** The customer this order belongs to: the signed-in one, or one found/made by email. */
+/**
+ * The customer this order belongs to: the signed-in one, or one found/made by
+ * email. A shop that doesn't take orders without an account gets
+ * 'sign-in-required' instead of a guest — before any record is made.
+ */
 async function resolveCustomer(input: {
   organizationId: string;
   customerId: string | null;
   contact: CheckoutContact;
-}): Promise<{ id: string; isGuest: boolean } | null> {
+  guestAllowed: boolean;
+}): Promise<{ id: string; isGuest: boolean } | 'sign-in-required' | null> {
   if (input.customerId) {
     const existing = await prisma.customer.findFirst({
       where: { id: input.customerId, organizationId: input.organizationId, status: 'ACTIVE' },
@@ -216,6 +223,7 @@ async function resolveCustomer(input: {
     });
     if (existing) return { id: existing.id, isGuest: false };
   }
+  if (!input.guestAllowed) return 'sign-in-required';
 
   const email = normalizeEmail(input.contact.email);
   const name = `${input.contact.firstName} ${input.contact.lastName}`.trim();
@@ -274,9 +282,13 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
   if (!input.lines.length) return fail('empty-cart');
 
+  // The merchant's rule (Settings → Payments → Checkout); checked again with
+  // the customer below, since a session can name an account that's gone.
+  if (!input.config.guestCheckoutEnabled && !input.customerId) return fail('sign-in-required');
 
   const paymentMethod = findPaymentMethod(input.config, input.paymentMethodId);
-  if (!paymentMethod) return fail('invalid-payment-method');
+  // Offered, but not to this shopper (a wallet they don't have yet).
+  if (!paymentMethod || paymentMethod.unavailableReason) return fail('invalid-payment-method');
 
   /* A transfer needs somewhere to send the money. The config is resolved on
    * the server per store (checkout/store-config.ts), so this is the merchant's
@@ -322,7 +334,9 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     organizationId: organization.id,
     customerId: input.customerId,
     contact: input.contact,
+    guestAllowed: input.config.guestCheckoutEnabled,
   });
+  if (customer === 'sign-in-required') return fail('sign-in-required');
   if (!customer) return fail('order-failed');
 
   const now = new Date();
@@ -407,14 +421,17 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           currency: totals.currency,
           subtotal: toMajor(totals.subtotal),
           discount: toMajor(totals.discount),
+          // The VAT inside the price, at the shop's setting now (ROADMAP 14.1), and its number for the receipt.
           taxAmount: toMajor(totals.tax),
+          vatNumber: totals.tax > 0 ? (input.config.vat?.vatNumber ?? null) : null,
           totalAmount: toMajor(totals.total),
 
           discountCodeId,
           discountCode: coupon?.code ?? null,
           discountCodeLabel: coupon?.label ?? null,
 
-          note: input.note.trim() || null,
+          // A shop that turned notes off keeps none, whatever the browser sent.
+          note: (input.config.orderNotesEnabled && input.note.trim()) || null,
           placedAt: now,
 
           lineItems: {

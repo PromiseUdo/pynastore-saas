@@ -57,6 +57,20 @@ describe('cart math', () => {
   });
 });
 
+describe('VAT (ROADMAP 14.1)', () => {
+  it('has none for a store that isn’t VAT registered', () => {
+    expect(computeTotals({ items: [item({ quantity: 1 })] }).tax).toBe(0);
+  });
+
+  it('states the VAT already in the price after any discount, and never adds it', () => {
+    const t = computeTotals({ items: [item({ quantity: 1 })], vatRatePct: 7.5 });
+    expect(t.tax).toBe(Math.round((1_000_000 * 7.5) / 107.5));
+    expect(t.total).toBe(1_000_000);
+    const discounted = computeTotals({ items: [item({ quantity: 1 })], coupon: { code: 'PCT', label: '10% off', kind: 'percent' as const, value: 10 }, vatRatePct: 7.5 });
+    expect(discounted.tax).toBe(Math.round((900_000 * 7.5) / 107.5));
+  });
+});
+
 describe('discount codes', () => {
   /* The codes themselves belong to the merchant and are checked on the
    * server (lib/storefront/discounts/) — this file only owns the arithmetic

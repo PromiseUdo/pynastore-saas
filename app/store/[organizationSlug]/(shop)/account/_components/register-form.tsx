@@ -1,11 +1,11 @@
 'use client';
 
 /*
- * Create an account: name, email, password. Three fields, and no more.
+ * Create an account: name, email, phone, password.
  *
- * Phone and address are NOT asked for here. Checkout collects them when they
- * are actually needed, and saves them then (Part 3) — asking up front for
- * things a shopper hasn't needed yet is how a sign-up gets abandoned.
+ * Phone is asked for here because every account comes with a wallet, and
+ * the wallet needs one (ROADMAP 20.2). The address is still NOT: checkout
+ * collects it when it is actually needed, and saves it then.
  */
 import { useActionState } from 'react';
 import { registerAction, type AccountFormState } from '@/features/shop-account/actions';
@@ -14,7 +14,8 @@ import { PasswordField } from './password-field';
 import { SubmitButton } from './submit-button';
 import { AuthError } from './auth-shell';
 
-export function RegisterForm({ next }: { next: string }) {
+/** `walletNotice`: wallets are switched on, so say what is shared with EduPay (ROADMAP 20.2). */
+export function RegisterForm({ next, walletNotice = false }: { next: string; walletNotice?: boolean }) {
   const [state, action, pending] = useActionState<AccountFormState, FormData>(registerAction, null);
 
   return (
@@ -50,6 +51,19 @@ export function RegisterForm({ next }: { next: string }) {
         required
       />
 
+      <TextField
+        id="sf-phone"
+        name="phone"
+        label="Phone number"
+        type="tel"
+        inputMode="tel"
+        autoComplete="tel-national"
+        placeholder="0803 123 4567"
+        defaultValue={state?.values?.phone}
+        error={state?.fieldErrors?.phone}
+        required
+      />
+
       <PasswordField
         id="sf-password"
         name="password"
@@ -63,6 +77,13 @@ export function RegisterForm({ next }: { next: string }) {
       <SubmitButton pending={pending} pendingLabel="Creating your account…">
         Create account
       </SubmitButton>
+
+      {walletNotice && (
+        <p className="text-center text-xs text-muted-foreground">
+          Your account includes a wallet provided by EduPay. We share your name, email and phone number with EduPay to
+          set it up.
+        </p>
+      )}
     </form>
   );
 }

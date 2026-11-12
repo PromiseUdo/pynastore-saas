@@ -2205,6 +2205,9 @@ The order detail page shows the same breakdown for that order's payment.
 
 ### 10.7 Refunds — PAUSED (2026-09-29)
 
+**Update 2026-10-15:** the provider is EduPay, and the wallet design now
+lives in **Phase 20**. Refunds will be built there, not here.
+
 **Paused. Don't build any of 10.7 until this note is lifted.** The platform is
 in talks with a third-party wallet provider. The expected model is:
 - a merchant initiates a refund;
@@ -4318,11 +4321,36 @@ never showed.
 The rest of the former Phase 7, plus gaps found in the 2026-09-29 audit. Not
 launch blockers, but a merchant will feel each within weeks.
 
-- **14.1 Tax settings** per org: VAT registered or not, rate, inclusive or
-  exclusive, VAT number on invoices and receipts. Replaces the hard-coded
-  `VAT_RATE` (7.5% inclusive) in `lib/storefront/pricing.ts` and the env flag in
-  `lib/storefront/checkout/config.ts`. Many small shops are not VAT-registered and
-  should not show VAT at all.
+- **14.1 Tax settings — DONE (2026-11-07).** Settings → General → Tax: "VAT
+  registered" (off by default), the rate (7.5% to start) and the VAT number.
+  Decided 2026-11-07:
+  - **Not registered by default**, existing shops included: a shop shows no
+    VAT anywhere until its merchant says it's registered, so nobody's receipts
+    state a tax they don't charge. (Before this, every storefront stated a
+    fixed 7.5%.)
+  - **Prices always include VAT** — it's worked out from the price and stated
+    ("Includes ₦X VAT"), never added. "Added on top" isn't offered: it would
+    make checkout differ from shelf prices and change order, Paystack and
+    wallet totals. Add it only if a merchant asks.
+  As shipped:
+  - One rule, `lib/tax.ts` (`includedVat`, `shopVat`); a shop's setting via
+    `lib/tax-settings.ts`. The hard-coded `VAT_RATE` and `CHECKOUT_TAX_ENABLED`
+    are gone; `CheckoutConfig.vat` replaces `taxEnabled`.
+  - The bag, checkout, placed orders (`placeOrder`) and counter sales all use
+    it, so online and in-store receipts agree. Counter sales recorded no VAT
+    before; a registered shop's now record the VAT inside the price.
+  - Each order keeps the VAT number in force when it was placed
+    (`Order.vatNumber`): the confirmation, the shopper's order page, the admin
+    order and its receipt show it. A change applies to orders from then on;
+    placed orders keep what they had.
+  - Receipts state "Includes VAT" under the total instead of a "Tax" line that
+    looked added. Invoices show the shop's VAT number when it's registered
+    (their tax is still entered by hand, and added).
+  - Tests: `lib/tax.test.ts`, VAT cases in `lib/storefront/pricing.test.ts`,
+    `tests/vat-settings.test.ts`, `tests/counter-sale.test.ts`,
+    `tests/storefront-orders.test.ts`.
+  - Not yet: quotes and purchase orders keep their hand-entered tax; reports
+    don't break VAT out.
 - **14.2 Product CSV import — DONE (2026-09-30), moved before launch by 12.5.**
   As shipped:
   - **Inventory → Products → Import** (`/inventory/products/import`; also
@@ -4368,15 +4396,130 @@ launch blockers, but a merchant will feel each within weeks.
 - **14.4 SMS/WhatsApp order updates** for shoppers, alongside email, with the
   same message set as `emails/storefront-order-update.tsx`. Opt-in, and sent
   only for events the order actually went through.
-- **14.5 Staff account security.** Own profile and password change (owner
-  email verification at sign-up moved to 12.5), 2FA, and "sign out everywhere" (`User.sessionVersion`
-  already exists).
-- **14.6 Reports hub** at `/reports`: revenue by day and channel, top products,
-  top customers, discount and campaign performance, and 8.5's "Which store
-  sells" moved here from Inventory.
+- **14.5 Staff account security — DONE (2026-11-07).** Settings → Your account:
+  name, email (moved only by a link sent to the new address; the old one is
+  told at once), password change, two-step sign-in, "Sign out other devices".
+  Decided 2026-11-07:
+  - **An authenticator app** (TOTP, RFC 6238) with 10 one-time backup codes —
+    not SMS (cost, SIM swaps).
+  - **Optional for everyone, required for money:** withdrawing, connecting the
+    bank account and changing auto-withdraw (20.7) need a session that passed
+    two steps — a password and a code, or Google or Apple.
+  - **Only for password sign-ins:** Google and Apple have their own two-step
+    check, so they're never asked for a code.
+  As shipped:
+  - `lib/account-security/`: `totp.ts` (the codes), `two-factor.ts` (set up,
+    check, the sign-in challenge), `account.ts` (name, password, email change),
+    `sessions.ts` + `renew.ts` (sign out others), `password-sign-in.ts`,
+    `strong-sign-in.ts`. Actions in `features/account/security.ts`.
+  - **The password provider refuses** an account with two-step sign-in on
+    (`userForPassword`), so posting straight to the credentials endpoint gets
+    nowhere. The login action checks the password, puts a single-use
+    TWO_FACTOR ticket in an httpOnly cookie, and asks for the code (5 tries,
+    10 minutes); a right code lets the `two-factor` provider spend it once.
+    An app code works once (`twoFactorLastStep`), a backup code once.
+  - **The secret is sealed** with `lib/social/crypto.ts` (`SOCIAL_TOKEN_KEY`);
+    backup codes are kept only as hashes and shown once.
+  - **Sign out other devices** raises `sessionVersion` and keeps this session
+    with a RENEW ticket made and spent inside the server action — a browser
+    calling the session-update endpoint can't make one. A password change and
+    turning two-step on do it too; turning it on also makes this session a
+    two-step one, so a withdrawal works straight away.
+  - **Every session records how it signed in** (`signInMethod` in the JWT).
+    Sessions from before this have none and count as a password alone.
+  - **Security emails** (password changed, two-step on or off, email being
+    changed, the confirmation link) go straight through
+    `sendAccountSecurityEmail`, not `notify()`: account security, like the
+    reset email, must arrive whatever the person's notification settings.
+  - Deleting an account clears its two-step data; the daily retention job
+    clears old tickets and email-change links.
+  - Tests: `lib/account-security/totp.test.ts` (RFC 6238 vectors),
+    `tests/staff-account-security.test.ts`, the sign-in cases in
+    `tests/wallet-withdrawals.test.ts`.
+  - Not yet: platform console staff aren't required to use it; no list of
+    signed-in devices (sessions are JWTs, so there's nothing to list — only
+    "sign out all others").
+- **14.6 Reports hub — DONE (2026-11-07)** at `/reports` (sidebar → Business →
+  Reports). Five views, one period for all of them (last 7/30/90 days, last 12
+  months, or chosen dates — in the URL as `range` or `from`+`to`), each with a
+  CSV of what's on screen and a one-line statement of what it counts. Decided
+  2026-11-07:
+  - **Sales, Top products and Top customers on every plan; Discounts and
+    campaigns and Which store sells are Advanced reports** (`reports.advanced`),
+    shown with a lock and what they do, not hidden.
+  - **Days are Lagos days** (Africa/Lagos, a fixed UTC+1), the same calendar the
+    receipts use. Up to 62 days shows each day; longer, each month.
+  - **Sales = order totals** (after discounts, with delivery, VAT inside),
+    every channel, cancelled orders left out. Unpaid orders are included and
+    their value shown separately; refunds are shown beside, never deducted.
+  As shipped:
+  - `lib/reports/period.ts` (pure: the period, Lagos days, buckets, the
+    comparison with the same number of days just before);
+    `features/reports/sales-reports.ts` (`getRevenueReport`,
+    `getTopProductsReport`, `getTopCustomersReport`, `getDiscountsReport`), all
+    `sales.view`; top customers also needs `customer.view` (the tab is hidden
+    without it). Only the view on screen is queried.
+  - **Sales:** sales, orders and average order (with the change on the period
+    before), not paid yet, the split by channel (online / in store / phone), a
+    bar chart, discounts, delivery, VAT and refunds, and the day-by-day table.
+  - **Top products:** the top 50 by what their lines sold for (campaign prices
+    included; order discounts aren't spread over products), a deleted product
+    kept under the name it sold as.
+  - **Top customers:** the top 50 by spend, "New" when their first order ever
+    is in the period, repeat buyers, and nameless counter sales counted apart.
+  - **Discounts and campaigns:** each code (its orders, what it took off, what
+    those orders came to, its campaign), counter discounts with no code, and
+    each campaign that ran in the period — only the days of its window inside
+    the period. Campaign figures come from `lib/marketing/campaign-performance.ts`,
+    now shared with the campaign page, so the two can't disagree.
+  - **Which store sells** moved from Inventory → Sales-based reports; old
+    `?view=by-store` links redirect, and the store page links to the hub.
+    Inventory's own "Reports" is now "Stock reports" in the sidebar.
+  - Tests: `lib/reports/period.test.ts`, `tests/sales-reports.test.ts` (Lagos
+    day boundary, channels, cancelled, unpaid/refunds, previous period, months,
+    products incl. deleted, new vs returning, campaign clipped to the period,
+    plan gate, permission, tenancy).
+  - Not yet: profit stays in Inventory → Sales-based reports (it's by invoice);
+    no VAT-only report; no comparison against the same period last year.
 - **14.7 Returns for counter sales — PAUSED with 10.7** (Phase 2's known gap):
   an in-store return and refund against a `WALK_IN` order, putting stock back
   on that store's shelf. Revisit with the wallet decision.
+- **14.8 Checkout rules — DONE (2026-10-28), pulled before launch** (the
+  2026-10-28 go-live audit found every shop's checkout read fixed values from
+  `lib/storefront/mock/checkout.ts`). As shipped:
+  - **Three switches per shop** on `Organization`, all on by default so no
+    shop changed: `checkoutPayOnDelivery`, `checkoutGuestAllowed`,
+    `checkoutOrderNotes`. Set on **Settings → Payments** (`settings.edit`;
+    viewers see On/Off): pay on delivery on its row under "Payment options
+    at checkout", the other two in a new **Checkout** card. Saved by
+    `features/settings/checkout-rules.ts`, audited as
+    `settings.checkout.updated` with before and after.
+  - **Read in one place:** `storeCheckoutRules` /
+    `getStoreCheckoutConfig` in `lib/storefront/checkout/store-config.ts`.
+    The method definitions moved out of `mock/` into
+    `lib/storefront/checkout/payment-methods.ts`.
+  - **Enforced where the order is written** (`placeOrder`), so an old
+    checkout tab can't get round a change: pay on delivery off → the method
+    is refused as before (it's no longer in the store's list); account
+    required → `sign-in-required` before any customer record is made (a
+    session naming an account that's gone counts as no account); notes off →
+    no note is kept, whatever the browser sent.
+  - **The shopper:** with an account required, checkout shows "Sign in to
+    order" with Sign in / Create an account, each returning to checkout with
+    the bag kept. The product page drops "pay on delivery isn't available for
+    this item" in a shop that doesn't offer pay on delivery at all.
+  - **Never without a way to pay:** pay on delivery can't be turned off while
+    online payments aren't ready and no bank account is active
+    (`lib/storefront/checkout/checkout-rules.ts`, checked in the action and
+    disabling the switch). If a shop still ends up with none (its last bank
+    account switched off), Settings → Payments says "Shoppers can't pay you
+    right now". The setup guide no longer says pay on delivery "always works".
+  - **Not changed:** countries (Nigeria only, because delivery zones are by
+    Nigerian state) and the VAT line (14.1).
+  - Tests: `tests/checkout-rules.test.ts` (defaults; the rules reach checkout
+    for that shop only; each is enforced at order time; the last way to pay;
+    audit; permission), `lib/storefront/checkout/checkout-rules.test.ts`, and
+    two cases in `components/storefront/checkout/checkout-view.test.tsx`.
 
 **Still deferred, with their reasons unchanged:** email campaigns (Phase 5 — needs
 unsubscribe, suppression and bounce handling first), paying an invoice online
@@ -7427,6 +7570,480 @@ user agent on the server).
 - **The demo shop and reviewer login** (19.3).
 - **Testers:** the email addresses of the first merchants and staff who will
   try it, for TestFlight and the Android install link.
+
+
+## Phase 20 — Wallets with EduPay — IN PROGRESS (20.1 DONE 2026-10-15; 20.2–20.4 code done 2026-10-25; 20.5 code done 2026-11-01; 20.6, 20.7 code done 2026-11-03)
+
+**The gap.** Shoppers and vendors get an EduPay wallet inside their
+account: shoppers top up with Paystack (into EduPay's own Paystack account)
+and pay for orders from it; a wallet payment moves money from the
+shopper's wallet to the shop's; a vendor refund moves it back. Everything
+happens on our pages ("Powered by EduPay", no redirects). This replaces the
+paused refund design in 10.7. EduPay holds the money; the platform still
+holds none.
+
+**Decisions taken (2026-10-15):**
+- **No "set up your wallet" step.** A shopper's wallet is created, or their
+  existing EduPay wallet connected, as soon as their email is proved. A
+  shop's wallet belongs to the SHOP and is made when the shop is created,
+  not per staff member.
+- **Two groups only:** new to EduPay (`register_user` makes a ₦0 wallet,
+  password-less), and existing EduPay users (connected when EduPay reports
+  the same **email**, never on a phone match, and only once EduPay confirms
+  it verifies its own users' emails).
+- **No EduPay password ever passes through the platform.**
+- **EduPay's answers so far (2026-10-15):** phone is required, as
+  `08031234567`; emails are unique in their database; they match existing
+  users on email OR phone and say which in `matched_on`; a taken username
+  returns `USERNAME_TAKEN`, and we generate usernames ourselves (the full
+  name, no spaces, plus a random suffix).
+- **We connect only on `matched_on: "email"`**, and only when the email
+  EduPay returns is the one the shopper proved to us. We don't verify
+  phones, so a phone match may be someone else's wallet: the shopper is told
+  the number belongs to another EduPay wallet and can change it. Nothing
+  from a phone match (its email, name) is ever shown. EduPay says existing
+  wallet holders are few and will be told to sign up with the same email
+  and phone, so this should be rare.
+- **More answers (2026-10-15):** every EduPay account's email is verified
+  (which is what makes connecting on email safe); an email and a phone
+  matching two different users "won't happen" per EduPay — our email-only
+  rule makes it harmless if it does; the generated password will be removed
+  from `register_user`'s response, and until then our client discards it
+  on arrival (never stored, never logged).
+- **Vendors (2026-10-15).** A shop's wallet is the same kind of EduPay
+  wallet as a shopper's; every business check (CAC, ID, bank account) stays
+  on our side (Settings → Payments, 10.2). **Refunds** are the shop sending
+  money to the shopper's wallet with EduPay's existing `transfer_funds`,
+  started by the vendor; our side enforces that a refund never exceeds what
+  the order paid (`OrderRefund` totals, as today). **Payouts** — shop wallet
+  to the shop's bank account — are requested by the vendor through an API
+  EduPay will provide.
+
+**Settled for shop wallets (2026-10-19):**
+- **Whose email and phone.** EduPay's `user_type: "business"` lets a shop
+  wallet reuse an email and phone that a person's wallet has, so the owner's
+  own shopper wallet and each of their shops' wallets stay separate.
+- **The PIN on refunds.** The vendor enters the shop wallet's PIN, as
+  `transfer_funds` expects; staff who refund need it, and the owner changes
+  it when one leaves.
+
+**Waiting on EduPay** before payments (20.3+): PIN setup and reset in the
+Service API, top-up returning a Paystack `access_code`, one atomic
+pay-order call (shopper wallet to shop wallet, never one without the
+other), the payout API, idempotency keys on money calls, webhooks to us,
+and a separate live key that is sent as a key id, not the secret.
+
+**Build order:**
+- **20.1** Shoppers prove their email, and every account has a phone — DONE.
+- **20.2** Shopper wallets: created or connected automatically once the
+  email is proved; a read-only Wallet page (balance, transactions) — CODE
+  DONE (2026-10-19), see below.
+- **20.3** Top-up (Paystack inside our page) and the wallet PIN — CODE
+  DONE (PIN 2026-10-19, top-up 2026-10-25), see below.
+- **20.4** Shop wallets, made when the shop is approved for online
+  payments — CODE DONE (2026-10-19), see below.
+- **20.5** Pay for an order from the wallet — CODE DONE (2026-11-01), see below.
+- **20.6** Refunds to the shopper's wallet (replaces 10.7) — CODE DONE (2026-11-03), see below.
+- **20.7** Payouts to the shop's bank account — CODE DONE (2026-11-03), see below.
+
+### 20.1 Shoppers prove their email, and every account has a phone — DONE (2026-10-15)
+
+Connecting a wallet by email is only safe if whoever registered the address
+owns it, and a password registration proved nothing. Now:
+
+- **No shopper session without a proved address.** Registering, or signing
+  in to an account whose address was never proved, emails a six-digit code
+  in the store's name and goes to `/account/verify`; the session is issued
+  only when the code is typed back. `getShopper()` treats any session for
+  an unproved address as signed out, so pre-existing ones end at once.
+  Google, a password reset and an email change already prove the address.
+- **The code** (`lib/storefront/account/email-verification.ts`,
+  `CustomerEmailVerification`): the browser holds a random token in the
+  host-only `sf-verify-{slug}` cookie; the row keeps its hash and an HMAC of
+  the code. 15 minutes, five tries, only the newest code works, a minute
+  between resends (five an hour). A code, not a link, so it works inside
+  the store apps.
+- **Two holes closed:** registering with a password can no longer claim a
+  record whose address is already proved (a Google-only account); and when
+  Google vouches for an address whose password nobody proved, that password
+  is dropped and its sessions end.
+- Tests: `tests/storefront-email-verification.test.ts`, plus the new cases
+  in `tests/storefront-account.test.ts`.
+- **Every account has a phone** (EduPay requires one). Registration and the
+  profile require a Nigerian mobile number, stored as `+234…`
+  (`lib/phone.ts`; `toLocalNigerianPhone` gives EduPay its `080…`). Google
+  shares no phone, so a Google sign-up without one goes to `/account/phone`
+  straight after signing in (`phoneStepUrl`), and older accounts are sent
+  there the next time they open their account (`requireShopper`).
+
+
+### 20.2 Shopper wallets, created or connected — CODE DONE (2026-10-19)
+
+- **EduPay's last change (2026-10-19):** `register_user` takes `user_type`
+  (`normal` for shoppers, `business` for shops) and a `user_ref` that must
+  be unique — ours are `shopper-{customerId}` and, in 20.4,
+  `shop-{organizationId}`. A business wallet may reuse an email and phone
+  that a normal wallet has. A duplicate reference returns `USER_REF_TAKEN`.
+- **The client** (`lib/wallet/edupay.ts`) is the only code that calls
+  EduPay: EduPay's HMAC scheme, a 15-second timeout, never throws (`unavailable`
+  vs a refusal), never logs a body, drops `credentials` on arrival. Settings:
+  `EDUPAY_SERVICE_URL`, `EDUPAY_SERVICE_KEY` (`.env.example`); without both,
+  wallets are simply off — no Wallet page, no sign-up notice.
+- **`ShopperWallet`** (one per shopper account) holds ids and a status only
+  — `PENDING`, `ACTIVE` (`origin` CREATED or CONNECTED), `PHONE_IN_USE`,
+  `FAILED` (`lastError`, for staff). Balances are never copied; the page
+  reads EduPay every time.
+- **When:** after the email code is confirmed, after the phone step, and on
+  opening the Wallet page (how accounts made before wallets get one — the
+  page says what is shared). All are moments the shopper has just been told
+  their account includes a wallet; a plain sign-in sends nothing.
+- **Rules** (`lib/wallet/shopper.ts`): connect only `matched_on: "email"`
+  with the same email; a phone match becomes `PHONE_IN_USE` and changing
+  the phone retries; `USERNAME_TAKEN` → a new suffix (3 tries);
+  `USER_REF_TAKEN` with ids → that wallet (an unanswered earlier attempt);
+  unreachable → retried with backoff (5 minutes doubling to 6 hours, 10
+  tries) by the **`wallet-setup` cron job, every 15 minutes** (add it on
+  cron-job.org, docs/SCHEDULED-JOBS.md). A conditional claim means two
+  requests at once register the person once.
+- **Data rights:** deleting a shopper account or closing a shop removes our
+  wallet records; the wallet and its money stay the person's, at EduPay.
+- Tests: `lib/wallet/edupay.test.ts`, `tests/shopper-wallets.test.ts`.
+
+**Not yet:**
+- **Not checked end to end.** Not tried in a browser, and no wallet has been
+  registered on EduPay's test server from the app yet.
+- **Transactions' shape is unconfirmed.** The test wallets had none, so
+  `getTransactions` reads the fields EduPay names elsewhere and skips items
+  it can't read. Check against a real top-up in 20.3.
+- **Ask EduPay:** return the wallet's `uuid_v4`/`uniq_id` with
+  `USER_REF_TAKEN` (today a lost first reply leaves the account `FAILED`).
+- **Changing email or phone after the wallet exists** isn't sent to EduPay
+  (no update API yet); the wallet keeps the details it was made with.
+- **EduPay bug (2026-10-26): an existing user with a NEW `user_ref` →
+  `INTERNAL_ERROR`** ("Failed to register user", HTTP 200), where it used to
+  answer `USER_EXISTS`. Reproduced on the new test server; brand-new details
+  register fine. It breaks every shopper with accounts at two stores (one
+  EduPay user, a reference per store account) and existing EduPay users.
+  EduPay's own error codes (`INTERNAL_ERROR`, `SERVER_ERROR`, …) are now
+  retried like an outage. **FIXED by EduPay 2026-10-29:** an existing email
+  with a new `user_ref` answers `USER_EXISTS` again — verified the same day,
+  when the waiting test wallet connected (`origin` CONNECTED) on its next try.
+
+
+### 20.4 Shop wallets — CODE DONE (2026-10-19)
+
+- **When:** platform staff approving a shop for online payments
+  (`approveVerification`) asks for its wallet straight after making the
+  Paystack subaccount; it is set up after the response and approval never
+  waits on EduPay. Shops approved before wallets get theirs the first time
+  someone opens Settings → Payments or the wallet page.
+- **What:** an EduPay `business` wallet, `user_ref` `shop-{organizationId}`,
+  from the application's business name and its reviewed contact email and
+  phone (`lib/wallet/shop.ts`, `ShopWallet`).
+- **One wallet per person (EduPay, 2026-10-30).** EduPay can't yet give an
+  email a business wallet when a normal one exists (it answers
+  `EMAIL_TAKEN`, without ids), so: a wallet stays the type it was first made
+  as, and the same person reaches it as shopper and vendor. A shop whose
+  contact email already has a wallet uses THAT wallet (`origin: CONNECTED`),
+  but only when the contact email is the proved sign-up email of an active
+  Owner of the shop — never a typed address that could send a shop's takings
+  to a stranger (otherwise `FAILED`). On `EMAIL_TAKEN` we ask once more as
+  the other type, which answers `USER_EXISTS` with the ids. The wallet page
+  tells a connected shop it's their own wallet, balance and PIN shared.
+  Consequence: staff who send refunds (20.6) from a connected wallet need
+  the Owner's own PIN, and the shop's money sits with the Owner's personal
+  balance. First connected: Ada Fabrics → EduPay user 57.
+- **Shared rules:** shopper and shop wallets go through one decision
+  (`lib/wallet/register.ts`); the `wallet-setup` cron job retries both.
+- **Test and live servers.** Every wallet record stores the
+  `EDUPAY_SERVICE_URL` it was set up on; a record from another server — the
+  test server, after go-live — is set up again instead of being read, like
+  Paystack's test/live subaccounts (13.9).
+- **Admin:** a "Shop wallet" card in Settings → Payments (status only, no
+  EduPay call) and Settings → Payments → Shop wallet (`settings.view`):
+  balance, and transactions a page at a time with the page in the URL. It
+  says plainly that wallet payments and payouts aren't available yet.
+- **Tests never reach EduPay:** `vitest.setup.ts` clears the EduPay settings,
+  so a developer's `.env` can hold the test server's for running the app.
+- Tests: `tests/shop-wallets.test.ts`.
+
+**Not yet:**
+- Not tried in a browser, and no shop wallet has been made on EduPay's test
+  server from the app.
+- **Staff can't see why a shop wallet failed** except in the database
+  (`shop_wallets.lastError`); add it to the console's verification case
+  page, with a "try again" button, before launch.
+- **The transactions list has no search, filters or CSV export** yet (the
+  admin rule for lists over 20 rows). EduPay's `search_transactions` takes
+  type, status and dates; add them with 20.5, when there's real data.
+
+
+### 20.3 (part) The wallet PIN — CODE DONE (2026-10-19)
+
+EduPay's Service API now takes `setup_transaction_pin` (`action_type`
+`setup`, or `update` with `current_pin`), `get_transaction_pin_status` and
+`verify_transaction_pin`.
+
+- **Shoppers:** Account → Wallet asks for a PIN once the wallet is active
+  ("Create your wallet PIN", entered twice), then offers "Change your PIN"
+  and shows when it is locked (`features/shop-account/wallet-actions.ts`).
+- **Shops:** Settings → Payments → Shop wallet has a "Wallet PIN" card;
+  creating or changing it is a dialog for `settings.edit`, and each change
+  is in the audit log — without the PIN (`features/settings/shop-wallet.ts`).
+  The vendor enters it to refund (20.6) and withdraw (20.7).
+- **Rules** (`lib/wallet/pin.ts`): four digits, typed twice, a new PIN that
+  differs from the current one; EduPay's refusals (wrong, locked, already
+  set, too weak, refused, unreachable) become plain sentences. 10 tries per
+  wallet per 15 minutes on our side, on top of EduPay's own lock.
+- **The PIN is never kept:** it goes from the form to EduPay; it is not
+  stored, logged, audited or sent back to the page (a test checks the logs).
+
+**Not yet:**
+- **A forgotten PIN can't be reset.** The page says so. Ask EduPay for a
+  reset by one-time code (to the wallet's phone or email).
+- **EduPay's refusals are guessed.** None has been seen; codes and messages
+  are read for "locked", "already", "weak", "incorrect". Ask EduPay for the
+  error codes of a wrong, locked and weak PIN, and whether `update` may
+  reuse the same PIN (their example does).
+- **Top-up**, the other half of 20.3: done 2026-10-25, below.
+
+### 20.3 (part) Top-ups — CODE DONE (2026-10-25)
+
+EduPay's Service API `initiate_fund_wallet` (`amount` in naira, `gateway:
+"paystack"`, `metadata`) answers with its charges (`transaction_charges`,
+`total_amount` — 1.5% + ₦100, capped at ₦2,000, in their example), a
+Paystack `access_code` and `expires_at`. Paystack takes the money into
+EduPay's account; EduPay's webhook credits the wallet.
+
+- **On our page, no redirect.** `@paystack/inline-js` opens Paystack's
+  window over the page with `resumeTransaction(access_code)`
+  (`lib/wallet/paystack-window.ts`). The CSP allows `checkout.paystack.com`
+  in a frame and `api.paystack.co` for connections, only while EduPay is
+  configured (`lib/security/csp.ts`, `paystackPopup`).
+- **Three steps:** amount (whole naira, ₦100–₦1,000,000) → EduPay's charges
+  and the total, "Pay ₦1,622.50" → Paystack. The charges are the payer's and
+  are shown before anything is charged.
+- **Only EduPay's word completes it.** `WalletTopUp` records each one
+  (amount, fee, total, EduPay's reference). After Paystack's window says
+  paid, the page asks every 3 seconds for a minute (`checkTopUp` →
+  `get_transaction_status`, then the wallet's transactions matched on the
+  reference); "added" appears only when EduPay confirms. A top-up id from the
+  page is looked up only together with whose it must be.
+- **Nobody waiting:** the `wallet-setup` job (now "Finish wallets and
+  top-ups") settles pending ones — every 5 minutes once the payer said they
+  paid, every 30 otherwise — and lets unpaid ones lapse an hour after
+  EduPay's expiry. Never while EduPay can't be asked.
+- **Where:** shoppers on Account → Wallet ("Add money"); shops on Settings →
+  Payments → Shop wallet ("Add money", `settings.edit`, audited), mainly to
+  cover refunds. Not inside the business app (19.3).
+- **`EDUPAY_MODE` (test|live) is now required**, and wallet records store
+  the mode instead of the server address: EduPay moved its test server
+  (to `https://test-api.edupay.africa/test-backend/api/v1/wallet-service`),
+  and an address change must not set every wallet up again.
+- Tests: `tests/wallet-top-ups.test.ts`, top-up cases in
+  `lib/wallet/edupay.test.ts`, `lib/security/csp.test.ts`.
+
+**Not yet:**
+- **Not tried end to end** — no real Paystack payment has gone through the
+  window into a wallet. Check on a phone too (store apps, card 3-D Secure).
+- **Checked against EduPay's test server (2026-10-29):** `initiate_fund_wallet`
+  is read correctly (₦100 → charges ₦101.50, total ₦201.50; the payment
+  expires 30 minutes after it starts, in Lagos time). For an UNPAID payment,
+  `get_transaction_status` with the `payment_reference` answers
+  `{"success":false,"message":"Transaction not found"}` and the wallet's
+  transactions are empty — expected. Still unseen: what a PAID top-up looks
+  like (does its wallet transaction carry the `payment_reference`?). Until a
+  real test payment shows it, a top-up the payer was told succeeded is never
+  marked expired: it waits, with `lastError` asking staff to check with EduPay.
+- **The minimum top-up is ₦100, where EduPay's charges (1.5% + ₦100) are more
+  than the amount.** The total is shown before paying; a higher minimum
+  (₦1,000 → ₦115 charges) is a product decision.
+- **Does the new test address share the old one's data?** Wallets made on
+  `api.edupay.africa/test-backend` keep their ids. If EduPay's new test
+  server is a separate database, those test records must be cleared (they
+  will read as "couldn't reach EduPay").
+- **EduPay's Firebase listener** (their `firebase-wallet.js`) is not used.
+  It needs a Firebase token from EduPay's user API (`get_firebase_token`,
+  which takes the user's EduPay login — not available to us), loads
+  EduPay's Firebase SDK into our pages (our CSP and AGENTS' rule that
+  real-time is a hint over Ably), and writes "read" marks into EduPay's
+  database from the shopper's browser. Asking EduPay after Paystack's window
+  closes, plus the job, covers top-ups; if live balance updates are wanted
+  later, ask EduPay for a signed webhook to our server and send our own
+  Ably hint.
+
+### 20.5 Paying for an order from the wallet — CODE DONE (2026-11-01; moved to `debit_wallet` 2026-11-03)
+
+EduPay's `debit_wallet` now names a receiver (`receiver_uuid_v4`,
+`receiver_uniq_id`) as well as `order_id` and the payer's PIN: one call that
+takes the money from the shopper's wallet and gives it to the shop's — the
+"never one without the other" this phase asked for. It replaced `transfer_funds`
+here because it says what the money is for and carries the order's id, stable
+across tries at one order, so EduPay can refuse a repeat. (The id, not the
+ORD- reference: references repeat across stores, and one wallet shops at many.)
+`credit_wallet` (no source, no PIN — it would mint money) is never used.
+
+- **Offered:** "Pay from wallet", second after "Pay online", by a shop that
+  may take online payments AND has an active wallet (20.4). Greyed out with
+  the reason — "Sign in to pay from your wallet", "Your wallet isn't ready
+  yet", "This is the store's own wallet" — for a shopper who can't use it;
+  placing the order refuses it the same way (`unavailableReason` on the
+  method, `lib/storefront/checkout/store-config.ts`).
+- **Placed, then paid.** The order is placed like a Paystack one (stock held,
+  `AWAITING_PAYMENT`, expires after the same hour). The confirmation page and
+  the shopper's own order page show the wallet balance, the order total and a
+  PIN box; short of money, the Wallet page's top-up sits right there.
+- **Only the order's own signed-in shopper**, from their own wallet, into the
+  shop's (`payFromWalletAction` finds the order WITH the session's customer;
+  the confirmation link can be shared, a wallet can't).
+- **Paid only on EduPay's word.** `debit_wallet` answering success marks
+  the attempt SUCCESS and the order PAID + CONFIRMED through the same
+  `markAttemptPaid` as Paystack — same emails, same store alert, same late
+  payment revival.
+- **At most once.** Every press is an `OrderPayment` (provider `edupay`, its
+  own `…-W…` reference, sent as `metadata.payment_reference` and written into
+  the description). The order
+  row is locked while one is written, and none is written while another is
+  open — so a double click is one transfer. Not enough money is said before
+  the PIN is spent on it.
+- **No clear answer** (timeout, crash, unreadable reply, or EduPay saying the
+  order was already debited) is never retried: the
+  attempt stays open ("we're checking — don't pay again") and is settled from
+  the shopper's own transactions by our reference (`findTransfer`,
+  `lib/wallet/order-payment.ts`) whenever the order is next looked at or the
+  expiry job runs; with no trace after 15 minutes it's closed and they may
+  pay again. Never while EduPay can't be asked.
+- **Admin:** the order and the payments list say "Wallet (EduPay)". The
+  refund dialog says plainly that sending money back to the wallet isn't
+  available yet (20.6).
+- Tests: `tests/wallet-order-payments.test.ts`, transfer cases in
+  `lib/wallet/edupay.test.ts`.
+
+**Not yet:**
+- **Not tried against EduPay.** No `debit_wallet` reply has been seen:
+  success, wrong PIN, not enough money and locked PIN are read defensively,
+  like the PIN calls. Check the first real one — especially that the debit
+  keeps our reference (description or metadata), which is how an unanswered
+  one is found. (EduPay confirmed 2026-11-07 that `debit_wallet` credits the
+  receiver in the same step.)
+- **Is `order_id` unique at EduPay?** Ask. If it is, a repeat can't charge
+  twice whatever happens on our side; if not, our lock and reference are the
+  only guard.
+- **EduPay's own fee on a transfer, if any,** is unknown; the order is paid
+  for its total either way.
+- **Switching an unpaid wallet order to "Pay online"** isn't offered; the
+  shopper tops up instead, or the order lapses after the hour.
+- **Refunds** to the wallet are 20.6.
+
+### 20.6 Refunds to the shopper's wallet — CODE DONE (2026-11-03)
+
+For an order the shopper paid from their wallet (20.5), the refund dialog
+SENDS the money instead of recording money sent elsewhere: one
+`transfer_funds` from the shop wallet to the shopper's, with the SHOP
+wallet's PIN, which the merchant types (`lib/storefront/orders/wallet-refunds.ts`).
+
+- **Which orders:** paid from a wallet (a SUCCESS `edupay` attempt), with the
+  shop's and the shopper's wallets both still active. Anything else — Paystack,
+  transfer, pay on delivery, or a shopper whose wallet is gone — keeps the old
+  "send it, then record it" dialog. Both a cancelled order's refund and a
+  return's go this way; "Refund to wallet" replaces "Record refund".
+- **Recorded only on EduPay's word**, through the same `refundReturn` /
+  `refundCancelledOrder` as any refund: the same cap (never more than the
+  order paid), payment status, restocking and audit log, with the note
+  "Sent to the customer's wallet (EduPay TXN…)". The shopper's email says it
+  IS in their wallet — a fact EduPay confirmed, not the store's word.
+- **At most once.** A `WalletRefund` row is written under the order's lock
+  before EduPay is asked. While it's PENDING it holds its amount (no refund —
+  to the wallet or recorded by hand — can take the same naira), no second
+  wallet refund starts, and the shopper can't withdraw the return. Recording
+  it claims the row (PENDING → SENT) in the same transaction, so a reply and
+  the job racing record it once.
+- **No clear answer** stays PENDING and is settled from the SHOP wallet's
+  transactions by our `…-R…` reference (`settlePendingWalletRefunds`): from
+  the order page, before a new refund, and in the `wallet-setup` job. No trace
+  after 15 minutes → ABANDONED, its amount freed. Never while EduPay can't be
+  asked.
+- **Refusals** (wrong PIN, locked, no PIN, not enough in the shop wallet)
+  record nothing. The shop wallet's balance is shown in the dialog and
+  checked before the PIN is spent.
+- **Sent but not recordable** (the return changed in between): the money has
+  gone, so it's never undone or resent — the row is SENT with `lastError`
+  "Sent, but not recorded", logged, and the merchant told to contact support.
+- Tests: `tests/wallet-refunds.test.ts`.
+
+**Not yet:**
+- **Not tried against EduPay:** the first real `transfer_funds` reply, and
+  whether the description (our reference) survives on the debit. Refunds keep
+  `transfer_funds`: it's a shop-to-shopper transfer, not an order payment.
+- **Staff can't see a "sent but not recorded" refund** except in the
+  database (`wallet_refunds.lastError`) and the error log. Add it to the
+  order page or the console before launch.
+- **Connected shop wallets (20.4):** the shop PIN is the Owner's personal
+  PIN, so whoever refunds needs it.
+- **Paystack orders** are still refunded by hand (10.7 stays paused).
+
+### 20.7 Withdrawals to the shop's bank — CODE DONE (2026-11-03)
+
+EduPay's Service API: bank accounts (`get_bank_accounts`,
+`request_add_bank_account` + `confirm_add_bank_account`), withdrawals
+(`request_withdraw` + `confirm_withdraw`, each pair with a 6-digit code EduPay
+emails to the wallet's address) and auto-withdraw (`get_` / `update_auto_withdraw_settings`,
+`get_auto_withdraw_history`). EduPay says there's no withdrawal charge for now.
+All in `lib/wallet/payouts.ts`; the page is Settings → Payments → Shop wallet.
+
+**Decided (2026-11-03):**
+- **Only the verified settlement account.** Account details come from
+  `MerchantPaymentAccount` (the one staff reviewed), never the browser; its bank
+  code is Paystack's, as EduPay's are. Changing it means going through review.
+- **Only the shop's Owner** withdraws, connects the account or changes
+  auto-withdraw (`features/settings/shop-wallet-payouts.ts`); anyone with
+  `settings.view` sees where things stand. Auto-withdraw asks for no code at
+  EduPay, so this check is its only guard.
+- **By hand, or on a schedule — never both.** A withdrawal by hand is refused
+  on the server while auto-withdraw is on, and when EduPay can't say whether it
+  is. Auto-withdraw won't turn on while a withdrawal is open; one waiting for its
+  code is cancelled if auto-withdraw has come on since.
+
+**How it holds together:**
+- **At most once.** A `WalletWithdrawal` (reference `WD-…`, in the description)
+  is written under the shop's lock before EduPay is asked, and only one may be
+  open. Using the code claims it (AWAITING_CODE → CONFIRMING), so a double press
+  confirms once; a wrong code puts it back.
+- **No clear answer** stays CONFIRMING and is settled from the wallet's
+  transactions — the code is never sent again. No trace after 15 minutes →
+  FAILED. Never while EduPay can't be asked. From the page, before a new
+  withdrawal, and in the `wallet-setup` job.
+- **"Sent" means started.** EduPay's success is that it debited the wallet and
+  began the bank transfer, so we never say "arrived". A credit naming our
+  reference, or a failed debit, within 3 days → RETURNED, and the Owner is told
+  (`account.notice`).
+- **Auto-withdraw always pays the verified account.** One set up outside this
+  page to another account gets a warning; saving here puts it back.
+- **Codes** go to EduPay only: never stored, logged or returned; `debug_otp` from
+  a test server is never read.
+- **Connected wallets (20.4):** the balance includes the owner's personal money,
+  so the withdraw dialog and auto-withdraw both warn; "Keep in the wallet" also
+  protects what refunds need.
+- Tests: `tests/wallet-withdrawals.test.ts`, cases in `lib/wallet/edupay.test.ts`.
+
+**Not yet:**
+- **Not tried against EduPay.** `get_banks`, `get_bank_accounts`, the settings
+  and history reads were checked on the test server (2026-11-03), all empty.
+  `request_withdraw`'s refusals are as EduPay listed them; the replies to
+  `confirm_withdraw` and `confirm_add_bank_account` (wrong and expired codes),
+  a saved account's fields (`id`, `bank_code`) and a run's fields are read
+  defensively.
+- **Ask EduPay:**
+  - does a new `request_withdraw` replace an earlier pending one? `confirm_withdraw`
+    carries only the code, so after a cancel on our side the amount confirmed must
+    be the new one;
+  - does the withdrawal's debit keep our description, and how does a failed
+    transfer's refund appear? Without that a failed transfer stays "Sent" here;
+  - does EduPay itself refuse a manual withdrawal while auto-withdraw is on?
+  - is `debug_otp` off in live?
+- **One wallet, several shops:** an owner with two connected shops shares one
+  wallet and one pending code at EduPay. Our "one open" rule is per shop.
+- **Staff can't see a shop's withdrawals** in the console yet.
 
 ## Sequencing
 

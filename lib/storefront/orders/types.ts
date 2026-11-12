@@ -111,6 +111,8 @@ export interface StorefrontOrder {
   totals: { subtotal: Money; discount: Money; shipping: Money; tax: Money; total: Money };
   /** the code used, as it read when the order was placed; null if none */
   discountCode: string | null;
+  /** the store's VAT number when the order was placed; null if it charged no VAT (ROADMAP 14.1) */
+  vatNumber: string | null;
 
   note: string | null;
   lines: StorefrontOrderLine[];
