@@ -1295,7 +1295,64 @@ between it and real merchants is the business around it — how a merchant gets
 paid, how the platform is run, and what production needs. Phases 10–14 are
 ordered by what blocks taking real money first. See "Sequencing" for the order.
 
-## What's next — build order (updated 2026-09-29)
+## What's next — build order (updated 2026-11-12)
+
+**This list is the current order.** Everything below it ("History of this
+list") is the 2026-09-29 version, kept for its reasoning; every item in it is
+done or appears here.
+
+### Before launch, in order
+
+Two tracks run side by side: code (A) and the owner's outside steps (B).
+Launch (C) needs both.
+
+**A. Code**
+
+| # | What | Status |
+|---|---|---|
+| A1 | Commit and push everything since 2026-10-13 (Phase 20, 14.1, 14.5, 14.6, 14.8) and its four migrations, so CI runs and production deploys it | TODO |
+| A2 | EduPay in the go-live checklist and docs/GO-LIVE.md: keys set, `wallet-setup` on cron-job.org, `debug_otp` off in live | TODO |
+| A3 | 14.7 Returns for counter sales (unpaused: the wallet decision is made) | TODO |
+
+**B. Owner (docs/GO-LIVE.md)**
+
+| # | What | Status |
+|---|---|---|
+| B1 | Resend: sending domain verified, production key set | TODO |
+| B2 | `SOCIAL_TOKEN_KEY` in production; Meta business verification and App Review | TODO |
+| B3 | Paystack: business activated, live keys and webhook, payout accounts moved to live, one real payment | TODO |
+| B4 | Terms and privacy reviewed by counsel (10.10) | TODO |
+| B5 | Paystack's written answers, above all who pays a lost chargeback (10.13) | TODO |
+| B6 | Confirm the name (working name Notely, `lib/brand.ts`) | TODO |
+| B7 | Notifications set up: push keys, Firebase, Ably, the 5-minute retry job | TODO |
+| B8 | Real-phone acceptance: Messages (17.6), notifications (docs/NOTIFICATIONS-ACCEPTANCE.md), business app (19.6) | TODO |
+| B9 | App Store and Google Play listings and privacy forms | TODO |
+| B10 | Wallets: end-to-end runs on EduPay (pay, refund, withdraw) and EduPay's answers to Phase 20's open questions | TODO — **not a launch gate**: without EduPay's settings in production, wallets show as unavailable and Paystack covers payment |
+
+**C. Launch**
+
+| # | What |
+|---|---|
+| C1 | Console → Go-live checklist all Ready; Scheduled jobs all Working; Errors clear |
+| C2 | Open to the first live merchant; watch the console for the first days of real orders |
+
+### After launch, in order
+
+| # | What | Note |
+|---|---|---|
+| D1 | Wallets switched on (once B10 is done, if it wasn't before launch) | — |
+| D2 | Wallet withdrawals visible to platform staff in the console | Phase 20 "Not yet" |
+| D3 | 14.4 SMS/WhatsApp order updates | needs a provider decision first (cost per message) |
+| D4 | 13.5 Custom domains bought through Namecheap's API | staff handle them by hand until then |
+
+### Deliberately not planned yet
+
+Email marketing campaigns (Phase 5 — needs unsubscribe, suppression and
+bounces first); paying an invoice online (Phase 3); merchant API (12.4);
+two-step sign-in required for platform staff (14.5); updating existing
+products by CSV import (14.2).
+
+### History of this list (2026-09-29)
 
 **Phase 10 is done** except refunds (10.7, paused for the wallet partnership)
 and the legal wording (10.10, with counsel). Online payments work end to end in
@@ -4316,7 +4373,7 @@ never showed.
     test mode, both store listings with the privacy answers, and a final
     check.
 
-## Phase 14 — Running the business day to day — TODO
+## Phase 14 — Running the business day to day — IN PROGRESS (14.1, 14.2, 14.5, 14.6, 14.8 done; 14.7 next; 14.4 after launch)
 
 The rest of the former Phase 7, plus gaps found in the 2026-09-29 audit. Not
 launch blockers, but a merchant will feel each within weeks.
@@ -4481,7 +4538,7 @@ launch blockers, but a merchant will feel each within weeks.
     plan gate, permission, tenancy).
   - Not yet: profit stays in Inventory → Sales-based reports (it's by invoice);
     no VAT-only report; no comparison against the same period last year.
-- **14.7 Returns for counter sales — PAUSED with 10.7** (Phase 2's known gap):
+- **14.7 Returns for counter sales — TODO, unpaused 2026-11-12** (the wallet decision it waited on is made; Phase 2's known gap):
   an in-store return and refund against a `WALK_IN` order, putting stock back
   on that store's shelf. Revisit with the wallet decision.
 - **14.8 Checkout rules — DONE (2026-10-28), pulled before launch** (the
