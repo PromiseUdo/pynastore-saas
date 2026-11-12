@@ -46,6 +46,8 @@ import { DISPUTE_STATUS_VARIANT, disputeLabel, disputeOutcome } from '@/lib/sale
 import { ParcelsPanel } from './_components/ParcelsPanel';
 import { RecordOrderRefundButton } from './_components/RefundDialog';
 import { walletRefundOption } from '@/lib/storefront/orders/wallet-refunds';
+import { canUseStore } from '@/lib/store-access';
+import { CounterReturnButton } from './_components/CounterReturnSheet';
 
 export default async function StoreOrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
   await requireFeature(FEATURES.SALES_MODULE);
@@ -80,6 +82,14 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
    * happened all at once — so the online progress track would be a row of
    * ticks for steps nobody took. */
   const isCounterSale = order.channel !== 'ONLINE';
+  /* A counter sale brought back to the shop (ROADMAP 14.7): only by someone
+   * who works in the store that sold it (8.6). */
+  const counterStoreId = order.fulfilledFrom[0]?.warehouseId ?? null;
+  const canTakeBack =
+    isCounterSale &&
+    canManageReturns &&
+    order.status !== 'CANCELLED' &&
+    (counterStoreId === null || canUseStore(ctx.membership, counterStoreId));
   /* Which store's shelf this came off. One store is a fact for the summary
      card; several means the parcel is packed in more than one place, so each
      line has to say where its units are (ROADMAP Phase 8.4). */
@@ -139,6 +149,26 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
               <Printer className="size-3.5" />
               Receipt
             </Link>
+            {canTakeBack && (
+              <CounterReturnButton
+                orderId={order.id}
+                lines={order.lines.map((line) => ({
+                  id: line.id,
+                  name: line.name,
+                  variantName: line.variantName,
+                  quantity: line.quantity,
+                  unitPrice: line.unitPrice,
+                  returnable: line.returnable,
+                }))}
+                subtotal={order.subtotal}
+                discount={order.discount}
+                refundable={order.refundable}
+                paymentStatus={order.paymentStatus}
+                paymentMethod={order.paymentMethod}
+                currency={order.currency}
+                storeName={order.storeName}
+              />
+            )}
             {canManageReturns && refundOwed && (
               <RecordOrderRefundButton
                 orderId={order.id}

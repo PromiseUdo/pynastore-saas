@@ -1,7 +1,7 @@
 # Going live: the outside approvals and live keys
 
 ROADMAP 13.9. This is the work that happens in other companies' dashboards:
-Resend, Meta, Paystack, Apple and Google. Do the steps in the order below,
+Resend, Meta, Paystack, EduPay, Apple and Google. Do the steps in the order below,
 because some outside reviews take days.
 
 **Track progress on Console → Go-live checklist (`/platform/launch`).** It
@@ -22,7 +22,8 @@ Variables**, for **Production**, and only take effect after a **redeploy**
 | 5. Tidy up test mode | nobody | 15 minutes |
 | 6. App Store and Google Play | Apple and Google review | 1–7 days each |
 | 7. Notifications | nobody, then a phone in each hand | 1 hour |
-| 8. Final check | — | 30 minutes |
+| 8. Wallets (EduPay) — optional at launch | EduPay's live server and answers | depends on EduPay |
+| 9. Final check | — | 30 minutes |
 
 ---
 
@@ -236,7 +237,38 @@ forms ask what the app collects. This is what it actually does:
 6. Work through **docs/NOTIFICATIONS-ACCEPTANCE.md** on real phones and
    browsers.
 
-## 8. Final check
+## 8. Wallets (EduPay) — optional at launch
+
+Wallets (ROADMAP 20) are **not needed to open**. With no EduPay settings on
+the live server, no wallet can be set up or used — checkout doesn't offer
+"Pay from wallet", and wallet pages say wallets aren't available — and
+Paystack takes every payment. The checklist's **EduPay wallets** then says Ready ("Wallets are
+off"). Turn them on when the steps below are done, before launch or after.
+
+1. **Get EduPay's answers** to the open questions in ROADMAP Phase 20 (20.7
+   "Ask EduPay"): whether a new withdrawal request replaces a pending one; how
+   a failed bank transfer's money comes back and whether it keeps our
+   reference; whether EduPay refuses a manual withdrawal while auto-withdraw
+   is on; and that `debug_otp` is never returned by the live server.
+2. **Run it end to end on EduPay's test server** (`EDUPAY_MODE=test`, in
+   development): a shopper wallet and a shop wallet set up, a top-up, an
+   order paid from a wallet, a refund to the wallet, and a withdrawal to the
+   shop's bank — each showing the right result in Notely and in EduPay.
+3. **Set the live settings** in Vercel (Production), all three together —
+   with one missing, wallets stay off and the checklist says so:
+   - `EDUPAY_SERVICE_URL` — EduPay's **live** address (https);
+   - `EDUPAY_SERVICE_KEY` — the **live** service key (never in code or chat);
+   - `EDUPAY_MODE=live`.
+
+   Wallets made against the test server aren't carried over: EduPay's test
+   and live servers are separate, so each one is set up again on live.
+4. **cron-job.org:** `/api/cron/wallet-setup` every 15 minutes, with the
+   `CRON_SECRET` header (docs/SCHEDULED-JOBS.md). The checklist's
+   **Finishing wallet payments** turns Ready once it has run.
+5. Redeploy, then do one small real top-up, order, refund and withdrawal on
+   the live site.
+
+## 9. Final check
 
 1. **Console → Go-live checklist:** every check says **Ready**, Notifications
    included.
@@ -247,7 +279,9 @@ forms ask what the app collects. This is what it actually does:
    - both app listings approved;
    - counsel's review of the terms and privacy policy, including the 6-year
      and 30-day rules (10.10);
-   - notifications on real phones and browsers (§7).
+   - notifications on real phones and browsers (§7);
+   - if wallets are on: EduPay's live server checked and the real wallet run
+     done (§8).
 3. **Console → Scheduled jobs:** every job **Working**.
 4. **Console → Errors:** nothing new and open.
 5. Watch the console for the first few days of real orders.

@@ -29,7 +29,13 @@ const FACTS: GoLiveFacts = {
   expectedMetaRedirect: 'https://app.getnotely.io/api/social/meta/callback',
   lastRetryRun: '2026-10-01T09:55:00Z',
   failedDeliveries24h: 0,
+  lastWalletJobRun: '2026-10-01T09:50:00Z',
   now: new Date('2026-10-01T10:00:00Z'),
+};
+const EDUPAY_LIVE = {
+  EDUPAY_SERVICE_URL: 'https://api.edupay.example/service',
+  EDUPAY_SERVICE_KEY: 'edupay-key-91c2',
+  EDUPAY_MODE: 'live',
 };
 const statusOf = (env: Record<string, string | undefined>, facts: Partial<GoLiveFacts> = {}) =>
   Object.fromEntries(goLiveChecks(env, { ...FACTS, ...facts }).map((c) => [c.id, c.status]));
@@ -68,5 +74,30 @@ describe('the go-live checklist', () => {
     expect(statusOf(LIVE_ENV, { lastRetryRun: null })['notification-retries']).toBe('action');
     expect(statusOf(LIVE_ENV, { lastRetryRun: '2026-10-01T08:00:00Z' })['notification-retries']).toBe('action');
     expect(statusOf(LIVE_ENV, { failedDeliveries24h: 3 })['deliveries']).toBe('action');
+  });
+
+  it('is ready with wallets off, and then asks nothing about the wallet job (ROADMAP 20)', () => {
+    const checks = statusOf(LIVE_ENV, { lastWalletJobRun: null });
+    expect(checks.edupay).toBe('ok');
+    expect(checks['wallet-job']).toBeUndefined();
+  });
+
+  it('is ready with wallets on EduPay’s live server and the job running', () => {
+    const checks = statusOf({ ...LIVE_ENV, ...EDUPAY_LIVE });
+    expect(checks.edupay).toBe('ok');
+    expect(checks['wallet-job']).toBe('ok');
+    expect(JSON.stringify(goLiveChecks({ ...LIVE_ENV, ...EDUPAY_LIVE }, FACTS))).not.toContain('edupay-key-91c2');
+  });
+
+  it('flags EduPay half set up, on the test server, or over plain http', () => {
+    expect(statusOf({ ...LIVE_ENV, ...EDUPAY_LIVE, EDUPAY_SERVICE_KEY: undefined }).edupay).toBe('action');
+    expect(statusOf({ ...LIVE_ENV, ...EDUPAY_LIVE, EDUPAY_MODE: 'production' }).edupay).toBe('action');
+    expect(statusOf({ ...LIVE_ENV, ...EDUPAY_LIVE, EDUPAY_MODE: 'test' }).edupay).toBe('action');
+    expect(statusOf({ ...LIVE_ENV, ...EDUPAY_LIVE, EDUPAY_SERVICE_URL: 'http://api.edupay.example' }).edupay).toBe('action');
+  });
+
+  it('flags a wallet job that never ran or has stopped', () => {
+    expect(statusOf({ ...LIVE_ENV, ...EDUPAY_LIVE }, { lastWalletJobRun: null })['wallet-job']).toBe('action');
+    expect(statusOf({ ...LIVE_ENV, ...EDUPAY_LIVE }, { lastWalletJobRun: '2026-10-01T09:00:00Z' })['wallet-job']).toBe('action');
   });
 });

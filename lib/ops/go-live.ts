@@ -16,7 +16,7 @@ export type CheckStatus = 'ok' | 'action' | 'manual';
 
 export interface GoLiveCheck {
   id: string;
-  group: 'Payments' | 'Email' | 'Social' | 'Platform' | 'Notifications';
+  group: 'Payments' | 'Wallets' | 'Email' | 'Social' | 'Platform' | 'Notifications';
   title: string;
   status: CheckStatus;
   /** what we found, in plain words — never a secret's value */
@@ -34,6 +34,8 @@ export interface GoLiveFacts {
   lastRetryRun: string | null;
   /** notifications that couldn't be delivered in the last day: given up, after retries */
   failedDeliveries24h: number;
+  /** when the "wallet-setup" job last finished well (ROADMAP 20) */
+  lastWalletJobRun: string | null;
   now: Date;
 }
 
@@ -103,6 +105,48 @@ export function goLiveChecks(env: Env, facts: GoLiveFacts): GoLiveCheck[] {
           detail: `${facts.payoutsToMove} approved ${facts.payoutsToMove === 1 ? 'business doesn’t have a payout account' : 'businesses don’t have payout accounts'} that work${facts.payoutsToMove === 1 ? 's' : ''} with this key — missing, or made in ${keyMode === 'live' ? 'test' : 'the other'} mode, which this key can’t see. Their shoppers can’t pay online until it’s set up — use the button below.`,
         }),
   });
+
+  // ── Wallets (ROADMAP 20) ──
+  // Optional at launch: with EduPay not set up at all, no wallet is offered
+  // anywhere and Paystack takes every payment, which is a working shop — so
+  // "off" reads Ready. Half set up, or on EduPay's test server, does not.
+  const edupayUrl = env.EDUPAY_SERVICE_URL?.trim() ?? '';
+  const edupayMode = env.EDUPAY_MODE?.trim().toLowerCase() ?? '';
+  const edupaySet = [edupayUrl, env.EDUPAY_SERVICE_KEY?.trim() ?? '', edupayMode].filter(Boolean).length;
+  const walletsOn = edupaySet === 3 && (edupayMode === 'live' || edupayMode === 'test');
+  checks.push({
+    id: 'edupay',
+    group: 'Wallets',
+    title: 'EduPay wallets',
+    ...(edupaySet === 0
+      ? { status: 'ok' as const, detail: 'Wallets are off: EduPay isn’t set up, so nobody is offered a wallet and Paystack takes every payment. Set EDUPAY_SERVICE_URL, EDUPAY_SERVICE_KEY and EDUPAY_MODE=live to turn them on.' }
+      : edupaySet < 3
+        ? { status: 'action' as const, detail: `EduPay is half set up — ${['EDUPAY_SERVICE_URL', 'EDUPAY_SERVICE_KEY', 'EDUPAY_MODE'].filter((k) => !env[k]?.trim()).join(', ')} missing — so wallets stay off. Set all three, or remove them all.` }
+        : !walletsOn
+          ? { status: 'action' as const, detail: `EDUPAY_MODE is “${env.EDUPAY_MODE?.trim()}”; it must be live or test, so wallets stay off.` }
+          : !edupayUrl.startsWith('https://')
+            ? { status: 'action' as const, detail: 'EDUPAY_SERVICE_URL isn’t an https:// address. Wallet requests carry money and must be encrypted.' }
+            : edupayMode === 'test'
+              ? { status: 'action' as const, detail: 'Wallets are on EduPay’s TEST server: balances, top-ups and withdrawals aren’t real money. Set EDUPAY_MODE=live with EduPay’s live address and key — or remove all three to launch without wallets.' }
+              : { status: 'ok' as const, detail: 'Wallets are on, on EduPay’s live server.' }),
+  });
+  if (walletsOn) {
+    const walletJobAge = facts.lastWalletJobRun ? (facts.now.getTime() - new Date(facts.lastWalletJobRun).getTime()) / 60_000 : null;
+    checks.push({
+      id: 'wallet-job',
+      group: 'Wallets',
+      title: 'Finishing wallet payments',
+      ...(walletJobAge !== null && walletJobAge <= 45
+        ? { status: 'ok' as const, detail: `The wallet job last ran ${Math.max(1, Math.round(walletJobAge))} minutes ago.` }
+        : {
+            status: 'action' as const,
+            detail:
+              walletJobAge === null
+                ? 'The wallet job has never run. Add /api/cron/wallet-setup on cron-job.org, every 15 minutes (docs/SCHEDULED-JOBS.md) — without it, unclear top-ups, refunds and withdrawals wait until someone opens them.'
+                : 'The wallet job hasn’t run in the last 45 minutes. Check it on cron-job.org.',
+          }),
+    });
+  }
 
   // ── Email ──
   const from = env.EMAIL_FROM?.trim() ?? '';
@@ -244,6 +288,7 @@ export function goLiveChecks(env: Env, facts: GoLiveFacts): GoLiveCheck[] {
 /** What only a person can confirm, with where to do it — the steps in docs/GO-LIVE.md. */
 export const MANUAL_STEPS: { id: string; group: GoLiveCheck['group'] | 'Mobile app' | 'Legal'; title: string; detail: string }[] = [
   { id: 'meta-review', group: 'Social', title: 'Meta App Review approved', detail: 'Advanced Access granted for the six permissions, and the app switched to Live mode — until then only testers can connect.' },
+  { id: 'edupay-live', group: 'Wallets', title: 'EduPay live server checked (only if wallets are on)', detail: 'On EduPay’s live server: verification codes are emailed and never returned in replies (debug_otp off); one real top-up, order paid from a wallet, refund to a wallet and withdrawal to a bank done end to end; EduPay’s answers to ROADMAP Phase 20’s open questions in hand.' },
   { id: 'resend-domain', group: 'Email', title: 'Sending domain verified in Resend', detail: 'The domain in EMAIL_FROM shows “Verified” under Resend → Domains.' },
   { id: 'paystack-live', group: 'Payments', title: 'A real payment, end to end', detail: 'One small live order paid with a real card, the order marked paid, and the money arriving in the merchant’s bank account.' },
   { id: 'app-store', group: 'Mobile app', title: 'App Store listing and privacy answers', detail: 'App Store Connect: listing, screenshots, privacy policy link and the App Privacy questions answered.' },

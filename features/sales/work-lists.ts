@@ -20,7 +20,7 @@
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
-import { isReturnReason, RETURN_REASONS } from '@/lib/storefront/orders/policy';
+import { COUNTER_RETURN_REASONS, isReturnReason, RETURN_REASONS } from '@/lib/storefront/orders/policy';
 import { type ActionResult, toActionError } from './shared';
 
 export type WorkSource = 'order' | 'invoice';
@@ -247,6 +247,8 @@ export interface ReturnRow {
   statusVariant: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
   /** the customer's reason, for an online-store return */
   reason: string | null;
+  /** an order return taken back at the counter (ROADMAP 14.7), not asked for online */
+  atCounter: boolean;
   itemCount: number;
   requestedAt: string;
   /** refunded against it so far (online returns), if any */
@@ -335,7 +337,7 @@ export async function listAllReturns(params: {
               status: true,
               reason: true,
               requestedAt: true,
-              order: { select: { id: true, reference: true, firstName: true, lastName: true, email: true, currency: true } },
+              order: { select: { id: true, reference: true, channel: true, firstName: true, lastName: true, email: true, currency: true } },
               lines: { select: { quantity: true } },
               refunds: { select: { amount: true } },
             },
@@ -369,11 +371,13 @@ export async function listAllReturns(params: {
           source: 'order',
           href: `/sales/orders/${r.order.id}`,
           reference: r.order.reference,
-          customerName: name || r.order.email || 'A customer',
+          customerName: name || r.order.email || (r.order.channel === 'ONLINE' ? 'A customer' : 'A walk-in customer'),
           status: r.status,
-          statusLabel: s.label,
+          // Taken back with nothing refunded (an exchange) isn't "Refunded".
+          statusLabel: r.status === 'REFUNDED' && r.refunds.length === 0 ? 'Taken back' : s.label,
           statusVariant: s.variant,
-          reason: isReturnReason(r.reason) ? RETURN_REASONS[r.reason] : r.reason,
+          reason: isReturnReason(r.reason) ? (r.order.channel === 'ONLINE' ? RETURN_REASONS : COUNTER_RETURN_REASONS)[r.reason] : r.reason,
+          atCounter: r.order.channel !== 'ONLINE',
           itemCount: r.lines.reduce((n, l) => n + l.quantity, 0),
           requestedAt: r.requestedAt.toISOString(),
           refunded: r.refunds.length ? r.refunds.reduce((n, x) => n + Number(x.amount), 0) : null,
@@ -392,6 +396,7 @@ export async function listAllReturns(params: {
           statusLabel: s.label,
           statusVariant: s.variant,
           reason: null,
+          atCounter: false,
           itemCount: r.lineItems.reduce((n, l) => n + Number(l.quantity), 0),
           requestedAt: r.createdAt.toISOString(),
           refunded: null,

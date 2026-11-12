@@ -36,6 +36,33 @@ export const RETURN_REASONS = {
 
 export type ReturnReason = keyof typeof RETURN_REASONS;
 
+/**
+ * The same reasons, as staff say them about a counter sale brought back
+ * (ROADMAP 14.7) — "Arrived damaged" and "Wrong item sent" are a parcel's
+ * words. Stored as the same keys, so reports read one list.
+ */
+export const COUNTER_RETURN_REASONS: Record<ReturnReason, string> = {
+  'changed-mind': 'Changed their mind',
+  'doesnt-fit': 'Doesn’t fit',
+  'not-as-described': 'Not what they expected',
+  damaged: 'Damaged or faulty',
+  'wrong-item': 'Wrong item given',
+  other: 'Something else',
+};
+
+/** How money went back over the counter — kept on the refund's note, for the merchant's books. */
+export const COUNTER_REFUND_METHODS = {
+  cash: 'Cash',
+  transfer: 'Bank transfer',
+  card: 'Card (back to the card)',
+  other: 'Other',
+} as const;
+export type CounterRefundMethod = keyof typeof COUNTER_REFUND_METHODS;
+
+export function isCounterRefundMethod(value: unknown): value is CounterRefundMethod {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(COUNTER_REFUND_METHODS, value);
+}
+
 export function isReturnReason(value: string): value is ReturnReason {
   return Object.prototype.hasOwnProperty.call(RETURN_REASONS, value);
 }

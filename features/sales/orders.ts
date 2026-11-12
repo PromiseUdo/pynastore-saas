@@ -39,7 +39,7 @@ import {
 import { canUseStore, requireStoreAccess } from '@/lib/store-access';
 import { collectionSplit } from '@/lib/sales/parcel-collection';
 import { readTransferDetails } from '@/lib/storefront/orders/read';
-import { RETURN_REASONS, isReturnReason, refundableAmount, suggestedReturnRefund } from '@/lib/storefront/orders/policy';
+import { COUNTER_RETURN_REASONS, RETURN_REASONS, countsAgainstReturnable, isReturnReason, refundableAmount, suggestedReturnRefund } from '@/lib/storefront/orders/policy';
 import type { ActionResult } from './shared';
 
 export interface StoreOrderRow {
@@ -163,6 +163,8 @@ export interface StoreOrderDetail extends StoreOrderRow {
     productId: string | null;
     /** Which store(s) this line's units came off — see `fulfilledFrom`. */
     fromStores: OrderStoreShare[];
+    /** units not yet in a return that counts — what could still come back (ROADMAP 14.7) */
+    returnable: number;
   }[];
   /** True once the hold was given back (a cancelled or expired order). */
   stockReleased: boolean;
@@ -603,7 +605,9 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
         returns: order.returns.map((r) => ({
           id: r.id,
           status: r.status,
-          reasonLabel: isReturnReason(r.reason) ? RETURN_REASONS[r.reason] : r.reason,
+          reasonLabel: isReturnReason(r.reason)
+            ? (order.channel === 'ONLINE' ? RETURN_REASONS : COUNTER_RETURN_REASONS)[r.reason]
+            : r.reason,
           details: r.details,
           merchantNote: r.merchantNote,
           restocked: r.restocked,
@@ -686,6 +690,15 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
           totalPrice: Number(line.totalPrice),
           productId: line.productId,
           fromStores: lineShares(order, line.id),
+          returnable: Math.max(
+            0,
+            line.quantity -
+              order.returns
+                .filter((r) => countsAgainstReturnable(r.status))
+                .flatMap((r) => r.lines)
+                .filter((l) => l.orderLineItemId === line.id)
+                .reduce((sum, l) => sum + l.quantity, 0),
+          ),
         })),
         parcels: order.shipments.map((shipment, i) => ({
           id: shipment.id,

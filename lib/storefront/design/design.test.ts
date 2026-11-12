@@ -85,6 +85,18 @@ describe('parseDesign', () => {
     expect(parseDesign({ ...design(), version: 99 })).toBeNull();
   });
 
+  it('drops a section type that has since been removed, keeping the rest of the page', () => {
+    const saved = {
+      ...design(),
+      sections: [
+        { id: 'hero', type: 'hero', enabled: true },
+        { id: 'promises', type: 'service-features', enabled: true },
+        { id: 'deal', type: 'deal-of-the-day', enabled: true },
+      ],
+    };
+    expect(parseDesign(saved)?.sections?.map((s) => s.type)).toEqual(['hero', 'deal-of-the-day']);
+  });
+
   it('builds Classic from what a shop set before designs existed', () => {
     expect(classicDesign({ accent: '#B42318', darkByDefault: true })).toEqual(
       design({ look: 'classic', brandColour: '#b42318', darkByDefault: true }),

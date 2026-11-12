@@ -31,6 +31,9 @@ import { prisma } from '@/lib/prisma';
 import { formatMoney } from '../format';
 import { notifyMerchant, notifyShopper } from './notifications';
 import {
+  COUNTER_REFUND_METHODS,
+  isCounterRefundMethod,
+  type CounterRefundMethod,
   countsAgainstReturnable,
   isReturnReason,
   paymentStatusAfterRefund,
@@ -446,6 +449,136 @@ export async function refundCancelledOrder(input: {
 
   await notifyShopper(order.id, 'refunded', { refundAmount: input.amount, toWallet: Boolean(input.walletRefundId) });
   return { ok: true, data: undefined };
+}
+
+/* ---------------- at the counter (ROADMAP 14.7) ---------------- */
+
+/**
+ * A customer brings a counter sale back to the shop. Unlike an online return
+ * there is no request to answer: the person and the goods are at the counter,
+ * so the return is recorded already settled (REFUNDED), in one step, with
+ * whatever money was handed back and the items back on the shelf of the
+ * store that sold them.
+ *
+ * - Only WALK_IN and PHONE orders: an online order is returned by its
+ *   shopper from their account, so the two flows never cross.
+ * - No return window: the store's online window is a promise to shoppers;
+ *   at the counter the staff member decides.
+ * - Money: anything up to what's still refundable, through the same
+ *   `recordRefund` as online refunds, or nothing at all (an exchange, or a
+ *   sale nobody has paid for yet).
+ * - Restock goes back to the allocations the sale dispatched — the store
+ *   that sold it.
+ */
+export async function recordCounterReturn(input: {
+  organizationId: string;
+  orderId: string;
+  lines: ReturnLineRequest[];
+  reason: string;
+  details?: string | null;
+  /** major units; 0 = nothing given back */
+  refundAmount: number;
+  refundMethod?: CounterRefundMethod | null;
+  refundNote?: string | null;
+  restock: boolean;
+  performedById: string | null;
+}): Promise<ReturnResult<{ id: string; refunded: number }>> {
+  if (!isReturnReason(input.reason)) return { ok: false, error: 'Choose why it’s coming back.' };
+  const details = input.details?.trim().slice(0, 1000) || null;
+  if (input.reason === 'other' && !details) return { ok: false, error: 'Add a short note about why it’s coming back.' };
+
+  const amount = Math.round(Number(input.refundAmount) * 100) / 100;
+  if (!Number.isFinite(amount) || amount < 0) return { ok: false, error: 'Enter the amount given back, or 0 for none.' };
+  if (amount > 0 && !isCounterRefundMethod(input.refundMethod)) {
+    return { ok: false, error: 'Choose how the money was given back.' };
+  }
+
+  const order = await prisma.order.findFirst({
+    where: { id: input.orderId, organizationId: input.organizationId },
+    select: { id: true, channel: true, status: true, paymentStatus: true, lineItems: { select: { id: true, quantity: true } } },
+  });
+  if (!order) return { ok: false, error: 'Order not found' };
+  if (order.channel === 'ONLINE') {
+    return { ok: false, error: 'An online order is returned by the customer from their account, and answered under Returns.' };
+  }
+  if (order.status === 'CANCELLED') return { ok: false, error: 'This sale was cancelled, so there is nothing to return.' };
+  if (amount > 0 && order.paymentStatus !== 'PAID' && order.paymentStatus !== 'PARTIALLY_REFUNDED') {
+    return {
+      ok: false,
+      error:
+        order.paymentStatus === 'REFUNDED'
+          ? 'Everything paid for this sale has already been given back. Record the return with nothing refunded.'
+          : 'This sale hasn’t been paid, so there’s no money to give back. Record the return with nothing refunded.',
+    };
+  }
+
+  const note =
+    amount > 0
+      ? [COUNTER_REFUND_METHODS[input.refundMethod as CounterRefundMethod], input.refundNote?.trim().slice(0, 400)].filter(Boolean).join(' — ')
+      : null;
+
+  return prisma
+    .$transaction(async (tx) => {
+      await lockOrder(tx, order.id);
+      const returned = await returnedByLine(tx, order.id);
+      const remaining = new Map<string, number>();
+      for (const line of order.lineItems) {
+        const left = line.quantity - (returned.get(line.id) ?? 0);
+        if (left > 0) remaining.set(line.id, left);
+      }
+      if (remaining.size === 0) return { ok: false as const, error: 'Everything on this sale has already been returned.' };
+
+      const checked = validateReturnLines(input.lines, remaining);
+      if (!checked.ok) {
+        return { ok: false as const, error: counterLineMessage(checked.message) };
+      }
+
+      const now = new Date();
+      const row = await tx.orderReturn.create({
+        data: {
+          organizationId: input.organizationId,
+          orderId: order.id,
+          status: 'REFUNDED',
+          reason: input.reason,
+          details,
+          restocked: input.restock,
+          requestedAt: now,
+          refundedAt: now,
+          lines: { create: checked.lines },
+        },
+        select: { id: true },
+      });
+
+      if (amount > 0) {
+        const refunded = await recordRefund(tx, {
+          organizationId: input.organizationId,
+          orderId: order.id,
+          returnId: row.id,
+          amount,
+          note,
+          performedById: input.performedById,
+        });
+        // Throwing rolls the return back with it: no return without its money, or the reverse.
+        if (!refunded.ok) throw new RefundRefused(refunded.error);
+      }
+      if (input.restock) {
+        await restockReturn(tx, { organizationId: input.organizationId, returnId: row.id, performedById: input.performedById });
+      }
+      return { ok: true as const, data: { id: row.id, refunded: amount } };
+    })
+    .catch((error) => {
+      if (error instanceof RefundRefused) return { ok: false as const, error: error.message };
+      throw error;
+    });
+}
+
+/** The shopper's wording of a line problem, said from behind the counter. */
+function counterLineMessage(message: string): string {
+  const most = /at most (\d+)/.exec(message);
+  if (most) return `Only ${most[1]} of one of those items can still be returned.`;
+  if (message.startsWith('Choose at least one')) return 'Choose at least one item that came back.';
+  if (message.startsWith('Choose how many')) return 'Choose how many of each item came back.';
+  return message;
 }
 
 class RefundRefused extends Error {

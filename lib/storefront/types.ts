@@ -479,7 +479,6 @@ export interface BlogTeaser {
 
 export interface HomepageSections {
   hero: HeroSlide[];
-  serviceFeatures: { icon: string; title: string; description: string }[];
   featuredCategories: Category[];
   dealOfTheDay: { product: Product; endsAt: string } | null;
   collections: { key: string; title: string; subtitle: string; products: Product[] }[];

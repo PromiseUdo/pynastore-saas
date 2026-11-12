@@ -82,6 +82,7 @@ const ACTIONS = [
   'sales.order.parcel_send',
   'sales.order.refunded',
   'sales.order_return.approved',
+  'sales.order_return.counter_recorded',
   'sales.order_return.refunded',
   'sales.order_return.rejected',
   'sales.question.answer',

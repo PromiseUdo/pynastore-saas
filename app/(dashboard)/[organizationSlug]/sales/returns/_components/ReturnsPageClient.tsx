@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableColumnHeader, TableHead, TableRow, Ta
 import { formatDate, formatMoney, formatNumber } from '@/lib/format';
 import type { ReturnsFilter, ReturnsPage, SourceFilter } from '@/features/sales/work-lists';
 
-const SOURCE_LABEL: Record<SourceFilter, string> = { all: 'Orders and invoices', order: 'Online store only', invoice: 'Invoices only' };
+const SOURCE_LABEL: Record<SourceFilter, string> = { all: 'Orders and invoices', order: 'Orders only', invoice: 'Invoices only' };
 
 export function ReturnsPageClient({
   data,
@@ -58,7 +58,7 @@ export function ReturnsPageClient({
     <>
       <PageHeader
         title="Returns"
-        description="Items customers are sending back — from your online store and against invoices — and the refunds you’ve recorded."
+        description="Items customers send or bring back — from your online store, at the counter and against invoices — and the refunds you’ve recorded."
       />
       <PageToolbar className="gap-y-2">
         <PageTabs tabs={tabs} current={filter} param="status" />
@@ -104,7 +104,7 @@ export function ReturnsPageClient({
             <EmptyState
               icon={RotateCcw}
               title={filter === 'open' ? 'Nothing waiting on you' : 'No returns yet'}
-              description="Online-store customers ask to return items from their account; returns against an invoice are raised from the invoice. Both appear here."
+              description="Online-store customers ask to return items from their account; a counter sale is taken back from its order page (Return items); returns against an invoice are raised from the invoice. All of them appear here."
             />
           )
         ) : (
@@ -136,7 +136,9 @@ export function ReturnsPageClient({
                           <Link href={r.href} className="font-medium text-foreground hover:underline">
                             {r.reference}
                           </Link>
-                          <Badge variant={r.source === 'order' ? 'info' : 'muted'}>{r.source === 'order' ? 'Online store' : 'Invoice'}</Badge>
+                          <Badge variant={r.source === 'order' ? 'info' : 'muted'}>
+                            {r.source === 'invoice' ? 'Invoice' : r.atCounter ? 'In store' : 'Online store'}
+                          </Badge>
                         </div>
                         <span className="block text-xs text-muted-foreground">{r.customerName}</span>
                       </TableCell>

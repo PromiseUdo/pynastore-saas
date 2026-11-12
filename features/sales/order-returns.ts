@@ -25,17 +25,21 @@ import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendWalletRefund } from '@/lib/storefront/orders/wallet-refunds';
+import { requireStoreAccess } from '@/lib/store-access';
 import {
   approveReturn,
+  recordCounterReturn,
   refundCancelledOrder,
   refundReturn,
   rejectReturn,
   type ReturnResult,
 } from '@/lib/storefront/orders/returns';
-import { RETURN_REASONS, isReturnReason } from '@/lib/storefront/orders/policy';
+import { RETURN_REASONS, isCounterRefundMethod, isReturnReason } from '@/lib/storefront/orders/policy';
 import type { ActionResult } from './shared';
 
 function denied(error: unknown, fallback: string): { success: false; error: string } {
+  // A store this member doesn't work in — the message says what to do (Phase 8.6).
+  if (error instanceof Error && error.name === 'StoreAccessDeniedError') return { success: false, error: error.message };
   if (error instanceof Error && error.name === 'PermissionDeniedError') {
     return { success: false, error: 'You don’t have permission to manage returns and refunds' };
   }
@@ -141,6 +145,78 @@ export async function refundCancelledStoreOrder(
     });
   } catch (error) {
     return denied(error, 'We couldn’t record this refund. Please try again.');
+  }
+}
+
+/* ---------------- returns at the counter (ROADMAP 14.7) ---------------- */
+
+const CounterReturnSchema = z.object({
+  lines: z
+    .array(z.object({ orderLineItemId: z.string().min(1).max(64), quantity: z.number().int().min(0).max(100_000) }))
+    .min(1)
+    .max(500),
+  reason: z.string().max(40),
+  details: z.string().max(1000).optional(),
+  refundAmount: z.number().min(0, 'Enter the amount given back, or 0 for none').max(1_000_000_000),
+  refundMethod: z.string().max(20).optional(),
+  refundNote: z.string().max(400).optional(),
+  restock: z.boolean(),
+});
+
+/**
+ * A counter sale brought back to the shop: the items, the money handed back
+ * (or none), and the stock back on the selling store's shelf — recorded in
+ * one go (lib/storefront/orders/returns.ts `recordCounterReturn`). The member
+ * must be able to work in the store that made the sale (8.6).
+ */
+export async function recordCounterReturnAction(
+  orderId: string,
+  input: z.input<typeof CounterReturnSchema>,
+): Promise<ActionResult<{ returnId: string }>> {
+  try {
+    const ctx = await manage();
+    const parsed = CounterReturnSchema.safeParse(input);
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? 'Check the return' };
+
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, organizationId: ctx.organization.id },
+      select: { id: true, reference: true, warehouse: { select: { id: true, name: true } } },
+    });
+    if (!order) return { success: false, error: 'Order not found' };
+    if (order.warehouse) requireStoreAccess(ctx.membership, order.warehouse.id, order.warehouse.name);
+
+    const result = await recordCounterReturn({
+      organizationId: ctx.organization.id,
+      orderId: order.id,
+      lines: parsed.data.lines,
+      reason: parsed.data.reason,
+      details: parsed.data.details,
+      refundAmount: parsed.data.refundAmount,
+      refundMethod: isCounterRefundMethod(parsed.data.refundMethod) ? parsed.data.refundMethod : null,
+      refundNote: parsed.data.refundNote,
+      restock: parsed.data.restock,
+      performedById: ctx.userId,
+    });
+    if (!result.ok) return { success: false, error: result.error };
+
+    await createAuditLog({
+      organizationId: ctx.organization.id,
+      userId: ctx.userId,
+      action: 'sales.order_return.counter_recorded',
+      entityType: 'OrderReturn',
+      entityId: result.data.id,
+      metadata: {
+        reference: order.reference,
+        store: order.warehouse?.name ?? '',
+        items: parsed.data.lines.reduce((sum, line) => sum + line.quantity, 0),
+        refunded: result.data.refunded,
+        refundMethod: result.data.refunded > 0 ? (parsed.data.refundMethod ?? '') : '',
+        restock: parsed.data.restock,
+      },
+    });
+    return { success: true, data: { returnId: result.data.id } };
+  } catch (error) {
+    return denied(error, 'We couldn’t record this return. Please try again.');
   }
 }
 

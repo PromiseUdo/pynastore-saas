@@ -94,8 +94,6 @@ export const SectionSchema = z.discriminatedUnion('type', [
       variant: z.enum(['tiles', 'circles', 'list']).default('tiles'),
     })
     .strict(),
-  /** what this store's settings actually promise — delivery, returns, payment */
-  z.object({ ...base, type: z.literal('service-features') }).strict(),
   /**
    * A picture and the merchant's own words (15.4) — "Our story", "Made in
    * Lagos". Plain text, never HTML; a button only with both halves.
@@ -124,6 +122,14 @@ export type HomepageSection = z.output<typeof SectionSchema>;
 export type SectionType = HomepageSection['type'];
 
 export const MAX_SECTIONS = 24;
+
+/**
+ * Section types that no longer exist. A saved front page may still list one;
+ * it's dropped when the design is read (lib/storefront/design/schema.ts), so
+ * the rest of that page keeps working instead of the whole design failing.
+ * 'service-features' — the "Shopping here" band — removed 2026-11-12.
+ */
+export const RETIRED_SECTION_TYPES: readonly string[] = ['service-features'];
 
 export const SectionListSchema = z
   .array(SectionSchema)
@@ -173,7 +179,6 @@ export function classicSections(): HomepageSection[] {
       source: { kind: 'newest' },
     },
     { id: 'categories', type: 'category-showcase', enabled: true, variant: 'tiles' },
-    { id: 'promises', type: 'service-features', enabled: true },
   ];
 }
 
@@ -227,11 +232,6 @@ export const SECTION_INFO: Record<SectionType, SectionInfo> = {
   'category-showcase': {
     label: 'Shop by category',
     description: 'The categories you marked as featured.',
-    single: true,
-  },
-  'service-features': {
-    label: 'What your shop promises',
-    description: 'Delivery, returns and payment — from your settings, never typed.',
     single: true,
   },
   'image-text': {

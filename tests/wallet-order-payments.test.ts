@@ -12,7 +12,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 vi.mock('@/lib/wallet/edupay', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/wallet/edupay')>()),
-  edupayConfigured: () => true,
+  edupayConfigured: vi.fn(() => true),
   walletEnvironment: () => 'test',
   getWallet: vi.fn(),
   getPinStatus: vi.fn(async () => ({ isSet: true, isLocked: false, lockedUntil: null })),
@@ -27,7 +27,7 @@ vi.mock('@/lib/email', () => ({
 
 import { prisma } from '@/lib/prisma';
 import { giveStoreDelivery } from './helpers/delivery';
-import { debitForOrder, findTransfer, getWallet } from '@/lib/wallet/edupay';
+import { debitForOrder, edupayConfigured, findTransfer, getWallet } from '@/lib/wallet/edupay';
 import { getStoreCheckoutConfig } from '@/lib/storefront/checkout/store-config';
 import { placeOrder } from '@/lib/storefront/orders/create';
 import { getOrderPaymentState, reconcileOpenAttempts } from '@/lib/storefront/checkout/payment-service';
@@ -178,6 +178,17 @@ describe('offering it', () => {
       expect(config.paymentMethods.map((m) => m.id)).not.toContain('wallet');
     } finally {
       await prisma.shopWallet.update({ where: { organizationId: store.id }, data: { status: 'ACTIVE' } });
+    }
+  });
+  it('isn’t offered anywhere while EduPay isn’t set up on this server — Paystack still is (go-live, ROADMAP A2)', async () => {
+    const ada = await shopper('Ada');
+    vi.mocked(edupayConfigured).mockReturnValue(false);
+    try {
+      const config = await getStoreCheckoutConfig({ organizationSlug: store.slug }, { customerId: ada.id });
+      expect(config.paymentMethods.map((m) => m.id)).not.toContain('wallet');
+      expect(config.paymentMethods.map((m) => m.id)).toContain('paystack');
+    } finally {
+      vi.mocked(edupayConfigured).mockReturnValue(true);
     }
   });
 });

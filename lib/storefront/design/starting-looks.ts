@@ -55,7 +55,6 @@ export const STARTING_LOOKS: Record<StartingLookId, StartingLook> = {
       { id: 'for-you', type: 'recommended', enabled: true },
       { id: 'reviews', type: 'reviews', enabled: true },
       { id: 'recently-viewed', type: 'recently-viewed', enabled: true },
-      { id: 'promises', type: 'service-features', enabled: true },
     ],
   },
   electronics: {
@@ -72,7 +71,6 @@ export const STARTING_LOOKS: Record<StartingLookId, StartingLook> = {
       band('new-arrivals', 'Just in', 'carousel', { kind: 'newest' }),
       { id: 'budget', type: 'price-explorer', enabled: true },
       { id: 'reviews', type: 'reviews', enabled: true },
-      { id: 'promises', type: 'service-features', enabled: true },
     ],
   },
   grocery: {
@@ -88,7 +86,6 @@ export const STARTING_LOOKS: Record<StartingLookId, StartingLook> = {
       band('popular', 'Popular right now', 'grid', { kind: 'bestselling' }),
       { id: 'recently-viewed', type: 'recently-viewed', enabled: true },
       { id: 'missions', type: 'shopping-missions', enabled: true },
-      { id: 'promises', type: 'service-features', enabled: true },
     ],
   },
   general: {

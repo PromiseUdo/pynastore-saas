@@ -43,7 +43,6 @@ import { loadStorePage, loadStorePageLinks, type PublishedStorePage } from './da
 import { isValidPageSlug, type StorePageLink } from './pages/rules';
 import type { Catalogue } from './data/catalogue';
 import { deliveryOverview } from './delivery/quote';
-import { onlinePaymentsReady } from './checkout/store-config';
 import { loadLiveAnnouncements } from './data/announcements';
 import { loadStorefrontLook, type StorefrontLook } from './data/appearance';
 import { loadStorefrontDesign, type StorefrontDesignView } from './data/design';
@@ -810,7 +809,6 @@ export async function getHomepageSections(scope?: StoreScope): Promise<HomepageS
 
   return ok({
     hero: [],
-    serviceFeatures: await serviceFeatures(cat.organizationSlug, cat.returnWindowDays),
     featuredCategories: cat.categories.filter((c) => c.featured && c.level === 0),
     dealOfTheDay: deal ? { product: deal, endsAt: endOfDay.toISOString() } : null,
     collections: [
@@ -844,50 +842,6 @@ export async function getHomepageSections(scope?: StoreScope): Promise<HomepageS
     instagram: [],
     blog: [],
   });
-}
-
-/**
- * The promises shown at the foot of the homepage. Each restates something
- * the app genuinely does — the gateway it charges through, the delivery
- * options the cart offers, the returns window the policy sets — so the band
- * can't drift into claims a merchant never made.
- */
-async function serviceFeatures(
-  organizationSlug: string,
-  returnWindowDays: number | null,
-): Promise<HomepageSections['serviceFeatures']> {
-  const [options, payOnline] = await Promise.all([
-    deliveryOverview(organizationSlug),
-    onlinePaymentsReady(organizationSlug),
-  ]);
-  const delivery = options.filter((o) => o.kind !== 'pickup');
-  // By the zone's kind, not its label — with several delivering stores it reads "… from Lagos Store".
-  const nationwide = delivery.some((o) => o.nationwide);
-
-  const features = [
-    // Online payment only where checkout will actually offer it (ROADMAP 10.8).
-    payOnline
-      ? { icon: 'shield-check', title: 'Pay your way', description: 'Card, bank transfer or USSD through Paystack, or pay on delivery' }
-      : { icon: 'shield-check', title: 'Pay on delivery', description: 'Pay the courier when your order arrives' },
-  ];
-  if (delivery.length) {
-    features.push({
-      icon: 'truck',
-      title: nationwide ? 'Delivery across Nigeria' : 'Delivery available',
-      description: 'Options and prices for your address at checkout',
-    });
-  }
-  if (returnWindowDays) {
-    features.push({
-      icon: 'rotate-ccw',
-      title: 'Returns',
-      description: `Ask to return items within ${returnWindowDays} days of delivery`,
-    });
-  }
-  if (options.some((o) => o.kind === 'pickup')) {
-    features.push({ icon: 'badge-check', title: 'Collect in store', description: 'Pick up your order instead' });
-  }
-  return features;
 }
 
 /* ---------------- store pages ----------------

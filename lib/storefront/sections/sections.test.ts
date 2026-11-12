@@ -25,7 +25,6 @@ describe('classicSections', () => {
       'deal-of-the-day',
       'products:newest',
       'category-showcase',
-      'service-features',
     ]);
   });
 

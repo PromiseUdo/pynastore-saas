@@ -138,8 +138,6 @@ describe('homepage & content', () => {
     expect(h.collections.every((c) => c.products.length > 0)).toBe(true);
     expect(h.featuredCategories.every((c) => c.level === 0)).toBe(true);
     // Service promises restate what the app really does (gateway, delivery, returns).
-    expect(h.serviceFeatures.length).toBeGreaterThan(0);
-    expect(h.serviceFeatures.every((f) => f.title && f.description)).toBe(true);
   });
 
   it('invents no social proof or campaign copy for a store', async () => {

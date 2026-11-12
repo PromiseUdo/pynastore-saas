@@ -65,12 +65,15 @@ export function OrderReturnsPanel({
   if (order.returns.length === 0 && order.refunds.length === 0) return null;
 
   const returnsById = new Map(order.returns.map((r, index) => [r.id, order.returns.length - index]));
+  /* A counter sale's returns were recorded at the counter (ROADMAP 14.7):
+   * nobody requested anything, and there's no customer message. */
+  const atCounter = order.channel !== 'ONLINE';
 
   return (
     <>
       {order.returns.length > 0 && (
         <section id="returns" className="mt-4 rounded-lg border bg-card">
-          <h2 className="border-b px-4 py-3 text-sm font-semibold">Return requests</h2>
+          <h2 className="border-b px-4 py-3 text-sm font-semibold">{atCounter ? 'Returns' : 'Return requests'}</h2>
           <ul className="divide-y">
             {order.returns.map((ret) => {
               const open = ret.status === 'REQUESTED' || ret.status === 'APPROVED';
@@ -82,7 +85,9 @@ export function OrderReturnsPanel({
                       {ORDER_RETURN_LABEL[ret.status] ?? '—'}
                     </Badge>
                     <span className="text-sm font-medium">{ret.reasonLabel}</span>
-                    <span className="text-xs text-muted-foreground">Requested {formatDate(ret.requestedAt)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {atCounter ? 'Brought back' : 'Requested'} {formatDate(ret.requestedAt)}
+                    </span>
                   </div>
 
                   <ul className="space-y-1 text-sm">
@@ -102,7 +107,7 @@ export function OrderReturnsPanel({
 
                   {ret.details && (
                     <p className="border-l-2 pl-3 text-sm text-muted-foreground">
-                      <span className="font-medium text-foreground">Customer: </span>
+                      <span className="font-medium text-foreground">{atCounter ? 'Note: ' : 'Customer: '}</span>
                       {ret.details}
                     </p>
                   )}
@@ -114,7 +119,7 @@ export function OrderReturnsPanel({
                   )}
                   {ret.status === 'REFUNDED' && (
                     <p className="text-xs text-muted-foreground">
-                      Refunded {formatDate(ret.refundedAt)}
+                      {atCounter ? 'Settled at the counter' : `Refunded ${formatDate(ret.refundedAt)}`}
                       {ret.restocked ? ' · items put back in stock' : ' · not restocked'}
                     </p>
                   )}

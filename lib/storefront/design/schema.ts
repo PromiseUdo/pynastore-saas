@@ -24,7 +24,7 @@
 import { z } from 'zod';
 import { CARD_KEYS, CORNER_KEYS, FONT_KEYS, LOOK_KEYS } from './looks';
 import { isHex } from './colour';
-import { SectionListSchema, shopPath, type HomepageSection } from '../sections/schema';
+import { RETIRED_SECTION_TYPES, SectionListSchema, shopPath, type HomepageSection } from '../sections/schema';
 import { STARTING_LOOK_IDS } from './starting-look-ids';
 
 /* ─── Header and footer (15.5) ─────────────────────────────────────────── */
@@ -123,6 +123,15 @@ export function parseDesign(raw: unknown): StorefrontDesignConfig | null {
   while (Number.isInteger(version) && version < DESIGN_VERSION && UPGRADES[version]) {
     doc = UPGRADES[version](doc);
     version += 1;
+  }
+  // A section type that has since been removed is dropped, not fatal.
+  if (Array.isArray(doc.sections)) {
+    doc = {
+      ...doc,
+      sections: doc.sections.filter(
+        (section) => !(section && typeof section === 'object' && RETIRED_SECTION_TYPES.includes((section as { type?: unknown }).type as string)),
+      ),
+    };
   }
   const parsed = DesignSchema.safeParse(doc);
   return parsed.success ? parsed.data : null;

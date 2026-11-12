@@ -42,7 +42,6 @@ import { CategoryShowcase } from '@/components/storefront/merchandising/category
 import { ProductCarousel } from '@/components/storefront/merchandising/product-carousel';
 import { ProductGrid } from '@/components/storefront/merchandising/product-grid';
 import { DealOfTheDay } from '@/components/storefront/merchandising/deal-of-the-day';
-import { ServiceFeatures } from '@/components/storefront/merchandising/service-features';
 import { Recommendations } from '@/components/storefront/recommendations/recommendations';
 import { RecentlyViewed } from '@/components/storefront/product/recently-viewed';
 import { ProductFeature } from '@/components/storefront/merchandising/product-feature';
@@ -194,11 +193,6 @@ const REGISTRY = {
   'category-showcase': define('category-showcase', {
     load: async (_section, { shared }) => ({ categories: (await shared.homepage()).featuredCategories }),
     render: ({ categories }, section) => <CategoryShowcase categories={categories} variant={section.variant} />,
-  }),
-
-  'service-features': define('service-features', {
-    load: async (_section, { shared }) => ({ features: (await shared.homepage()).serviceFeatures }),
-    render: ({ features }) => <ServiceFeatures features={features} />,
   }),
 
   /* The merchant's own picture and words — nothing to fetch. */

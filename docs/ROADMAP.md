@@ -143,9 +143,8 @@ Tests: `tests/counter-sale.test.ts` (13 cases — stock leaves the right store,
 a refused sale leaves no order behind, tenancy, and that a counter sale never
 reaches the storefront even when attached to a real customer).
 
-**Known gap:** a counter sale can't yet be returned. `OrderReturn` is the
-shopper-initiated storefront flow; an in-store return needs its own path and
-belongs with Phase 3's receipts or Phase 4.
+**Known gap — closed by 14.7 (2026-11-12):** a counter sale can now be taken
+back from its order page (Return items), recorded settled in one step.
 
 ## Phase 3 — Finish invoices and receipts — DONE (2026-09-22)
 
@@ -1310,9 +1309,9 @@ Launch (C) needs both.
 
 | # | What | Status |
 |---|---|---|
-| A1 | Commit and push everything since 2026-10-13 (Phase 20, 14.1, 14.5, 14.6, 14.8) and its four migrations, so CI runs and production deploys it | TODO |
-| A2 | EduPay in the go-live checklist and docs/GO-LIVE.md: keys set, `wallet-setup` on cron-job.org, `debug_otp` off in live | TODO |
-| A3 | 14.7 Returns for counter sales (unpaused: the wallet decision is made) | TODO |
+| A1 | Commit and push everything since 2026-10-13 (Phase 20, 14.1, 14.5, 14.6, 14.8) and its four migrations, so CI runs and production deploys it | DONE 2026-11-12 |
+| A2 | EduPay in the go-live checklist and docs/GO-LIVE.md: keys set, `wallet-setup` on cron-job.org, `debug_otp` off in live | DONE 2026-11-12 — checks `edupay` and `wallet-job` in `lib/ops/go-live.ts`, manual step `edupay-live`, GO-LIVE.md §8; wallets off reads Ready |
+| A3 | 14.7 Returns for counter sales (unpaused: the wallet decision is made) | DONE 2026-11-12 |
 
 **B. Owner (docs/GO-LIVE.md)**
 
@@ -4373,7 +4372,7 @@ never showed.
     test mode, both store listings with the privacy answers, and a final
     check.
 
-## Phase 14 — Running the business day to day — IN PROGRESS (14.1, 14.2, 14.5, 14.6, 14.8 done; 14.7 next; 14.4 after launch)
+## Phase 14 — Running the business day to day — DONE except 14.4 (after launch); 14.1, 14.2, 14.5–14.8 done
 
 The rest of the former Phase 7, plus gaps found in the 2026-09-29 audit. Not
 launch blockers, but a merchant will feel each within weeks.
@@ -4538,9 +4537,35 @@ launch blockers, but a merchant will feel each within weeks.
     plan gate, permission, tenancy).
   - Not yet: profit stays in Inventory → Sales-based reports (it's by invoice);
     no VAT-only report; no comparison against the same period last year.
-- **14.7 Returns for counter sales — TODO, unpaused 2026-11-12** (the wallet decision it waited on is made; Phase 2's known gap):
-  an in-store return and refund against a `WALK_IN` order, putting stock back
-  on that store's shelf. Revisit with the wallet decision.
+- **14.7 Returns for counter sales — DONE (2026-11-12)** (Phase 2's known gap).
+  A counter sale's order page has **Return items** (needs `sales.return.manage`
+  and the store that made the sale, 8.6). Decided 2026-11-12:
+  - **Recorded settled, in one step.** The customer and the goods are at the
+    counter, so there's no request to approve: the `OrderReturn` is written
+    REFUNDED, with its lines, the money and the restock together — or not at
+    all.
+  - **Same records as online returns,** no new model: `OrderReturn` +
+    `OrderRefund`, through the same `recordRefund` and `restockReturn`
+    (`recordCounterReturn` in `lib/storefront/orders/returns.ts`). A return
+    is "at the counter" because its order's channel isn't ONLINE.
+  - **Money:** up to what's still refundable, with how it went back (cash,
+    bank transfer, card, other — kept on the refund's note), or **nothing**
+    for an exchange or store credit. An unpaid sale can still be taken back,
+    with nothing refunded. The app moves no money.
+  - **Stock** goes back to the shelf the sale's allocations came from (on by
+    default; off for damaged goods), with an IN movement.
+  - **No return window** at the counter: the online window is a promise to
+    shoppers; in the shop, staff decide.
+  - **Only WALK_IN and PHONE orders;** an online order is still returned by
+    its shopper.
+  As shipped: the sheet (`CounterReturnSheet.tsx`) suggests the amount (the
+  lines less their share of the sale's discount, `suggestedReturnRefund`);
+  counter-worded reasons (`COUNTER_RETURN_REASONS`, same keys);
+  the order page shows "Returns … Brought back"; Sales → Returns marks them
+  **In store** and an exchange **Taken back**; audit
+  `sales.order_return.counter_recorded`. Tests: `tests/counter-returns.test.ts`.
+  Not yet: no printed return slip; the sales reports still don't net returns
+  out of product figures (refunds are shown beside sales, 14.6).
 - **14.8 Checkout rules — DONE (2026-10-28), pulled before launch** (the
   2026-10-28 go-live audit found every shop's checkout read fixed values from
   `lib/storefront/mock/checkout.ts`). As shipped:
