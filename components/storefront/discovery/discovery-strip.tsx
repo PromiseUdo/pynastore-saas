@@ -5,7 +5,8 @@
  *
  * When a merchant uses their own front-page slides those replace
  * <DiscoveryHero>, and three things went with it: the search box (now always
- * in the header), "Ask the assistant" (now a floating button), and this —
+ * in the header), "Ask the assistant" (a floating button, or a chip in this
+ * row when "Message us" holds that corner), and this —
  * guided narrowing, plus the surface that ANSWERS the shopping-mission and
  * budget tiles further down the page.
  *
@@ -25,6 +26,8 @@ import { useDiscoveryRun } from './use-discovery-run';
 import { DiscoveryResults } from './discovery-results';
 import { GuidedPicker, type GuidedSelection } from './guided-picker';
 import { ImageSearchLink } from '@/components/storefront/visual-search/image-search-link';
+import { AssistantLauncher } from '@/components/storefront/assistant/assistant-launcher';
+import { useChatConfig } from '@/components/storefront/chat/chat-config';
 import type { PriceBandOption, RootCategoryOption } from './types';
 
 export function DiscoveryStrip({
@@ -35,6 +38,9 @@ export function DiscoveryStrip({
   priceBands: PriceBandOption[];
 }) {
   const [guiding, setGuiding] = React.useState(false);
+  /* With chat on, "Message us" owns the floating corner, so the assistant
+   * sits in this row with the other ways in (see AssistantLauncher). */
+  const chatOn = useChatConfig() !== null;
   const { state, heading, resultsRef, run, reset } = useDiscoveryRun();
 
   const onGuided = (selection: GuidedSelection) => {
@@ -115,6 +121,24 @@ export function DiscoveryStrip({
           variant="icon"
           className="size-11 shrink-0 border border-border hover:border-brand sm:hidden"
         />
+
+        {chatOn && (
+          <>
+            <AssistantLauncher
+              seed={{ surface: 'home' }}
+              label="Ask the assistant"
+              variant="chip"
+              className="hidden sm:inline-flex"
+            />
+            {/* A phone has no room for three labels in one row. */}
+            <AssistantLauncher
+              seed={{ surface: 'home' }}
+              label="Ask"
+              variant="chip"
+              className="shrink-0 sm:hidden"
+            />
+          </>
+        )}
       </div>
 
       {guiding && (

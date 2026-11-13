@@ -129,9 +129,9 @@ describe('the ways in', () => {
     await waitFor(() => expect(screen.getByRole('link', { name: /the store has replied/ })).toBeTruthy());
   });
 
-  it('turns the homepage’s floating assistant into a chip while chat holds the corner', () => {
+  it('leaves the corner to chat: the floating assistant moves into the discovery row', () => {
     wrap(<AssistantLauncher seed={{ surface: 'home' }} label="Ask the assistant" variant="floating" />);
-    expect(screen.getByRole('button', { name: /Ask the assistant/ }).className).not.toContain('sf-assistant-fab');
+    expect(screen.queryByRole('button', { name: /Ask the assistant/ })).toBeNull();
     cleanup();
     wrap(<AssistantLauncher seed={{ surface: 'home' }} label="Ask the assistant" variant="floating" />, null);
     expect(screen.getByRole('button', { name: /Ask the assistant/ }).className).toContain('sf-assistant-fab');

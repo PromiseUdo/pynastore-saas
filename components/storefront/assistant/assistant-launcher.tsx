@@ -46,16 +46,11 @@ export function AssistantLauncher({
   const openPanel = useAssistantStore((s) => s.openPanel);
   const scrolled = usePageScrolled();
   /* The corner holds one floating button. When the shop takes messages it
-   * belongs to "Message us" (ROADMAP 17.3), and this one sits in the page
-   * as a chip instead. */
+   * belongs to "Message us" (ROADMAP 17.3), and the assistant joins the
+   * "Not sure where to start?" row in <DiscoveryStrip> instead — a chip on
+   * a line of its own under that row read as misplaced. */
   const chatOn = useChatConfig() !== null;
-  if (variant === 'floating' && chatOn) {
-    return (
-      <div className="sf-container mt-4 flex justify-center">
-        <AssistantLauncher seed={seed} label={label} variant="chip" className={className} />
-      </div>
-    );
-  }
+  if (variant === 'floating' && chatOn) return null;
 
   const floating = variant === 'floating';
 
