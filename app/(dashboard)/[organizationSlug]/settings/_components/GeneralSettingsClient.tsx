@@ -63,6 +63,25 @@ export function GeneralSettingsClient({
 
   const currency = currencies.find((c) => c.code === settings.currency);
 
+  /* Uploading an image only stores the file; nothing changes on the shop until
+   * the form is saved. The header's Save button is off-screen by the time
+   * someone reaches the images, so a bar follows them while anything differs
+   * from what was last saved. */
+  const snapshot = JSON.stringify({
+    name,
+    supportEmail,
+    supportPhone,
+    businessAddress,
+    vatRegistered,
+    vatRate,
+    vatNumber,
+    socialLinks,
+    logo: logo[0]?.publicId ?? null,
+    favicon: favicon[0]?.publicId ?? null,
+  });
+  const [savedSnapshot, setSavedSnapshot] = React.useState(snapshot);
+  const dirty = canManage && snapshot !== savedSnapshot;
+
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canManage || pending || uploading) return;
@@ -89,9 +108,11 @@ export function GeneralSettingsClient({
     if (!result.success) {
       if ('fieldErrors' in result) setFieldErrors(result.fieldErrors);
       setFormError(result.error);
+      toast.error(result.error);
       return;
     }
 
+    setSavedSnapshot(snapshot);
     toast.success('Business details saved');
     router.refresh();
   }
@@ -345,6 +366,17 @@ export function GeneralSettingsClient({
             />
           </ul>
         </FormSection>
+        {dirty && (
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex items-center justify-between gap-3 border-t bg-background/95 px-6 py-3 backdrop-blur-sm">
+            <p className="text-sm text-muted-foreground">
+              {uploading ? 'Uploading image…' : 'You have unsaved changes.'}
+            </p>
+            <Button type="submit" size="sm" disabled={pending || uploading}>
+              {pending && <Loader2 className="size-3.5 animate-spin" />}
+              Save changes
+            </Button>
+          </div>
+        )}
       </PageBody>
     </form>
   );
