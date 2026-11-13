@@ -48,8 +48,15 @@ export function GeneralSettingsClient({
       ? [{ url: settings.logoUrl, publicId: settings.logoPublicId }]
       : [],
   );
+  const [favicon, setFavicon] = React.useState<UploadedImage[]>(
+    settings.faviconUrl && settings.faviconPublicId
+      ? [{ url: settings.faviconUrl, publicId: settings.faviconPublicId }]
+      : [],
+  );
 
-  const [uploading, setUploading] = React.useState(false);
+  const [logoUploading, setLogoUploading] = React.useState(false);
+  const [faviconUploading, setFaviconUploading] = React.useState(false);
+  const uploading = logoUploading || faviconUploading;
   const [pending, setPending] = React.useState(false);
   const [fieldErrors, setFieldErrors] = React.useState<OrganizationFieldErrors>({});
   const [formError, setFormError] = React.useState<string | null>(null);
@@ -67,6 +74,7 @@ export function GeneralSettingsClient({
     const result = await saveOrganizationSettings({
       name,
       logo: logo[0] ? { url: logo[0].url, publicId: logo[0].publicId } : null,
+      favicon: favicon[0] ? { url: favicon[0].url, publicId: favicon[0].publicId } : null,
       supportEmail,
       supportPhone,
       businessAddress,
@@ -92,7 +100,7 @@ export function GeneralSettingsClient({
     <form onSubmit={onSubmit}>
       <PageHeader
         title="General"
-        description="Your business name, logo, contact details, VAT and social media."
+        description="Your business name, logo, tab icon, contact details, VAT and social media."
         actions={
           canManage ? (
             <Button type="submit" size="sm" disabled={pending || uploading}>
@@ -129,7 +137,7 @@ export function GeneralSettingsClient({
           <Field>
             <Label>Logo</Label>
             <FieldDescription>
-              Shown in the sidebar, on your online shop and its browser tab, and on what you send out. A square image works best.
+              Shown in the sidebar, on your online shop, and on what you send out. A square image works best.
             </FieldDescription>
             <ImageUploader
               purpose="organization"
@@ -137,8 +145,26 @@ export function GeneralSettingsClient({
               onChange={setLogo}
               max={1}
               disabled={!canManage}
-              onBusyChange={setUploading}
+              onBusyChange={setLogoUploading}
               hint="PNG, JPG or WebP, up to 10MB"
+            />
+          </Field>
+
+          <Field>
+            <Label>Browser tab icon</Label>
+            <FieldDescription>
+              The small picture beside your shop&apos;s name in a browser tab (a &ldquo;favicon&rdquo;). It shows at about
+              16–32 pixels, so a simple square mark reads better than a full logo with words. Leave it empty to use your
+              logo.
+            </FieldDescription>
+            <ImageUploader
+              purpose="organization"
+              value={favicon}
+              onChange={setFavicon}
+              max={1}
+              disabled={!canManage}
+              onBusyChange={setFaviconUploading}
+              hint="A square PNG, at least 64 × 64 pixels"
             />
           </Field>
 

@@ -3,7 +3,7 @@
 /*
  * features/settings/organization.ts
  *
- * Settings → General: the business's own details — name, logo, how customers
+ * Settings → General: the business's own details — name, logo, tab icon, how customers
  * reach them, and the currency every amount in the workspace is written in.
  *
  * The online store's returns window is NOT here: it is already owned by
@@ -37,6 +37,9 @@ export interface OrganizationSettings {
   slug: string;
   logoUrl: string | null;
   logoPublicId: string | null;
+  /** the shop's browser-tab icon; null = the tab shows the logo */
+  faviconUrl: string | null;
+  faviconPublicId: string | null;
   currency: string;
   supportEmail: string | null;
   supportPhone: string | null;
@@ -61,6 +64,7 @@ const OrganizationSchema = z.object({
     .min(2, 'Enter your business name')
     .max(80, 'Keep the business name under 80 characters'),
   logo: z.object({ url: z.string().url(), publicId: z.string() }).nullable().optional(),
+  favicon: z.object({ url: z.string().url(), publicId: z.string() }).nullable().optional(),
   supportEmail: z
     .string()
     .trim()
@@ -103,6 +107,8 @@ export async function getOrganizationSettings(): Promise<ActionResult<Organizati
         slug: true,
         logoUrl: true,
         logoPublicId: true,
+        faviconUrl: true,
+        faviconPublicId: true,
         currency: true,
         supportEmail: true,
         supportPhone: true,
@@ -155,16 +161,24 @@ export async function saveOrganizationSettings(
     if (data.logo && !isOrgAsset(data.logo, organizationId)) {
       return { success: false, error: 'That logo wasn’t uploaded through this workspace. Remove it and upload it again.' };
     }
+    if (data.favicon && !isOrgAsset(data.favicon, organizationId)) {
+      return { success: false, error: 'That tab icon wasn’t uploaded through this workspace. Remove it and upload it again.' };
+    }
 
     const current = await prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { logoPublicId: true, vatRegistered: true, vatRate: true },
+      select: { logoPublicId: true, faviconPublicId: true, vatRegistered: true, vatRate: true },
     });
     const vatRegistered = data.vatRegistered ?? current?.vatRegistered ?? false;
     const vatRate = data.vatRate ?? Number(current?.vatRate ?? DEFAULT_VAT_RATE_PCT);
 
     const logoUrl = data.logo?.url ?? null;
     const logoPublicId = data.logo?.publicId ?? null;
+    /* Left out of the input = keep what's saved (an older form); null = removed. */
+    const favicon =
+      data.favicon === undefined
+        ? undefined
+        : { faviconUrl: data.favicon?.url ?? null, faviconPublicId: data.favicon?.publicId ?? null };
 
     await prisma.organization.update({
       where: { id: organizationId },
@@ -172,6 +186,7 @@ export async function saveOrganizationSettings(
         name: data.name,
         logoUrl,
         logoPublicId,
+        ...(favicon ?? {}),
         supportEmail: data.supportEmail?.trim() || null,
         supportPhone: data.supportPhone?.trim() || null,
         businessAddress: data.businessAddress?.trim() || null,
@@ -189,6 +204,10 @@ export async function saveOrganizationSettings(
     if (current?.logoPublicId && current.logoPublicId !== logoPublicId) {
       await destroyAsset(current.logoPublicId);
     }
+    const faviconChanged = favicon !== undefined && (current?.faviconPublicId ?? null) !== favicon.faviconPublicId;
+    if (faviconChanged && current?.faviconPublicId) {
+      await destroyAsset(current.faviconPublicId);
+    }
 
     await createAuditLog({
       organizationId,
@@ -199,6 +218,7 @@ export async function saveOrganizationSettings(
       metadata: {
         name: data.name,
         logoChanged: (current?.logoPublicId ?? null) !== logoPublicId,
+        faviconChanged,
         socialLinks: Object.keys(social.links),
         vatRegistered,
         vatRate,

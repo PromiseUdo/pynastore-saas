@@ -224,6 +224,13 @@ model Organization {
    */
   logoUrl      String?
   logoPublicId String?
+  /**
+   * The icon in the online shop's browser tab. Optional: without one the tab
+   * shows the logo. Kept apart because a wide logo is unreadable at 16–32px,
+   * and many businesses have a small square mark for exactly this.
+   */
+  faviconUrl      String?
+  faviconPublicId String?
   status       OrganizationStatus @default(ACTIVE)
 
   /**

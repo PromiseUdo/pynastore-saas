@@ -81,6 +81,7 @@ export async function generateMetadata({
     select: {
       name: true,
       logoUrl: true,
+      faviconUrl: true,
       storefrontTagline: true,
       storefrontSocialImageUrl: true,
       storefrontOpen: true,
@@ -98,10 +99,12 @@ export async function generateMetadata({
    * search listing. Pages that know more set their own. */
   const description = org.storefrontTagline?.trim() || `Shop online at ${org.name}.`;
   const image = org.storefrontSocialImageUrl ?? org.logoUrl ?? null;
-  /* The shop's logo in the browser tab (15.0), shrunk by Cloudinary rather
-   * than downloaded at full size. Without a logo the browser keeps its own. */
-  const icons = org.logoUrl
-    ? { icon: cloudinaryImage(org.logoUrl, { width: 64, height: 64, crop: 'fit' }), apple: '/app-icon/180' }
+  /* The browser-tab icon: the merchant's own favicon if they set one, else
+   * the logo (15.0), shrunk by Cloudinary rather than downloaded at full
+   * size. With neither, the browser keeps its own. */
+  const tabIcon = org.faviconUrl ?? org.logoUrl;
+  const icons = tabIcon
+    ? { icon: cloudinaryImage(tabIcon, { width: 64, height: 64, crop: 'fit' }), apple: '/app-icon/180' }
     : { apple: '/app-icon/180' };
 
   return {

@@ -238,7 +238,14 @@ export async function purgeClosedWorkspace(organizationId: string, now: Date = n
       });
       await tx.organization.update({
         where: { id: organizationId },
-        data: { closedDataPurgedAt: now, logoUrl: null, logoPublicId: null, closureReason: null },
+        data: {
+          closedDataPurgedAt: now,
+          logoUrl: null,
+          logoPublicId: null,
+          faviconUrl: null,
+          faviconPublicId: null,
+          closureReason: null,
+        },
       });
     },
     { timeout: 120_000 },
