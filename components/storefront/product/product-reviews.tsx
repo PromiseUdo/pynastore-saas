@@ -195,7 +195,7 @@ function ReviewItem({
         <RatingStars value={review.rating} size={14} />
         <h3 className="text-sm font-semibold">{review.title}</h3>
         {isOwn && (
-          <span className="rounded-full bg-secondary px-2 py-0.5 text-[0.6875rem] font-semibold">
+          <span className="rounded-(--sf-radius-button) bg-secondary px-2 py-0.5 text-[0.6875rem] font-semibold">
             Your review
           </span>
         )}

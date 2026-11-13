@@ -49,7 +49,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label={isLight ? 'Switch to dark theme' : 'Switch to light theme'}
       title={isLight ? 'Dark theme' : 'Light theme'}
       className={cn(
-        'flex size-8 items-center justify-center rounded-full opacity-75 transition hover:bg-white/10 hover:opacity-100',
+        'flex size-8 items-center justify-center rounded-(--sf-radius-button) opacity-75 transition hover:bg-white/10 hover:opacity-100',
         className,
       )}
     >

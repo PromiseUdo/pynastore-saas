@@ -78,7 +78,7 @@ export function AddressCard({ address }: { address: Address }) {
             <button
               type="button"
               aria-label={`Delete the address for ${address.fullName}`}
-              className="ml-auto flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              className="ml-auto flex size-10 items-center justify-center rounded-(--sf-radius-button) text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="size-4" aria-hidden />
             </button>

@@ -50,7 +50,7 @@ export function SavedAddressPicker({
                 <span className="flex flex-wrap items-center gap-2 font-semibold">
                   {address.fullName}
                   {address.isDefault && (
-                    <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    <span className="rounded-(--sf-radius-button) bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
                       Default
                     </span>
                   )}

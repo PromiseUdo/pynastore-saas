@@ -69,7 +69,7 @@ function IconAction({
   children: React.ReactNode;
 }) {
   const className = cn(
-    'relative flex size-11 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:border-brand hover:text-brand',
+    'relative flex size-11 items-center justify-center rounded-(--sf-radius-button) border border-border bg-card text-foreground transition-colors hover:border-brand hover:text-brand',
     extra,
   );
   /* The badge is decorative to a screen reader — the count belongs in the
@@ -147,7 +147,7 @@ export function SiteHeader({
       onClick={openSearch}
       aria-label="Search"
       className={cn(
-        'flex size-11 items-center justify-center rounded-full border border-border bg-card transition-colors hover:border-brand hover:text-brand',
+        'flex size-11 items-center justify-center rounded-(--sf-radius-button) border border-border bg-card transition-colors hover:border-brand hover:text-brand',
         className,
       )}
     >

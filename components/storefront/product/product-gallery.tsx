@@ -131,7 +131,7 @@ export function ProductGallery({
             type="button"
             onClick={() => setZoomed(true)}
             aria-label="Open image full size"
-            className="absolute right-4 top-4 flex size-10 items-center justify-center rounded-full bg-white/85 text-neutral-800 backdrop-blur transition hover:bg-white"
+            className="absolute right-4 top-4 flex size-10 items-center justify-center rounded-(--sf-radius-button) bg-white/85 text-neutral-800 backdrop-blur transition hover:bg-white"
           >
             <Expand className="size-4" />
           </button>
@@ -221,7 +221,7 @@ export function ProductGallery({
             type="button"
             onClick={() => setZoomed(false)}
             aria-label="Close image"
-            className="absolute right-3 top-3 flex size-10 items-center justify-center rounded-full bg-white/90 text-neutral-800 transition hover:bg-white"
+            className="absolute right-3 top-3 flex size-10 items-center justify-center rounded-(--sf-radius-button) bg-white/90 text-neutral-800 transition hover:bg-white"
           >
             <X className="size-4" />
           </button>
@@ -239,7 +239,7 @@ function GalleryArrow({ side, onClick }: { side: 'left' | 'right'; onClick: () =
       onClick={onClick}
       aria-label={side === 'left' ? 'Previous image' : 'Next image'}
       className={cn(
-        'absolute top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full',
+        'absolute top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-(--sf-radius-button)',
         'bg-white/85 text-neutral-800 backdrop-blur transition hover:bg-white',
         side === 'left' ? 'left-3' : 'right-3',
       )}

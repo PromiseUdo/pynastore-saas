@@ -97,7 +97,7 @@ function RailButton({
       disabled={disabled}
       aria-label={dir === 'prev' ? 'Scroll left' : 'Scroll right'}
       className={cn(
-        'flex size-11 items-center justify-center rounded-full border border-border transition-colors',
+        'flex size-11 items-center justify-center rounded-(--sf-radius-button) border border-border transition-colors',
         'hover:border-brand hover:bg-brand hover:text-primary-foreground',
         'disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-border disabled:hover:bg-transparent disabled:hover:text-foreground',
       )}

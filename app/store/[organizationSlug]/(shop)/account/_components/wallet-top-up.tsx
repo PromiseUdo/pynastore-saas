@@ -35,7 +35,7 @@ type Step =
   | { name: 'slow'; amount: number };
 
 const primary =
-  'flex h-12 w-full items-center justify-center gap-2 rounded-full bg-brand text-base font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60';
+  'flex h-12 w-full items-center justify-center gap-2 rounded-(--sf-radius-button) bg-brand text-base font-semibold text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60';
 const quiet = 'text-sm font-medium text-foreground underline underline-offset-4 hover:text-brand';
 
 /** Ask until EduPay confirms, or give up politely — the job settles it later either way. */
@@ -169,7 +169,7 @@ export function WalletTopUp() {
             type="button"
             onClick={() => setAmount(String(value))}
             className={cn(
-              'h-9 rounded-full border px-4 text-sm font-medium tabular-nums transition-colors hover:border-brand',
+              'h-9 rounded-(--sf-radius-button) border px-4 text-sm font-medium tabular-nums transition-colors hover:border-brand',
               amount === String(value) ? 'border-brand bg-brand/10' : 'border-border',
             )}
           >

@@ -103,7 +103,7 @@ export function TrackOrderForm({ locale }: { locale: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-brand text-base font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-60"
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-(--sf-radius-button) bg-brand text-base font-semibold text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-60"
       >
         <Search className="size-4" aria-hidden />
         {pending ? 'Looking…' : 'Find my order'}

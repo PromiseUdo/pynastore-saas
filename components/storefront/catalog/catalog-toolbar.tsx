@@ -125,14 +125,14 @@ export function CatalogToolbar({
                 setSheetOpen(false);
                 go(buildHref(pathname, clearFilters(criteria), optionIndex));
               }}
-              className="h-11 flex-1 rounded-full border text-sm font-semibold transition-colors hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-border disabled:hover:text-foreground"
+              className="h-11 flex-1 rounded-(--sf-radius-button) border text-sm font-semibold transition-colors hover:border-brand hover:text-brand disabled:opacity-40 disabled:hover:border-border disabled:hover:text-foreground"
             >
               Clear all
             </button>
             <button
               type="button"
               onClick={() => setSheetOpen(false)}
-              className="h-11 flex-1 rounded-full bg-brand text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+              className="h-11 flex-1 rounded-(--sf-radius-button) bg-brand text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
             >
               Show {total.toLocaleString()} {total === 1 ? 'result' : 'results'}
             </button>

@@ -33,7 +33,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
         }
       }}
       aria-label={copied ? `${label} copied` : `Copy ${label}`}
-      className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+      className="inline-flex size-8 shrink-0 items-center justify-center rounded-(--sf-radius-button) text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
     >
       {copied ? <Check className="size-4 text-success" aria-hidden /> : <Copy className="size-4" aria-hidden />}
     </button>

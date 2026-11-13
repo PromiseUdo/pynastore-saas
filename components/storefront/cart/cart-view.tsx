@@ -294,7 +294,7 @@ function CartSkeleton() {
               <Skeleton className="h-3 w-20" />
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-9 w-28 rounded-full" />
+              <Skeleton className="h-9 w-28 rounded-(--sf-radius-button)" />
             </div>
           </div>
         ))}

@@ -88,14 +88,14 @@ export function OrderSummary({
 
       <Link
         href="/checkout"
-        className="mt-5 flex h-12 w-full items-center justify-center rounded-full bg-brand text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+        className="mt-5 flex h-12 w-full items-center justify-center rounded-(--sf-radius-button) bg-brand text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
       >
         Checkout
       </Link>
 
       <Link
         href="/products"
-        className="mt-3 flex h-11 w-full items-center justify-center rounded-full border text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
+        className="mt-3 flex h-11 w-full items-center justify-center rounded-(--sf-radius-button) border text-sm font-semibold transition-colors hover:border-brand hover:text-brand"
       >
         Continue shopping
       </Link>

@@ -347,7 +347,7 @@ export function ChatPanel() {
                   type="button"
                   onClick={clearProduct}
                   aria-label={`Don’t send this about ${product.name}`}
-                  className="flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-accent"
+                  className="flex size-6 shrink-0 items-center justify-center rounded-(--sf-radius-button) hover:bg-accent"
                 >
                   <X aria-hidden className="size-3.5" />
                 </button>
@@ -392,7 +392,7 @@ export function ChatPanel() {
                 type="submit"
                 disabled={sending || !draft.trim() || overLimit}
                 aria-label="Send message"
-                className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-brand text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+                className="inline-flex size-11 shrink-0 items-center justify-center rounded-(--sf-radius-button) bg-brand text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
               >
                 {sending ? <Loader2 aria-hidden className="size-4 animate-spin" /> : <Send aria-hidden className="size-4" />}
               </button>

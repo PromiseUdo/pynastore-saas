@@ -133,7 +133,7 @@ export function HeaderSearch({ className }: { className?: string }) {
               setData(null);
             }}
             aria-label="Clear search"
-            className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
+            className="shrink-0 rounded-(--sf-radius-button) p-1 text-muted-foreground transition-colors hover:text-foreground"
           >
             <X className="size-4" />
           </button>
@@ -147,7 +147,7 @@ export function HeaderSearch({ className }: { className?: string }) {
         <button
           type="submit"
           aria-label="Search"
-          className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand text-primary-foreground transition-colors hover:bg-brand-hover"
+          className="flex size-9 shrink-0 items-center justify-center rounded-(--sf-radius-button) bg-brand text-primary-foreground transition-colors hover:bg-brand-hover"
         >
           {loading ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
         </button>

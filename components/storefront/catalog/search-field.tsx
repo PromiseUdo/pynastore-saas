@@ -176,7 +176,7 @@ export function SearchField({
               setData(EMPTY);
             }}
             aria-label="Clear search"
-            className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            className="shrink-0 rounded-(--sf-radius-button) p-1.5 text-muted-foreground transition-colors hover:text-foreground"
           >
             <X className="size-4" />
           </button>

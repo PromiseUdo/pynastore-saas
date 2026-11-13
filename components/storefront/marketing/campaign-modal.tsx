@@ -99,8 +99,8 @@ export function CampaignModal({ announcement }: { announcement: Announcement }) 
             announcement.image
               ? /* Over a photo the button needs its own backing, or it
                  * disappears into whatever the merchant uploaded. */
-                'absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/65'
-              : 'absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-full text-current opacity-60 transition-opacity hover:opacity-100'
+                'absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-(--sf-radius-button) bg-black/45 text-white backdrop-blur-sm transition-colors hover:bg-black/65'
+              : 'absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-(--sf-radius-button) text-current opacity-60 transition-opacity hover:opacity-100'
           }
         >
           <X className="size-4" />

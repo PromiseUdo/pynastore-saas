@@ -716,7 +716,7 @@ function CheckoutSkeleton() {
         </div>
         <Skeleton className="h-12 rounded-xl" />
         <Skeleton className="h-12 rounded-xl" />
-        <Skeleton className="h-12 w-44 rounded-full" />
+        <Skeleton className="h-12 w-44 rounded-(--sf-radius-button)" />
       </div>
       <Skeleton className="hidden h-80 rounded-2xl lg:block" />
     </div>

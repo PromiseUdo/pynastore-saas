@@ -172,7 +172,7 @@ export function AssistantPanel() {
           <button
             type="submit"
             disabled={!draft.trim() || status === 'thinking'}
-            className="flex size-12 shrink-0 items-center justify-center rounded-full bg-brand text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-40"
+            className="flex size-12 shrink-0 items-center justify-center rounded-(--sf-radius-button) bg-brand text-primary-foreground transition-colors hover:bg-brand-hover disabled:opacity-40"
           >
             {status === 'thinking' ? (
               <Loader2 aria-hidden className="size-4 animate-spin" />

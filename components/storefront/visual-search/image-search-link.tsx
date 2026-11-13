@@ -36,7 +36,7 @@ export function ImageSearchLink({
     row: 'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent',
     quiet:
       'inline-flex items-center gap-1.5 text-sm font-semibold text-brand underline-offset-4 hover:underline',
-    icon: 'flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-brand',
+    icon: 'flex size-9 shrink-0 items-center justify-center rounded-(--sf-radius-button) text-muted-foreground transition-colors hover:bg-accent hover:text-brand',
   }[variant];
 
   return (

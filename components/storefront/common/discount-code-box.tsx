@@ -84,7 +84,7 @@ export function DiscountCodeBox({
               type="button"
               onClick={() => removeCoupon()}
               aria-label={`Remove discount code ${coupon.code}`}
-              className="-m-1 shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:text-destructive"
+              className="-m-1 shrink-0 rounded-(--sf-radius-button) p-1 text-muted-foreground transition-colors hover:text-destructive"
             >
               <X className="size-4" aria-hidden />
             </button>

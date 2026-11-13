@@ -66,7 +66,7 @@ export function GetAppBanner({ listing }: { listing: StoreAppListing }) {
         type="button"
         onClick={close}
         aria-label="Close"
-        className="-ml-1 inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+        className="-ml-1 inline-flex size-8 shrink-0 items-center justify-center rounded-(--sf-radius-button) text-muted-foreground hover:text-foreground"
       >
         <X aria-hidden className="size-4" />
       </button>

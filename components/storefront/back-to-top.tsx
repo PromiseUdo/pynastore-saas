@@ -15,7 +15,7 @@ export function BackToTop() {
       aria-label="Back to top"
       className={cn(
         // `sf-back-to-top` sets how high it sits: above the phone's tab bar (storefront.css).
-        'sf-back-to-top fixed right-5 z-20 rounded-full border bg-background p-3 shadow-md transition-all hover:bg-accent',
+        'sf-back-to-top fixed right-5 z-20 rounded-(--sf-radius-button) border bg-background p-3 shadow-md transition-all hover:bg-accent',
         'lg:right-6',
         show ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0',
       )}

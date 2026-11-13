@@ -28,8 +28,8 @@ export default function Loading() {
             </div>
           </div>
           <div className="flex gap-3 pt-2">
-            <div className="h-12 w-[8.5rem] shrink-0 animate-pulse rounded-full bg-muted" />
-            <div className="h-12 flex-1 animate-pulse rounded-full bg-muted" />
+            <div className="h-12 w-[8.5rem] shrink-0 animate-pulse rounded-(--sf-radius-button) bg-muted" />
+            <div className="h-12 flex-1 animate-pulse rounded-(--sf-radius-button) bg-muted" />
           </div>
           <div className="h-40 w-full animate-pulse rounded-2xl bg-muted" />
         </div>

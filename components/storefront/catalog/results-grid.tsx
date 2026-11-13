@@ -56,8 +56,8 @@ export function CatalogSkeleton() {
           <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
             <div className="h-4 w-24 animate-pulse rounded bg-muted" />
             <div className="flex w-full gap-2 sm:w-auto">
-              <div className="h-11 flex-1 animate-pulse rounded-full bg-muted sm:w-28 sm:flex-none lg:hidden" />
-              <div className="h-11 flex-1 animate-pulse rounded-full bg-muted sm:h-10 sm:w-40 sm:flex-none" />
+              <div className="h-11 flex-1 animate-pulse rounded-(--sf-radius-button) bg-muted sm:w-28 sm:flex-none lg:hidden" />
+              <div className="h-11 flex-1 animate-pulse rounded-(--sf-radius-button) bg-muted sm:h-10 sm:w-40 sm:flex-none" />
             </div>
           </div>
           <ResultsGridSkeleton />

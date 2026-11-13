@@ -43,13 +43,13 @@ export function QuantityStepper({
     'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring';
 
   return (
-    <div className={cn('inline-flex items-center rounded-full border', className)}>
+    <div className={cn('inline-flex items-center rounded-(--sf-radius-button) border', className)}>
       <button
         type="button"
         onClick={() => step(-1)}
         disabled={atMin}
         aria-label={`Decrease quantity${of}`}
-        className={cn(button, 'rounded-l-full')}
+        className={cn(button, 'rounded-l-(--sf-radius-button)')}
       >
         <Minus className="size-4" />
       </button>
@@ -68,7 +68,7 @@ export function QuantityStepper({
         onClick={() => step(1)}
         disabled={atMax || max <= 0}
         aria-label={`Increase quantity${of}`}
-        className={cn(button, 'rounded-r-full')}
+        className={cn(button, 'rounded-r-(--sf-radius-button)')}
       >
         <Plus className="size-4" />
       </button>

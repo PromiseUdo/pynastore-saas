@@ -28,7 +28,7 @@ export function SubmitButton({
       type="submit"
       disabled={pending}
       className={cn(
-        'flex h-12 w-full items-center justify-center gap-2 rounded-full text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60',
+        'flex h-12 w-full items-center justify-center gap-2 rounded-(--sf-radius-button) text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60',
         variant === 'danger'
           ? 'bg-destructive text-white hover:bg-destructive/90'
           : 'bg-brand text-primary-foreground hover:bg-brand-hover',

@@ -115,17 +115,17 @@ export function ProductCard({
         {/* badges */}
         <div className="pointer-events-none absolute left-3 top-3 flex flex-col items-start gap-1.5">
           {pct != null && (
-            <span className="rounded-full bg-highlight px-2.5 py-1 text-[11px] font-bold text-highlight-foreground">
+            <span className="rounded-(--sf-radius-button) bg-highlight px-2.5 py-1 text-[11px] font-bold text-highlight-foreground">
               −{pct}%
             </span>
           )}
           {product.tags.includes('new') && (
-            <span className="rounded-full bg-brand px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-primary-foreground">
+            <span className="rounded-(--sf-radius-button) bg-brand px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-primary-foreground">
               New
             </span>
           )}
           {soldOut && (
-            <span className="rounded-full bg-muted-foreground px-2.5 py-1 text-[11px] font-bold text-background">
+            <span className="rounded-(--sf-radius-button) bg-muted-foreground px-2.5 py-1 text-[11px] font-bold text-background">
               Sold out
             </span>
           )}
@@ -139,7 +139,7 @@ export function ProductCard({
           aria-label={wishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
           aria-pressed={hydrated && wishlisted}
           className={cn(
-            'absolute right-3 top-3 flex size-9 items-center justify-center rounded-full backdrop-blur transition',
+            'absolute right-3 top-3 flex size-9 items-center justify-center rounded-(--sf-radius-button) backdrop-blur transition',
             'bg-white/85 text-neutral-800 hover:bg-white',
             hydrated && wishlisted && 'bg-brand text-primary-foreground hover:bg-brand',
           )}
@@ -150,7 +150,7 @@ export function ProductCard({
         <button
           type="button"
           onClick={onQuickView}
-          className="absolute inset-x-3 bottom-3 hidden translate-y-2 items-center justify-center gap-2 rounded-full bg-white/90 py-2.5 text-xs font-semibold text-neutral-900 opacity-0 backdrop-blur transition-all duration-200 hover:bg-white group-hover/card:translate-y-0 group-hover/card:opacity-100 lg:flex"
+          className="absolute inset-x-3 bottom-3 hidden translate-y-2 items-center justify-center gap-2 rounded-(--sf-radius-button) bg-white/90 py-2.5 text-xs font-semibold text-neutral-900 opacity-0 backdrop-blur transition-all duration-200 hover:bg-white group-hover/card:translate-y-0 group-hover/card:opacity-100 lg:flex"
         >
           <Eye className="size-3.5" />
           Quick view
@@ -222,7 +222,7 @@ export function ProductCardSkeleton({ className }: { className?: string }) {
         <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
         <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
         <div className="h-5 w-24 animate-pulse rounded bg-muted" />
-        <div className="h-11 animate-pulse rounded-full bg-muted" />
+        <div className="h-11 animate-pulse rounded-(--sf-radius-button) bg-muted" />
       </div>
     </div>
   );

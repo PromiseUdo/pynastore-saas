@@ -76,7 +76,7 @@ export function CheckoutProgress({
                   type="button"
                   onClick={() => onSelect(step.id)}
                   aria-label={`${step.label} — step ${i + 1} of ${CHECKOUT_STEPS.length}, completed`}
-                  className="flex items-center gap-2 rounded-full px-1 py-0.5 text-sm transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex items-center gap-2 rounded-(--sf-radius-button) px-1 py-0.5 text-sm transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {content}
                 </button>
