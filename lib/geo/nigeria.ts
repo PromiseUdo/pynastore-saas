@@ -38,6 +38,11 @@ export function normalizePlace(value: string): string {
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\b(city|town|lga|local government area|metropolis)\b/g, ' ')
     .replace(/\s+/g, ' ')
+    .trim()
+    // Merchants describe the area rather than name it ("Within Abakaliki",
+    // "Inside Lagos Island", "Aba and environs"); shoppers type the bare name.
+    .replace(/^(?:(?:within|inside|in|around|all of|greater)\s+)+/, '')
+    .replace(/\s+(?:and\s+)?(?:environs|surroundings|area|areas)$/, '')
     .trim();
 }
 

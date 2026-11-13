@@ -136,6 +136,15 @@ describe('place names', () => {
     expect(normalizePlace('Obio/Akpor LGA')).toBe('obio akpor');
   });
 
+  it('ignores a merchant describing the area instead of naming it', () => {
+    expect(normalizePlace('Within Abakaliki')).toBe('abakaliki');
+    expect(normalizePlace('inside Lagos Island')).toBe('lagos island');
+    expect(normalizePlace('Aba and environs')).toBe('aba');
+    expect(normalizePlace('Greater Port Harcourt area')).toBe('port harcourt');
+    // a real name that merely contains the words is left alone
+    expect(normalizePlace('Ikot Ekpene')).toBe('ikot ekpene');
+  });
+
   it('cleans a merchant’s list and drops duplicates', () => {
     expect(parsePlaceList('Port Harcourt, port-harcourt ,Obio-Akpor,\nEleme,, ')).toEqual(['Port Harcourt', 'Obio-Akpor', 'Eleme']);
   });
