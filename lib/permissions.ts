@@ -55,6 +55,8 @@ export const PERMISSIONS = {
   CUSTOMER_VIEW: 'customer.view',
   CUSTOMER_CREATE: 'customer.create',
   CUSTOMER_EDIT: 'customer.edit',
+  /** Make, approve, decline and suspend trade buyers (ROADMAP 21.1). Owner and Admin. */
+  CUSTOMER_TRADE_MANAGE: 'customer.trade.manage',
 
   // ─── Social commerce ─────────────────────────────────────
   SOCIAL_VIEW: 'social.view',

@@ -15,7 +15,10 @@
  *   - whether shoppers may order without an account, and leave a note — the
  *     merchant's checkout rules (Settings → Payments → Checkout);
  *   - the shop's VAT, only when it is VAT registered (Settings → General,
- *     ROADMAP 14.1).
+ *     ROADMAP 14.1);
+ *   - for an approved trade buyer (pass `tradeBuyer`), only the ways the
+ *     merchant lets trade orders be paid (Settings → Wholesale, ROADMAP
+ *     21.1) — narrowing the list above, never adding to it.
  *
  * Use this, not getCheckoutConfig, anywhere payment methods matter: the
  * checkout page, the confirmation page, and placing the order — so a shopper
@@ -26,6 +29,8 @@ import type { StoreScope } from '../types';
 import { BANK_TRANSFER_METHOD, ONLINE_PAYMENT_METHOD, PAY_ON_DELIVERY_METHOD } from './payment-methods';
 import { onlinePaymentReadiness } from '@/lib/payments/payment-setup';
 import { getCheckoutConfig } from './config';
+import { getWholesaleSettingsBySlug } from '@/lib/trade/accounts';
+import { tradeMayPayWith } from '@/lib/trade/rules';
 import { shopVatBySlug } from '@/lib/tax-settings';
 import { useFixtures } from '../data/current';
 import { storeHasDelivery } from '../delivery/quote';
@@ -69,14 +74,19 @@ export async function storeCheckoutRules(organizationSlug: string): Promise<Chec
   };
 }
 
-export async function getStoreCheckoutConfig(scope: StoreScope): Promise<CheckoutConfig> {
-  const [base, transferAccounts, hasDelivery, onlineReady, rules, vat] = await Promise.all([
+export async function getStoreCheckoutConfig(
+  scope: StoreScope,
+  /** the signed-in shopper is an approved trade buyer here (lib/trade/accounts.ts isTradeBuyer) */
+  { tradeBuyer = false }: { tradeBuyer?: boolean } = {},
+): Promise<CheckoutConfig> {
+  const [base, transferAccounts, hasDelivery, onlineReady, rules, vat, wholesale] = await Promise.all([
     getCheckoutConfig(scope),
     activeTransferAccounts(scope.organizationSlug),
     storeHasDelivery(scope.organizationSlug),
     onlinePaymentsReady(scope.organizationSlug),
     storeCheckoutRules(scope.organizationSlug),
     shopVatBySlug(scope.organizationSlug),
+    tradeBuyer ? getWholesaleSettingsBySlug(scope.organizationSlug) : null,
   ]);
 
   /* Under the demo fixtures the store keeps the fixed demo delivery list, so a
@@ -98,7 +108,7 @@ export async function getStoreCheckoutConfig(scope: StoreScope): Promise<Checkou
       ...(onlineReady ? [ONLINE_PAYMENT_METHOD] : []),
       ...base.paymentMethods.filter((method) => rules.payOnDelivery || method.id !== PAY_ON_DELIVERY_METHOD.id),
       ...(transferAccounts.length ? [BANK_TRANSFER_METHOD] : []),
-    ],
+    ].filter((method) => !wholesale || tradeMayPayWith(method.id, wholesale)),
     transferAccounts,
     vat,
     guestCheckoutEnabled: base.guestCheckoutEnabled && rules.guestAllowed,

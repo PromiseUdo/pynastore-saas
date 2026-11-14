@@ -7849,7 +7849,43 @@ pay on account. A vendor who sells only wholesale switches the shop to
 9. **Language:** "Trade buyer", "Wholesale price", "Pay on account",
    "Buy wholesale" — never "B2B", "price list" or "tier" on screen.
 
-### 21.1 Trade buyers — TODO
+### 21.1 Trade buyers — DONE (2026-11-14)
+
+**As built** (migration `20261114180000_trade_buyers`):
+- `TradeAccount` per customer (REQUESTED / APPROVED / DECLINED / SUSPENDED),
+  `Organization.wholesaleMode` + `wholesaleRequestsOpen` + `tradePay*`.
+  Rules in `lib/trade/rules.ts` (pure), reads and status changes in
+  `lib/trade/accounts.ts` (each change is one conditional update), messages
+  in `lib/trade/messages.ts`.
+- Settings → Wholesale (`features/settings/wholesale.ts`); Customers: Trade
+  buyers / Trade requests tabs, Trade badge, "Invite a trade buyer", and a
+  Trade account card on the customer page (`features/sales/trade.ts`,
+  `customer.trade.manage`, granted to existing Admins by the migration).
+- Shop: Account → Trade account (`/account/trade`, request form),
+  `/wholesale` ("Buy wholesale", linked from the footer), invitations reuse
+  the password-reset token with a 7-day life (`?invite=1` changes the words).
+- Notifications: `trade.request` (staff, daily summary email + push) and
+  `trade.decision` (the shopper, required email in the shop's name via the
+  new `storefront-notice` template; kept out of shoppers' settings grid).
+- Checkout: `getStoreCheckoutConfig(scope, { tradeBuyer })` narrows payment
+  methods for approved buyers; placing an order applies it again.
+- Trade only: enforced where the catalogue loads
+  (`lib/storefront/trade-gate.ts` → `data/current.ts`), so pages, API
+  routes, search and the sitemap all get nothing; the store layout shows
+  "{shop} sells to businesses" outside `/account`, `/pages`, `/wholesale`;
+  `noindex` and a closed robots.txt.
+- Data rights: in the shopper's download; deleted with their account and
+  with a closed shop.
+- Tests: `tests/trade-buyers.test.ts`, `lib/trade/rules.test.ts`.
+
+**Changed from the plan below:**
+- The VAT choice moved to 21.2 — it only means something once wholesale
+  prices exist.
+- The tax ID stays on `Customer.taxId` (invoices already read it), not a
+  second copy on the trade account. Credit terms wait for 21.5.
+- Trade only also gates the front page: its sections show products and
+  prices.
+
 
 - **Schema:** a `TradeAccount` per `Customer` (shopper accounts are already
   per store): status (`REQUESTED` → `APPROVED` | `DECLINED`, and
@@ -7881,6 +7917,9 @@ pay on account. A vendor who sells only wholesale switches the shop to
 - **Audit:** every approval, decline, suspension and change of terms.
 
 ### 21.2 One wholesale price per product — TODO
+
+- **Also here (moved from 21.1):** the Settings → Wholesale choice "my
+  wholesale prices include VAT / VAT is added" (decision 8).
 
 - **Schema:** `InventoryItem.wholesalePrice` (nullable, major units, like
   `sellingPrice`). A variant is its own `InventoryItem`, so each variant can

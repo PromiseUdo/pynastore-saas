@@ -163,8 +163,10 @@ describe('the catalogue', () => {
     'social.failed': { postId: 's1', productName: 'Shoe', platform: 'Facebook' },
     'platform.merchant-new': { organizationId: 'org1', shopName: 'S' },
     'platform.verification': { shopName: 'S' },
+    'trade.request': { customerId: 'c1', businessName: 'Ada Stores' },
+    'trade.decision': { customerId: 'c1', storeName: 'S', decision: 'approved' },
   };
-  const surfaceOf = { staff: 'admin', 'order-shopper': 'store', 'chat-shopper': 'store', platform: 'platform' } as const;
+  const surfaceOf = { staff: 'admin', 'order-shopper': 'store', 'chat-shopper': 'store', customer: 'store', platform: 'platform' } as const;
 
   it('leads somewhere on every surface each kind is sent to', () => {
     for (const kind of Object.keys(EVENTS) as NotificationKind[]) {

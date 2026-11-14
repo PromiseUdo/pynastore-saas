@@ -213,6 +213,7 @@ export async function purgeClosedWorkspace(organizationId: string, now: Date = n
       await tx.customerEmailChange.deleteMany({ where: customer });
       await tx.customerAddress.deleteMany({ where: customer });
       await tx.customerWishlistItem.deleteMany({ where: customer });
+      await tx.tradeAccount.deleteMany({ where });
       await tx.productReviewVote.deleteMany({ where: customer });
       await tx.productReview.deleteMany({ where });
       await tx.productQuestion.deleteMany({ where });

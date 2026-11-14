@@ -61,6 +61,8 @@ export interface CustomerListRow {
   averageOrder: number;
   lastOrderAt: string | null;
   returnCount: number;
+  /** where they stand as a trade buyer (ROADMAP 21.1); null when they never were one */
+  tradeStatus: 'REQUESTED' | 'APPROVED' | 'DECLINED' | 'SUSPENDED' | null;
 }
 
 export interface CustomerListResult {
@@ -127,6 +129,10 @@ function segmentClause(segment: CustomerSegment | undefined, now: Date): Prisma.
       return Prisma.sql`AND s.cid IS NULL`;
     case 'consented':
       return Prisma.sql`AND c."marketingConsent" = true`;
+    case 'trade':
+      return Prisma.sql`AND ta."status" = 'APPROVED'`;
+    case 'trade-requests':
+      return Prisma.sql`AND ta."status" = 'REQUESTED'`;
     default:
       return Prisma.empty;
   }
@@ -159,6 +165,7 @@ type RawRow = {
   spend: Prisma.Decimal | null;
   last_order: Date | null;
   return_count: number;
+  trade_status: CustomerListRow['tradeStatus'];
 };
 
 function toRow(row: RawRow): CustomerListRow {
@@ -177,6 +184,7 @@ function toRow(row: RawRow): CustomerListRow {
     averageOrder: row.order_count ? spend / row.order_count : 0,
     lastOrderAt: row.last_order?.toISOString() ?? null,
     returnCount: row.return_count ?? 0,
+    tradeStatus: row.trade_status ?? null,
   };
 }
 
@@ -204,6 +212,7 @@ export async function listCustomerInsights(
       FROM "customers" c
       LEFT JOIN stats s   ON s.cid = c."id"
       LEFT JOIN returns rt ON rt.cid = c."id"
+      LEFT JOIN "trade_accounts" ta ON ta."customerId" = c."id"
       WHERE c."organizationId" = ${organizationId}
         AND c."mergedIntoId" IS NULL
         ${search}
@@ -218,7 +227,8 @@ export async function listCustomerInsights(
                COALESCE(s.order_count, 0) AS order_count,
                s.spend,
                s.last_order,
-               COALESCE(rt.return_count, 0) AS return_count
+               COALESCE(rt.return_count, 0) AS return_count,
+               ta."status"::text AS trade_status
         ${base}
         ${orderClause(sort)}
         LIMIT ${PER_PAGE} OFFSET ${(page - 1) * PER_PAGE}
@@ -293,10 +303,12 @@ export async function exportCustomerInsights(
              COALESCE(s.order_count, 0) AS order_count,
              s.spend,
              s.last_order,
-             COALESCE(rt.return_count, 0) AS return_count
+             COALESCE(rt.return_count, 0) AS return_count,
+             ta."status"::text AS trade_status
         FROM "customers" c
         LEFT JOIN stats s   ON s.cid = c."id"
         LEFT JOIN returns rt ON rt.cid = c."id"
+        LEFT JOIN "trade_accounts" ta ON ta."customerId" = c."id"
        WHERE c."organizationId" = ${organizationId}
          AND c."mergedIntoId" IS NULL
          ${search}

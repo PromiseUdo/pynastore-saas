@@ -82,11 +82,14 @@ export function CustomerDetailClient({
   currency,
   canManage,
   duplicates,
+  tradeCard = null,
 }: {
   customer: CustomerDetail;
   currency: string;
   canManage: boolean;
   duplicates: MergeCandidate[];
+  /** their trade account (ROADMAP 21.1), built by the page */
+  tradeCard?: React.ReactNode;
 }) {
   const router = useRouter();
   const now = React.useMemo(() => new Date(), []);
@@ -317,6 +320,7 @@ export function CustomerDetailClient({
 
         {/* ── Who they are, and what to remember ────────────────────── */}
         <aside className="space-y-4">
+          {tradeCard}
           <section className="space-y-3 rounded-lg border bg-card p-4 text-sm">
             <h2 className="text-sm font-semibold">Contact</h2>
             <Line icon={Mail} value={customer.email} href={customer.email ? `mailto:${customer.email}` : null} />

@@ -52,6 +52,7 @@ const LABELS: Record<PermissionKey, string> = {
   'customer.view': 'View customers',
   'customer.create': 'Create customers',
   'customer.edit': 'Edit customers',
+  'customer.trade.manage': 'Approve and manage trade buyers',
 
   // Social commerce
   'social.view': 'View connected social accounts',

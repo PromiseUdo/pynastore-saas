@@ -8,6 +8,7 @@ import { Resend } from 'resend';
 import { InvitationEmail } from '@/emails/invitation';
 import { ResetPasswordEmail } from '@/emails/reset-password';
 import { StorefrontResetPasswordEmail } from '@/emails/storefront-reset-password';
+import { StorefrontNoticeEmail, type StorefrontNoticeEmailProps } from '@/emails/storefront-notice';
 import { StorefrontConfirmEmailChangeEmail } from '@/emails/storefront-confirm-email';
 import { StorefrontVerifyEmail } from '@/emails/storefront-verify-email';
 import { StorefrontEmailChangeNoticeEmail } from '@/emails/storefront-email-change-notice';
@@ -250,6 +251,16 @@ export async function sendStoreOrderAlertEmail(payload: StoreOrderAlertEmailProp
   if (payload.to.length === 0) return false;
   const { to, ...props } = payload;
   return handOver('store order alert email', { to, subject: storeOrderAlertSubject(props), react: StoreOrderAlertEmail(props) });
+}
+
+/**
+ * A short message to a shopper in the merchant's name (ROADMAP 21.1): a
+ * trade account invitation or decision. Returns whether it was handed over.
+ */
+export async function sendStorefrontNoticeEmail(payload: StorefrontNoticeEmailProps & { to: string[] }): Promise<boolean> {
+  if (payload.to.length === 0) return false;
+  const { to, ...props } = payload;
+  return handOver('storefront notice email', { to, subject: props.subject, react: StorefrontNoticeEmail(props) });
 }
 
 /** A shopper is waiting for a reply in Messages (ROADMAP 17.4) — sent to the store's staff. */

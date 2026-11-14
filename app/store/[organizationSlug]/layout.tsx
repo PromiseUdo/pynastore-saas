@@ -28,6 +28,8 @@ import { pageOfKind } from '@/lib/storefront/pages/rules';
 import { WishlistSync } from '@/components/storefront/wishlist/wishlist-sync';
 import { storefrontIsOpen } from '@/lib/billing/workspace-access';
 import { getStorefrontOpening } from '@/lib/storefront/opening';
+import { getTradeGate } from '@/lib/storefront/trade-gate';
+import { openInTradeOnly } from '@/lib/trade/rules';
 import './storefront.css';
 import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 import { cloudinaryImage } from '@/lib/cloudinary/url';
@@ -85,6 +87,7 @@ export async function generateMetadata({
       storefrontTagline: true,
       storefrontSocialImageUrl: true,
       storefrontOpen: true,
+      wholesaleMode: true,
     },
   });
   if (!org) return {};
@@ -92,6 +95,8 @@ export async function generateMetadata({
   const appListing = await getStoreAppListing({ organizationSlug });
   // Not open yet (12.5): the "Opening soon" page stays out of search results.
   if (!org.storefrontOpen) return { title: org.name, robots: { index: false, follow: false } };
+  // Trade only (ROADMAP 21.1): nothing here is for the public, so nothing is listed.
+  if (org.wholesaleMode === 'TRADE_ONLY') return { title: org.name, robots: { index: false, follow: false } };
 
   /* The merchant's own line if they have written one. No claims about what
    * the store sells or how it delivers: those were template words ("free
@@ -203,6 +208,43 @@ export default async function StorefrontRootLayout({
   }
 
   const requestHeaders = await headers();
+
+  /* Trade only (ROADMAP 21.1): anyone who isn't an approved trade buyer or
+   * on the team sees what this shop is and how to get in, instead of a shop
+   * with nothing in it. Signing in, their account (where they ask) and the
+   * merchant's own pages stay open (lib/trade/rules.ts). The catalogue is
+   * empty for them regardless (lib/storefront/trade-gate.ts). */
+  const tradeGate = await getTradeGate(organization.slug);
+  if (tradeGate.tradeOnly && !tradeGate.allowed && !openInTradeOnly(requestHeaders.get('x-store-path'))) {
+    const button =
+      'inline-flex h-12 items-center justify-center rounded-[var(--sf-radius-button,999px)] px-6 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+    return (
+      <div
+        data-storefront
+        className={`${fontVariables} flex min-h-screen items-center justify-center bg-background px-4 text-foreground`}
+      >
+        <main className="max-w-md text-center">
+          {organization.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={organization.logoUrl} alt="" className="mx-auto mb-5 h-12 w-auto object-contain" />
+          ) : null}
+          <h1 className="font-display text-3xl">{organization.name} sells to businesses</h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Products and prices are for approved trade buyers. Sign in if you have a trade account, or find out how to get one.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <a href="/account/sign-in" className={`${button} bg-brand text-primary-foreground hover:opacity-90`}>
+              Sign in
+            </a>
+            <a href="/wholesale" className={`${button} border border-border hover:border-brand hover:text-brand`}>
+              Buy wholesale
+            </a>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   const isMobileRuntime = requestHeaders.get('x-runtime') === 'mobile';
   // The request's CSP nonce (proxy.ts), for the merchant's measurement tags.
   const nonce = requestHeaders.get('x-nonce') ?? undefined;

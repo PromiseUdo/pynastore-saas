@@ -15,6 +15,7 @@ import {
   sendPaymentDisputeEmail,
   sendPlatformNoticeEmail,
   sendStoreOrderAlertEmail,
+  sendStorefrontNoticeEmail,
   sendStorefrontOrderUpdateEmail,
   type DomainOrderNotificationEmailPayload,
 } from '@/lib/email';
@@ -23,6 +24,7 @@ import type { StoreOrderAlertEmailProps } from '@/emails/store-order-alert';
 import type { ChatMessageAlertEmailProps } from '@/emails/chat-message-alert';
 import type { PaymentDisputeEmailProps } from '@/emails/payment-dispute';
 import type { PlatformNoticeEmailProps } from '@/emails/platform-notice';
+import type { StorefrontNoticeEmailProps } from '@/emails/storefront-notice';
 
 export type EmailMessage =
   | { template: 'storefront-order-update'; props: StorefrontOrderUpdateEmailProps }
@@ -30,7 +32,8 @@ export type EmailMessage =
   | { template: 'chat-message-alert'; props: ChatMessageAlertEmailProps }
   | { template: 'payment-dispute'; props: PaymentDisputeEmailProps }
   | { template: 'platform-notice'; props: PlatformNoticeEmailProps & { subject: string } }
-  | { template: 'domain-order'; props: Omit<DomainOrderNotificationEmailPayload, 'to'> };
+  | { template: 'domain-order'; props: Omit<DomainOrderNotificationEmailPayload, 'to'> }
+  | { template: 'storefront-notice'; props: StorefrontNoticeEmailProps };
 
 /** Whether the provider accepted it. A `false` is retried by the outbox. */
 export async function sendEmailMessage(message: EmailMessage, to: string[]): Promise<boolean> {
@@ -55,5 +58,11 @@ export async function sendEmailMessage(message: EmailMessage, to: string[]): Pro
       return accepted(sendPlatformNoticeEmail({ ...message.props, to }));
     case 'domain-order':
       return accepted(sendDomainOrderNotificationEmail({ ...message.props, to }));
+    case 'storefront-notice': {
+      // A shopper's own message: one address, one message each.
+      let all = true;
+      for (const address of to) all = (await accepted(sendStorefrontNoticeEmail({ ...message.props, to: [address] }))) && all;
+      return all;
+    }
   }
 }

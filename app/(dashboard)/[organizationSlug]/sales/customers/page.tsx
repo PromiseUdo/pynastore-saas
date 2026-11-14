@@ -14,6 +14,7 @@ import { requireFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { listCustomerInsights } from '@/features/sales/customer-insights';
+import { getWholesaleSettings } from '@/lib/trade/accounts';
 import { CustomersPageClient } from './_components/CustomersPageClient';
 
 export const metadata: Metadata = { title: 'Customers' };
@@ -35,6 +36,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Se
 
   const raw = await searchParams;
   const page = Number(one(raw.page));
+  const wholesale = await getWholesaleSettings(ctx.organization.id);
   const result = await listCustomerInsights({
     q: one(raw.q),
     segment: one(raw.segment),
@@ -49,6 +51,8 @@ export default async function CustomersPage({ searchParams }: { searchParams: Se
       currency={ctx.organization.currency}
       canManage={hasPermission(perms, PERMISSIONS.CUSTOMER_EDIT)}
       canCreate={hasPermission(perms, PERMISSIONS.CUSTOMER_CREATE)}
+      wholesaleOn={wholesale.mode !== 'OFF'}
+      canManageTrade={hasPermission(perms, PERMISSIONS.CUSTOMER_TRADE_MANAGE)}
     />
   );
 }

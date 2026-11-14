@@ -27,7 +27,8 @@ export async function GET(
    * a sitemap pointing at nothing. */
   const store = await prisma.organization.findFirst({
     // A shop that isn't open yet (12.5) is kept out of search engines too.
-    where: { slug: organizationSlug, status: 'ACTIVE', storefrontOpen: true },
+    // A Trade only shop (ROADMAP 21.1) is for its approved buyers, not search results.
+    where: { slug: organizationSlug, status: 'ACTIVE', storefrontOpen: true, wholesaleMode: { not: 'TRADE_ONLY' } },
     select: { id: true },
   });
 

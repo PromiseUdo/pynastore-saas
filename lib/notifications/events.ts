@@ -33,6 +33,7 @@ export const NOTIFICATION_CATEGORIES = {
   stock: { label: 'Low stock', about: 'Products at or below their reorder point in a store you can work in.' },
   purchasing: { label: 'Purchasing', about: 'Purchase orders waiting for approval.' },
   payments: { label: 'Payment disputes', about: 'A customer’s bank disputing a payment, and how it ended.' },
+  trade: { label: 'Trade accounts', about: 'Businesses asking to buy wholesale — or, for a shopper, the answer to yours.' },
   account: { label: 'Your shop’s account', about: 'Your trial ending, and your domain and store app.' },
   social: { label: 'Social posts', about: 'A post that failed to publish.' },
   merchants: { label: 'Merchants', about: 'New shops, and verification waiting for review.' },
@@ -51,6 +52,8 @@ export type Audience =
   | { type: 'order-shopper'; orderId: string }
   /** the shopper in a conversation: their account, or a guest's browsers, and phones watching it */
   | { type: 'chat-shopper'; conversationId: string }
+  /** one shopper with an account in this shop (their email, phones and browsers) */
+  | { type: 'customer'; customerId: string }
   /** platform staff */
   | { type: 'platform' };
 
@@ -108,7 +111,20 @@ export interface EventFacts {
   'social.failed': { postId: string; productName: string | null; platform: string };
   'platform.merchant-new': { organizationId: string; shopName: string };
   'platform.verification': { shopName: string };
+  /** a shopper asked for a trade account (ROADMAP 21.1) */
+  'trade.request': { customerId: string; businessName: string };
+  /** the merchant's answer, told to the shopper */
+  'trade.decision': { customerId: string; storeName: string; decision: TradeDecision };
 }
+
+export type TradeDecision = 'approved' | 'declined' | 'suspended' | 'reinstated';
+
+const TRADE_DECISION_WORDS: Record<TradeDecision, (storeName: string) => NotificationWords> = {
+  approved: (store) => ({ title: store, body: 'You’re now a trade buyer. Sign in to shop with your trade account.' }),
+  reinstated: (store) => ({ title: store, body: 'Your trade account is active again.' }),
+  declined: (store) => ({ title: store, body: 'The store replied to your trade account request.' }),
+  suspended: (store) => ({ title: store, body: 'Your trade account has been paused.' }),
+};
 
 export type NotificationKind = keyof EventFacts;
 
@@ -330,6 +346,27 @@ export const EVENTS: Catalogue = {
     channels: { WEB_PUSH: 'on' },
     words: (f) => ({ title: 'New shop', body: `${f.shopName} just signed up.` }),
     target: (f) => ({ type: 'platform', path: `/platform/merchants/${f.organizationId}` }),
+  },
+  'trade.request': {
+    category: 'trade',
+    reaches: { staff: PERMISSIONS.CUSTOMER_TRADE_MANAGE },
+    audiences: () => [{ type: 'staff', permission: PERMISSIONS.CUSTOMER_TRADE_MANAGE, owner: true }],
+    channels: { EMAIL: 'digest', WEB_PUSH: 'on', NATIVE_PUSH: 'on' },
+    words: (f) => ({ title: 'Trade account request', body: `${f.businessName} asked to buy wholesale.` }),
+    target: (f) => ({ type: 'trade', customerId: f.customerId }),
+    thread: () => 'trade-requests',
+  },
+  'trade.decision': {
+    category: 'trade',
+    // Rare, and about their own account (like the email itself, which is
+    // required): not a row in every shopper's notification settings, most
+    // of whose shops don't sell wholesale.
+    reaches: {},
+    audiences: (f) => [{ type: 'customer', customerId: f.customerId }],
+    // About their own account, so the email can't be turned off.
+    channels: { EMAIL: 'required', WEB_PUSH: 'on', NATIVE_PUSH: 'on' },
+    words: (f) => TRADE_DECISION_WORDS[f.decision](f.storeName),
+    target: (f) => ({ type: 'trade', customerId: f.customerId }),
   },
   'platform.verification': {
     category: 'merchants',

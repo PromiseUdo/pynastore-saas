@@ -167,7 +167,7 @@ describe('preferences', () => {
     expect(writerRows.map((r) => r.category)).toEqual(['messages']);
 
     const ownerRows = await loadPreferenceGrid({ audience: 'staff', userId: owner, organizationId: shop.id, permissions: [...ALL_PERMISSIONS] });
-    expect(ownerRows.map((r) => r.category)).toEqual(['orders', 'messages', 'questions', 'stock', 'purchasing', 'payments', 'account', 'social']);
+    expect(ownerRows.map((r) => r.category)).toEqual(['orders', 'messages', 'questions', 'stock', 'purchasing', 'payments', 'trade', 'account', 'social']);
     expect(ownerRows.find((r) => r.category === 'account')!.email).toEqual({ kind: 'required', on: true });
     expect(ownerRows.find((r) => r.category === 'stock')!.email).toEqual({ kind: 'digest', on: true });
 

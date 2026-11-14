@@ -66,6 +66,7 @@ model User {
   chatMessages        ChatMessage[]
   resolvedChats       ChatConversation[]   @relation("ChatResolvedBy")
   blockedChats        ChatConversation[]   @relation("ChatBlockedBy")
+  tradeDecisions      TradeAccount[]       @relation("TradeDecidedBy")
 
   // Notifications (ROADMAP 18)
   notifications           Notification[]
@@ -368,6 +369,24 @@ model Organization {
   checkoutOrderNotes    Boolean @default(true)
 
   /**
+   * Wholesale (ROADMAP 21.1), Settings → Wholesale. OFF until the merchant
+   * turns it on. RETAIL_AND_TRADE: everyone shops, approved trade buyers get
+   * trade terms. TRADE_ONLY: the catalogue is shown only to approved trade
+   * buyers (and the team), everyone else sees "This shop sells to
+   * businesses" (lib/storefront/data/current.ts).
+   * - wholesaleRequestsOpen: shoppers may ask for a trade account from the
+   *   shop; off, only the merchant makes trade buyers (by inviting them).
+   * - tradePay*: which ways a trade buyer may pay at checkout, on top of the
+   *   shop's own checkout rules — a method the shop doesn't offer stays off
+   *   for everyone. At least one is on (features/settings/wholesale.ts).
+   */
+  wholesaleMode         WholesaleMode @default(OFF)
+  wholesaleRequestsOpen Boolean       @default(false)
+  tradePayOnline        Boolean       @default(true)
+  tradePayTransfer      Boolean       @default(true)
+  tradePayOnDelivery    Boolean       @default(true)
+
+  /**
    * Messages (ROADMAP 17): whether shoppers can message the store from the
    * storefront. Off until the merchant turns it on — a chat button nobody
    * answers is worse than none. The greeting is the merchant's own words,
@@ -424,6 +443,7 @@ model Organization {
   stockTransfers         StockTransfer[]
   inventoryRequisitions  InventoryRequisition[]
   customers              Customer[]
+  tradeAccounts          TradeAccount[]
   customerOAuthAccounts  CustomerOAuthAccount[]
   orders                 Order[]
   orderPayments          OrderPayment[]
@@ -1487,6 +1507,7 @@ model Customer {
   emailVerifications     CustomerEmailVerification[]
   emailChanges           CustomerEmailChange[]
   wishlist               CustomerWishlistItem[]
+  tradeAccount           TradeAccount?
   orders                 Order[]
   reviews                ProductReview[]
   reviewVotes            ProductReviewVote[]
@@ -1637,6 +1658,57 @@ model CustomerEmailVerification {
   @@index([customerId])
   @@index([expiresAt])
   @@map("customer_email_verifications")
+}
+
+enum WholesaleMode {
+  OFF
+  RETAIL_AND_TRADE
+  TRADE_ONLY
+}
+
+enum TradeAccountStatus {
+  /** the shopper asked from the shop; waiting for the merchant */
+  REQUESTED
+  /** a trade buyer: invited by the merchant, or their request approved */
+  APPROVED
+  /** the merchant said no; the shopper may ask again */
+  DECLINED
+  /** was approved, paused by the merchant; trade terms don't apply */
+  SUSPENDED
+}
+
+/**
+ * A customer's standing as a trade buyer (ROADMAP 21.1): one per customer,
+ * and a customer belongs to one store, so it is per store too. Only
+ * APPROVED gets trade terms. The tax ID is the customer's own
+ * (`Customer.taxId`, also used on invoices) — one place for it. Credit terms
+ * arrive with 21.5.
+ */
+model TradeAccount {
+  id             String             @id @default(cuid())
+  organizationId String
+  customerId     String             @unique
+  status         TradeAccountStatus
+  businessName   String
+  /** Corporate Affairs Commission registration number, if they gave one */
+  cacNumber      String?
+  /** what the shopper wrote when asking ("We run two shops in Aba") */
+  requestNote    String?
+  /** the merchant's reason when declining or suspending; shown to the shopper */
+  decisionReason String?
+  requestedAt    DateTime?
+  decidedAt      DateTime?
+  decidedById    String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  decidedBy    User?        @relation("TradeDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@map("trade_accounts")
 }
 
 /**

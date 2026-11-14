@@ -18,6 +18,7 @@
 import { headers } from 'next/headers';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getStoreCheckoutConfig } from '@/lib/storefront/checkout/store-config';
+import { isTradeBuyer } from '@/lib/trade/accounts';
 import { findStoreBySlug } from '@/lib/storefront/account/shopper';
 import { currentStoreSlug, getShopper, getShopperForStore } from '@/lib/storefront/account/session';
 import { placeOrder, resolveLines, type OrderLineRequest, type PlaceOrderFailure } from '@/lib/storefront/orders/create';
@@ -106,7 +107,9 @@ export async function placeOrderAction(
   }
 
   const shopper = await getShopper();
-  const config = await getStoreCheckoutConfig({ organizationSlug: slug });
+  // The same trade rule the checkout page showed, applied again here (ROADMAP 21.1).
+  const tradeBuyer = shopper ? await isTradeBuyer(shopper.organizationId, shopper.id) : false;
+  const config = await getStoreCheckoutConfig({ organizationSlug: slug }, { tradeBuyer });
 
   const result = await placeOrder({
     organizationSlug: slug,

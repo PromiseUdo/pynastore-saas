@@ -8,6 +8,13 @@ import { auditActionLabel, auditEntityLabel, describeAuditAction } from './audit
  * — which is the point: a raw key must never reach a merchant's screen.
  */
 const ACTIONS = [
+  'settings.wholesale.updated',
+  'sales.trade.approved',
+  'sales.trade.declined',
+  'sales.trade.suspended',
+  'sales.trade.reinstated',
+  'sales.trade.invited',
+  'sales.trade.details_updated',
   'billing.subscription.activated',
   'billing.subscription.canceled',
   'billing.subscription.payment_failed',

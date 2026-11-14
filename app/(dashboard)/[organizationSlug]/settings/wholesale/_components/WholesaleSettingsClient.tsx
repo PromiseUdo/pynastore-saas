@@ -1,0 +1,223 @@
+'use client';
+
+/*
+ * Settings → Wholesale (ROADMAP 21.1). Three choices, saved together:
+ * whether the shop sells to trade buyers (and to anyone else), whether
+ * shoppers may ask, and how trade buyers may pay.
+ */
+import * as React from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { ArrowRight, Loader2 } from 'lucide-react';
+import { RadioGroup as RadioGroupPrimitive } from 'radix-ui';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
+import { Label } from '@/components/ui/label';
+import { SwitchRoot } from '@/components/ui/switch';
+import { CheckboxRoot } from '@/components/ui/checkbox';
+import { PageHeader, PageBody } from '@/components/layout/page-header';
+import { formatNumber } from '@/lib/format';
+import { cn } from '@/lib/utils';
+import { WHOLESALE_MODES, type WholesaleMode } from '@/lib/trade/rules';
+import { saveWholesaleSettings, type WholesaleSettingsInput } from '@/features/settings/wholesale';
+
+const PAY_OPTIONS = [
+  { key: 'tradePayOnline', label: 'Pay online', hint: 'Card, bank transfer or USSD through Paystack, before the order is sent.', offeredBy: 'online' },
+  { key: 'tradePayTransfer', label: 'Bank transfer to you', hint: 'They transfer to your bank account; you confirm it.', offeredBy: 'transfer' },
+  { key: 'tradePayOnDelivery', label: 'Pay on delivery', hint: 'They pay when the goods arrive.', offeredBy: 'onDelivery' },
+] as const;
+
+const NOT_OFFERED: Record<(typeof PAY_OPTIONS)[number]['offeredBy'], string> = {
+  online: 'Your shop doesn’t take online payments yet (Settings → Payment setup).',
+  transfer: 'Add a bank account in Settings → Payment setup to offer it.',
+  onDelivery: 'Pay on delivery is turned off for your whole shop (Settings → Payment setup).',
+};
+
+export function WholesaleSettingsClient({
+  initial,
+  offered,
+  buyers,
+  waiting,
+  canEdit,
+}: {
+  initial: WholesaleSettingsInput;
+  /** what the shop offers everyone today; trade choices can only narrow it */
+  offered: { online: boolean; transfer: boolean; onDelivery: boolean };
+  buyers: number;
+  waiting: number;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [values, setValues] = React.useState<WholesaleSettingsInput>(initial);
+  const [pending, setPending] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const dirty = JSON.stringify(values) !== JSON.stringify(initial);
+  const on = values.mode !== 'OFF';
+
+  async function save() {
+    setPending(true);
+    setError(null);
+    const result = await saveWholesaleSettings(values);
+    setPending(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    toast.success('Wholesale settings saved');
+    router.refresh();
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Wholesale"
+        description="Sell to other businesses on the same website, as trade buyers you approve."
+        actions={
+          <Link href="/sales/customers?segment=trade" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+            Trade buyers
+            <ArrowRight className="size-3.5" />
+          </Link>
+        }
+      />
+      <PageBody className="max-w-3xl space-y-8">
+        {error && (
+          <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
+        {on && (buyers > 0 || waiting > 0) && (
+          <p className="text-sm text-muted-foreground">
+            {formatNumber(buyers)} trade {buyers === 1 ? 'buyer' : 'buyers'}
+            {waiting > 0 && (
+              <>
+                {' · '}
+                <Link href="/sales/customers?segment=trade-requests" className="font-medium text-primary hover:underline">
+                  {formatNumber(waiting)} {waiting === 1 ? 'request' : 'requests'} waiting
+                </Link>
+              </>
+            )}
+          </p>
+        )}
+
+        <section aria-labelledby="wholesale-mode" className="space-y-3">
+          <div>
+            <h2 id="wholesale-mode" className="text-sm font-semibold">
+              Who can shop
+            </h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Trade buyers are businesses you approve. You manage them in Customers.
+            </p>
+          </div>
+          <RadioGroupPrimitive.Root
+            value={values.mode}
+            onValueChange={(mode) => setValues((v) => ({ ...v, mode: mode as WholesaleMode }))}
+            disabled={!canEdit}
+            aria-labelledby="wholesale-mode"
+            className="grid gap-2"
+          >
+            {WHOLESALE_MODES.map((mode) => (
+              <label
+                key={mode.value}
+                htmlFor={`wholesale-${mode.value}`}
+                className={cn(
+                  'flex cursor-pointer items-start gap-3 rounded-lg border bg-card p-3.5 transition-colors hover:bg-muted/40',
+                  'has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:ring-1 has-[[data-state=checked]]:ring-primary',
+                  'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
+                  !canEdit && 'cursor-not-allowed opacity-70',
+                )}
+              >
+                <RadioGroupPrimitive.Item
+                  id={`wholesale-${mode.value}`}
+                  value={mode.value}
+                  className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-input data-[state=checked]:border-primary focus-visible:outline-none"
+                >
+                  <RadioGroupPrimitive.Indicator className="size-2 rounded-full bg-primary" />
+                </RadioGroupPrimitive.Item>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{mode.label}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{mode.hint}</span>
+                </span>
+              </label>
+            ))}
+          </RadioGroupPrimitive.Root>
+        </section>
+
+        {on && (
+          <>
+            <section aria-labelledby="wholesale-requests" className="space-y-3">
+              <h2 id="wholesale-requests" className="text-sm font-semibold">
+                New trade buyers
+              </h2>
+              <div className="flex items-start justify-between gap-4 rounded-lg border bg-card p-3.5">
+                <div className="min-w-0">
+                  <Label htmlFor="wholesale-requests-open">Let businesses ask for a trade account</Label>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Adds a “Buy wholesale” page to your shop, where a signed-in shopper can send their business details. Each
+                    request waits for you to approve or decline it. Off, only businesses you invite become trade buyers.
+                  </p>
+                </div>
+                <SwitchRoot
+                  id="wholesale-requests-open"
+                  checked={values.requestsOpen}
+                  onCheckedChange={(requestsOpen) => setValues((v) => ({ ...v, requestsOpen }))}
+                  disabled={!canEdit}
+                />
+              </div>
+            </section>
+
+            <section aria-labelledby="wholesale-pay" className="space-y-3">
+              <div>
+                <h2 id="wholesale-pay" className="text-sm font-semibold">
+                  How trade buyers can pay
+                </h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  For example, turn off pay on delivery to have every trade order paid before it leaves. This only narrows
+                  what your shop already offers.
+                </p>
+              </div>
+              <div className="divide-y rounded-lg border bg-card">
+                {PAY_OPTIONS.map((option) => {
+                  const available = offered[option.offeredBy];
+                  return (
+                    <label
+                      key={option.key}
+                      htmlFor={`wholesale-${option.key}`}
+                      className={cn('flex items-start gap-3 p-3.5', available && canEdit ? 'cursor-pointer' : 'cursor-not-allowed')}
+                    >
+                      <CheckboxRoot
+                        id={`wholesale-${option.key}`}
+                        className="mt-0.5"
+                        checked={values[option.key]}
+                        disabled={!canEdit}
+                        onCheckedChange={(checked) => setValues((v) => ({ ...v, [option.key]: checked === true }))}
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium">{option.label}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {available ? option.hint : NOT_OFFERED[option.offeredBy]}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </section>
+          </>
+        )}
+
+        {canEdit ? (
+          <div className="flex justify-end">
+            <Button size="sm" onClick={save} disabled={!dirty || pending}>
+              {pending && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
+              Save wholesale settings
+            </Button>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">Only someone who can change settings can change these.</p>
+        )}
+      </PageBody>
+    </>
+  );
+}

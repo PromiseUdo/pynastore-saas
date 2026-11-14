@@ -194,6 +194,7 @@ export function buildNav(shopOpen: boolean): NavGroup[] {
             ...(shopOpen ? [SETUP_GUIDE] : []),
             { title: 'Payment setup', href: '/settings/payments' },
             { title: 'Delivery and returns', href: '/settings/delivery' },
+            { title: 'Wholesale', href: '/settings/wholesale' },
             { title: 'Team', href: '/settings/members' },
             { title: 'Roles and permissions', href: '/settings/roles' },
             { title: 'Activity log', href: '/settings/activity' },

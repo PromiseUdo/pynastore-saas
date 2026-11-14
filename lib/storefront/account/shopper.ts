@@ -303,6 +303,8 @@ export function toShopper(customer: CustomerAuthRow): Shopper {
 export async function createPasswordResetToken(input: {
   organizationId: string;
   email: string;
+  /** how long the link works; a trade invitation (ROADMAP 21.1) gets days, not minutes */
+  ttlMinutes?: number;
 }): Promise<{ rawToken: string; customer: CustomerAuthRow } | null> {
   const customer = await findByEmail(input.organizationId, input.email);
   if (!customer || customer.status !== 'ACTIVE' || !customer.email) return null;
@@ -324,7 +326,7 @@ export async function createPasswordResetToken(input: {
       data: {
         customerId: customer.id,
         tokenHash: hashToken(rawToken),
-        expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60_000),
+        expiresAt: new Date(Date.now() + (input.ttlMinutes ?? RESET_TOKEN_TTL_MINUTES) * 60_000),
       },
     }),
   ]);

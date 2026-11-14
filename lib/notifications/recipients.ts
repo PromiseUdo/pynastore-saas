@@ -144,6 +144,19 @@ export async function resolveRecipients(organizationId: string | null, audiences
         break;
       }
 
+      case 'customer': {
+        if (!organizationId) break;
+        const customer = await prisma.customer.findFirst({
+          where: { id: audience.customerId, organizationId, accountDeletedAt: null, mergedIntoId: null },
+          select: { id: true, email: true, passwordHash: true, _count: { select: { oauthAccounts: true } } },
+        });
+        // Only someone who can sign in has a list to read; nobody else is told this way.
+        if (customer && (customer.passwordHash || customer._count.oauthAccounts > 0)) {
+          add({ userId: null, customerId: customer.id, scope: organizationId, organizationId, email: customer.email, surface: 'store' });
+        }
+        break;
+      }
+
       case 'platform': {
         const staff = await prisma.user.findMany({ where: { isPlatformStaff: true }, select: { id: true } });
         // Platform email still goes to PLATFORM_ADMIN_EMAIL, as it always has.

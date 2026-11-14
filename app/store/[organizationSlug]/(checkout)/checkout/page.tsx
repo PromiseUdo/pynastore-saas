@@ -26,6 +26,7 @@
  */
 import type { Metadata } from 'next';
 import { getStoreCheckoutConfig } from '@/lib/storefront/checkout/store-config';
+import { isTradeBuyer } from '@/lib/trade/accounts';
 import { getShopper } from '@/lib/storefront/account/session';
 import { listAddresses } from '@/lib/storefront/account/addresses';
 import type { CheckoutAccount } from '@/lib/storefront/checkout/types';
@@ -44,7 +45,9 @@ export default async function CheckoutPage({
   const { organizationSlug } = await params;
   /* The tenant seam: this store's checkout, not "the" checkout. */
   const shopper = await getShopper();
-  const config = await getStoreCheckoutConfig({ organizationSlug });
+  // A trade buyer sees only the ways the merchant lets trade orders be paid (ROADMAP 21.1).
+  const tradeBuyer = shopper ? await isTradeBuyer(shopper.organizationId, shopper.id) : false;
+  const config = await getStoreCheckoutConfig({ organizationSlug }, { tradeBuyer });
 
   let account: CheckoutAccount | null = null;
   if (shopper) {

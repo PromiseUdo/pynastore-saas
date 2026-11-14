@@ -29,6 +29,7 @@ import { footerPageLinks } from '@/lib/storefront/pages/rules';
 import type { FooterColumn } from '@/components/storefront/layout/site-footer';
 import { GetAppBanner } from '@/components/storefront/layout/get-app-banner';
 import { getStoreAppListing } from '@/lib/mobile/listing';
+import { getWholesaleSettingsBySlug } from '@/lib/trade/accounts';
 
 export default async function ShopLayout({
   children,
@@ -38,7 +39,7 @@ export default async function ShopLayout({
   params: Promise<{ organizationSlug: string }>;
 }) {
   const { organizationSlug } = await params;
-  const [navItems, departments, pages, delivery, checkout, announcements, look, { design }, appListing] = await Promise.all([
+  const [navItems, departments, pages, delivery, checkout, announcements, look, { design }, appListing, wholesale] = await Promise.all([
     getNavItems({ organizationSlug }),
     getFeaturedCategories({ organizationSlug }),
     getStorePages({ organizationSlug }),
@@ -49,7 +50,13 @@ export default async function ShopLayout({
     getRequestDesign({ organizationSlug }),
     // The store's own app, when it is listed somewhere (ROADMAP 16.4).
     getStoreAppListing({ organizationSlug }),
+    // "Buy wholesale" in the footer, when there's a way in (ROADMAP 21.1).
+    getWholesaleSettingsBySlug(organizationSlug),
   ]);
+  const wholesaleLink =
+    wholesale.mode === 'TRADE_ONLY' || (wholesale.mode === 'RETAIL_AND_TRADE' && wholesale.requestsOpen)
+      ? [{ label: 'Buy wholesale', href: '/wholesale' }]
+      : [];
 
   /* At most one of each, newest campaign first: two bars stacked above the
    * header is a worse announcement than one, and two modals in a row is an
@@ -76,6 +83,7 @@ export default async function ShopLayout({
           label: category.name,
           href: categoryHref(category.path),
         })),
+        ...wholesaleLink,
       ],
     },
     account: {

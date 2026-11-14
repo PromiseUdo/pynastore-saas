@@ -28,6 +28,8 @@ export type NotificationTarget =
   | { type: 'social-post'; postId: string }
   /** the shop's questions waiting for an answer */
   | { type: 'questions' }
+  /** a customer's trade account: their page in the admin, the trade page of their account in the shop */
+  | { type: 'trade'; customerId: string }
   /** a page of the shop's admin — its billing, domain or app settings */
   | { type: 'admin-page'; path: string }
   /** a page of the platform console, e.g. /platform/errors/abc */
@@ -67,6 +69,10 @@ export function pathFor(target: NotificationTarget, surface: Surface): string | 
       return surface === 'admin' ? `/social/posts/${target.postId}` : null;
     case 'questions':
       return surface === 'admin' ? '/sales/questions' : null;
+    case 'trade':
+      if (surface === 'admin') return `/sales/customers/${target.customerId}`;
+      if (surface === 'store') return '/account/trade';
+      return null;
     case 'admin-page':
       // Only a path inside the admin: never another host.
       return surface === 'admin' && target.path.startsWith('/') && !target.path.startsWith('//') ? target.path : null;

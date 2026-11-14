@@ -12,6 +12,7 @@
  *     email-change links), saved addresses, wishlist, reviews, questions and
  *     "helpful" votes, their chat with the store (ROADMAP 17.5), their
  *     notifications, notification choices, phones and browsers (ROADMAP 18),
+ *     their trade account and its business details (ROADMAP 21.1),
  *     the merchant's notes and tags, marketing consent;
  *   - contact details cleared from the customer record, so the store can't
  *     reach them through it, and the email is free to register again;
@@ -58,6 +59,17 @@ export interface ShopperExport {
   messages: { from: 'you' | 'Store team'; message: string; sentAt: string }[];
   /** what they were told about, from their notification list (ROADMAP 18) */
   notifications: { title: string; message: string; at: string; read: boolean }[];
+  /** their trade account, if they have or asked for one (ROADMAP 21.1) */
+  tradeAccount: {
+    status: string;
+    businessName: string;
+    taxId: string | null;
+    cacNumber: string | null;
+    yourNote: string | null;
+    storeNote: string | null;
+    askedAt: string | null;
+    decidedAt: string | null;
+  } | null;
 }
 
 /** Everything the store holds about this shopper, in plain JSON they can keep. */
@@ -77,6 +89,7 @@ export async function exportShopperData(organizationId: string, customerId: stri
         select: { messages: { orderBy: { seq: 'asc' }, select: { sender: true, body: true, createdAt: true } } },
       },
       notifications: { orderBy: { createdAt: 'asc' }, select: { title: true, body: true, createdAt: true, readAt: true } },
+      tradeAccount: true,
     },
   });
   if (!customer) return null;
@@ -138,6 +151,16 @@ export async function exportShopperData(organizationId: string, customerId: stri
       at: n.createdAt.toISOString(),
       read: n.readAt !== null,
     })),
+    tradeAccount: customer.tradeAccount && {
+      status: customer.tradeAccount.status,
+      businessName: customer.tradeAccount.businessName,
+      taxId: customer.taxId,
+      cacNumber: customer.tradeAccount.cacNumber,
+      yourNote: customer.tradeAccount.requestNote,
+      storeNote: customer.tradeAccount.decisionReason,
+      askedAt: iso(customer.tradeAccount.requestedAt),
+      decidedAt: iso(customer.tradeAccount.decidedAt),
+    },
   };
 }
 
@@ -167,6 +190,7 @@ export async function deleteShopperAccount(organizationId: string, customerId: s
     await tx.customerEmailChange.deleteMany({ where: { customerId } });
     await tx.customerAddress.deleteMany({ where: { customerId } });
     await tx.customerWishlistItem.deleteMany({ where: { customerId } });
+    await tx.tradeAccount.deleteMany({ where: { customerId } });
     await tx.productReviewVote.deleteMany({ where: { customerId } });
     await tx.productReview.deleteMany({ where: { customerId } });
     await tx.productQuestion.deleteMany({ where: { customerId } });

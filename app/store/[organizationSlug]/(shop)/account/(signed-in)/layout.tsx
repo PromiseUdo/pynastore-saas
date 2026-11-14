@@ -18,6 +18,7 @@
 import { headers } from 'next/headers';
 import { requireShopper } from '@/lib/storefront/account/session';
 import { safeNextPath } from '@/lib/storefront/account/return-url';
+import { getWholesaleSettings, tradeStanding } from '@/lib/trade/accounts';
 import { AccountNav, SignOutButton } from '../_components/account-nav';
 import { AccountGreeting } from '../_components/account-greeting';
 
@@ -26,6 +27,11 @@ export default async function SignedInAccountLayout({ children }: { children: Re
    * linked to, say — once they've signed in (ROADMAP 18.5). The path comes
    * from proxy.ts, never the browser, and is checked as a same-site path. */
   const shopper = await requireShopper(safeNextPath((await headers()).get('x-store-path'), '/account'));
+  const [wholesale, standing] = await Promise.all([
+    getWholesaleSettings(shopper.organizationId),
+    tradeStanding(shopper.organizationId, shopper.id),
+  ]);
+  const showTrade = Boolean(standing) || (wholesale.mode !== 'OFF' && wholesale.requestsOpen);
 
   return (
     <div className="sf-container py-6 sm:py-12">
@@ -36,7 +42,7 @@ export default async function SignedInAccountLayout({ children }: { children: Re
           * takes its width from its widest content, which let the nav strip
           * push every account page sideways on a phone. */}
         <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5 sm:mt-7 sm:gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
-          <AccountNav />
+          <AccountNav trade={showTrade} />
           <div className="min-w-0">{children}</div>
         </div>
 

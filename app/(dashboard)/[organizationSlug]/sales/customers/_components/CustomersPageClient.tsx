@@ -15,7 +15,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { Plus, Search, Users } from 'lucide-react';
+import { Building2, Plus, Search, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -36,19 +36,25 @@ import {
 } from '@/components/ui/table';
 import { formatDate, formatMoney, formatNumber, formatRelativeTime } from '@/lib/format';
 import { exportCustomerInsights, type CustomerListResult, type CustomerListRow } from '@/features/sales/customer-insights';
-import { CUSTOMER_SEGMENTS, CUSTOMER_SORTS } from '@/lib/sales/customer-segments';
+import { CUSTOMER_SEGMENTS, CUSTOMER_SORTS, TRADE_SEGMENTS } from '@/lib/sales/customer-segments';
 import { CustomerDialog } from './CustomerDialog';
+import { InviteTradeBuyerDialog, TradeStatusBadge } from './TradeAccount';
 
 export function CustomersPageClient({
   list,
   currency,
   canManage,
   canCreate,
+  wholesaleOn = false,
+  canManageTrade = false,
 }: {
   list: CustomerListResult;
   currency: string;
   canManage: boolean;
   canCreate: boolean;
+  /** the shop sells wholesale: trade tabs, badges and the invite button (ROADMAP 21.1) */
+  wholesaleOn?: boolean;
+  canManageTrade?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -56,6 +62,8 @@ export function CustomersPageClient({
   const now = React.useMemo(() => new Date(), []);
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [inviteOpen, setInviteOpen] = React.useState(false);
+  const segments = CUSTOMER_SEGMENTS.filter((s) => wholesaleOn || !TRADE_SEGMENTS.includes(s.key));
   const segment = searchParams.get('segment') ?? 'all';
   const sort = searchParams.get('sort') ?? 'spend';
   const urlQuery = searchParams.get('q') ?? '';
@@ -86,7 +94,7 @@ export function CustomersPageClient({
   const filtered = segment !== 'all' || urlQuery !== '';
   /* Say what the chosen segment means — nobody should have to guess what
    * "gone quiet" counts as. */
-  const segmentHint = CUSTOMER_SEGMENTS.find((s) => s.key === segment)?.hint ?? null;
+  const segmentHint = segments.find((s) => s.key === segment)?.hint ?? null;
 
   const fetchExport = React.useCallback(
     () => exportCustomerInsights({ q: urlQuery || undefined, segment, sort }),
@@ -112,11 +120,19 @@ export function CustomersPageClient({
             name="customers"
             disabled={list.historySize === 0}
           />
+          {wholesaleOn && canManageTrade && (
+            <Button size="sm" variant="outline" onClick={() => setInviteOpen(true)}>
+              <Building2 className="size-3.5" />
+              Invite a trade buyer
+            </Button>
+          )}
           {newCustomerButton}
         </>
       }
     />
   );
+
+  const inviteDialog = wholesaleOn && canManageTrade ? <InviteTradeBuyerDialog open={inviteOpen} onOpenChange={setInviteOpen} /> : null;
 
   if (list.historySize === 0) {
     return (
@@ -131,6 +147,7 @@ export function CustomersPageClient({
           />
         </PageBody>
         <CustomerDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={null} />
+        {inviteDialog}
       </>
     );
   }
@@ -152,7 +169,7 @@ export function CustomersPageClient({
         * what PageTabs' `-mb-2.5` pulls back, so the active tab's underline
         * lands ON the toolbar's bottom border instead of below it. */}
       <PageToolbar className="gap-y-2">
-        <PageTabs tabs={[...CUSTOMER_SEGMENTS]} current={segment} param="segment" />
+        <PageTabs tabs={segments} current={segment} param="segment" />
       </PageToolbar>
 
       <PageToolbar>
@@ -270,6 +287,9 @@ export function CustomersPageClient({
                       </TableCell>
                       <TableCell>
                         <span className="flex flex-wrap gap-1">
+                          {customer.tradeStatus && (wholesaleOn || customer.tradeStatus === 'APPROVED') && (
+                            <TradeStatusBadge status={customer.tradeStatus} />
+                          )}
                           {customer.returnCount > 0 && (
                             <Badge variant="warning">
                               {customer.returnCount === 1 ? '1 return' : `${customer.returnCount} returns`}
@@ -304,6 +324,7 @@ export function CustomersPageClient({
       </PageBody>
 
       <CustomerDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={null} />
+      {inviteDialog}
     </>
   );
 }
@@ -327,6 +348,7 @@ const CSV_COLUMNS = [
   { header: 'Last order', value: (row: CustomerListRow) => row.lastOrderAt ?? '' },
   { header: 'Returns', value: (row: CustomerListRow) => row.returnCount },
   { header: 'Agreed to marketing', value: (row: CustomerListRow) => (row.marketingConsent ? 'Yes' : 'No') },
+  { header: 'Trade', value: (row: CustomerListRow) => (row.tradeStatus === 'APPROVED' ? 'Trade buyer' : row.tradeStatus === 'REQUESTED' ? 'Asked for trade' : '') },
   { header: 'Labels', value: (row: CustomerListRow) => row.tags.join(', ') },
   { header: 'Added', value: (row: CustomerListRow) => row.createdAt },
 ];

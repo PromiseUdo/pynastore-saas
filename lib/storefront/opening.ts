@@ -33,7 +33,8 @@ export const getStorefrontOpening = cache(async (organizationSlug: string): Prom
   return { open: false, previewer: await isTeamMember(org.id), everOpened: Boolean(org.storefrontOpenedAt) };
 });
 
-async function isTeamMember(organizationId: string): Promise<boolean> {
+/** Signed in to the admin as an active member of this shop (also used by the trade-only gate, ./trade-gate.ts). */
+export async function isTeamMember(organizationId: string): Promise<boolean> {
   try {
     const { auth } = await import('@/lib/auth');
     const userId = (await auth())?.user?.id;
