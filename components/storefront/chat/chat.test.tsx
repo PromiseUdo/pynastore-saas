@@ -124,9 +124,12 @@ describe('the ways in', () => {
     expect(useChatStore.getState()).toMatchObject({ open: true, product: { id: 'p1', name: 'Air Max' } });
   });
 
-  it('puts a dot on the phone’s Account tab when the store has replied', async () => {
+  it('counts the store’s replies on the phone’s Messages tab, which opens the chat', async () => {
     wrap(<MobileTabBar />, { ...ON, exists: true, unread: 1 });
-    await waitFor(() => expect(screen.getByRole('link', { name: /the store has replied/ })).toBeTruthy());
+    const tab = await waitFor(() => screen.getByRole('button', { name: /Messages.*the store has replied/ }));
+    expect(tab.textContent).toContain('1');
+    tab.click();
+    expect(useChatStore.getState()).toMatchObject({ open: true });
   });
 
   it('leaves the corner to chat: the floating assistant moves into the discovery row', () => {
