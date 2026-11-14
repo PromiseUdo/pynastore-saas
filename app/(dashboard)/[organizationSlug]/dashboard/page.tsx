@@ -382,7 +382,7 @@ function ClickableStat({ href, children }: { href: string; children: React.React
   return (
     <Link
       href={href}
-      className="block h-full rounded-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&>*]:h-full"
+      className="block h-full rounded-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring *:h-full"
     >
       {children}
     </Link>
