@@ -35,7 +35,8 @@
 import { prisma } from '@/lib/prisma';
 import { maybeSendLowStockAlert } from '@/features/inventory/shared';
 import { ONLINE_PAYMENT_METHODS, reconcileOpenAttempts, reviveTimedOutOrder } from '../checkout/payment-service';
-import { TRANSFER_HOLD_HOURS, UNPAID_ORDER_HOLD_MINUTES } from './holds';
+import { ARRANGED_REMINDER_HOURS, TRANSFER_HOLD_HOURS, UNPAID_ORDER_HOLD_MINUTES } from './holds';
+import { DELIVERY_NOT_ACCEPTED, DELIVERY_NOT_PRICED, remindArrangedPricing } from './arranged';
 import { dispatchOrderStock, releaseOrderStock, type DispatchedStock } from './stock';
 import { markShipmentsCancelled, markShipmentsDelivered, markShipmentsDispatched } from './shipments';
 import { cancelRequestedTransfers, requestGatheringTransfers, waitingOn } from './gather';
@@ -87,6 +88,19 @@ async function load(scope: Scope) {
  */
 export async function expireUnpaidOrders(options: { organizationId?: string; limit?: number } = {}) {
   const store = options.organizationId ? { organizationId: options.organizationId } : {};
+  const now = new Date();
+  /* An order's payment clock starts when it was placed — or, for delivery to
+   * be arranged, when the buyer accepted the store's price (21.4B). */
+  const heldSince = (cutoff: Date) => ({
+    OR: [
+      { deliveryArranged: false, placedAt: { lt: cutoff } },
+      { deliveryArranged: true, deliveryAcceptedAt: { lt: cutoff } },
+    ],
+  });
+  // The store's last call to price an arranged delivery, before its deadline cancels it.
+  await remindArrangedPricing(store, ARRANGED_REMINDER_HOURS).catch((error) => {
+    console.error('[orders] Could not remind stores to price arranged deliveries:', error);
+  });
   const onlineCutoff = new Date(Date.now() - UNPAID_ORDER_HOLD_MINUTES * 60_000);
   const transferCutoff = new Date(Date.now() - TRANSFER_HOLD_HOURS * 3_600_000);
 
@@ -99,19 +113,25 @@ export async function expireUnpaidOrders(options: { organizationId?: string; lim
           // Paystack, and any Squad-era order still waiting (ROADMAP 10.9).
           paymentMethod: { in: [...ONLINE_PAYMENT_METHODS] },
           paymentStatus: 'AWAITING_PAYMENT',
-          placedAt: { lt: onlineCutoff },
+          ...heldSince(onlineCutoff),
         },
-        { paymentMethod: 'transfer', paymentStatus: 'AWAITING_TRANSFER', placedAt: { lt: transferCutoff } },
+        { paymentMethod: 'transfer', paymentStatus: 'AWAITING_TRANSFER', ...heldSince(transferCutoff) },
+        /* Delivery to be arranged (21.4B): the store didn't price it in time,
+         * or the buyer didn't accept the price in time. */
+        { paymentStatus: 'AWAITING_DELIVERY_PRICE', deliveryArranged: true, deliveryPricedAt: null, deliveryPriceDueAt: { lt: now } },
+        { paymentStatus: 'AWAITING_DELIVERY_PRICE', deliveryArranged: true, deliveryPricedAt: { not: null }, deliveryAcceptBy: { lt: now } },
       ],
     },
-    select: { id: true, paymentStatus: true, discountCodeId: true },
+    select: { id: true, paymentStatus: true, discountCodeId: true, deliveryPricedAt: true },
     orderBy: { placedAt: 'asc' },
     take: options.limit ?? 50,
   });
 
   let expired = 0;
 
-  for (const { id, paymentStatus, discountCodeId } of stale) {
+  for (const { id, paymentStatus, discountCodeId, deliveryPricedAt } of stale) {
+    const arranged = paymentStatus === 'AWAITING_DELIVERY_PRICE';
+    const reason = arranged ? (deliveryPricedAt ? DELIVERY_NOT_ACCEPTED : DELIVERY_NOT_PRICED) : PAYMENT_TIMEOUT;
     if (paymentStatus === 'AWAITING_PAYMENT') {
       await reconcileOpenAttempts(id).catch((error) => {
         console.error(`[orders] Could not re-check payment for ${id} before expiring it:`, error);
@@ -121,7 +141,7 @@ export async function expireUnpaidOrders(options: { organizationId?: string; lim
     const cancelled = await prisma.$transaction(async (tx) => {
       const claimed = await tx.order.updateMany({
         where: { id, status: 'PENDING', paymentStatus },
-        data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: PAYMENT_TIMEOUT },
+        data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: reason },
       });
       if (claimed.count === 0) return false;
       await releaseOrderStock(tx, id);
@@ -133,7 +153,12 @@ export async function expireUnpaidOrders(options: { organizationId?: string; lim
 
     if (cancelled) {
       expired += 1;
-      await notifyShopper(id, 'payment-timeout');
+      if (reason === DELIVERY_NOT_PRICED) {
+        await notifyShopper(id, 'delivery-not-priced');
+        await notifyMerchant(id, 'delivery-not-priced');
+      } else {
+        await notifyShopper(id, reason === DELIVERY_NOT_ACCEPTED ? 'delivery-price-lapsed' : 'payment-timeout');
+      }
     }
   }
 
@@ -152,6 +177,9 @@ export async function confirmOrder(scope: Scope): Promise<TransitionResult> {
   }
   if (order.paymentStatus === 'AWAITING_TRANSFER') {
     return { ok: false, error: 'Check your bank first — confirm the transfer once it has arrived.' };
+  }
+  if (order.paymentStatus === 'AWAITING_DELIVERY_PRICE') {
+    return { ok: false, error: 'Set the delivery price first. The customer accepts it before the order can go ahead.' };
   }
 
   const claimed = await prisma.order.updateMany({

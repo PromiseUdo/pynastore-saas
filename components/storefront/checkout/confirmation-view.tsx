@@ -17,12 +17,12 @@
  * the order's real state with the one sentence that says what happens next.
  */
 import { InvoiceLink } from '@/components/storefront/orders/invoice-link';
-import { formatEtaWindow } from '@/lib/storefront/delivery/eta';
+import { ArrangedDeliveryCard } from '@/components/storefront/orders/arranged-delivery-card';
 import Link from 'next/link';
 import Image from 'next/image';
 import { CheckCircle2, CircleAlert, Clock, Mail, PackageCheck } from 'lucide-react';
 import { formatMoney, formatDate } from '@/lib/storefront/format';
-import { PAYMENT_STATUS_LABEL, cancelledRefundSentence, paymentHint } from '@/lib/storefront/orders/labels';
+import { PAYMENT_STATUS_LABEL, cancelledRefundSentence, deliveryWhen, paymentHint } from '@/lib/storefront/orders/labels';
 import type { StorefrontOrder } from '@/lib/storefront/orders/types';
 import type { CheckoutConfig } from '@/lib/storefront/checkout/types';
 import type { OrderPaymentState } from '@/lib/storefront/checkout/payment-service';
@@ -74,9 +74,14 @@ export function ConfirmationView({
     if (awaitingTransfer) {
       return 'We’ve saved your order and set the items aside. Send the transfer below — the store confirms your order once the money arrives.';
     }
+    if (awaitingDeliveryPrice) {
+      return 'We’ve saved your order and set the items aside. The store will price delivery for an order this size — you pay once you’ve seen it and accepted.';
+    }
     return `Thank you${order.contact.firstName ? `, ${order.contact.firstName}` : ''}. We’ve got your order and we’ll let you know as soon as it’s on the way.`;
   }
   const awaitingTransfer = !cancelled && order.paymentStatus === 'AWAITING_TRANSFER';
+  // Delivery to be arranged (ROADMAP 21.4B): the store prices it, the buyer accepts.
+  const awaitingDeliveryPrice = !cancelled && order.paymentStatus === 'AWAITING_DELIVERY_PRICE';
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -125,7 +130,12 @@ export function ConfirmationView({
 
       {/* What the shopper still has to do, if anything. A cancelled order has
         * nothing left to pay; if money is owed back, the heading says so. */}
-      {!cancelled && (
+      {awaitingDeliveryPrice && (
+        <div className="mt-4">
+          <ArrangedDeliveryCard order={order} confirmationToken={payment.confirmationToken} confirmationPath={payment.confirmationPath} />
+        </div>
+      )}
+      {!cancelled && !awaitingDeliveryPrice && (
         <div className="mt-4 rounded-xl border border-brand/30 bg-brand/5 p-4">
           <p className="flex items-center gap-2 text-sm font-semibold">
             {payment.lastAttemptFailed ? (
@@ -271,7 +281,7 @@ export function ConfirmationView({
             <p className="mt-2 text-sm font-medium">{order.delivery.label}</p>
           )}
           <p className="mt-1.5 text-sm text-muted-foreground">
-            {formatEtaWindow(order.delivery.eta, order.delivery.estimated, config.locale)}
+            {deliveryWhen(order, config.locale)}
           </p>
           {order.note && (
             <p className="mt-3 border-t pt-3 text-sm text-muted-foreground">

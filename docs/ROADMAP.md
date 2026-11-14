@@ -1343,7 +1343,7 @@ Launch (C) needs both.
 |---|---|---|
 | D3 | 14.4 SMS/WhatsApp order updates | needs a provider decision first (cost per message) |
 | D4 | 13.5 Custom domains bought through Namecheap's API | staff handle them by hand until then |
-| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | 21.1, 21.2 DONE 2026-11-14, 21.3 + 21.6 DONE 2026-11-15; next 21.4 trade delivery; can move before launch if a launch vendor needs it |
+| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | 21.1, 21.2 DONE 2026-11-14, 21.3 + 21.6 + 21.4 DONE 2026-11-15; next 21.5 pay on account; can move before launch if a launch vendor needs it |
 
 ### Deliberately not planned yet
 
@@ -8001,7 +8001,7 @@ pay on account. A vendor who sells only wholesale switches the shop to
 - Checked in the cart, at checkout and again in `placeOrder` (the server is
   the one that counts, as with payment terms).
 
-### 21.4 Delivery for trade orders — TODO
+### 21.4 Delivery for trade orders — DONE (2026-11-15)
 
 Delivery is priced per store, per area, per option (Phase 9: `DeliveryZone`
 → `DeliveryRate` with price, arrival time and `freeOver`; `PickupLocation`).
@@ -8062,6 +8062,51 @@ afterwards; the buyer sees the price before paying anything.
 **Not in this step:** separate trade prices for the same option, and prices
 by weight or size (needs every product's weight and per-kilo rates — a lot
 of setup for vendors). Both in "Later" if vendors ask.
+
+As built:
+- **A (commit abba74d).** `DeliveryRate.audience` / `tradeFreeOver`,
+  `PickupLocation.audience` (`DeliveryAudience` EVERYONE / RETAIL / TRADE).
+  One pure filter, `deliveryFor(setup, buyer)` in
+  `lib/storefront/delivery/match.ts`, shapes each store's setup for the
+  buyer before `planOrder`; `quoteDelivery(…, { buyer })` takes it, and
+  checkout, `placeOrder` (from `config.tradeBuyer`), the product page
+  estimate, a revived order (from `buyerBusinessName`) and the admin's
+  "Check an address" (a Customer: retail / trade choice) all pass it.
+  `deliveryOverview` — the public promise — is always retail. A trade buyer
+  with no `tradeFreeOver` set gets the usual `freeOver`. The trade fields
+  show in Settings → Delivery while wholesale is on.
+- **B.** Per store (`Warehouse.arrangedDeliveryOn`, `…FromValue`,
+  `…FromItems`, `arrangedPriceHours` 12/24/48/72), set in Settings →
+  Delivery. `quoteDelivery` adds the option (`arranged_{storeId}`,
+  `ShippingMethod.arranged`) for a trade buyer when the bag goes as ONE
+  parcel from a store that offers it and either amount is reached; it
+  reuses the planner's plan, so the stock is held where the truck leaves
+  from. Checkout says "To be arranged" and "Total before delivery", never
+  ₦0 or a window.
+  - Placed with `paymentStatus AWAITING_DELIVERY_PRICE`, `deliveryFee` and
+    the window null, `deliveryPriceDueAt`; no payment is started. The buyer
+    gets "placed-delivery-to-arrange", the store an `order.alert`
+    "delivery-to-price" (email + push).
+  - The store sets or changes the price on the order page ("Set delivery
+    price": fee + optional note), audited; the buyer is emailed the fee and
+    the new total and has `ARRANGED_ACCEPT_HOURS` (48) to accept.
+  - **Accepting** (`acceptDeliveryPriceAction`, by confirmation token, on
+    the confirmation and account order pages) moves it to the method's
+    normal state — online goes straight to Paystack, transfer gets its
+    instructions, pay on delivery goes to the store to confirm — and its
+    payment clock starts from `deliveryAcceptedAt`. Until then nothing can
+    be paid, confirmed or shipped, and the buyer can cancel at no cost.
+  - `expireUnpaidOrders` reminds the store once 4 hours before its deadline,
+    then cancels (`delivery-not-priced`, buyer and store told), and cancels
+    a priced order not accepted in time (`delivery-not-accepted`).
+  - The invoice (21.6) says "To be arranged" / "Delivery (arranged by the
+    store)"; the order pages say where it stands instead of a window; the
+    product page estimate adds "Large trade orders: delivery arranged by the
+    store" for a trade buyer.
+  - **Not built, by choice:** switching an arranged order to collection
+    (the buyer cancels at no cost and orders again with collection); a bag
+    split across stores (one open fee is agreeable, several aren't); a
+    setting for the buyer's 48 hours (fixed, like the transfer hold).
 
 ### 21.5 Pay on account (optional, per buyer) — TODO
 

@@ -41,6 +41,7 @@ import {
 import { UNPAID_ORDER_HOLD_MINUTES } from '@/lib/storefront/orders/lifecycle';
 import { TRANSFER_HOLD_HOURS } from '@/lib/storefront/orders/holds';
 import { OrderActions } from './_components/OrderActions';
+import { ArrangedDeliveryPanel } from './_components/ArrangedDeliveryPanel';
 import { OrderReturnsPanel } from './_components/OrderReturnsPanel';
 import { DISPUTE_STATUS_VARIANT, disputeLabel, disputeOutcome } from '@/lib/sales/dispute-labels';
 import { ParcelsPanel } from './_components/ParcelsPanel';
@@ -212,6 +213,9 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
           {order.partiallySent && <Badge variant="processing">Partially sent</Badge>}
         </div>
         {hint && <p className="mt-2 text-sm text-muted-foreground">{hint}</p>}
+
+        {/* Delivery to be arranged (ROADMAP 21.4B): the price this order is waiting for. */}
+        <ArrangedDeliveryPanel order={order} canManage={canManage} />
 
         {order.disputes.map((dispute) => {
           const open = dispute.status !== 'resolved';

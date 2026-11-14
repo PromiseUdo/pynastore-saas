@@ -25,6 +25,10 @@ const LINES: Partial<Record<OrderEmailKind, (reference: string) => string>> = {
   'return-approved': (ref) => `Your return for order ${ref} was approved.`,
   'return-rejected': (ref) => `The store replied to your return request for order ${ref}.`,
   refunded: (ref) => `A refund for order ${ref} has been recorded.`,
+  // Delivery to be arranged (ROADMAP 21.4B): the buyer has something to decide, or it's over.
+  'delivery-priced': (ref) => `The delivery price for order ${ref} is ready. Accept it to go ahead.`,
+  'delivery-not-priced': (ref) => `Order ${ref} was cancelled — the store couldn’t price delivery in time.`,
+  'delivery-price-lapsed': (ref) => `Order ${ref} was cancelled — the delivery price wasn’t accepted in time.`,
 };
 
 export function orderPushMessage(

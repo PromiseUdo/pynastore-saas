@@ -27,8 +27,10 @@ import { SHIPPING_METHODS } from '../pricing';
 import type { DeliveryPromise, Money, ShippingMethod } from '../types';
 import { formatEtaSpan } from './eta';
 import {
+  arrangedOption,
   deliveryFor,
   hasAnyDelivery,
+  qualifiesForArranged,
   type DeliveryAddress,
   type DeliveryBuyer,
   type DeliveryQuote,
@@ -79,6 +81,10 @@ export const loadDeliverySetup = cache(async (organizationSlug: string): Promise
       id: true,
       name: true,
       state: true,
+      arrangedDeliveryOn: true,
+      arrangedDeliveryFromValue: true,
+      arrangedDeliveryFromItems: true,
+      arrangedPriceHours: true,
       deliveryZones: {
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         select: {
@@ -129,6 +135,13 @@ export const loadDeliverySetup = cache(async (organizationSlug: string): Promise
     warehouseId: store.id,
     name: store.name,
     state: store.state,
+    arranged: store.arrangedDeliveryOn
+      ? {
+          fromValue: toMinor(store.arrangedDeliveryFromValue),
+          fromItems: store.arrangedDeliveryFromItems,
+          withinHours: store.arrangedPriceHours,
+        }
+      : null,
     zones: store.deliveryZones.map((zone) => ({
       ...zone,
       rates: zone.rates.map((rate) => ({
@@ -199,13 +212,49 @@ export async function quoteDelivery(
     loadStockFor(organizationSlug, bag.map((line) => line.itemId)),
     loadConsolidation(organizationSlug),
   ]);
-  return planOrder(
+  const quote = planOrder(
     stores.map((store) => deliveryFor(store, buyer)),
     stock,
     bag,
     address,
     consolidation,
   );
+  return buyer === 'trade' ? withArrangedDelivery(quote, stores, bag) : quote;
+}
+
+/**
+ * "Delivery to be arranged" (ROADMAP 21.4B), for an approved trade buyer
+ * only: offered beside the normal options when the bag goes as ONE parcel
+ * from a store that offers it, and is big enough by that store's rule. The
+ * planner has already decided where it leaves from — the merchant needs to
+ * know where the truck starts — so the option reuses that plan and leaves
+ * only the fee open. A bag split across stores isn't offered it: one open
+ * fee is something a buyer can agree to; several aren't.
+ */
+function withArrangedDelivery(quote: PlannedQuote, stores: StoreDeliverySetup[], bag: BagLine[]): PlannedQuote {
+  if (quote.parcels.length !== 1) return quote;
+  const [parcel] = quote.parcels;
+  const store = stores.find((s) => s.warehouseId === parcel.store.id);
+  const size = {
+    value: bag.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0),
+    items: bag.reduce((sum, line) => sum + line.quantity, 0),
+  };
+  if (!store?.arranged || !qualifiesForArranged(store.arranged, size)) return quote;
+
+  // The plan behind this parcel's delivery — whichever option, the stores and lines are the same.
+  const basis = parcel.options.map((o) => quote.plans[o.id]).find(Boolean);
+  if (!basis) return quote;
+  const option = arrangedOption(store.warehouseId, store.arranged.withinHours);
+  const deliveries = quote.options.filter((o) => o.kind !== 'pickup');
+  const pickups = quote.options.filter((o) => o.kind === 'pickup');
+  return {
+    ...quote,
+    options: [...deliveries, option, ...pickups],
+    plans: {
+      ...quote.plans,
+      [option.id]: { shipments: basis.shipments.map((shipment) => ({ ...shipment, method: option })) },
+    },
+  };
 }
 
 export async function storeHasDelivery(organizationSlug: string, buyer: DeliveryBuyer = 'retail'): Promise<boolean> {

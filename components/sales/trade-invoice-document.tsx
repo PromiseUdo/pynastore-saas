@@ -40,11 +40,18 @@ export function TradeInvoiceDocument({ invoice }: { invoice: TradeInvoice }) {
   if (invoice.discount > 0) {
     totals.push({ label: invoice.discountLabel ? `Discount (${invoice.discountLabel})` : 'Discount', value: `−${money(invoice.discount)}` });
   }
-  if (invoice.deliveryFee !== null) {
-    totals.push({ label: 'Delivery', value: invoice.deliveryFee > 0 ? money(invoice.deliveryFee) : 'Free' });
+  const unpricedDelivery = invoice.deliveryArranged && invoice.deliveryFee === null;
+  if (unpricedDelivery) {
+    // Delivery to be arranged (21.4B), not priced yet: said, never guessed.
+    totals.push({ label: 'Delivery', value: 'To be arranged' });
+  } else if (invoice.deliveryFee !== null) {
+    totals.push({
+      label: invoice.deliveryArranged ? 'Delivery (arranged by the store)' : 'Delivery',
+      value: invoice.deliveryFee > 0 ? money(invoice.deliveryFee) : 'Free',
+    });
   }
   if (invoice.vatAdded > 0) totals.push({ label: 'VAT', value: money(invoice.vatAdded) });
-  totals.push({ label: 'Total', value: money(invoice.total), kind: 'total' });
+  totals.push({ label: unpricedDelivery ? 'Total before delivery' : 'Total', value: money(invoice.total), kind: 'total' });
   if (invoice.vatIncluded > 0) totals.push({ label: 'Includes VAT', value: money(invoice.vatIncluded), kind: 'note' });
 
   const paymentLine =

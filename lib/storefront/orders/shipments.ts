@@ -41,9 +41,10 @@ export async function writeShipments(
       deliveryMethodLabel: method.label,
       fee: toMajor(method.price),
       freeOverApplied: method.price === 0 && (method.regularPrice ?? 0) > 0,
-      etaMinMinutes: method.eta.minMinutes,
-      etaMaxMinutes: method.eta.maxMinutes,
-      etaUnit: method.eta.unit,
+      // Delivery to be arranged (21.4B): no window until the store sets one.
+      etaMinMinutes: method.arranged ? null : method.eta.minMinutes,
+      etaMaxMinutes: method.arranged ? null : method.eta.maxMinutes,
+      etaUnit: method.arranged ? null : method.eta.unit,
       sortOrder: index,
     })),
     select: { id: true, sortOrder: true },

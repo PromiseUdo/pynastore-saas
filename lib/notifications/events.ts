@@ -142,6 +142,15 @@ export interface EventDefinition<F> {
 
 type Catalogue = { [K in NotificationKind]: EventDefinition<EventFacts[K]> };
 
+const ORDER_ALERT_WORDS: Record<StoreOrderAlertKind, (f: { reference: string; customerName: string }) => NotificationWords> = {
+  'customer-cancelled': (f) => ({ title: `Order ${f.reference} cancelled`, body: `${f.customerName} cancelled their order.` }),
+  'return-requested': (f) => ({ title: `Return requested on order ${f.reference}`, body: `${f.customerName} asked to return items.` }),
+  // Delivery to be arranged (ROADMAP 21.4B)
+  'delivery-to-price': (f) => ({ title: `Delivery to price: order ${f.reference}`, body: `${f.customerName}’s trade order needs a delivery price.` }),
+  'delivery-price-reminder': (f) => ({ title: `Price delivery soon: order ${f.reference}`, body: 'Set the delivery price before the deadline, or the order is cancelled.' }),
+  'delivery-not-priced': (f) => ({ title: `Order ${f.reference} cancelled`, body: 'Its delivery wasn’t priced in time. The stock is back on sale.' }),
+};
+
 /** The list's words for an order update; a phone gets orderPushMessage's where it has one. */
 const ORDER_LIST_LINES: Record<OrderEmailKind, (reference: string) => string> = {
   'placed-pay-on-delivery': (ref) => `Order ${ref} was placed. You’ll pay when it arrives.`,
@@ -156,6 +165,10 @@ const ORDER_LIST_LINES: Record<OrderEmailKind, (reference: string) => string> = 
   'return-approved': (ref) => `Your return for order ${ref} was approved.`,
   'return-rejected': (ref) => `The store replied to your return request for order ${ref}.`,
   refunded: (ref) => `A refund for order ${ref} has been recorded.`,
+  'placed-delivery-to-arrange': (ref) => `Order ${ref} was placed. The store will send you a delivery price.`,
+  'delivery-priced': (ref) => `The delivery price for order ${ref} is ready. Accept it to go ahead.`,
+  'delivery-not-priced': (ref) => `Order ${ref} was cancelled — the store couldn’t price delivery in time.`,
+  'delivery-price-lapsed': (ref) => `Order ${ref} was cancelled — the delivery price wasn’t accepted in time.`,
 };
 
 const orderThread = (facts: { orderId: string }) => `order:${facts.orderId}`;
@@ -185,15 +198,12 @@ export const EVENTS: Catalogue = {
     audiences: (f) => [
       {
         type: 'staff',
-        permission: f.kind === 'customer-cancelled' ? PERMISSIONS.SALES_FULFILLMENT_MANAGE : PERMISSIONS.SALES_RETURN_MANAGE,
+        permission: f.kind === 'return-requested' ? PERMISSIONS.SALES_RETURN_MANAGE : PERMISSIONS.SALES_FULFILLMENT_MANAGE,
         owner: true,
       },
     ],
     channels: { EMAIL: 'on', WEB_PUSH: 'on', NATIVE_PUSH: 'on' },
-    words: (f) =>
-      f.kind === 'customer-cancelled'
-        ? { title: `Order ${f.reference} cancelled`, body: `${f.customerName} cancelled their order.` }
-        : { title: `Return requested on order ${f.reference}`, body: `${f.customerName} asked to return items.` },
+    words: (f) => ORDER_ALERT_WORDS[f.kind](f),
     target: (f) =>
       f.returnId
         ? { type: 'return', returnId: f.returnId, orderId: f.orderId, reference: f.reference }

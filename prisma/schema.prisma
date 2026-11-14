@@ -859,6 +859,17 @@ model Warehouse {
    * → Delivery asks until someone does; checkout uses them meanwhile.
    */
   deliveryNeedsReview Boolean         @default(false)
+  /**
+   * "Delivery to be arranged" for big trade orders (ROADMAP 21.4B): an
+   * approved trade buyer whose bag leaves from this store and reaches either
+   * amount may order with delivery left open — the merchant prices it after,
+   * within `arrangedPriceHours`, and the buyer pays once they've seen it.
+   * Major units / units; null = that threshold isn't used.
+   */
+  arrangedDeliveryOn        Boolean  @default(false)
+  arrangedDeliveryFromValue Decimal? @db.Decimal(12, 2)
+  arrangedDeliveryFromItems Int?
+  arrangedPriceHours        Int      @default(24)
 
   organization          Organization           @relation(fields: [organizationId], references: [id])
   stockMovements        StockMovement[]
@@ -1923,6 +1934,24 @@ model Order {
   vatAddedAmount Decimal @default(0) @db.Decimal(12, 2)
 
   /**
+   * "Delivery to be arranged" (ROADMAP 21.4B): placed with the fee left open
+   * (`deliveryFee` null, nothing charged, payment AWAITING_DELIVERY_PRICE).
+   * The merchant prices it by `deliveryPriceDueAt` (`deliveryPricedAt`, with
+   * an optional note: "our truck, Thursday"); the buyer accepts it by
+   * `deliveryAcceptBy` (`deliveryAcceptedAt`), and from then on it's paid
+   * like any order — its payment clock runs from the acceptance. Either
+   * deadline missed cancels the order and releases its stock
+   * (expireUnpaidOrders).
+   */
+  deliveryArranged        Boolean   @default(false)
+  deliveryPriceDueAt      DateTime?
+  deliveryPriceRemindedAt DateTime?
+  deliveryPricedAt        DateTime?
+  deliveryArrangedNote    String?
+  deliveryAcceptBy        DateTime?
+  deliveryAcceptedAt      DateTime?
+
+  /**
    * The buyer's business, copied onto the order when an approved trade
    * buyer placed it (ROADMAP 21.6) — what their business invoice is made
    * out to. A snapshot, like the address: renaming the trade account later
@@ -2054,6 +2083,11 @@ enum OrderPaymentStatus {
   AWAITING_PAYMENT
   AWAITING_TRANSFER
   DUE_ON_DELIVERY
+  /**
+   * "Delivery to be arranged" (ROADMAP 21.4B): nothing can be paid until the
+   * store has priced delivery and the buyer has accepted it.
+   */
+  AWAITING_DELIVERY_PRICE
   PAID
   /**
    * Some of the money has gone back (a returned item, say); the rest stays paid.

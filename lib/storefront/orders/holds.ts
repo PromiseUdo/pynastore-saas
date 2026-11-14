@@ -12,3 +12,16 @@ export const UNPAID_ORDER_HOLD_MINUTES = 60;
 
 /** A bank-transfer order waits this long for the money before it's cancelled unpaid. */
 export const TRANSFER_HOLD_HOURS = 48;
+
+/**
+ * "Delivery to be arranged" (ROADMAP 21.4B): once the store has priced
+ * delivery, the buyer has this long to accept it (or cancel) before the
+ * order is cancelled and its stock released — as long as a transfer gets.
+ */
+export const ARRANGED_ACCEPT_HOURS = 48;
+
+/** How long before the store's pricing deadline it's reminded, once. */
+export const ARRANGED_REMINDER_HOURS = 4;
+
+/** The pricing promises a store may make, in hours. */
+export const ARRANGED_PRICE_HOURS = [12, 24, 48, 72] as const;

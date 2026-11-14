@@ -21,6 +21,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
+import { priceArrangedDelivery } from '@/lib/storefront/orders/arranged';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import {
@@ -156,6 +157,18 @@ export interface StoreOrderDetail extends StoreOrderRow {
   vatNumber: string | null;
   /** a trade order: the business it's invoiced to, as given at checkout (ROADMAP 21.6); null otherwise */
   buyer: { businessName: string; taxId: string | null; cacNumber: string | null } | null;
+  /**
+   * "Delivery to be arranged" (ROADMAP 21.4B): the store's deadline to price
+   * it, the price and note once set, and the customer's deadline to accept.
+   * Null for every other order.
+   */
+  arranged: {
+    priceDueAt: string | null;
+    pricedAt: string | null;
+    note: string | null;
+    acceptBy: string | null;
+    acceptedAt: string | null;
+  } | null;
   note: string | null;
   lines: {
     id: string;
@@ -679,6 +692,15 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
         buyer: order.buyerBusinessName
           ? { businessName: order.buyerBusinessName, taxId: order.buyerTaxId, cacNumber: order.buyerCacNumber }
           : null,
+        arranged: order.deliveryArranged
+          ? {
+              priceDueAt: order.deliveryPriceDueAt?.toISOString() ?? null,
+              pricedAt: order.deliveryPricedAt?.toISOString() ?? null,
+              note: order.deliveryArrangedNote,
+              acceptBy: order.deliveryAcceptBy?.toISOString() ?? null,
+              acceptedAt: order.deliveryAcceptedAt?.toISOString() ?? null,
+            }
+          : null,
         totalAmount: Number(order.totalAmount),
         itemCount: order.lineItems.reduce((sum, line) => sum + line.quantity, 0),
         note: order.note,
@@ -839,6 +861,36 @@ export async function updateStoreOrder(
     }
     console.error(`[orders] Could not ${action} order ${orderId}:`, error);
     return { success: false, error: 'We couldn’t update this order. Please try again.' };
+  }
+}
+
+/**
+ * Set — or change, until the customer accepts — the delivery price of an
+ * order placed with "delivery to be arranged" (ROADMAP 21.4B). `fee` in
+ * naira. The customer is told the price and the new total, and accepts it
+ * before paying (lib/storefront/orders/arranged.ts).
+ */
+export async function setArrangedDeliveryPrice(
+  orderId: string,
+  input: { fee: number; note?: string | null },
+): Promise<ActionResult<void>> {
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_FULFILLMENT_MANAGE);
+    const result = await priceArrangedDelivery({
+      organizationId: ctx.organization.id,
+      orderId: String(orderId ?? ''),
+      fee: Number(input?.fee),
+      note: typeof input?.note === 'string' ? input.note : null,
+      userId: ctx.userId,
+    });
+    return result.ok ? { success: true, data: undefined } : { success: false, error: result.error };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'PermissionDeniedError') {
+      return { success: false, error: 'You don’t have permission to update orders' };
+    }
+    console.error(`[orders] Could not price delivery for order ${orderId}:`, error);
+    return { success: false, error: 'We couldn’t save the delivery price. Please try again.' };
   }
 }
 

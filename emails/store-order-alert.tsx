@@ -8,7 +8,16 @@
 import { Body, Button, Container, Head, Hr, Html, Preview, Section, Text } from '@react-email/components';
 import * as React from 'react';
 
-export type StoreOrderAlertKind = 'customer-cancelled' | 'return-requested';
+export type StoreOrderAlertKind =
+  | 'customer-cancelled'
+  | 'return-requested'
+  /* Delivery to be arranged (ROADMAP 21.4B): a trade order waiting for the store's delivery price */
+  | 'delivery-to-price'
+  | 'delivery-price-reminder'
+  | 'delivery-not-priced';
+
+/** The alerts about pricing an arranged delivery. */
+const PRICING: StoreOrderAlertKind[] = ['delivery-to-price', 'delivery-price-reminder', 'delivery-not-priced'];
 
 export type StoreOrderAlertEmailProps = {
   kind: StoreOrderAlertKind;
@@ -26,16 +35,60 @@ export type StoreOrderAlertEmailProps = {
   /** return requests: why, and what is coming back */
   returnReason?: string;
   lines?: { name: string; quantity: number; total: string }[];
+  /** pricing alerts: the store's deadline, already formatted */
+  priceBy?: string;
 };
 
 export function storeOrderAlertSubject(props: Pick<StoreOrderAlertEmailProps, 'kind' | 'reference' | 'customerName'>) {
-  return props.kind === 'customer-cancelled'
-    ? `${props.customerName} cancelled order ${props.reference}`
-    : `${props.customerName} asked to return items from ${props.reference}`;
+  switch (props.kind) {
+    case 'customer-cancelled':
+      return `${props.customerName} cancelled order ${props.reference}`;
+    case 'return-requested':
+      return `${props.customerName} asked to return items from ${props.reference}`;
+    case 'delivery-to-price':
+      return `Set the delivery price for order ${props.reference}`;
+    case 'delivery-price-reminder':
+      return `Reminder: set the delivery price for order ${props.reference}`;
+    case 'delivery-not-priced':
+      return `Order ${props.reference} was cancelled — delivery wasn’t priced in time`;
+  }
+}
+
+/** The pricing alerts' words (21.4B). */
+function PricingBody(props: StoreOrderAlertEmailProps) {
+  if (props.kind === 'delivery-not-priced') {
+    return (
+      <Text style={paragraph}>
+        Order <strong>{props.reference}</strong> from {props.customerName} was cancelled because its delivery wasn’t
+        priced in time. Its stock has gone back on sale, and the customer has been told. They weren’t charged.
+      </Text>
+    );
+  }
+  return (
+    <>
+      <Text style={paragraph}>
+        {props.customerName} placed trade order <strong>{props.reference}</strong> ({props.total} of goods) with{' '}
+        <strong>delivery to be arranged</strong>. Work out what it costs to deliver and set the price on the order
+        {props.priceBy ? <> by <strong>{props.priceBy}</strong></> : null}.
+      </Text>
+      <Text style={paragraph}>
+        The stock is held for it meanwhile. They’ll see the price, accept it, then pay the way they chose. If it isn’t
+        priced in time, the order is cancelled and the stock released.
+      </Text>
+    </>
+  );
 }
 
 export function StoreOrderAlertEmail(props: StoreOrderAlertEmailProps) {
   const cancelled = props.kind === 'customer-cancelled';
+  const pricing = PRICING.includes(props.kind);
+  const heading = pricing
+    ? props.kind === 'delivery-not-priced'
+      ? 'An order was cancelled'
+      : 'A delivery to price'
+    : cancelled
+      ? 'An order was cancelled'
+      : 'A customer wants to return items';
 
   return (
     <Html>
@@ -46,9 +99,11 @@ export function StoreOrderAlertEmail(props: StoreOrderAlertEmailProps) {
           <Text style={logo}>{props.storeName}</Text>
 
           <Section style={card}>
-            <Text style={heading}>{cancelled ? 'An order was cancelled' : 'A customer wants to return items'}</Text>
+            <Text style={headingStyle}>{heading}</Text>
 
-            {cancelled ? (
+            {pricing ? (
+              <PricingBody {...props} />
+            ) : cancelled ? (
               <>
                 <Text style={paragraph}>
                   {props.customerName} cancelled order <strong>{props.reference}</strong> ({props.total}) before you
@@ -92,7 +147,7 @@ export function StoreOrderAlertEmail(props: StoreOrderAlertEmailProps) {
             <Hr style={hr} />
 
             <Text style={footer}>
-              You’re receiving this because your role manages {cancelled ? 'orders' : 'returns'} for {props.storeName}.
+              You’re receiving this because your role manages {cancelled || pricing ? 'orders' : 'returns'} for {props.storeName}.
             </Text>
           </Section>
         </Container>
@@ -123,7 +178,7 @@ const card: React.CSSProperties = {
   border: '1px solid #e4e4e7',
   padding: '32px',
 };
-const heading: React.CSSProperties = { fontSize: '22px', fontWeight: '600', color: '#18181b', margin: '0 0 16px' };
+const headingStyle: React.CSSProperties = { fontSize: '22px', fontWeight: '600', color: '#18181b', margin: '0 0 16px' };
 const paragraph: React.CSSProperties = { fontSize: '15px', lineHeight: '24px', color: '#3f3f46', margin: '0 0 16px' };
 const lineText: React.CSSProperties = { fontSize: '14px', lineHeight: '20px', color: '#3f3f46', margin: '0 0 6px' };
 const quote: React.CSSProperties = {

@@ -35,7 +35,12 @@ export type OrderEmailKind =
   | 'return-requested'
   | 'return-approved'
   | 'return-rejected'
-  | 'refunded';
+  | 'refunded'
+  /* Delivery to be arranged (ROADMAP 21.4B) */
+  | 'placed-delivery-to-arrange'
+  | 'delivery-priced'
+  | 'delivery-not-priced'
+  | 'delivery-price-lapsed';
 
 export type StorefrontOrderUpdateEmailProps = {
   kind: OrderEmailKind;
@@ -63,10 +68,25 @@ export type StorefrontOrderUpdateEmailProps = {
   refundAmount?: string;
   /** a trade order's business invoice (ROADMAP 21.6) — linked from the emails about buying it */
   invoiceUrl?: string;
+  /** delivery to be arranged (21.4B): when the store will price it, already formatted ("4:30 pm on 16 Nov 2026") */
+  priceBy?: string;
+  /** …the fee it set, and how it's going */
+  deliveryFee?: string;
+  deliveryNote?: string;
+  /** …and when the buyer must accept it by */
+  acceptBy?: string;
 };
 
 /** The emails a business invoice belongs with: buying it, not cancelling or returning it. */
-const WITH_INVOICE: OrderEmailKind[] = ['placed-pay-on-delivery', 'placed-bank-transfer', 'payment-received', 'shipped', 'delivered'];
+const WITH_INVOICE: OrderEmailKind[] = [
+  'placed-pay-on-delivery',
+  'placed-bank-transfer',
+  'payment-received',
+  'shipped',
+  'delivered',
+  'placed-delivery-to-arrange',
+  'delivery-priced',
+];
 
 const COPY: Record<OrderEmailKind, { subject: string; heading: string }> = {
   'placed-pay-on-delivery': { subject: 'We’ve got your order', heading: 'Thanks — we’ve got your order' },
@@ -81,6 +101,10 @@ const COPY: Record<OrderEmailKind, { subject: string; heading: string }> = {
   'return-approved': { subject: 'Your return was approved', heading: 'Your return was approved' },
   'return-rejected': { subject: 'About your return request', heading: 'Your return request was declined' },
   refunded: { subject: 'Your refund has been sent', heading: 'Your refund has been sent' },
+  'placed-delivery-to-arrange': { subject: 'We’ve got your order — delivery to be arranged', heading: 'Thanks — we’ve got your order' },
+  'delivery-priced': { subject: 'Your delivery price is ready', heading: 'Your delivery price is ready' },
+  'delivery-not-priced': { subject: 'Your order was cancelled', heading: 'Your order was cancelled' },
+  'delivery-price-lapsed': { subject: 'Your order was cancelled', heading: 'Your order was cancelled' },
 };
 
 export function orderEmailSubject(kind: OrderEmailKind, storeName: string, reference: string): string {
@@ -140,6 +164,26 @@ function body(props: StorefrontOrderUpdateEmailProps): string[] {
           : `${props.storeName} says they’ve sent your refund.`,
         'Depending on how you paid, it can take a few working days to reach your account. If it hasn’t arrived after that, reply to this email.',
       ];
+    case 'placed-delivery-to-arrange':
+      return [
+        `${props.storeName} has your order and has set the items aside. They’ll work out delivery for an order this size and send you the price${props.priceBy ? ` by ${props.priceBy}` : ''}.`,
+        'Nothing is charged until you’ve seen the price and accepted it. If it doesn’t suit you, you can cancel at no cost.',
+      ];
+    case 'delivery-priced':
+      return [
+        `${props.storeName} has priced delivery for your order: ${props.deliveryFee ?? ''}${props.deliveryNote ? ` (${props.deliveryNote})` : ''}. Your order now comes to ${props.total}.`,
+        `Accept it${props.acceptBy ? ` by ${props.acceptBy}` : ''} to go ahead — you then pay the way you chose when ordering. If it doesn’t suit you, cancel the order instead; nothing has been charged.`,
+      ];
+    case 'delivery-not-priced':
+      return [
+        `${props.storeName} couldn’t price delivery for your order in time, so it has been cancelled and the items have gone back on sale. You haven’t been charged.`,
+        'You’re welcome to order again, or get in touch with the store.',
+      ];
+    case 'delivery-price-lapsed':
+      return [
+        'The delivery price for your order wasn’t accepted in time, so it has been cancelled and the items have gone back on sale. You haven’t been charged.',
+        'If you still want them, you’re welcome to order again.',
+      ];
     case 'payment-timeout':
       return [
         'Your payment didn’t come through in time, so we’ve cancelled the order and put the items back on sale. You haven’t been charged.',
@@ -151,9 +195,15 @@ function body(props: StorefrontOrderUpdateEmailProps): string[] {
 export function StorefrontOrderUpdateEmail(props: StorefrontOrderUpdateEmailProps) {
   const copy = COPY[props.kind];
   const aboutReturn = props.returnReason !== undefined;
-  const showDelivery = ['placed-pay-on-delivery', 'placed-bank-transfer', 'payment-received', 'shipped', 'delivered'].includes(
-    props.kind,
-  );
+  const showDelivery = [
+    'placed-pay-on-delivery',
+    'placed-bank-transfer',
+    'payment-received',
+    'shipped',
+    'delivered',
+    'placed-delivery-to-arrange',
+    'delivery-priced',
+  ].includes(props.kind);
 
   return (
     <Html>
@@ -238,7 +288,7 @@ export function StorefrontOrderUpdateEmail(props: StorefrontOrderUpdateEmailProp
             )}
 
             <Button style={button} href={props.orderUrl}>
-              View your order
+              {props.kind === 'delivery-priced' ? 'See the price and accept' : 'View your order'}
             </Button>
 
             {props.invoiceUrl && WITH_INVOICE.includes(props.kind) && (

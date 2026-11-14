@@ -9,7 +9,9 @@
  * equivalent in lib/format.ts; this one is written for the customer.
  */
 import { TRANSFER_HOLD_HOURS } from './holds';
+import { formatEtaWindow } from '../delivery/eta';
 import { formatDate, formatMoney } from '../format';
+import { formatDate as formatDay, formatTime as formatClock } from '@/lib/format';
 import type {
   OrderPaymentStatus,
   OrderReturnStatus,
@@ -31,6 +33,7 @@ export const PAYMENT_STATUS_LABEL: Record<OrderPaymentStatus, string> = {
   AWAITING_PAYMENT: 'Awaiting payment',
   AWAITING_TRANSFER: 'Awaiting your transfer',
   DUE_ON_DELIVERY: 'Pay on delivery',
+  AWAITING_DELIVERY_PRICE: 'Waiting for delivery price',
   PAID: 'Paid',
   PARTIALLY_REFUNDED: 'Partly refunded',
   REFUNDED: 'Refunded',
@@ -46,6 +49,8 @@ export function paymentHint(status: OrderPaymentStatus): string {
       return `Transfer the total to the account shown, using your order number as the reference, within ${TRANSFER_HOLD_HOURS} hours of ordering. The store confirms your order once the money arrives.`;
     case 'DUE_ON_DELIVERY':
       return 'Have the exact amount ready for the courier.';
+    case 'AWAITING_DELIVERY_PRICE':
+      return 'The store is working out delivery for an order this size. Nothing is charged until you’ve seen the price and accepted it.';
     case 'PAID':
       return 'Thank you — nothing more to pay.';
     case 'PARTIALLY_REFUNDED':
@@ -149,4 +154,25 @@ export function orderTimeline(
     done: status !== 'CANCELLED' && index <= reached,
     current: status !== 'CANCELLED' && index === reached,
   }));
+}
+
+/**
+ * When it's coming, in a shopper's words. A normal order says its window;
+ * "delivery to be arranged" (ROADMAP 21.4B) says where the store and the
+ * buyer have got to — never an estimate the store hasn't given.
+ */
+export function deliveryWhen(
+  order: Pick<StorefrontOrder, 'delivery' | 'currency' | 'status'>,
+  locale: string,
+): string {
+  const { arranged, eta, estimated } = order.delivery;
+  if (!arranged) return eta && estimated ? formatEtaWindow(eta, estimated, locale) : '';
+  if (order.status === 'CANCELLED') return 'Arranged by the store.';
+  if (!arranged.priced) {
+    // Lagos time, as every deadline we send says it (lib/format.ts).
+    const by = arranged.priceDueAt ? ` by ${formatClock(arranged.priceDueAt)} on ${formatDay(arranged.priceDueAt)}` : '';
+    return `The store is working out delivery for an order this size and will send you the price${by}. Nothing is charged until you accept it.`;
+  }
+  const how = arranged.note ? ` — ${arranged.note}` : '';
+  return `Arranged by the store: ${order.delivery.fee === 0 ? 'free' : formatMoney(order.delivery.fee, order.currency)}${how}.`;
 }

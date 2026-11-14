@@ -85,10 +85,22 @@ export interface DeliverySetup {
   pickups: PickupSetup[];
 }
 
+/** A store's offer of "delivery to be arranged" for big trade orders (ROADMAP 21.4B). Minor units. */
+export interface ArrangedDeliverySetup {
+  /** offered from this much of goods; null = not by value */
+  fromValue: Money | null;
+  /** offered from this many items; null = not by count */
+  fromItems: number | null;
+  /** how soon the store promises to price it */
+  withinHours: number;
+}
+
 /** A store that supplies the online store, with its own delivery setup. */
 export interface StoreDeliverySetup extends DeliverySetup {
   warehouseId: string;
   name: string;
+  /** null/absent: this store doesn't offer it */
+  arranged?: ArrangedDeliverySetup | null;
   /** where the store is (Phase 9.1) — the planner prefers a store in the shopper's state */
   state?: string | null;
 }
@@ -247,4 +259,31 @@ export function quoteEachStore(stores: StoreDeliverySetup[], address: DeliveryAd
     store: { id: store.warehouseId, name: store.name },
     ...quoteFromSetup(store, address, subtotal),
   }));
+}
+
+/* ---------------- delivery to be arranged (ROADMAP 21.4B) ---------------- */
+
+export const ARRANGED_ID_PREFIX = 'arranged_';
+
+/** Does a bag this size qualify? Either amount reached is enough; a store with neither set offers it to nobody. */
+export function qualifiesForArranged(arranged: ArrangedDeliverySetup | null | undefined, bag: { value: Money; items: number }): boolean {
+  if (!arranged) return false;
+  const byValue = arranged.fromValue !== null && arranged.fromValue > 0 && bag.value >= arranged.fromValue;
+  const byItems = arranged.fromItems !== null && arranged.fromItems > 0 && bag.items >= arranged.fromItems;
+  return byValue || byItems;
+}
+
+/** The option itself. No price and no window: the store sets them after. */
+export function arrangedOption(storeId: string, withinHours: number): ShippingMethod {
+  return {
+    id: `${ARRANGED_ID_PREFIX}${storeId}`,
+    kind: 'delivery',
+    label: 'Delivery to be arranged',
+    description: `The store will work out the delivery cost for an order this size and send it to you within ${withinHours} hours. You pay once you’ve seen it.`,
+    price: 0,
+    regularPrice: 0,
+    freeOver: null,
+    eta: eta(0, 0, 'DAYS'),
+    arranged: { withinHours },
+  };
 }

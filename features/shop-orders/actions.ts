@@ -24,6 +24,7 @@ import { currentStoreSlug, getShopper, getShopperForStore } from '@/lib/storefro
 import { placeOrder, resolveLines, type OrderLineRequest, type PlaceOrderFailure } from '@/lib/storefront/orders/create';
 import { findOrderByReferenceAndEmail } from '@/lib/storefront/orders/read';
 import { startOrderPayment } from '@/lib/storefront/checkout/payment-service';
+import { acceptArrangedDelivery } from '@/lib/storefront/orders/arranged';
 import { deepLinkSchemeFor } from '@/lib/mobile/store-apps';
 import { watchOrder } from '@/lib/mobile/push/watch';
 import { prisma } from '@/lib/prisma';
@@ -35,7 +36,7 @@ import { resolveDiscount } from '@/lib/storefront/discounts/resolve';
 import { normalizeCode } from '@/lib/storefront/discounts/rules';
 import type { AppliedCoupon, ShippingMethod } from '@/lib/storefront/types';
 import { findPaymentMethod } from '@/lib/storefront/checkout/config';
-import { notifyShopper, notifyStoreOfOrder } from '@/lib/storefront/orders/notifications';
+import { notifyMerchant, notifyShopper, notifyStoreOfOrder } from '@/lib/storefront/orders/notifications';
 import { isLocalHostname } from '@/lib/tenant/resolveHostname';
 import type { CheckoutAddress, CheckoutBusiness, CheckoutContact } from '@/lib/storefront/checkout/types';
 import type { StorefrontOrder } from '@/lib/storefront/orders/types';
@@ -141,7 +142,11 @@ export async function placeOrderAction(
 
   let paymentUrl: string | null = null;
 
-  if (method?.provider === 'paystack') {
+  if (result.deliveryArranged) {
+    // Delivery to be arranged (21.4B): nothing to pay yet. The store prices it; the buyer accepts, then pays.
+    await notifyShopper(result.orderId, 'placed-delivery-to-arrange');
+    await notifyMerchant(result.orderId, 'delivery-to-price');
+  } else if (method?.provider === 'paystack') {
     /* The order exists whatever happens next. If Paystack can't be reached,
      * the shopper still lands on their confirmation, which offers "Pay now". */
     const started = await startOrderPayment({
@@ -487,4 +492,47 @@ export async function watchOrderUpdatesAction(
   return result === 'watching'
     ? { ok: true }
     : { ok: false, message: 'We couldn’t turn on notifications for this order just now.' };
+}
+
+export type AcceptDeliveryPriceResult =
+  | {
+      ok: true;
+      /** paying online: Paystack's page to go to now; null otherwise, or when it couldn't start (the page then offers "Pay now") */
+      paymentUrl: string | null;
+    }
+  | { ok: false; message: string };
+
+/**
+ * "Accept and pay" — the buyer agrees to the delivery price the store set
+ * for an arranged delivery (ROADMAP 21.4B). Unlocked by the confirmation
+ * token, the key that opens the order's page (the account's order page
+ * passes it too). An order paid online goes straight on to Paystack.
+ */
+export async function acceptDeliveryPriceAction(
+  confirmationToken: string,
+  options: { nativeApp?: boolean } = {},
+): Promise<AcceptDeliveryPriceResult> {
+  const slug = await currentStoreSlug();
+  const store = slug ? await findStoreBySlug(slug) : null;
+  if (!slug || !store) return { ok: false, message: 'We couldn’t reach the store. Please try again.' };
+  if (!(await checkRateLimit(`accept-delivery:${store.id}:${await clientIp()}`, 10, 10 * 60 * 1000))) {
+    return { ok: false, message: 'Too many attempts. Please wait a moment and try again.' };
+  }
+
+  const token = String(confirmationToken ?? '').trim();
+  const accepted = await acceptArrangedDelivery({ organizationId: store.id, confirmationToken: token });
+  if (!accepted.ok) return { ok: false, message: accepted.error };
+  if (accepted.paymentMethod !== 'paystack') return { ok: true, paymentUrl: null };
+
+  const nativeApp = Boolean(options.nativeApp);
+  const { origin, pathPrefix } = await storeLocation(slug);
+  const started = await startOrderPayment({
+    organizationId: store.id,
+    orderId: accepted.orderId,
+    origin,
+    returnPath: confirmationPathFor(pathPrefix, token),
+    nativeApp,
+    nativeAppScheme: await nativeAppScheme(nativeApp),
+  });
+  return { ok: true, paymentUrl: started.ok ? started.checkoutUrl : null };
 }

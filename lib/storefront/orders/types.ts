@@ -24,6 +24,8 @@ export type OrderPaymentStatus =
   | 'AWAITING_PAYMENT'
   | 'AWAITING_TRANSFER'
   | 'DUE_ON_DELIVERY'
+  /** delivery to be arranged: the store prices it, then the buyer accepts (ROADMAP 21.4B) */
+  | 'AWAITING_DELIVERY_PRICE'
   | 'PAID'
   | 'PARTIALLY_REFUNDED'
   | 'REFUNDED'
@@ -89,10 +91,25 @@ export interface StorefrontOrder {
     methodId: string;
     label: string;
     fee: Money;
-    /** how long it takes, as quoted at checkout */
-    eta: DeliveryEta;
-    /** ISO dates bracketing the estimate, worked out from `placedAt` */
-    estimated: { from: string; to: string };
+    /** how long it takes, as quoted at checkout; null for delivery to be arranged */
+    eta: DeliveryEta | null;
+    /** ISO dates bracketing the estimate, worked out from `placedAt`; null with no window */
+    estimated: { from: string; to: string } | null;
+    /**
+     * "Delivery to be arranged" (ROADMAP 21.4B): where the store and the
+     * buyer have got to. Null for every other order. `fee` is 0 and means
+     * nothing until `priced`.
+     */
+    arranged: {
+      priced: boolean;
+      /** the store's deadline to price it */
+      priceDueAt: string | null;
+      /** how it's going, in the store's words ("our truck, Thursday") */
+      note: string | null;
+      /** the buyer's deadline to accept, once priced */
+      acceptBy: string | null;
+      accepted: boolean;
+    } | null;
     /**
      * The parcels it travels in (ROADMAP Phase 9.4/9.5), biggest first — one
      * for most orders; several when the bag came from more than one store.

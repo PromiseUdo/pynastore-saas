@@ -96,6 +96,7 @@ afterAll(async () => {
   await prisma.deliveryRate.deleteMany({ where: { organizationId: store.id } });
   await prisma.deliveryZone.deleteMany({ where: { organizationId: store.id } });
   await prisma.warehouse.deleteMany({ where: { organizationId: store.id } });
+  await prisma.auditLog.deleteMany({ where: { organizationId: store.id } });
   await prisma.organization.delete({ where: { id: store.id } });
 });
 
@@ -169,5 +170,159 @@ describe('A — options and thresholds by buyer', () => {
     expect(overview).toHaveLength(1);
     expect(overview[0].price).toBe(250_000);
     expect(overview[0].freeOver).toBe(5_000_000);
+  });
+});
+
+/*
+ * B — "delivery to be arranged": offered to a trade buyer whose bag is big
+ * enough, placed with nothing to pay, priced by the store, accepted by the
+ * buyer, and cancelled (stock released) when either side runs out of time.
+ */
+describe('B — delivery to be arranged', () => {
+  let arranged: typeof import('@/lib/storefront/orders/arranged');
+  let lifecycle: typeof import('@/lib/storefront/orders/lifecycle');
+  let arrangedId = '';
+
+  beforeAll(async () => {
+    arranged = await import('@/lib/storefront/orders/arranged');
+    lifecycle = await import('@/lib/storefront/orders/lifecycle');
+    const warehouse = await prisma.warehouse.findFirstOrThrow({ where: { organizationId: store.id } });
+    await prisma.warehouse.update({
+      where: { id: warehouse.id },
+      data: { arrangedDeliveryOn: true, arrangedDeliveryFromValue: 500_000, arrangedPriceHours: 24 },
+    });
+    arrangedId = `arranged_${warehouse.id}`;
+    // So the shop offers payment by transfer.
+    await prisma.merchantBankAccount.create({
+      data: { organizationId: store.id, bankName: 'GTBank', accountName: 'Trade Delivery Shop', accountNumber: '0123456789' },
+    });
+  });
+
+  const ids = async (customerId: string, quantity: number) => {
+    as(customerId);
+    const items = await resolveLines(store.slug, [{ productId: riceId, variantId: riceId, quantity }]);
+    const quote = await quoteDelivery(
+      store.slug,
+      ADDRESS,
+      items!.map((item) => ({ itemId: item.variantId, quantity: item.quantity, unitPrice: item.unitPrice })),
+      { buyer: customerId === buyerId ? 'trade' : 'retail' },
+    );
+    return quote.options.map((o) => o.id);
+  };
+
+  async function placeArranged(paymentMethodId = 'pod') {
+    as(buyerId);
+    const config = await getStoreCheckoutConfig({ organizationSlug: store.slug }, { tradeBuyer: true });
+    const result = await placeOrder({
+      organizationSlug: store.slug,
+      customerId: buyerId,
+      // 70 × ₦8,000 = ₦560,000 of goods: over the store's ₦500,000.
+      lines: [{ productId: riceId, variantId: riceId, quantity: 70 }],
+      contact: { firstName: 'Bola', lastName: 'Ade', email: `bola-${suffix}@example.com`, phone: '08012345678' },
+      address: ADDRESS,
+      deliveryMethodId: arrangedId,
+      paymentMethodId,
+      note: '',
+      discountCode: null,
+      config,
+    });
+    if (!result.ok) throw new Error(`refused: ${result.message}`);
+    return result;
+  }
+
+  const row = (id: string) =>
+    prisma.order.findUniqueOrThrow({
+      where: { id },
+      select: {
+        status: true,
+        paymentStatus: true,
+        totalAmount: true,
+        deliveryFee: true,
+        deliveryArranged: true,
+        deliveryPriceDueAt: true,
+        deliveryAcceptBy: true,
+        deliveryPriceRemindedAt: true,
+        cancelReason: true,
+        allocations: { select: { status: true } },
+      },
+    });
+
+  it('is offered only to a trade buyer, and only for a big enough bag', async () => {
+    expect(await ids(buyerId, 70)).toContain(arrangedId);
+    expect(await ids(buyerId, 10)).not.toContain(arrangedId);
+    expect(await ids(shopperId, 70)).not.toContain(arrangedId);
+  });
+
+  it('is placed with nothing to pay, no fee, the stock held and a pricing deadline', async () => {
+    const placed = await placeArranged();
+    expect(placed.deliveryArranged).toBe(true);
+    const order = await row(placed.orderId);
+    expect(order).toMatchObject({ status: 'PENDING', paymentStatus: 'AWAITING_DELIVERY_PRICE', deliveryArranged: true, deliveryFee: null });
+    expect(Number(order.totalAmount)).toBe(560_000);
+    expect(order.deliveryPriceDueAt!.getTime() - Date.now()).toBeGreaterThan(23 * 3_600_000);
+    expect(order.allocations.length).toBeGreaterThan(0);
+    // Nothing can go ahead before it's priced and accepted.
+    expect(await lifecycle.confirmOrder({ organizationId: store.id, orderId: placed.orderId })).toMatchObject({ ok: false });
+  });
+
+  it('is priced by the store (and re-priced), then accepted by the buyer once', async () => {
+    const placed = await placeArranged();
+    const price = (fee: number, note?: string) =>
+      arranged.priceArrangedDelivery({ organizationId: store.id, orderId: placed.orderId, fee, note, userId: null });
+
+    expect(await price(45_000, 'Our truck, Thursday')).toEqual({ ok: true });
+    expect(Number((await row(placed.orderId)).totalAmount)).toBe(605_000);
+    expect(await price(40_000)).toEqual({ ok: true });
+    const priced = await row(placed.orderId);
+    expect(Number(priced.totalAmount)).toBe(600_000);
+    expect(Number(priced.deliveryFee)).toBe(40_000);
+    expect(priced.paymentStatus).toBe('AWAITING_DELIVERY_PRICE');
+    expect(priced.deliveryAcceptBy).not.toBeNull();
+
+    // Another store can't price it.
+    expect(
+      await arranged.priceArrangedDelivery({ organizationId: 'someone-else', orderId: placed.orderId, fee: 1, userId: null }),
+    ).toMatchObject({ ok: false });
+
+    const token = (await prisma.order.findUniqueOrThrow({ where: { id: placed.orderId }, select: { confirmationToken: true } })).confirmationToken!;
+    expect(await arranged.acceptArrangedDelivery({ organizationId: store.id, confirmationToken: token })).toMatchObject({ ok: true, paymentMethod: 'pod' });
+    expect((await row(placed.orderId)).paymentStatus).toBe('DUE_ON_DELIVERY');
+    // Accepted: the price is settled.
+    expect(await price(99_000)).toMatchObject({ ok: false });
+    expect(await lifecycle.confirmOrder({ organizationId: store.id, orderId: placed.orderId })).toEqual({ ok: true });
+  });
+
+  it('can’t be accepted before it’s priced; a transfer starts its window on acceptance', async () => {
+    const placed = await placeArranged('transfer');
+    const token = (await prisma.order.findUniqueOrThrow({ where: { id: placed.orderId }, select: { confirmationToken: true } })).confirmationToken!;
+    expect(await arranged.acceptArrangedDelivery({ organizationId: store.id, confirmationToken: token })).toMatchObject({ ok: false });
+    await arranged.priceArrangedDelivery({ organizationId: store.id, orderId: placed.orderId, fee: 30_000, userId: null });
+    // Accepted long after it was placed: the transfer hold runs from now, so the expiry job leaves it alone.
+    await prisma.order.update({ where: { id: placed.orderId }, data: { placedAt: new Date(Date.now() - 30 * 24 * 3_600_000) } });
+    expect(await arranged.acceptArrangedDelivery({ organizationId: store.id, confirmationToken: token })).toMatchObject({ ok: true });
+    await lifecycle.expireUnpaidOrders({ organizationId: store.id });
+    expect(await row(placed.orderId)).toMatchObject({ status: 'PENDING', paymentStatus: 'AWAITING_TRANSFER' });
+  });
+
+  it('reminds the store once near its deadline, then cancels and releases the stock if it isn’t priced', async () => {
+    const placed = await placeArranged();
+    await prisma.order.update({ where: { id: placed.orderId }, data: { deliveryPriceDueAt: new Date(Date.now() + 3_600_000) } });
+    expect(await arranged.remindArrangedPricing({ organizationId: store.id }, 4)).toBe(1);
+    expect(await arranged.remindArrangedPricing({ organizationId: store.id }, 4)).toBe(0);
+    expect((await row(placed.orderId)).deliveryPriceRemindedAt).not.toBeNull();
+
+    await prisma.order.update({ where: { id: placed.orderId }, data: { deliveryPriceDueAt: new Date(Date.now() - 60_000) } });
+    await lifecycle.expireUnpaidOrders({ organizationId: store.id });
+    const order = await row(placed.orderId);
+    expect(order).toMatchObject({ status: 'CANCELLED', cancelReason: 'delivery-not-priced' });
+    expect(order.allocations.every((a) => a.status === 'RELEASED')).toBe(true);
+  });
+
+  it('cancels a priced order the buyer didn’t accept in time', async () => {
+    const placed = await placeArranged();
+    await arranged.priceArrangedDelivery({ organizationId: store.id, orderId: placed.orderId, fee: 20_000, userId: null });
+    await prisma.order.update({ where: { id: placed.orderId }, data: { deliveryAcceptBy: new Date(Date.now() - 60_000) } });
+    await lifecycle.expireUnpaidOrders({ organizationId: store.id });
+    expect(await row(placed.orderId)).toMatchObject({ status: 'CANCELLED', cancelReason: 'delivery-not-accepted' });
   });
 });

@@ -23,6 +23,7 @@ import { getOrderPaymentState, reconcileOpenAttempts } from '@/lib/storefront/ch
 import { confirmationPath, storePathPrefix } from '@/lib/storefront/store-path';
 import { formatMoney } from '@/lib/storefront/format';
 import { PayNowButton } from '@/components/storefront/checkout/pay-now-button';
+import { ArrangedDeliveryCard } from '@/components/storefront/orders/arranged-delivery-card';
 import { markThreadRead } from '@/lib/notifications/inbox';
 import { runAfter } from '@/lib/run-after';
 import { tradeInvoicePath } from '@/lib/storefront/orders/trade-invoice';
@@ -85,7 +86,14 @@ export default async function OrderDetailPage({
         selfService="account"
         invoiceHref={row?.buyerBusinessName && row.confirmationToken ? `${prefix}${tradeInvoicePath(row.confirmationToken)}` : null}
         paymentAction={
-          payment?.canPay && row?.confirmationToken ? (
+          // Delivery to be arranged (21.4B): see the store's price and accept it.
+          order.delivery.arranged && order.paymentStatus === 'AWAITING_DELIVERY_PRICE' && row?.confirmationToken ? (
+            <ArrangedDeliveryCard
+              order={order}
+              confirmationToken={row.confirmationToken}
+              confirmationPath={confirmationPath(prefix, row.confirmationToken)}
+            />
+          ) : payment?.canPay && row?.confirmationToken ? (
             <div className="space-y-2">
               {payment.lastAttemptFailed && (
                 <p className="text-sm text-muted-foreground">

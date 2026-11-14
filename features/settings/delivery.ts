@@ -40,6 +40,7 @@ import { planWithAnyStock } from '@/lib/storefront/delivery/plan';
 import { HAS_LIVE_DELIVERY_WHERE, ONLINE_SUPPLY_WHERE } from '@/lib/storefront/delivery/supply';
 import { ETA_UNITS, toMinutes, type DeliveryEtaUnit } from '@/lib/storefront/delivery/eta';
 import { MAX_RETURN_WINDOW_DAYS } from '@/lib/storefront/orders/policy';
+import { ARRANGED_PRICE_HOURS } from '@/lib/storefront/orders/holds';
 
 type Result<T = void> = { success: true; data: T } | { success: false; error: string; fieldErrors?: Record<string, string> };
 
@@ -105,6 +106,8 @@ export interface DeliveryStoreRow {
   suppliesOnline: boolean;
   /** prices were copied from another store's and nobody has confirmed them */
   needsReview: boolean;
+  /** "delivery to be arranged" for big trade orders (ROADMAP 21.4B); naira */
+  arranged: { on: boolean; fromValue: number | null; fromItems: number | null; priceHours: number };
 }
 
 export interface DeliverySettings {
@@ -151,7 +154,19 @@ async function loadSettings(organizationId: string): Promise<DeliverySettings> {
     prisma.warehouse.findMany({
       where: { organizationId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { id: true, name: true, city: true, state: true, status: true, sellsOnline: true, deliveryNeedsReview: true },
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        state: true,
+        status: true,
+        sellsOnline: true,
+        deliveryNeedsReview: true,
+        arrangedDeliveryOn: true,
+        arrangedDeliveryFromValue: true,
+        arrangedDeliveryFromItems: true,
+        arrangedPriceHours: true,
+      },
     }),
     prisma.warehouse.findMany({ where: { organizationId, ...HAS_LIVE_DELIVERY_WHERE }, select: { id: true } }),
     prisma.warehouse.findMany({ where: { organizationId, ...ONLINE_SUPPLY_WHERE }, select: { id: true } }),
@@ -188,6 +203,12 @@ async function loadSettings(organizationId: string): Promise<DeliverySettings> {
       hasLiveDelivery: liveIds.has(store.id),
       suppliesOnline: supplyingIds.has(store.id),
       needsReview: store.deliveryNeedsReview,
+      arranged: {
+        on: store.arrangedDeliveryOn,
+        fromValue: num(store.arrangedDeliveryFromValue),
+        fromItems: store.arrangedDeliveryFromItems,
+        priceHours: store.arrangedPriceHours,
+      },
     })),
     zones: zones.map((zone) => ({
       id: zone.id,
@@ -682,6 +703,66 @@ export async function deletePickupLocation(pickupId: string): Promise<Result> {
     return { success: true, data: undefined };
   } catch (error) {
     return failure(error, 'We couldn’t remove this pickup location');
+  }
+}
+
+/* ---------------- delivery to be arranged (ROADMAP 21.4B) ---------------- */
+
+const ArrangedSchema = z
+  .object({
+    on: z.boolean(),
+    fromValue: z
+      .union([z.literal(''), z.null(), money('an amount')])
+      .transform((v) => (v === '' || v === null || v === 0 ? null : v))
+      .default(null),
+    fromItems: z
+      .union([z.literal(''), z.null(), z.number({ error: 'Enter a number of items' }).int('Use a whole number').min(1).max(1_000_000)])
+      .transform((v) => (v === '' || v === null ? null : v))
+      .default(null),
+    priceHours: z
+      .number()
+      .refine((h) => (ARRANGED_PRICE_HOURS as readonly number[]).includes(h), 'Choose how soon you’ll price it'),
+  })
+  .superRefine((value, ctx) => {
+    if (value.on && value.fromValue === null && value.fromItems === null) {
+      ctx.addIssue({ code: 'custom', path: ['fromValue'], message: 'Say from what order size — an amount, a number of items, or both' });
+    }
+  });
+
+export type ArrangedDeliveryInput = z.input<typeof ArrangedSchema>;
+
+/**
+ * Whether this store offers "delivery to be arranged" to trade buyers, from
+ * what order size, and how soon it promises to price one. Orders already
+ * placed keep the promise they were made with.
+ */
+export async function saveArrangedDelivery(warehouseId: string, input: ArrangedDeliveryInput): Promise<Result> {
+  try {
+    const ctx = await context('edit');
+    const parsed = ArrangedSchema.safeParse(input);
+    if (!parsed.success) {
+      return { success: false, error: 'Check the highlighted fields', fieldErrors: fieldErrors(parsed.error) };
+    }
+    const store = await ownStore(ctx.organization.id, String(warehouseId ?? ''));
+    if (!store) return NO_STORE;
+    const data = {
+      arrangedDeliveryOn: parsed.data.on,
+      arrangedDeliveryFromValue: parsed.data.fromValue,
+      arrangedDeliveryFromItems: parsed.data.fromItems,
+      arrangedPriceHours: parsed.data.priceHours,
+    };
+    await prisma.warehouse.update({ where: { id: store.id }, data });
+    await createAuditLog({
+      organizationId: ctx.organization.id,
+      userId: ctx.userId,
+      action: 'settings.delivery.arranged',
+      entityType: 'Warehouse',
+      entityId: store.id,
+      metadata: { store: store.name, ...parsed.data },
+    });
+    return { success: true, data: undefined };
+  } catch (error) {
+    return failure(error, 'We couldn’t save this setting');
   }
 }
 

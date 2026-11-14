@@ -98,6 +98,12 @@ const ORDER_SELECT = {
   deliveryEtaMinMinutes: true,
   deliveryEtaMaxMinutes: true,
   deliveryEtaUnit: true,
+  deliveryArranged: true,
+  deliveryPriceDueAt: true,
+  deliveryPricedAt: true,
+  deliveryArrangedNote: true,
+  deliveryAcceptBy: true,
+  deliveryAcceptedAt: true,
   shipments: {
     orderBy: { sortOrder: 'asc' },
     select: { deliveryMethodLabel: true, fee: true, kind: true, status: true, warehouse: { select: { name: true } } },
@@ -234,11 +240,15 @@ function toStorefrontOrder(row: OrderRow, now = new Date()): StorefrontOrder {
     now,
   });
 
-  const deliveryEta: DeliveryEta = {
-    minMinutes: onlineField(row.deliveryEtaMinMinutes, 'deliveryEtaMinMinutes', row.reference),
-    maxMinutes: onlineField(row.deliveryEtaMaxMinutes, 'deliveryEtaMaxMinutes', row.reference),
-    unit: onlineField(row.deliveryEtaUnit, 'deliveryEtaUnit', row.reference),
-  };
+  /* Delivery to be arranged (21.4B) has no window: the store says how it's
+   * going in its note instead, and nothing is estimated for it. */
+  const deliveryEta: DeliveryEta | null = row.deliveryArranged
+    ? null
+    : {
+        minMinutes: onlineField(row.deliveryEtaMinMinutes, 'deliveryEtaMinMinutes', row.reference),
+        maxMinutes: onlineField(row.deliveryEtaMaxMinutes, 'deliveryEtaMaxMinutes', row.reference),
+        unit: onlineField(row.deliveryEtaUnit, 'deliveryEtaUnit', row.reference),
+      };
 
   return {
     reference: row.reference,
@@ -277,7 +287,16 @@ function toStorefrontOrder(row: OrderRow, now = new Date()): StorefrontOrder {
       label: onlineField(row.deliveryMethodLabel, 'deliveryMethodLabel', row.reference),
       fee: toMinor(row.deliveryFee ?? 0),
       eta: deliveryEta,
-      estimated: estimateWindow(row.placedAt, deliveryEta),
+      estimated: deliveryEta ? estimateWindow(row.placedAt, deliveryEta) : null,
+      arranged: row.deliveryArranged
+        ? {
+            priced: row.deliveryPricedAt !== null,
+            priceDueAt: row.deliveryPriceDueAt?.toISOString() ?? null,
+            note: row.deliveryArrangedNote,
+            acceptBy: row.deliveryAcceptBy?.toISOString() ?? null,
+            accepted: row.deliveryAcceptedAt !== null,
+          }
+        : null,
       parcels: row.shipments.map((shipment) => ({
         storeName: shipment.warehouse?.name ?? null,
         label: shipment.deliveryMethodLabel,

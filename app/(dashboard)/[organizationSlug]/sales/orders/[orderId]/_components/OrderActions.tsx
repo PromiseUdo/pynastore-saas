@@ -162,7 +162,7 @@ export function OrderActions({
         </AlertDialogRoot>
       )}
 
-      {status === 'PENDING' && !awaitingOnlinePayment && !awaitingTransfer && (
+      {status === 'PENDING' && !awaitingOnlinePayment && !awaitingTransfer && paymentStatus !== 'AWAITING_DELIVERY_PRICE' && (
         <Button size="sm" onClick={() => void run('confirm')} disabled={pending !== null}>
           {spinner('confirm')}
           Confirm order

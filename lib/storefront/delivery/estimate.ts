@@ -14,7 +14,7 @@
 import { isNigerianState } from '@/lib/geo/nigeria';
 import { resolveLines } from '../orders/create';
 import type { DeliveryEta } from './eta';
-import { quoteDelivery } from './quote';
+import { loadDeliverySetup, quoteDelivery } from './quote';
 import type { DeliveryBuyer } from './match';
 
 export interface DeliverTo {
@@ -31,6 +31,11 @@ export interface DeliveryEstimate {
   moreOptions: boolean;
   /** stores it could be collected from instead */
   pickupCount: number;
+  /**
+   * A trade buyer, and the store it ships from arranges delivery for large
+   * trade orders (ROADMAP 21.4B) — said instead of guessing what a truck costs.
+   */
+  arrangedForLargeOrders?: boolean;
 }
 
 export type EstimateResult =
@@ -69,6 +74,8 @@ export async function estimateDelivery(
     return { ok: false, reason: pickupCount ? 'pickup-only' : (quote.reason ?? 'no-delivery'), pickupCount };
   }
 
+  const arranged =
+    buyer === 'trade' && Boolean((await loadDeliverySetup(organizationSlug)).find((s) => s.warehouseId === parcel.store.id)?.arranged);
   return {
     ok: true,
     estimate: {
@@ -76,6 +83,7 @@ export async function estimateDelivery(
       cheapest: { label: cheapest.label, price: cheapest.price, eta: cheapest.eta },
       moreOptions: parcel.options.length > 1,
       pickupCount,
+      ...(arranged ? { arrangedForLargeOrders: true } : {}),
     },
   };
 }

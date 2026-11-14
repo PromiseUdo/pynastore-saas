@@ -24,10 +24,14 @@ import type { StoreOrderAlertKind } from '@/emails/store-order-alert';
 import { getAdminUrl } from '@/lib/tenant/urls';
 import { storeUrl } from '../account/return-url';
 import { formatMoney } from '../format';
+import { formatDate, formatTime } from '@/lib/format';
 import { TRANSFER_HOLD_HOURS } from './holds';
 import { readTransferDetails } from './read';
 import { tradeInvoicePath } from './trade-invoice';
 import { RETURN_REASONS, isReturnReason } from './policy';
+
+/** "4:30 pm on 16 Nov 2026" — a deadline, in Lagos time like every date we send. */
+const when = (at: Date) => `${formatTime(at)} on ${formatDate(at)}`;
 
 /** Decimal major units → minor units, for the storefront's money formatter. */
 const minor = (value: { toString(): string }) => Math.round(Number(value.toString()) * 100);
@@ -87,6 +91,10 @@ export async function notifyShopper(
         paymentStatus: true,
         transferDetails: true,
         buyerBusinessName: true,
+        deliveryFee: true,
+        deliveryPriceDueAt: true,
+        deliveryArrangedNote: true,
+        deliveryAcceptBy: true,
         deliveryMethodLabel: true,
         shipFullName: true,
         shipLine1: true,
@@ -162,6 +170,11 @@ export async function notifyShopper(
           invoiceUrl: order.buyerBusinessName
             ? storeUrl(order.organization, tradeInvoicePath(order.confirmationToken))
             : undefined,
+          // Delivery to be arranged (21.4B): the store's deadline, its price, and the buyer's.
+          priceBy: order.deliveryPriceDueAt ? when(order.deliveryPriceDueAt) : undefined,
+          deliveryFee: order.deliveryFee !== null ? money(order.deliveryFee) : undefined,
+          deliveryNote: order.deliveryArrangedNote ?? undefined,
+          acceptBy: order.deliveryAcceptBy ? when(order.deliveryAcceptBy) : undefined,
         },
       },
     });
@@ -198,6 +211,7 @@ export async function notifyMerchant(
         totalAmount: true,
         paymentStatus: true,
         cancelNote: true,
+        deliveryPriceDueAt: true,
         organizationId: true,
         organization: { select: { name: true, slug: true } },
       },
@@ -225,6 +239,7 @@ export async function notifyMerchant(
           customerNote: kind === 'customer-cancelled' ? (order.cancelNote ?? undefined) : (returned?.details ?? undefined),
           returnReason: returned?.reason,
           lines: returned?.lines,
+          priceBy: order.deliveryPriceDueAt ? when(order.deliveryPriceDueAt) : undefined,
         },
       },
     });

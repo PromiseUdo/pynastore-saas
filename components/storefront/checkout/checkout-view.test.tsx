@@ -966,6 +966,7 @@ describe('confirmation', () => {
       fee: 250_000,
       eta: { minMinutes: 2880, maxMinutes: 5760, unit: 'DAYS' as const },
       estimated: { from: '2026-09-18T10:00:00.000Z', to: '2026-09-22T10:00:00.000Z' },
+      arranged: null,
       parcels: [{ storeName: 'Main', label: 'Standard delivery', fee: 250_000, kind: 'delivery' as const, status: 'pending' as const }],
     },
     currency: 'NGN',

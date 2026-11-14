@@ -62,6 +62,8 @@ export interface TradeInvoice {
   discount: number;
   discountLabel: string | null;
   deliveryFee: number | null;
+  /** delivery to be arranged (21.4B): the fee is the store's own, or not set yet (`deliveryFee` null) */
+  deliveryArranged: boolean;
   /** VAT added on top of wholesale prices (21.2) */
   vatAdded: number;
   /** VAT already inside the prices (14.1) */
@@ -104,6 +106,7 @@ const SELECT = {
   discountCodeLabel: true,
   discountCode: true,
   deliveryFee: true,
+  deliveryArranged: true,
   taxAmount: true,
   vatAddedAmount: true,
   vatNumber: true,
@@ -177,6 +180,7 @@ async function read(where: Prisma.OrderWhereInput): Promise<TradeInvoice | null>
     discount: Number(order.discount),
     discountLabel: order.discountCodeLabel ?? order.discountCode,
     deliveryFee: order.deliveryFee === null ? null : Number(order.deliveryFee),
+    deliveryArranged: order.deliveryArranged,
     vatAdded: added,
     vatIncluded: Math.max(0, tax - added),
     total: Number(order.totalAmount),

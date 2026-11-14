@@ -82,6 +82,18 @@ export function findPaymentMethod(config: CheckoutConfig, id: string | null) {
  * the shopper reads can never disagree with the dates the order carries (see
  * `estimateWindow` in ../orders/read.ts).
  */
-export function deliveryEstimate(method: { eta: DeliveryEta; kind?: 'delivery' | 'pickup' }): string {
+export function deliveryEstimate(method: { eta: DeliveryEta; kind?: 'delivery' | 'pickup'; arranged?: { withinHours: number } }): string {
+  // Delivery to be arranged (21.4B) has no window to promise — only when the price comes.
+  if (method.arranged) return `Priced by the store within ${method.arranged.withinHours} hours`;
   return method.kind === 'pickup' ? formatReady(method.eta) : formatEta(method.eta);
+}
+
+/** A delivery option's cost as checkout shows it: "To be arranged" for 21.4B, never a ₦0 that reads as free. */
+export function deliveryCostText(
+  method: { arranged?: { withinHours: number } } | null | undefined,
+  price: number,
+  format: (minor: number) => string,
+): string {
+  if (method?.arranged) return 'To be arranged';
+  return price === 0 ? 'Free' : format(price);
 }

@@ -149,6 +149,10 @@ export function DeliverToEstimate({
                       {result.estimate.pickupCount > 0 ? 'or collect it from our store' : ''}
                     </span>
                   )}
+                  {result.estimate.arrangedForLargeOrders && (
+                    // Delivery to be arranged (ROADMAP 21.4B): no number for a truck we haven't priced.
+                    <span className="block text-xs text-muted-foreground">Large trade orders: delivery arranged by the store</span>
+                  )}
                 </span>
               </p>
               <p className="mt-2 text-xs text-muted-foreground">

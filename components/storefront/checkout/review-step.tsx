@@ -31,7 +31,7 @@ import type {
   ShippingMethod,
 } from '@/lib/storefront/checkout/types';
 import type { CheckoutFormValues } from '@/lib/storefront/checkout/schema';
-import { deliveryEstimate, findPaymentMethod } from '@/lib/storefront/checkout/config';
+import { deliveryCostText, deliveryEstimate, findPaymentMethod } from '@/lib/storefront/checkout/config';
 import { addressLines } from '@/lib/storefront/checkout/address';
 import { lineKey } from '@/lib/storefront/cart';
 import { formatMoney } from '@/lib/storefront/format';
@@ -162,9 +162,7 @@ export function ReviewStep({
               <p>{deliveryMethod.label}</p>
               <p className="text-muted-foreground">
                 {deliveryEstimate(deliveryMethod)} ·{' '}
-                {deliveryMethod.price === 0
-                  ? 'Free'
-                  : formatMoney(deliveryMethod.price, totals.currency)}
+                {deliveryCostText(deliveryMethod, deliveryMethod.price, (minor) => formatMoney(minor, totals.currency))}
               </p>
             </>
           ) : (
@@ -234,11 +232,11 @@ export function ReviewStep({
           <div className="flex justify-between">
             <dt className="text-muted-foreground">Delivery</dt>
             <dd className="font-medium tabular-nums">
-              {totals.shipping === 0 ? 'Free' : formatMoney(totals.shipping, totals.currency)}
+              {deliveryCostText(deliveryMethod, totals.shipping, (minor) => formatMoney(minor, totals.currency))}
             </dd>
           </div>
           <div className="flex justify-between border-t pt-2.5">
-            <dt className="font-semibold">Total</dt>
+            <dt className="font-semibold">{deliveryMethod?.arranged ? 'Total before delivery' : 'Total'}</dt>
             <dd className="text-base font-bold tabular-nums">
               {formatMoney(totals.total, totals.currency)}
             </dd>

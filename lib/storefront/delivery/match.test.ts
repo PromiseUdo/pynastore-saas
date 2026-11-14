@@ -8,6 +8,7 @@ import {
   deliveryFor,
   hasAnyDelivery,
   offeredTo,
+  qualifiesForArranged,
   matchZone,
   quoteEachStore,
   quoteFromSetup,
@@ -211,5 +212,16 @@ describe('delivery for trade buyers (ROADMAP 21.4A)', () => {
   it('falls back to the usual threshold for trade when the merchant set none', () => {
     const plain: DeliverySetup = { zones: [zone({ id: 'ng', kind: 'NATIONWIDE', rates: [rate('std', 350_000, { freeOver: 100 })] })], pickups: [] };
     expect(deliveryFor(plain, 'trade').zones[0].rates[0].freeOver).toBe(100);
+  });
+});
+
+describe('delivery to be arranged: which bags qualify (ROADMAP 21.4B)', () => {
+  it('needs either amount reached, and nothing when the store offers it to no size', () => {
+    const rule = { fromValue: 50_000_000, fromItems: 100, withinHours: 24 };
+    expect(qualifiesForArranged(rule, { value: 50_000_000, items: 1 })).toBe(true);
+    expect(qualifiesForArranged(rule, { value: 100, items: 100 })).toBe(true);
+    expect(qualifiesForArranged(rule, { value: 49_999_999, items: 99 })).toBe(false);
+    expect(qualifiesForArranged({ fromValue: null, fromItems: null, withinHours: 24 }, { value: 1e12, items: 1e6 })).toBe(false);
+    expect(qualifiesForArranged(null, { value: 1e12, items: 1e6 })).toBe(false);
   });
 });

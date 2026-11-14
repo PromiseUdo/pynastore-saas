@@ -21,7 +21,7 @@
 import { useWatch, type UseFormReturn } from 'react-hook-form';
 import { Loader2, MapPin, Store, Truck } from 'lucide-react';
 import type { CheckoutFormValues } from '@/lib/storefront/checkout/schema';
-import { deliveryEstimate } from '@/lib/storefront/checkout/config';
+import { deliveryCostText, deliveryEstimate } from '@/lib/storefront/checkout/config';
 import { formatMoney } from '@/lib/storefront/format';
 import type { CartItem, ShippingMethod } from '@/lib/storefront/types';
 import { parcelChoiceId, parcelChoices, type ParcelOffer } from '@/lib/storefront/delivery/plan';
@@ -120,7 +120,7 @@ export function DeliveryStep({
 
   const card = (method: ShippingMethod, idPrefix = '') => {
     const Icon = method.kind === 'pickup' ? Store : Truck;
-    const freeByThreshold = method.price === 0 && (method.regularPrice ?? 0) > 0;
+    const freeByThreshold = !method.arranged && method.price === 0 && (method.regularPrice ?? 0) > 0;
     return (
       <RadioGroupCard key={method.id} value={method.id} id={`delivery-${idPrefix}${method.id}`}>
         <span className="flex items-start justify-between gap-4">
@@ -134,6 +134,9 @@ export function DeliveryStep({
                   {method.description}
                   {method.pickup.instructions ? ` · ${method.pickup.instructions}` : ''}
                 </span>
+              ) : method.arranged ? (
+                // Delivery to be arranged (21.4B): what happens, in the store's promise.
+                <span className="mt-0.5 block text-xs text-muted-foreground">{method.description}</span>
               ) : method.consolidatedFrom?.length ? (
                 /* Brought together at one store first (Phase 9.7): say why it
                  * takes longer and costs a little more. */
@@ -149,7 +152,7 @@ export function DeliveryStep({
             </span>
           </span>
           <span className="shrink-0 text-right text-sm font-semibold tabular-nums">
-            {method.price === 0 ? 'Free' : formatMoney(method.price, currency)}
+            {deliveryCostText(method, method.price, (minor) => formatMoney(minor, currency))}
             {freeByThreshold && (
               <span className="block text-xs font-normal text-muted-foreground line-through">
                 {formatMoney(method.regularPrice!, currency)}

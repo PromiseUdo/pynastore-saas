@@ -601,6 +601,13 @@ export interface ShippingMethod {
   parcels?: { storeName: string; label: string; price: Money; eta: DeliveryEta; itemIds: string[] }[];
   /** brought together at one store first (ROADMAP Phase 9.7): the stores items come from */
   consolidatedFrom?: string[];
+  /**
+   * "Delivery to be arranged" (ROADMAP 21.4B): no price or window yet — the
+   * store works it out within `withinHours` of the order, and the buyer pays
+   * once they've seen it. `price` is 0 and `eta` is a placeholder: neither
+   * is shown.
+   */
+  arranged?: { withinHours: number };
 }
 
 export interface OrderTotals {

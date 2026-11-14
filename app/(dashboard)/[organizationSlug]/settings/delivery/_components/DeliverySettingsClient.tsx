@@ -52,6 +52,7 @@ import { ZoneSheet } from './ZoneSheet';
 import { RateDialog } from './RateDialog';
 import { PickupDialog } from './PickupDialog';
 import { AUDIENCE_BADGE } from './audience';
+import { ArrangedDeliveryDialog, arrangedSummary } from './ArrangedDeliveryDialog';
 import { ReturnsPolicyCard } from './ReturnsPolicyCard';
 import { ConsolidationCard } from './ConsolidationCard';
 
@@ -243,6 +244,7 @@ export function DeliverySettingsClient({ settings, canManage }: { settings: Deli
                 onConfirmReview={() => confirmReview(store)}
                 zoneHandlers={zoneHandlers}
                 pickupHandlers={pickupHandlers}
+                wholesaleOn={settings.wholesaleOn}
               />
             ))}
 
@@ -361,6 +363,7 @@ function StoreSection({
   onConfirmReview,
   zoneHandlers,
   pickupHandlers,
+  wholesaleOn,
 }: {
   store: DeliveryStoreRow;
   zones: DeliveryZoneRow[];
@@ -374,7 +377,10 @@ function StoreSection({
   onConfirmReview: () => void;
   zoneHandlers: (zone: DeliveryZoneRow) => ZoneHandlers;
   pickupHandlers: PickupHandlers;
+  /** the shop has trade buyers: offer "delivery to be arranged" (ROADMAP 21.4B) */
+  wholesaleOn: boolean;
 }) {
+  const [arrangedOpen, setArrangedOpen] = React.useState(false);
   const headingId = `store-${store.id}-heading`;
   const place = formatStorePlace(store);
   const empty = zones.length === 0 && pickups.length === 0;
@@ -496,6 +502,37 @@ function StoreSection({
           )}
           {pickups.length > 0 && <PickupTable pickups={pickups} canManage={canManage} {...pickupHandlers} />}
         </>
+      )}
+
+      {/* Delivery to be arranged for big trade orders (ROADMAP 21.4B) — while the
+        * shop has trade buyers, or while it's still on from before. */}
+      {(wholesaleOn || store.arranged.on) && !empty && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-sm">
+          <div className="min-w-0">
+            <p className="font-medium">
+              Delivery to be arranged{' '}
+              <Badge variant={store.arranged.on ? 'success' : 'draft'} className="ml-1">
+                {store.arranged.on ? 'On' : 'Off'}
+              </Badge>
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {store.arranged.on
+                ? `Big trade orders: ${arrangedSummary(store.arranged)}. You set the delivery price after the order.`
+                : 'For trade orders too big for a fixed price: the buyer orders, you price delivery after, they pay once they’ve seen it.'}
+            </p>
+          </div>
+          {canManage && (
+            <Button variant="outline" size="sm" onClick={() => setArrangedOpen(true)}>
+              {store.arranged.on ? 'Edit' : 'Set up'}
+            </Button>
+          )}
+          <ArrangedDeliveryDialog
+            key={`arranged-${store.id}-${arrangedOpen}`}
+            open={arrangedOpen}
+            onOpenChange={setArrangedOpen}
+            store={store}
+          />
+        </div>
       )}
     </section>
   );

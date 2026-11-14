@@ -35,7 +35,7 @@ import type { CheckoutConfig, OrderTotals, ShippingMethod } from '@/lib/storefro
 import { lineKey } from '@/lib/storefront/cart';
 import { formatMoney } from '@/lib/storefront/format';
 import { lineSubtotal } from '@/lib/storefront/checkout/totals';
-import { deliveryEstimate } from '@/lib/storefront/checkout/config';
+import { deliveryCostText, deliveryEstimate } from '@/lib/storefront/checkout/config';
 import { DiscountCodeBox } from '@/components/storefront/common/discount-code-box';
 
 /* ---------------- pieces ---------------- */
@@ -146,14 +146,18 @@ function SummaryBody({
           label="Delivery"
           hint={deliveryMethod ? deliveryEstimate(deliveryMethod) : 'Depends on your address'}
           value={
-            totals.shippingPending ? 'Not chosen yet' : shipping === 0 ? 'Free' : formatMoney(shipping, currency)
+            totals.shippingPending ? 'Not chosen yet' : deliveryCostText(deliveryMethod, shipping, (minor) => formatMoney(minor, currency))
           }
         />
 
         {config.vat && vatAdded > 0 && <Row label="VAT" hint="Added to wholesale prices" value={formatMoney(vatAdded, currency)} />}
 
         <div className="border-t pt-3">
-          <Row label={totals.shippingPending ? 'Total before delivery' : 'Total'} value={formatMoney(total, currency)} strong />
+          <Row
+            label={totals.shippingPending || deliveryMethod?.arranged ? 'Total before delivery' : 'Total'}
+            value={formatMoney(total, currency)}
+            strong
+          />
           {/* Only a VAT-registered store has any (ROADMAP 14.1), and it is in
            * the prices — stated, not added, so the column still adds up. The
            * one exception, a trade buyer's wholesale lines, has its row above. */}

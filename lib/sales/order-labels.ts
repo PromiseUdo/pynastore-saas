@@ -65,6 +65,7 @@ export const ORDER_PAYMENT_LABEL: Record<string, string> = {
   AWAITING_PAYMENT: 'Awaiting payment',
   AWAITING_TRANSFER: 'Awaiting transfer',
   DUE_ON_DELIVERY: 'Pay on delivery',
+  AWAITING_DELIVERY_PRICE: 'Delivery to price',
   PAID: 'Paid',
   PARTIALLY_REFUNDED: 'Partly refunded',
   REFUNDED: 'Refunded',
@@ -75,6 +76,7 @@ export const ORDER_PAYMENT_VARIANT: Record<string, BadgeVariant> = {
   AWAITING_PAYMENT: 'warning',
   AWAITING_TRANSFER: 'warning',
   DUE_ON_DELIVERY: 'info',
+  AWAITING_DELIVERY_PRICE: 'pending',
   PAID: 'success',
   PARTIALLY_REFUNDED: 'info',
   REFUNDED: 'draft',
@@ -165,6 +167,13 @@ export function nextStepHint(input: {
       return `${byCustomer ? 'The customer cancelled this after paying' : 'Cancelled after the customer paid'} — send the money back from your own bank account (online payments were paid into it), then record the refund here so they can see it.`;
     }
     if (paymentStatus === 'REFUNDED') return 'Cancelled and refunded — nothing left to do.';
+    // Delivery to be arranged (ROADMAP 21.4B): one of its two deadlines passed.
+    if (cancelReason === 'delivery-not-priced') {
+      return 'Cancelled automatically: delivery wasn’t priced in time, so the stock went back on sale. The customer was told and wasn’t charged.';
+    }
+    if (cancelReason === 'delivery-not-accepted') {
+      return 'Cancelled automatically: the customer didn’t accept the delivery price in time, so the stock went back on sale. They weren’t charged.';
+    }
     if (cancelReason === 'payment-timeout') {
       return `Cancelled automatically: the customer didn’t finish paying within ${holdMinutes} minutes, so the stock went back on sale.`;
     }
@@ -176,6 +185,9 @@ export function nextStepHint(input: {
     return input.returnsAwaiting === 1
       ? 'The customer has asked to return items — answer the request below.'
       : `The customer has ${input.returnsAwaiting} return requests waiting — answer them below.`;
+  }
+  if (paymentStatus === 'AWAITING_DELIVERY_PRICE') {
+    return 'Delivery to be arranged: this order waits for your delivery price, then for the customer to accept it. Nothing can be paid or sent before.';
   }
   if (paymentStatus === 'AWAITING_TRANSFER') {
     return `Waiting for the customer’s bank transfer. Check your bank account for the total with this order number as the reference, then confirm it. Unconfirmed after ${input.transferHoldHours} hours, the order is cancelled and its stock released.`;

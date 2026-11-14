@@ -383,6 +383,7 @@ export async function reReserveOrderStock(tx: Tx, input: { organizationId: strin
       shipState: true,
       shipCity: true,
       buyerBusinessName: true,
+      deliveryArranged: true,
       organization: { select: { slug: true } },
       lineItems: { select: { id: true, variantId: true, productId: true, quantity: true, unitPrice: true } },
     },
@@ -403,7 +404,11 @@ export async function reReserveOrderStock(tx: Tx, input: { organizationId: strin
   );
   const chosen = order.deliveryMethodId ? resolveDeliveryChoice(quote, order.deliveryMethodId) : null;
   const paidFee = Math.round(Number(order.deliveryFee ?? 0) * 100);
-  if (!chosen || chosen.method.price !== paidFee) throw new OutOfStockError('plan-changed');
+  /* Delivery to be arranged (21.4B): the fee is the store's own, never the
+   * quote's, so only the plan has to come back the same way. */
+  if (!chosen || (order.deliveryArranged ? !chosen.method.arranged : chosen.method.price !== paidFee)) {
+    throw new OutOfStockError('plan-changed');
+  }
   const { plan } = chosen;
 
   /* The new plan may send it from different stores than the first one did,
@@ -421,4 +426,8 @@ export async function reReserveOrderStock(tx: Tx, input: { organizationId: strin
     lines: lines.map(({ orderLineItemId, inventoryItemId, quantity }) => ({ orderLineItemId, inventoryItemId, quantity })),
     planned: plannedStockOf(plan.shipments, shipmentIds),
   });
+  // The re-written parcel carries the fee the store set, as the first one did.
+  if (order.deliveryArranged && order.deliveryFee !== null) {
+    await tx.orderShipment.updateMany({ where: { id: { in: shipmentIds } }, data: { fee: order.deliveryFee } });
+  }
 }

@@ -100,7 +100,15 @@ export type PlaceOrderFailure =
   | 'order-failed';
 
 export type PlaceOrderResult =
-  | { ok: true; orderId: string; organizationId: string; reference: string; confirmationToken: string }
+  | {
+      ok: true;
+      orderId: string;
+      organizationId: string;
+      reference: string;
+      confirmationToken: string;
+      /** delivery to be arranged (ROADMAP 21.4B): nothing is paid until the store has priced it and the buyer accepted */
+      deliveryArranged?: boolean;
+    }
   | { ok: false; code: PlaceOrderFailure; message: string };
 
 const MESSAGES: Record<PlaceOrderFailure, string> = {
@@ -417,7 +425,14 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           reference,
           confirmationToken,
           status: 'PENDING',
-          paymentStatus: initialPaymentStatus(paymentMethod.id),
+          // Delivery to be arranged (21.4B): nothing can be paid until it's priced and accepted.
+          paymentStatus: deliveryMethod.arranged ? 'AWAITING_DELIVERY_PRICE' : initialPaymentStatus(paymentMethod.id),
+          ...(deliveryMethod.arranged
+            ? {
+                deliveryArranged: true,
+                deliveryPriceDueAt: new Date(now.getTime() + deliveryMethod.arranged.withinHours * 3_600_000),
+              }
+            : {}),
           paymentMethod: paymentMethod.id,
           isGuest: customer.isGuest,
           transferDetails: transferDetails
@@ -440,10 +455,11 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
           deliveryMethodId: deliveryMethod.id,
           deliveryMethodLabel: deliveryMethod.label,
-          deliveryFee: toMajor(totals.shipping),
-          deliveryEtaMinMinutes: deliveryMethod.eta.minMinutes,
-          deliveryEtaMaxMinutes: deliveryMethod.eta.maxMinutes,
-          deliveryEtaUnit: deliveryMethod.eta.unit,
+          // Arranged: no fee and no window until the store sets them — never a guess.
+          deliveryFee: deliveryMethod.arranged ? null : toMajor(totals.shipping),
+          deliveryEtaMinMinutes: deliveryMethod.arranged ? null : deliveryMethod.eta.minMinutes,
+          deliveryEtaMaxMinutes: deliveryMethod.arranged ? null : deliveryMethod.eta.maxMinutes,
+          deliveryEtaUnit: deliveryMethod.arranged ? null : deliveryMethod.eta.unit,
 
           currency: totals.currency,
           subtotal: toMajor(totals.subtotal),
@@ -540,7 +556,14 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           .catch((error) => console.error('[orders] Could not save the trade buyer’s tax ID:', error));
       }
 
-      return { ok: true, orderId: created.id, organizationId: organization.id, reference, confirmationToken };
+      return {
+        ok: true,
+        orderId: created.id,
+        organizationId: organization.id,
+        reference,
+        confirmationToken,
+        ...(deliveryMethod.arranged ? { deliveryArranged: true } : {}),
+      };
     } catch (error) {
       /* The hold failed and the order rolled back. Either the goods are gone
        * (someone bought the last one) — say so — or a planned store ran short
