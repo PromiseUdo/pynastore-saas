@@ -43,6 +43,7 @@ export default async function StoreOrdersPage({ searchParams }: { searchParams: 
       status: one(raw.status),
       q: one(raw.q),
       warehouseId: one(raw.store),
+      buyer: one(raw.buyer),
       page: Number.isFinite(page) && page > 0 ? page : 1,
     }),
     listWarehouses(),

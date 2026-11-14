@@ -63,6 +63,8 @@ export interface StoreOrderRow {
   /** null on a counter sale — nothing was shipped anywhere */
   city: string | null;
   state: string | null;
+  /** placed by a trade buyer: the business it's invoiced to (ROADMAP 21.6); null otherwise */
+  tradeBusiness: string | null;
   /** return requests waiting on the merchant */
   returnsAwaiting: number;
   /** cancelled after it was paid, and not all of it sent back yet */
@@ -340,6 +342,8 @@ export interface StoreOrderFilters {
   warehouseId?: string;
   /** Oldest first is what a store packing its queue wants. */
   sort?: 'newest' | 'oldest';
+  /** trade = placed by an approved trade buyer (ROADMAP 21.8), retail = everyone else */
+  buyer?: string;
 }
 
 export interface StoreOrderList {
@@ -352,6 +356,8 @@ export interface StoreOrderList {
   historySize: number;
   /** how many of each channel exist, for the filter's counts */
   channelCounts: { channel: string; count: number }[];
+  /** orders placed by trade buyers — the Trade filter shows once there are any (ROADMAP 21.8) */
+  tradeCount: number;
 }
 
 const ORDERS_PER_PAGE = 25;
@@ -384,6 +390,8 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
       organizationId,
       ...(isOrderChannel(filters.channel) ? { channel: filters.channel } : {}),
       ...(isOrderStatus(filters.status) ? { status: filters.status } : {}),
+      // A trade order is one with a business on it (ROADMAP 21.6).
+      ...(filters.buyer === 'trade' ? { buyerBusinessName: { not: null } } : filters.buyer === 'retail' ? { buyerBusinessName: null } : {}),
       /* A store's orders are the counter sales it rang up AND the online
        * orders its shelf supplied. The id is used together with the org, so
        * another workspace's store simply matches nothing. */
@@ -414,7 +422,7 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
         : {}),
     };
 
-    const [orders, total, historySize, grouped] = await Promise.all([
+    const [orders, total, historySize, grouped, tradeCount] = await Promise.all([
       prisma.order.findMany({
         where,
         orderBy: { placedAt: filters.sort === 'oldest' ? 'asc' : 'desc' },
@@ -436,6 +444,7 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
           totalAmount: true,
           shipCity: true,
           shipState: true,
+          buyerBusinessName: true,
           lineItems: { select: { quantity: true } },
           warehouseId: true,
           warehouse: { select: { id: true, name: true } },
@@ -449,6 +458,7 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
       prisma.order.count({ where }),
       prisma.order.count({ where: { organizationId } }),
       prisma.order.groupBy({ by: ['channel'], where: { organizationId }, _count: { _all: true } }),
+      prisma.order.count({ where: { organizationId, buyerBusinessName: { not: null } } }),
     ]);
 
     return {
@@ -470,6 +480,7 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
           totalAmount: Number(order.totalAmount),
           city: order.shipCity,
           state: order.shipState,
+          tradeBusiness: order.buyerBusinessName,
           returnsAwaiting: order._count.returns,
           partiallySent: (() => {
             const sent = order.shipments.filter((sh) => sh.status === 'DISPATCHED' || sh.status === 'DELIVERED').length;
@@ -491,6 +502,7 @@ export async function listStoreOrders(filters: StoreOrderFilters = {}): Promise<
         pageCount: Math.max(1, Math.ceil(total / ORDERS_PER_PAGE)),
         historySize,
         channelCounts: grouped.map((g) => ({ channel: g.channel, count: g._count._all })),
+        tradeCount,
       },
     };
   } catch (error) {
@@ -624,6 +636,7 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
           returnId: r.returnId,
         })),
         refundedTotal,
+        tradeBusiness: order.buyerBusinessName,
         returnsAwaiting: order.returns.filter((r) => r.status === 'REQUESTED').length,
         refundOwed:
           order.status === 'CANCELLED' &&

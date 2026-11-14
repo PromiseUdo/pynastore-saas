@@ -1343,7 +1343,7 @@ Launch (C) needs both.
 |---|---|---|
 | D3 | 14.4 SMS/WhatsApp order updates | needs a provider decision first (cost per message) |
 | D4 | 13.5 Custom domains bought through Namecheap's API | staff handle them by hand until then |
-| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | 21.1, 21.2 DONE 2026-11-14, 21.3 + 21.6 + 21.4 + 21.5 DONE 2026-11-15; next 21.7 quick ordering / 21.8 reports as vendors ask; can move before launch if a launch vendor needs it |
+| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | 21.1, 21.2 DONE 2026-11-14, 21.3 + 21.6 + 21.4 + 21.5 + 21.8 DONE 2026-11-15; 21.7 quick ordering left, as vendors ask; can move before launch if a launch vendor needs it |
 
 ### Deliberately not planned yet
 
@@ -8217,12 +8217,32 @@ As built:
 - "Order again" on a past order (it exists for shoppers) brings the lines in
   at today's prices.
 
-### 21.8 Reports and the rest — TODO
+### 21.8 Reports and the rest — DONE (2026-11-15)
 
 - Reports: retail vs trade split on Sales; top trade buyers; amounts owed and
   overdue (a "Money owed" view with the ageing: due, 1–30, 31–60, 60+ days).
 - Orders and Customers filter by Trade; an order line says when it was sold at the wholesale price.
 - Business app (Phase 19): trade badge, balances and recording payments.
+
+As built:
+- **Reports → "Retail and trade"** (shown while wholesale is on, or once the
+  shop has trade orders): trade and retail sales, orders and average order
+  for the period, trade's share (`tradeShareRatio`, 0–1), and the top 50
+  trade buyers with what each owes today; CSV. A trade order is one carrying
+  a business (`Order.buyerBusinessName`, 21.6). The split sits in its own
+  view rather than inside "Sales", which stays the whole business.
+- **Reports → "Money owed"** (every shop): orders on account and unpaid
+  invoices, per customer, aged not due / 1–30 / 31–60 / over 60 days late
+  (`lib/reports/ageing.ts`), most overdue first, each with its statement;
+  StatCards for the totals; CSV. Today's position — the period picker is
+  hidden on it. Queries in `features/reports/trade-reports.ts`.
+- **Orders:** a Trade buyers / Retail customers filter (`?buyer=`), shown
+  once there are trade orders, and a "Trade" badge on the row and the order
+  page. **Customers** already filtered by trade (21.1); order lines already
+  say "Wholesale" (21.2).
+- **Business app:** it serves the admin pages, so the Trade badges, the
+  customer page's balance and terms, and "Record payment" on an order are
+  all there without anything of its own.
 
 ### Build order
 

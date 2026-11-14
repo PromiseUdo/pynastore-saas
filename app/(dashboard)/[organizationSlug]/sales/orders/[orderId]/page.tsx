@@ -211,6 +211,8 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
           <Badge variant={ORDER_CHANNEL_VARIANT[order.channel] ?? 'draft'}>
             {ORDER_CHANNEL_LABEL[order.channel] ?? order.channel}
           </Badge>
+          {/* Placed by a trade buyer (ROADMAP 21.8) */}
+          {order.buyer && <Badge variant="approved">Trade</Badge>}
           {order.isGuest && !isCounterSale && <Badge variant="draft">Guest checkout</Badge>}
           {order.partiallySent && <Badge variant="processing">Partially sent</Badge>}
         </div>

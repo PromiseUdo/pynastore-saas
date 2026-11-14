@@ -24,8 +24,10 @@ import type { StoreSalesReport } from '@/features/sales/store-sales';
 import { PeriodPicker } from './PeriodPicker';
 import { SalesChart } from './SalesChart';
 import { StoreSalesView } from './StoreSalesView';
+import { MoneyOwedView, TradeView } from './TradeViews';
+import type { MoneyOwedReport, TradeReport } from '@/features/reports/trade-reports';
 
-export type ReportsView = 'sales' | 'products' | 'customers' | 'discounts' | 'by-store';
+export type ReportsView = 'sales' | 'products' | 'customers' | 'discounts' | 'by-store' | 'trade' | 'owed';
 
 export type ReportsData =
   | { view: 'sales'; report: RevenueReport }
@@ -33,6 +35,9 @@ export type ReportsData =
   | { view: 'customers'; report: TopCustomersReport }
   | { view: 'discounts'; report: DiscountsReport }
   | { view: 'by-store'; report: StoreSalesReport }
+  /** wholesale (ROADMAP 21.8): retail vs trade and the top trade buyers; what's owed, by age */
+  | { view: 'trade'; report: TradeReport }
+  | { view: 'owed'; report: MoneyOwedReport }
   /** a view this plan doesn't include: shown with what it does, not hidden (AGENTS §7) */
   | { view: 'locked'; locked: 'discounts' | 'by-store' };
 
@@ -66,6 +71,10 @@ const EXPLAINER: Record<ReportsView, string> = {
     'What discount codes and counter discounts took off orders placed in the period, and what each campaign’s sale prices gave away below the usual price while it ran.',
   'by-store':
     'Goods that left each store’s shelf in the period, at the price the customer paid — counter sales and the website together. Delivery and discount codes belong to the whole order, so they are left out, and returns are not deducted.',
+  trade:
+    'Orders placed in the period by your approved trade buyers, beside everyone else’s — at what was charged, with delivery and VAT, cancelled orders left out. “Owes you now” is today’s figure, not the period’s.',
+  owed:
+    'What customers owe you today — orders on a trade buyer’s account and invoices you’ve sent, less what you’ve recorded receiving — by how late it is. The period above doesn’t apply: this is where things stand now. Something with no due date counts as not due.',
 };
 
 const LOCKED_COPY: Record<'discounts' | 'by-store', { title: string; description: string }> = {
@@ -108,8 +117,13 @@ export function ReportsHub({
       </PageToolbar>
 
       <PageToolbar className="gap-y-2">
-        <PeriodPicker current={period.key} firstDay={period.firstDay} lastDay={period.lastDay} today={period.today} />
-        <p className="text-xs text-muted-foreground tabular-nums">{periodText}</p>
+        {/* Money owed is today's position, not a period's. */}
+        {view !== 'owed' && (
+          <>
+            <PeriodPicker current={period.key} firstDay={period.firstDay} lastDay={period.lastDay} today={period.today} />
+            <p className="text-xs text-muted-foreground tabular-nums">{periodText}</p>
+          </>
+        )}
         <div className="ml-auto">{data.view !== 'locked' && <ExportFor data={data} suffix={fileSuffix} />}</div>
       </PageToolbar>
 
@@ -133,6 +147,8 @@ export function ReportsHub({
         {data.view === 'customers' && <CustomersView report={data.report} />}
         {data.view === 'discounts' && <DiscountsView report={data.report} />}
         {data.view === 'by-store' && <StoreSalesView report={data.report} periodLabel={periodText} />}
+        {data.view === 'trade' && <TradeView report={data.report} />}
+        {data.view === 'owed' && <MoneyOwedView report={data.report} />}
 
         <StockReportLinks stock={stock} />
       </PageBody>
@@ -290,6 +306,37 @@ function ExportFor({ data, suffix }: { data: Exclude<ReportsData, { view: 'locke
             { header: 'Orders', value: (r) => r.orders },
             { header: 'Given away', value: (r) => r.given },
             { header: 'Sales', value: (r) => (r.sales === null ? '' : r.sales) },
+          ]}
+        />
+      );
+    case 'trade':
+      return (
+        <ExportCsvButton
+          name={`Trade buyers ${suffix}`}
+          rows={data.report.rows}
+          columns={[
+            { header: 'Trade buyer', value: (r) => r.businessName },
+            { header: 'Orders', value: (r) => r.orders },
+            { header: 'Spent', value: (r) => r.spend },
+            { header: 'Owes now', value: (r) => r.owed },
+            { header: 'Last order', value: (r) => r.lastOrderAt },
+          ]}
+        />
+      );
+    case 'owed':
+      return (
+        <ExportCsvButton
+          name="Money owed"
+          rows={data.report.rows}
+          columns={[
+            { header: 'Customer', value: (r) => r.name },
+            { header: 'Trade buyer', value: (r) => (r.trade ? 'Yes' : 'No') },
+            { header: 'Not due yet', value: (r) => r.ages.notDue },
+            { header: '1–30 days late', value: (r) => r.ages.days1to30 },
+            { header: '31–60 days late', value: (r) => r.ages.days31to60 },
+            { header: 'Over 60 days late', value: (r) => r.ages.over60 },
+            { header: 'Owed', value: (r) => r.owed },
+            { header: 'Oldest due', value: (r) => r.oldestDueAt ?? '' },
           ]}
         />
       );

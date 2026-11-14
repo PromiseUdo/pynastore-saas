@@ -13,6 +13,9 @@ import {
   getTopProductsReport,
 } from '@/features/reports/sales-reports';
 import { getSalesByStore } from '@/features/sales/store-sales';
+import { getMoneyOwedReport, getTradeReport } from '@/features/reports/trade-reports';
+import { getWholesaleSettings } from '@/lib/trade/accounts';
+import { prisma } from '@/lib/prisma';
 import { ReportsHub, StockReportsOnly, type ReportsData, type ReportsView, type StockReportsAccess } from './_components/ReportsHub';
 
 export const metadata: Metadata = { title: 'Reports' };
@@ -45,6 +48,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
   }
 
   const canSeeCustomers = hasPermission(perms, PERMISSIONS.CUSTOMER_VIEW);
+  const [wholesale, anyTrade] = await Promise.all([
+    getWholesaleSettings(ctx.organization.id),
+    prisma.order.findFirst({ where: { organizationId: ctx.organization.id, buyerBusinessName: { not: null } }, select: { id: true } }),
+  ]);
+  const showTrade = wholesale.mode !== 'OFF' || Boolean(anyTrade);
 
   const tabs: { key: ReportsView; label: string; locked?: boolean }[] = [
     { key: 'sales', label: 'Sales' },
@@ -52,6 +60,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     ...(canSeeCustomers ? [{ key: 'customers' as const, label: 'Top customers' }] : []),
     { key: 'discounts', label: 'Discounts and campaigns', locked: !advanced },
     { key: 'by-store', label: 'Which store sells', locked: !advanced },
+    // Wholesale (ROADMAP 21.8): while the shop sells to trade buyers, or has trade orders to look back on.
+    ...(showTrade ? [{ key: 'trade' as const, label: 'Retail and trade' }] : []),
+    { key: 'owed', label: 'Money owed' },
   ];
 
   const raw = await searchParams;
@@ -69,6 +80,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     data = { view, report: unwrap(await getTopCustomersReport(input)) };
   } else if (view === 'discounts') {
     data = { view, report: unwrap(await getDiscountsReport(input)) };
+  } else if (view === 'trade') {
+    data = { view, report: unwrap(await getTradeReport(input)) };
+  } else if (view === 'owed') {
+    data = { view, report: unwrap(await getMoneyOwedReport()) };
   } else if (view === 'by-store') {
     data = { view, report: unwrap(await getSalesByStore({ from: period.from, to: period.to })) };
   } else {

@@ -251,6 +251,23 @@ describe('a store’s own order list', () => {
     expect(result.data.rows[0].unitsFromStore).toBeNull();
   });
 
+  it('filters by trade buyer, and marks their orders (ROADMAP 21.8)', async () => {
+    const ref = 'ORD-0003';
+    await prisma.order.updateMany({ where: { organizationId: ctx.organization.id, reference: ref }, data: { buyerBusinessName: 'Bola Stores' } });
+    try {
+      const trade = await listStoreOrders({ buyer: 'trade' });
+      const retail = await listStoreOrders({ buyer: 'retail' });
+      if (!trade.success || !retail.success) throw new Error('expected two reads');
+      expect(trade.data.rows.map((r) => r.reference)).toEqual([ref]);
+      expect(trade.data.rows[0].tradeBusiness).toBe('Bola Stores');
+      expect(trade.data.tradeCount).toBe(1);
+      expect(retail.data.rows.map((r) => r.reference)).not.toContain(ref);
+      expect(retail.data.rows).toHaveLength(3);
+    } finally {
+      await prisma.order.updateMany({ where: { organizationId: ctx.organization.id, reference: ref }, data: { buyerBusinessName: null } });
+    }
+  });
+
   it('narrows to nothing for another workspace’s store', async () => {
     const result = await listStoreOrders({ warehouseId: otherStore });
     if (!result.success) throw new Error(result.error);

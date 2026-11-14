@@ -58,6 +58,7 @@ export function OrdersPageClient({
   const channel = searchParams.get('channel') ?? 'all';
   const status = searchParams.get('status') ?? 'all';
   const store = searchParams.get('store') ?? 'all';
+  const buyer = searchParams.get('buyer') ?? 'all';
   const urlQuery = searchParams.get('q') ?? '';
   const [query, setQuery] = React.useState(urlQuery);
 
@@ -81,7 +82,7 @@ export function OrdersPageClient({
     return () => clearTimeout(timer);
   }, [query, urlQuery, setParams]);
 
-  const filtered = channel !== 'all' || status !== 'all' || store !== 'all' || urlQuery !== '';
+  const filtered = channel !== 'all' || status !== 'all' || store !== 'all' || buyer !== 'all' || urlQuery !== '';
   const countFor = (key: string) => list.channelCounts.find((c) => c.channel === key)?.count ?? 0;
 
   const newSaleButton = canSell ? (
@@ -162,6 +163,20 @@ export function OrdersPageClient({
           </SelectContent>
         </SelectRoot>
 
+        {/* Trade buyers' orders (ROADMAP 21.8), once there are any — or while filtering by them. */}
+        {(list.tradeCount > 0 || buyer !== 'all') && (
+          <SelectRoot value={buyer} onValueChange={(value) => setParams({ buyer: value })}>
+            <SelectTrigger className="w-40" aria-label="Filter by trade or retail">
+              <SelectValue placeholder="All customers" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All customers</SelectItem>
+              <SelectItem value="trade">Trade buyers ({formatNumber(list.tradeCount)})</SelectItem>
+              <SelectItem value="retail">Retail customers</SelectItem>
+            </SelectContent>
+          </SelectRoot>
+        )}
+
         {stores.length > 1 && (
           <SelectRoot value={store} onValueChange={(value) => setParams({ store: value })}>
             <SelectTrigger className="w-44" aria-label="Filter by which store served it">
@@ -184,7 +199,7 @@ export function OrdersPageClient({
             size="sm"
             onClick={() => {
               setQuery('');
-              setParams({ q: null, channel: null, status: null, store: null });
+              setParams({ q: null, channel: null, status: null, store: null, buyer: null });
             }}
           >
             Clear filters
@@ -204,7 +219,7 @@ export function OrdersPageClient({
                 variant="outline"
                 onClick={() => {
                   setQuery('');
-                  setParams({ q: null, channel: null, status: null, store: null });
+                  setParams({ q: null, channel: null, status: null, store: null, buyer: null });
                 }}
               >
                 Clear filters
@@ -245,6 +260,7 @@ export function OrdersPageClient({
                           <Badge variant={ORDER_CHANNEL_VARIANT[order.channel] ?? 'draft'}>
                             {ORDER_CHANNEL_LABEL[order.channel] ?? order.channel}
                           </Badge>
+                          {order.tradeBusiness && <Badge variant="approved">Trade</Badge>}
                         </span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">
                           {order.city ? `${order.city}${order.state ? `, ${order.state}` : ''}` : '—'}
