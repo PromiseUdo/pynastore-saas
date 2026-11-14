@@ -26,18 +26,23 @@ export const PAGE_SIZE = 20;
 
 const SURFACE: Record<Reader['kind'], Surface> = { staff: 'admin', platform: 'platform', shopper: 'store' };
 
-const TARGET_TYPES = new Set<NotificationTarget['type']>([
-  'order',
-  'return',
-  'conversation',
-  'dispute',
-  'low-stock',
-  'purchase-order',
-  'social-post',
-  'questions',
-  'admin-page',
-  'platform',
-]);
+/* Every kind of target a stored entry may carry. A Record, not a list, so a
+ * new target type can't be forgotten here — the compiler asks for it. (The
+ * trade account target of ROADMAP 21.1 was, and its entries had no link.) */
+const KNOWN_TARGETS: Record<NotificationTarget['type'], true> = {
+  order: true,
+  return: true,
+  conversation: true,
+  dispute: true,
+  'low-stock': true,
+  'purchase-order': true,
+  'social-post': true,
+  questions: true,
+  trade: true,
+  'admin-page': true,
+  platform: true,
+};
+const TARGET_TYPES = new Set(Object.keys(KNOWN_TARGETS));
 
 /** Where an entry leads for this reader. A signed-in shopper goes to their account's page, not the emailed link. */
 function hrefFor(target: unknown, reader: Reader): string | null {

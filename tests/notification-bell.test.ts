@@ -157,6 +157,15 @@ describe('whose list it is', () => {
     expect(items[0].href).toBe('/account/orders/R-9');
   });
 
+  it('links a trade account request to the customer, and the shopper to their trade page (ROADMAP 21.1)', async () => {
+    await entry({ userId: ownerId, organizationId: shop.id, target: { type: 'trade', customerId: 'c-trade' } });
+    await entry({ customerId, organizationId: shop.id, target: { type: 'trade', customerId } });
+    const staff = await latestNotifications({ kind: 'staff', userId: ownerId, organizationId: shop.id });
+    const shopper = await latestNotifications({ kind: 'shopper', customerId, organizationId: shop.id });
+    expect(staff.items.find((i) => i.href?.includes('c-trade'))?.href).toBe('/sales/customers/c-trade');
+    expect(shopper.items[0].href).toBe('/account/trade');
+  });
+
   it('shows nothing for a target it doesn’t recognise', async () => {
     await entry({ userId: ownerId, organizationId: shop.id, target: { type: 'something-else', url: 'https://evil.example' } });
     const { items } = await latestNotifications({ kind: 'staff', userId: ownerId, organizationId: shop.id });
