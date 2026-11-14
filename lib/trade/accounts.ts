@@ -25,6 +25,8 @@ export interface WholesaleSettings extends TradePaymentRules {
   vatAddedChosen: boolean;
   /** …and it applies: the shop is VAT registered, so VAT really is added to trade buyers' wholesale lines */
   vatAdded: boolean;
+  /** the least a trade order's goods may come to, major units (ROADMAP 21.3); null = no minimum */
+  minOrderValue: number | null;
 }
 
 const SETTINGS_SELECT = {
@@ -36,6 +38,7 @@ const SETTINGS_SELECT = {
   wholesaleVatAdded: true,
   vatRegistered: true,
   vatRate: true,
+  tradeMinOrderValue: true,
 } as const;
 
 type SettingsRow = {
@@ -47,6 +50,7 @@ type SettingsRow = {
   wholesaleVatAdded: boolean;
   vatRegistered: boolean;
   vatRate: { toString(): string } | number;
+  tradeMinOrderValue: { toString(): string } | number | null;
 };
 
 const OFF: WholesaleSettings = {
@@ -57,6 +61,7 @@ const OFF: WholesaleSettings = {
   tradePayOnDelivery: true,
   vatAddedChosen: false,
   vatAdded: false,
+  minOrderValue: null,
 };
 
 function toSettings(row: SettingsRow | null): WholesaleSettings {
@@ -71,6 +76,7 @@ function toSettings(row: SettingsRow | null): WholesaleSettings {
     vatAddedChosen: row.wholesaleVatAdded,
     // A shop that isn't VAT registered charges no VAT at all (14.1).
     vatAdded: row.wholesaleVatAdded && row.vatRegistered && Number(row.vatRate) > 0,
+    minOrderValue: row.tradeMinOrderValue !== null && Number(row.tradeMinOrderValue) > 0 ? Number(row.tradeMinOrderValue) : null,
   };
 }
 

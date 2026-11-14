@@ -208,6 +208,8 @@ async function analyse(ctx: OrganizationContext, text: string): Promise<{ previe
             categoryId,
             brandId,
             reorderPoint: p.reorderPoint,
+            tradeMinQuantity: p.tradeMinQuantity,
+            tradePackSize: p.tradePackSize,
             sellingPrice: variants ? (prices[0] ?? null) : first.price,
             compareAtPrice: variants ? null : first.compareAtPrice,
             wholesalePrice: variants ? null : first.wholesalePrice,

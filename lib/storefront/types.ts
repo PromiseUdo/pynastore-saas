@@ -76,6 +76,18 @@ export interface ProductOption {
   values: ProductOptionValue[];
 }
 
+/**
+ * A trade buyer's quantity rules for one product (ROADMAP 21.3). Present on
+ * a product — and a cart line — only when the catalogue was built for an
+ * approved trade buyer; its presence is what lifts the 99-per-line limit.
+ */
+export interface TradeQuantityRules {
+  /** at least this many of the product, all variants together; null = no minimum */
+  minQuantity: number | null;
+  /** each line in whole packs of this many; null = singles */
+  packSize: number | null;
+}
+
 export interface ProductVariant {
   id: string;
   sku: string;
@@ -141,6 +153,8 @@ export interface Product {
    * VAT is added to them at checkout ("+ VAT").
    */
   wholesale?: { vatAdded: boolean };
+  /** a trade buyer's quantity rules — set for every product in a trade buyer's catalogue (21.3) */
+  trade?: TradeQuantityRules;
 }
 
 export interface Review {
@@ -529,6 +543,8 @@ export interface CartItem {
   addedAt: number;
   /** at the wholesale price (ROADMAP 21.2) — VAT may be added to it rather than included */
   atWholesale?: boolean;
+  /** a trade buyer's line (ROADMAP 21.3): the product's quantity rules, and a higher line limit */
+  trade?: TradeQuantityRules;
 }
 
 /**

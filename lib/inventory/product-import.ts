@@ -88,6 +88,8 @@ export type ImportField =
   | 'category'
   | 'brand'
   | 'reorderPoint'
+  | 'tradeMinQuantity'
+  | 'tradePackSize'
   | `option${1 | 2 | 3}Name`
   | `option${1 | 2 | 3}Value`;
 
@@ -112,6 +114,8 @@ export const IMPORT_COLUMNS: { field: ImportField; header: string; required?: bo
   { field: 'category', header: 'Category', help: 'Optional. A category you already have, e.g. Women or Women > Dresses.' },
   { field: 'brand', header: 'Brand', help: 'Optional. A brand you already have.' },
   { field: 'reorderPoint', header: 'Reorder point', help: 'Optional. When stock falls to this number, you’re alerted.', aliases: ['reorder level'] },
+  { field: 'tradeMinQuantity', header: 'Trade minimum', help: 'Optional. The fewest a trade buyer can order of this product, all variants together.', aliases: ['trade min', 'minimum order quantity', 'moq'] },
+  { field: 'tradePackSize', header: 'Trade pack size', help: 'Optional. Trade buyers order in whole packs of this many, e.g. 24 for a carton.', aliases: ['pack size', 'carton size'] },
 ];
 
 export const STOCK_COLUMN_PREFIX = 'Stock:';
@@ -177,6 +181,9 @@ export interface ImportProduct {
   category: string | null;
   brand: string | null;
   reorderPoint: number | null;
+  /** trade quantity rules (ROADMAP 21.3), product-wide like the reorder point */
+  tradeMinQuantity: number | null;
+  tradePackSize: number | null;
   options: VariantOption[];
   units: ImportUnit[];
   errors: string[];
@@ -259,6 +266,8 @@ export function parseProductImport(text: string): ParsedImport {
         category: null,
         brand: null,
         reorderPoint: null,
+        tradeMinQuantity: null,
+        tradePackSize: null,
         options: [],
         units: [],
         errors: [],
@@ -289,6 +298,12 @@ export function parseProductImport(text: string): ParsedImport {
     if (reorder !== null) {
       if (Number.isNaN(reorder) || reorder < 0) rowError('Reorder point must be a number of 0 or more.');
       else product.reorderPoint ??= reorder;
+    }
+    for (const [field, label] of [['tradeMinQuantity', 'Trade minimum'], ['tradePackSize', 'Trade pack size']] as const) {
+      const whole = parseAmount(cell(r, field));
+      if (whole === null) continue;
+      if (Number.isNaN(whole) || whole < 1 || !Number.isInteger(whole)) rowError(`${label} must be a whole number of 1 or more.`);
+      else product[field] ??= whole;
     }
     if (product.description && product.description.length > 5000) rowError('Description is longer than 5,000 characters.');
 

@@ -53,7 +53,7 @@ const ADDRESS: CheckoutAddress = {
   postalCode: '',
 };
 
-const TRADE = { trade: true, vatAdded: false };
+const TRADE = { trade: true, vatAdded: false, minOrderValue: null };
 
 beforeAll(async () => {
   store.id = (
@@ -174,15 +174,15 @@ describe('whose prices a request gets', () => {
     session.shopper = { id: walkerId, organizationId: store.id };
     expect(await getBuyerPricing(store.slug)).toEqual(RETAIL_PRICING);
     session.shopper = { id: buyerId, organizationId: store.id };
-    expect(await getBuyerPricing(store.slug)).toEqual({ trade: true, vatAdded: false });
+    expect(await getBuyerPricing(store.slug)).toEqual({ trade: true, vatAdded: false, minOrderValue: null });
   });
 
   it('adds VAT only when the shop chose it and is VAT registered', async () => {
     session.shopper = { id: buyerId, organizationId: store.id };
     await prisma.organization.update({ where: { id: store.id }, data: { wholesaleVatAdded: true } });
-    expect(await getBuyerPricing(store.slug)).toEqual({ trade: true, vatAdded: true });
+    expect(await getBuyerPricing(store.slug)).toEqual({ trade: true, vatAdded: true, minOrderValue: null });
     await prisma.organization.update({ where: { id: store.id }, data: { vatRegistered: false } });
-    expect(await getBuyerPricing(store.slug)).toEqual({ trade: true, vatAdded: false });
+    expect(await getBuyerPricing(store.slug)).toEqual({ trade: true, vatAdded: false, minOrderValue: null });
     await prisma.organization.update({ where: { id: store.id }, data: { vatRegistered: true, wholesaleVatAdded: false } });
   });
 });

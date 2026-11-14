@@ -1343,7 +1343,7 @@ Launch (C) needs both.
 |---|---|---|
 | D3 | 14.4 SMS/WhatsApp order updates | needs a provider decision first (cost per message) |
 | D4 | 13.5 Custom domains bought through Namecheap's API | staff handle them by hand until then |
-| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | 21.1 and 21.2 DONE 2026-11-14; next 21.3; can move before launch if a launch vendor needs it |
+| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | 21.1, 21.2 DONE 2026-11-14, 21.3 DONE 2026-11-15; next 21.6 business documents; can move before launch if a launch vendor needs it |
 
 ### Deliberately not planned yet
 
@@ -7967,7 +7967,31 @@ pay on account. A vendor who sells only wholesale switches the shop to
 - **Seam:** decision 3 — the catalogue resolves `(variant, buyer)` to a
   price; `placeOrder` re-resolves it.
 
-### 21.3 Trade quantity rules — TODO
+### 21.3 Trade quantity rules — DONE (2026-11-15)
+
+**As built** (migration `20261115090000_trade_quantity_rules`):
+- `InventoryItem.tradeMinQuantity` / `tradePackSize` (top-level product; a
+  variant follows it) and `Organization.tradeMinOrderValue`.
+- **Decided:** a minimum counts the product's variants together (a shop
+  buying 12 tees may mix colours); a pack is per line (a carton holds one
+  variant); the minimum order counts the goods before discount and delivery.
+- One pure rule file, `lib/trade/quantity.ts` (`firstTradeQuantity`,
+  `snapToPacks`, `tradeBagProblems`), used by the bag, checkout
+  (`validateCheckout`) and `placeOrder` (new failure `trade-rules`).
+- The catalogue puts `trade` rules on every product only for an approved
+  trade buyer (`getBuyerPricing` → `loadCatalogueFromDb`), and a cart line
+  carries them: that is what lifts the line limit from 99 to
+  `TRADE_MAX_LINE_QUANTITY` (stock still limits). `lineQuantity` in
+  `lib/storefront/cart.ts` is the one place a line's quantity is set.
+- Shop: "Minimum 20 · in packs of 10" beside prices; "Add" and the product
+  page start at the first allowed quantity; steppers move in whole packs;
+  the bag lists what's wrong and holds Checkout until it's fixed.
+- Admin: Trade minimum and Trade pack size in the product editor (while
+  wholesale is on), the import sheet and the workspace export; Settings →
+  Wholesale: Minimum trade order.
+- Tests: `tests/trade-quantity-rules.test.ts`, `lib/trade/quantity.test.ts`.
+
+**Plan as written:**
 
 - **Per product (trade buyers only):** minimum quantity, and **sold in packs
   of N** (shown as "1 carton (24 pcs)"; quantities step by N).

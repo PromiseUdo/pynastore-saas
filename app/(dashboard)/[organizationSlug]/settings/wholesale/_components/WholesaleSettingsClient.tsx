@@ -14,6 +14,8 @@ import { RadioGroup as RadioGroupPrimitive } from 'radix-ui';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { FieldDescription } from '@/components/ui/form-field';
 import { SwitchRoot } from '@/components/ui/switch';
 import { CheckboxRoot } from '@/components/ui/checkbox';
 import { PageHeader, PageBody } from '@/components/layout/page-header';
@@ -54,14 +56,24 @@ export function WholesaleSettingsClient({
   const router = useRouter();
   const [values, setValues] = React.useState<WholesaleSettingsInput>(initial);
   const [pending, setPending] = React.useState(false);
+  // The minimum order as typed; saved as naira, blank = none.
+  const [minOrder, setMinOrder] = React.useState(initial.minOrderValue ? String(initial.minOrderValue) : '');
   const [error, setError] = React.useState<string | null>(null);
-  const dirty = JSON.stringify(values) !== JSON.stringify(initial);
+  const dirty =
+    JSON.stringify({ ...values, minOrderValue: null }) !== JSON.stringify({ ...initial, minOrderValue: null }) ||
+    minOrder.replace(/,/g, '').trim() !== (initial.minOrderValue ? String(initial.minOrderValue) : '');
   const on = values.mode !== 'OFF';
 
   async function save() {
+    const typed = minOrder.replace(/,/g, '').trim();
+    const minOrderValue = typed ? Number(typed) : null;
+    if (minOrderValue !== null && (!Number.isFinite(minOrderValue) || minOrderValue < 0)) {
+      setError('Enter the minimum trade order as an amount, like 50000 — or leave it empty.');
+      return;
+    }
     setPending(true);
     setError(null);
-    const result = await saveWholesaleSettings(values);
+    const result = await saveWholesaleSettings({ ...values, minOrderValue });
     setPending(false);
     if (!result.success) {
       setError(result.error);
@@ -167,6 +179,29 @@ export function WholesaleSettingsClient({
                   onCheckedChange={(requestsOpen) => setValues((v) => ({ ...v, requestsOpen }))}
                   disabled={!canEdit}
                 />
+              </div>
+            </section>
+
+            <section aria-labelledby="wholesale-min-order" className="space-y-3">
+              <h2 id="wholesale-min-order" className="text-sm font-semibold">
+                Minimum trade order
+              </h2>
+              <div className="rounded-lg border bg-card p-3.5">
+                <Label htmlFor="wholesale-min-order-value">Smallest trade order</Label>
+                <Input
+                  id="wholesale-min-order-value"
+                  className="mt-1.5 max-w-48"
+                  inputMode="decimal"
+                  startAdornment={<span className="text-xs">₦</span>}
+                  value={minOrder}
+                  onChange={(e) => setMinOrder(e.target.value)}
+                  placeholder="No minimum"
+                  disabled={!canEdit}
+                />
+                <FieldDescription className="mt-1.5">
+                  What a trade buyer’s goods must come to before they can check out — before any discount and delivery. Each
+                  product’s own minimum and pack size are set on the product.
+                </FieldDescription>
               </div>
             </section>
 

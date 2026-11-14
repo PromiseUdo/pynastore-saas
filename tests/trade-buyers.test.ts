@@ -55,7 +55,7 @@ const ALL = Object.values(PERMISSIONS);
 let shopperId = '';
 let otherCustomerId = '';
 
-const settingsOn = { mode: 'RETAIL_AND_TRADE' as const, requestsOpen: true, tradePayOnline: true, tradePayTransfer: true, tradePayOnDelivery: true, vatAdded: false };
+const settingsOn = { mode: 'RETAIL_AND_TRADE' as const, requestsOpen: true, tradePayOnline: true, tradePayTransfer: true, tradePayOnDelivery: true, vatAdded: false, minOrderValue: null };
 const details = { businessName: 'Ada Provisions', taxId: '12345678-0001', cacNumber: 'RC 1234567' };
 
 beforeAll(async () => {

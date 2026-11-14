@@ -145,6 +145,8 @@ export interface CheckoutConfig {
    * The store's VAT when it is VAT registered (ROADMAP 14.1), else null and
    * checkout shows no VAT at all. Always included in prices, never added.
    */
+  /** an approved trade buyer's minimum order, minor units, on the goods (ROADMAP 21.3); absent otherwise */
+  tradeMinOrderValue?: number | null;
   vat: {
     ratePct: number;
     vatNumber: string | null;

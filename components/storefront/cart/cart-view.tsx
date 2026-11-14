@@ -41,15 +41,19 @@ import { useCartReconciliation } from '@/lib/storefront/use-cart-reconciliation'
 import { describeNotice, lineKey } from '@/lib/storefront/cart';
 import { formatMoney } from '@/lib/storefront/format';
 import { computeTotals } from '@/lib/storefront/pricing';
+import { tradeBagProblems } from '@/lib/trade/quantity';
 
 export function CartView({
   vatRatePct = null,
   vatAdded = false,
+  tradeMinOrderValue = null,
 }: {
   /** the store's VAT rate when it is VAT registered (ROADMAP 14.1), else null */
   vatRatePct?: number | null;
   /** VAT is added to wholesale lines for this trade buyer (ROADMAP 21.2) */
   vatAdded?: boolean;
+  /** this trade buyer's minimum order on the goods, minor units (ROADMAP 21.3) */
+  tradeMinOrderValue?: number | null;
 } = {}) {
   const hydrated = useCartStore((s) => s.hydrated);
   const items = useCartStore((s) => s.items);
@@ -62,6 +66,8 @@ export function CartView({
    * call re-renders forever under zustand's snapshot checks. The numbers
    * still come from exactly one place (lib/storefront/pricing.ts). */
   const totals = React.useMemo(() => computeTotals({ items, coupon, vatRatePct, vatAdded }), [items, coupon, vatRatePct, vatAdded]);
+  // What stops a trade buyer's bag being ordered (21.3) — the same check checkout and the server make.
+  const tradeProblems = React.useMemo(() => tradeBagProblems(items, tradeMinOrderValue), [items, tradeMinOrderValue]);
 
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
@@ -200,7 +206,7 @@ export function CartView({
         </div>
 
         <div className="lg:sticky lg:top-24">
-          <OrderSummary totals={totals} itemCount={count} discountLabel={coupon?.label} />
+          <OrderSummary totals={totals} itemCount={count} discountLabel={coupon?.label} problems={tradeProblems.map((p) => p.message)} />
         </div>
       </div>
 

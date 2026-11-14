@@ -24,7 +24,7 @@ import { useCartActions } from '@/lib/storefront/use-cart-actions';
 import { useWishlistStore } from '@/lib/storefront/stores/wishlist-store';
 import { useUIStore } from '@/lib/storefront/stores/ui-store';
 import { useHydrated } from '@/lib/storefront/context';
-import { WholesaleNote } from '@/components/storefront/common/wholesale-note';
+import { TradeRulesNote, WholesaleNote } from '@/components/storefront/common/wholesale-note';
 import { discountPercent, formatCompact, formatMoney } from '@/lib/storefront/format';
 
 export function ProductCard({
@@ -195,6 +195,7 @@ export function ProductCard({
             )}
             <WholesaleNote product={product} />
           </div>
+          <TradeRulesNote product={product} />
 
           <button
             onClick={onAdd}

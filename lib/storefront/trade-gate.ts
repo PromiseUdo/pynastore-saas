@@ -36,7 +36,12 @@ export const getBuyerPricing = cache(async (organizationSlug: string): Promise<B
     const shopper = await getShopperForStore(organizationSlug);
     if (!shopper || shopper.organizationId !== settings.organizationId) return RETAIL_PRICING;
     if (!(await isTradeBuyer(settings.organizationId, shopper.id))) return RETAIL_PRICING;
-    return { trade: true, vatAdded: settings.vatAdded };
+    return {
+      trade: true,
+      vatAdded: settings.vatAdded,
+      // The admin keeps money in major units; the storefront counts kobo.
+      minOrderValue: settings.minOrderValue !== null ? Math.round(settings.minOrderValue * 100) : null,
+    };
   } catch {
     return RETAIL_PRICING;
   }

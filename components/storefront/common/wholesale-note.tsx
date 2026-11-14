@@ -9,6 +9,7 @@
  */
 import { cn } from '@/lib/utils';
 import type { Product, ProductVariant } from '@/lib/storefront/types';
+import { describeRules } from '@/lib/trade/quantity';
 
 export function WholesaleNote({
   product,
@@ -27,4 +28,14 @@ export function WholesaleNote({
       Wholesale price{product.wholesale.vatAdded ? ' · + VAT' : ''}
     </span>
   );
+}
+
+/**
+ * "Minimum 12 · in packs of 24" for a trade buyer (ROADMAP 21.3) — said
+ * beside the price, so the quantity they start at isn't a surprise.
+ */
+export function TradeRulesNote({ product, className }: { product: Pick<Product, 'trade'>; className?: string }) {
+  const text = describeRules(product.trade);
+  if (!text) return null;
+  return <span className={cn('block text-xs text-muted-foreground', className)}>{text}</span>;
 }

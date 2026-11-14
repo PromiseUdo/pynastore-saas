@@ -29,6 +29,7 @@ import { findPaymentMethod } from './config';
 import { isPaymentMethodAllowed, PREPAYMENT_REQUIRED_MESSAGE } from './payment-terms';
 import { checkoutSchema } from './schema';
 import { MAX_LINE_QUANTITY } from '../cart';
+import { TRADE_MAX_LINE_QUANTITY, tradeBagProblems } from '@/lib/trade/quantity';
 import { placeOrderAction } from '@/features/shop-orders/actions';
 
 export type CheckoutFailureCode =
@@ -39,6 +40,7 @@ export type CheckoutFailureCode =
   | 'invalid-cart-item'
   | 'product-unavailable'
   | 'invalid-discount'
+  | 'trade-rules'
   | 'order-failed';
 
 export interface CheckoutFailure {
@@ -87,6 +89,7 @@ const fail = (code: CheckoutFailureCode, message: string): CheckoutFailure => ({
 
 /** The server's refusals this side has a name for; anything else is generic. */
 const KNOWN_FAILURES = [
+  'trade-rules',
   'empty-cart',
   'invalid-delivery-method',
   'invalid-payment-method',
@@ -108,7 +111,7 @@ function lineProblem(item: CartItem): CheckoutFailureCode | null {
   if (!item.productId || !item.variantId) return 'invalid-cart-item';
   if (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0) return 'invalid-cart-item';
   if (!Number.isInteger(item.quantity) || item.quantity < 1) return 'invalid-cart-item';
-  if (item.quantity > MAX_LINE_QUANTITY) return 'invalid-cart-item';
+  if (item.quantity > (item.trade ? TRADE_MAX_LINE_QUANTITY : MAX_LINE_QUANTITY)) return 'invalid-cart-item';
   if (item.maxQuantity <= 0) return 'product-unavailable';
   if (item.quantity > item.maxQuantity) return 'product-unavailable';
   return null;
@@ -162,6 +165,9 @@ export function validateCheckout(input: SubmitCheckoutInput): CheckoutFailure | 
   if (!isPaymentMethodAllowed(paymentMethod, input.items)) {
     return fail('invalid-payment-method', PREPAYMENT_REQUIRED_MESSAGE);
   }
+  // A trade buyer's quantity rules (ROADMAP 21.3); the server checks again.
+  const tradeProblem = tradeBagProblems(input.items, input.config.tradeMinOrderValue ?? null)[0];
+  if (tradeProblem) return fail('trade-rules', tradeProblem.message);
 
   for (const item of input.items) {
     const problem = lineProblem(item);

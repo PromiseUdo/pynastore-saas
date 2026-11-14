@@ -74,7 +74,7 @@ describe('validation and payload', () => {
   it('round-trips a saved product, matching variants to option values', () => {
     const product = {
       name: 'Tee', sku: 'TEE', barcode: null, unit: 'pcs', description: null, shortDescription: null, itemType: 'STANDARD', status: 'ACTIVE',
-      categoryId: null, brandId: null, preferredSupplierId: null, reorderPoint: null, sellingPrice: 1000, compareAtPrice: null, wholesalePrice: null, averageCost: 0,
+      categoryId: null, brandId: null, preferredSupplierId: null, reorderPoint: null, sellingPrice: 1000, compareAtPrice: null, wholesalePrice: null, tradeMinQuantity: null, tradePackSize: null, averageCost: 0,
       slug: 'tee', isPublished: false, publishedAt: null, requiresPrepayment: false, tags: [], highlights: [], specs: [], images: [], id: 'p1',
       options: [{ name: 'Colour', kind: 'color', values: [{ label: 'Red' }, { label: 'Navy' }] }],
       variants: [{ id: 'v1', sku: 'TEE-RED', barcode: null, attributes: { Colour: 'Red' }, sellingPrice: null, compareAtPrice: null, wholesalePrice: null, imageUrl: null, status: 'ACTIVE', available: 3, onlineAvailable: 3 }],

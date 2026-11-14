@@ -50,6 +50,10 @@ export type FormState = {
   compareAtPrice: string;
   /** what an approved trade buyer pays; blank = the selling price (ROADMAP 21.2) */
   wholesalePrice: string;
+  /** trade buyers order at least this many, all variants together (21.3); blank = no minimum */
+  tradeMinQuantity: string;
+  /** trade buyers order in whole packs of this many; blank = singles */
+  tradePackSize: string;
   status: ItemStatus;
   isPublished: boolean;
   /** true = customers must pay before delivery; pay on delivery isn't offered */
@@ -85,6 +89,8 @@ export function emptyFormState(): FormState {
     sellingPrice: '',
     compareAtPrice: '',
     wholesalePrice: '',
+    tradeMinQuantity: '',
+    tradePackSize: '',
     status: 'ACTIVE',
     isPublished: false,
     requiresPrepayment: false,
@@ -148,6 +154,8 @@ export function formStateFromProduct(p: ProductDetail): FormState {
     sellingPrice: str(p.sellingPrice),
     compareAtPrice: str(p.compareAtPrice),
     wholesalePrice: str(p.wholesalePrice),
+    tradeMinQuantity: str(p.tradeMinQuantity),
+    tradePackSize: str(p.tradePackSize),
     status: p.status,
     isPublished: p.isPublished,
     requiresPrepayment: p.requiresPrepayment,
@@ -240,6 +248,10 @@ export function validateForm(state: FormState): FieldErrors {
   if (price === 'invalid') errors.sellingPrice = 'Enter a price like 5000 or 4999.99.';
   if (was === 'invalid') errors.compareAtPrice = 'Enter a price like 7500.';
   if (parseMoney(state.wholesalePrice) === 'invalid') errors.wholesalePrice = 'Enter a price like 4000.';
+  for (const field of ['tradeMinQuantity', 'tradePackSize'] as const) {
+    const raw = state[field].replace(/,/g, '').trim();
+    if (raw && !/^\d+$/.test(raw)) errors[field] = 'Enter a whole number, like 12.';
+  }
   if (price !== 'invalid' && was !== 'invalid' && !state.hasVariants) {
     const problem = compareAtProblem(price, was);
     if (problem) errors.compareAtPrice = problem;
@@ -308,6 +320,12 @@ export function effectivePrices(state: FormState): (number | null)[] {
     });
 }
 
+/** A whole number from a box, or null when blank or not one. */
+function wholeNumber(value: string): number | null {
+  const raw = value.replace(/,/g, '').trim();
+  return /^\d+$/.test(raw) && Number(raw) > 0 ? Number(raw) : null;
+}
+
 export function toProductInput(state: FormState): ProductInput {
   const money = (v: string) => {
     const p = parseMoney(v);
@@ -328,6 +346,8 @@ export function toProductInput(state: FormState): ProductInput {
     sellingPrice: money(state.sellingPrice),
     compareAtPrice: state.hasVariants ? null : money(state.compareAtPrice),
     wholesalePrice: money(state.wholesalePrice),
+    tradeMinQuantity: wholeNumber(state.tradeMinQuantity),
+    tradePackSize: wholeNumber(state.tradePackSize),
     status: state.status,
     isPublished: state.isPublished,
     requiresPrepayment: state.requiresPrepayment,

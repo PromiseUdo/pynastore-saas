@@ -26,7 +26,8 @@
  * Money is minor units (kobo) throughout — see lib/storefront/pricing.ts,
  * which owns every sum. Nothing in this file adds up money.
  */
-import type { CartItem, Product } from './types';
+import type { CartItem, Product, TradeQuantityRules } from './types';
+import { TRADE_MAX_LINE_QUANTITY, snapToPacks } from '@/lib/trade/quantity';
 import { optionSummary, variantImage } from './product-helpers';
 
 /** Bumped when the persisted shape changes; older payloads are discarded. */
@@ -56,10 +57,31 @@ export function sameLine(a: Pick<CartItem, 'productId' | 'variantId'>, b: Pick<C
  * Never returns 0: reaching zero through a stepper is an accidental delete,
  * so removing a line is its own explicit action (see `removeItem`).
  */
-export function normalizeQuantity(quantity: number, max = MAX_LINE_QUANTITY): number {
+export function normalizeQuantity(quantity: number, max = MAX_LINE_QUANTITY, lineCeiling = MAX_LINE_QUANTITY): number {
   if (!Number.isFinite(quantity)) return 1;
-  const ceiling = Math.min(max > 0 ? Math.floor(max) : 1, MAX_LINE_QUANTITY);
+  const ceiling = Math.min(max > 0 ? Math.floor(max) : 1, lineCeiling);
   return Math.min(Math.max(1, Math.floor(quantity)), Math.max(1, ceiling));
+}
+
+/**
+ * A line's quantity, by the rules for that line: a shopper's line is 1–99
+ * and within stock; a trade buyer's line (ROADMAP 21.3) may go higher, and
+ * is a whole number of packs when the product is sold in packs. The one
+ * function every quantity change goes through.
+ */
+export function lineQuantity(item: Pick<CartItem, 'maxQuantity' | 'trade'>, quantity: number): number {
+  if (!item.trade) return normalizeQuantity(quantity, item.maxQuantity);
+  const ceiling = Math.min(Math.max(1, Math.floor(item.maxQuantity)), TRADE_MAX_LINE_QUANTITY);
+  if (item.trade.packSize) return snapToPacks(quantity, item.trade, ceiling);
+  return normalizeQuantity(quantity, ceiling, TRADE_MAX_LINE_QUANTITY);
+}
+
+/** A trade rule read back from storage, or nothing. */
+function tradeRulesOf(value: unknown): TradeQuantityRules | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Partial<TradeQuantityRules>;
+  const whole = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) && n > 1 ? Math.floor(n) : null);
+  return { minQuantity: whole(raw.minQuantity), packSize: whole(raw.packSize) };
 }
 
 function isPositiveMoney(value: unknown): value is number {
@@ -100,7 +122,9 @@ export function sanitizeCartItems(value: unknown): CartItem[] {
   const byKey = new Map<string, CartItem>();
   for (const raw of value) {
     if (!isCartItem(raw)) continue;
-    const maxQuantity = isPositiveMoney(raw.maxQuantity) && raw.maxQuantity > 0 ? Math.floor(raw.maxQuantity) : MAX_LINE_QUANTITY;
+    const trade = tradeRulesOf(raw.trade);
+    const maxQuantity =
+      isPositiveMoney(raw.maxQuantity) && raw.maxQuantity > 0 ? Math.floor(raw.maxQuantity) : trade ? TRADE_MAX_LINE_QUANTITY : MAX_LINE_QUANTITY;
     const item: CartItem = {
       productId: raw.productId,
       productSlug: raw.productSlug,
@@ -111,7 +135,7 @@ export function sanitizeCartItems(value: unknown): CartItem[] {
       optionSummary: typeof raw.optionSummary === 'string' ? raw.optionSummary : '',
       unitPrice: Math.round(raw.unitPrice),
       compareAtPrice: isPositiveMoney(raw.compareAtPrice) ? Math.round(raw.compareAtPrice) : null,
-      quantity: normalizeQuantity(raw.quantity, maxQuantity),
+      quantity: lineQuantity({ maxQuantity, trade }, raw.quantity),
       maxQuantity,
       currency: raw.currency,
       /* A bag stored before this rule existed has no flag; false is the safe
@@ -119,13 +143,15 @@ export function sanitizeCartItems(value: unknown): CartItem[] {
       requiresPrepayment: raw.requiresPrepayment === true,
       // Only ever a label and a VAT basis: the server re-prices every line anyway.
       ...(raw.atWholesale === true ? { atWholesale: true } : {}),
+      // Only ever what the catalogue said; the server applies the real rules again.
+      ...(trade ? { trade } : {}),
       addedAt: typeof raw.addedAt === 'number' && Number.isFinite(raw.addedAt) ? raw.addedAt : Date.now(),
     };
 
     const key = lineKey(item);
     const existing = byKey.get(key);
     if (existing) {
-      existing.quantity = normalizeQuantity(existing.quantity + item.quantity, existing.maxQuantity);
+      existing.quantity = lineQuantity(existing, existing.quantity + item.quantity);
     } else {
       byKey.set(key, item);
     }
@@ -158,6 +184,7 @@ export function toCartLine(product: Product, variantId: string): CartLineInput |
     currency: product.currency,
     requiresPrepayment: product.requiresPrepayment,
     atWholesale: variant.atWholesale === true,
+    ...(product.trade ? { trade: product.trade } : {}),
   };
 }
 
@@ -173,13 +200,13 @@ export function addLine(items: CartItem[], input: CartLineInput, quantity = 1): 
 
   if (existing) {
     return items.map((i) =>
-      lineKey(i) === key ? { ...i, quantity: normalizeQuantity(i.quantity + quantity, input.maxQuantity) } : i,
+      lineKey(i) === key ? { ...i, quantity: lineQuantity(input, i.quantity + quantity) } : i,
     );
   }
 
   return [
     ...items,
-    { ...input, quantity: normalizeQuantity(quantity, input.maxQuantity), addedAt: Date.now() },
+    { ...input, quantity: lineQuantity(input, quantity), addedAt: Date.now() },
   ];
 }
 
@@ -260,17 +287,27 @@ export function reconcileCart(
       notices.push({ kind: 'price-changed', key, name: item.name, from: item.unitPrice, to: variant.price });
     }
 
+    const line = toCartLine(product, variant.id)!;
+    // Signing in or out changes whose rules apply: a line that stops being a trade line loses them.
+    const { trade: _wasTrade, ...rest } = item;
     next.push({
-      ...item,
-      ...toCartLine(product, variant.id),
-      quantity: normalizeQuantity(quantity, variant.stock),
+      ...rest,
+      ...line,
+      quantity: lineQuantity(line, quantity),
     });
   }
 
   const changed =
     notices.length > 0 ||
     next.length !== items.length ||
-    next.some((item, i) => item.unitPrice !== items[i]?.unitPrice || item.quantity !== items[i]?.quantity);
+    next.some(
+      (item, i) =>
+        item.unitPrice !== items[i]?.unitPrice ||
+        item.quantity !== items[i]?.quantity ||
+        // Signing in or out as a trade buyer (ROADMAP 21.3) changes the rules, if not always the price.
+        JSON.stringify(item.trade ?? null) !== JSON.stringify(items[i]?.trade ?? null) ||
+        Boolean(item.atWholesale) !== Boolean(items[i]?.atWholesale),
+    );
 
   return { items: next, notices, changed };
 }

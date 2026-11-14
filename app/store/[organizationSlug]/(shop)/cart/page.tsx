@@ -35,7 +35,7 @@ export default async function CartPage({ params }: { params: Promise<{ organizat
       </header>
 
       {/* A trade buyer at a shop that quotes wholesale before VAT has it added (ROADMAP 21.2). */}
-      <CartView vatRatePct={vat?.ratePct ?? null} vatAdded={pricing.vatAdded} />
+      <CartView vatRatePct={vat?.ratePct ?? null} vatAdded={pricing.vatAdded} tradeMinOrderValue={pricing.minOrderValue} />
     </div>
   );
 }

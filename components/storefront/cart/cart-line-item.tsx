@@ -85,6 +85,7 @@ export function CartLineItem({
           <QuantityStepper
             value={item.quantity}
             max={item.maxQuantity}
+            step={item.trade?.packSize ?? 1}
             size="sm"
             itemLabel={label}
             onChange={(next) => onQuantityChange(key, next)}

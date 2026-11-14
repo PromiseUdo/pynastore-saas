@@ -10,6 +10,7 @@
  * the interaction boundary. When adding to the bag becomes a request, only
  * this file learns about it.
  */
+import { firstTradeQuantity } from '@/lib/trade/quantity';
 import * as React from 'react';
 import { toast } from 'sonner';
 import type { Product, ProductVariant } from './types';
@@ -77,7 +78,8 @@ export function useCartActions() {
         return { ok: false, reason: 'unknown-variant', message: 'That option is no longer available.' };
       }
 
-      addItem(line, opts.quantity ?? 1);
+      // A trade buyer starts at the first quantity their rules allow (ROADMAP 21.3).
+      addItem(line, opts.quantity ?? (product.trade ? firstTradeQuantity(product.trade) : 1));
 
       void haptic();
       if (!opts.silent) {

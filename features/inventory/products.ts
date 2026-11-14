@@ -109,6 +109,10 @@ export type ProductDetail = {
   compareAtPrice: number | null;
   /** what an approved trade buyer pays (ROADMAP 21.2); null = they pay the selling price */
   wholesalePrice: number | null;
+  /** a trade buyer orders at least this many, all variants together (ROADMAP 21.3); null = no minimum */
+  tradeMinQuantity: number | null;
+  /** a trade buyer orders in whole packs of this many; null = singles */
+  tradePackSize: number | null;
   averageCost: number;
   slug: string | null;
   isPublished: boolean;
@@ -166,6 +170,8 @@ const ProductSchema = z.object({
   sellingPrice: money,
   compareAtPrice: money,
   wholesalePrice: money,
+  tradeMinQuantity: z.number().int('Use a whole number').positive('Use 1 or more').max(1_000_000).nullish(),
+  tradePackSize: z.number().int('Use a whole number').positive('Use 1 or more').max(100_000).nullish(),
   status: z.enum(ItemStatus).default(ItemStatus.ACTIVE),
   isPublished: z.boolean().default(false),
   requiresPrepayment: z.boolean().default(false),
@@ -598,6 +604,8 @@ export async function getProduct(productId: string): Promise<ActionResult<Produc
         sellingPrice: num(item.sellingPrice),
         compareAtPrice: num(item.compareAtPrice),
         wholesalePrice: num(item.wholesalePrice),
+        tradeMinQuantity: item.tradeMinQuantity,
+        tradePackSize: item.tradePackSize,
         averageCost: Number(item.averageCost),
         slug: item.slug,
         isPublished: item.isPublished,
@@ -655,6 +663,9 @@ function sharedFields(data: ParsedProduct, slug: string) {
     compareAtPrice: data.compareAtPrice ?? null,
     // 0 means nothing: a trade buyer then pays the selling price (ROADMAP 21.2).
     wholesalePrice: data.wholesalePrice || null,
+    // 1 means no rule (ROADMAP 21.3): a minimum of one, or packs of one.
+    tradeMinQuantity: data.tradeMinQuantity && data.tradeMinQuantity > 1 ? data.tradeMinQuantity : null,
+    tradePackSize: data.tradePackSize && data.tradePackSize > 1 ? data.tradePackSize : null,
     status: data.status,
     slug,
     isPublished: data.isPublished,

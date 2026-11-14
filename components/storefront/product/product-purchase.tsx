@@ -27,7 +27,8 @@ import { ProductGallery } from './product-gallery';
 import { VariantPicker } from './variant-picker';
 import { QuantityStepper } from './quantity-stepper';
 import type { Product } from '@/lib/storefront/types';
-import { WholesaleNote } from '@/components/storefront/common/wholesale-note';
+import { firstTradeQuantity } from '@/lib/trade/quantity';
+import { TradeRulesNote, WholesaleNote } from '@/components/storefront/common/wholesale-note';
 import { discountPercent, formatCompact, formatMoney } from '@/lib/storefront/format';
 import { useCartActions } from '@/lib/storefront/use-cart-actions';
 import { useWishlistStore } from '@/lib/storefront/stores/wishlist-store';
@@ -74,7 +75,8 @@ export function ProductPurchase({
   const { addToCart } = useCartActions();
 
   const [selection, setSelection] = React.useState<Selection>(() => initialSelection(product));
-  const [quantity, setQuantity] = React.useState(1);
+  // A trade buyer starts at the first quantity their rules allow (ROADMAP 21.3).
+  const [quantity, setQuantity] = React.useState(() => (product.trade ? firstTradeQuantity(product.trade) : 1));
   const [imageIndex, setImageIndex] = React.useState(0);
   const [adding, setAdding] = React.useState(false);
 
@@ -93,7 +95,7 @@ export function ProductPurchase({
   // A different product through the same component (a rail click) resets.
   React.useEffect(() => {
     setSelection(initialSelection(product));
-    setQuantity(1);
+    setQuantity(product.trade ? firstTradeQuantity(product.trade) : 1);
     setImageIndex(0);
   }, [product]);
 
@@ -207,6 +209,7 @@ export function ProductPurchase({
             )}
             <WholesaleNote product={product} variant={variant} className="text-sm" />
           </div>
+          <TradeRulesNote product={product} className="mt-1 text-sm" />
 
           <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
             {product.shortDescription}
@@ -234,7 +237,7 @@ export function ProductPurchase({
             * button takes what is left. A minimum width here used to push the
             * button onto its own line on 360–375px phones. */}
           <div className="mt-5 flex items-center gap-3">
-            <QuantityStepper value={quantity} max={stock} onChange={setQuantity} className="shrink-0" />
+            <QuantityStepper value={quantity} max={stock} onChange={setQuantity} step={product.trade?.packSize ?? 1} className="shrink-0" />
 
             <button
               type="button"

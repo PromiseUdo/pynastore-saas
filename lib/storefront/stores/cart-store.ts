@@ -28,7 +28,7 @@ import {
   CART_STORAGE_VERSION,
   addLine,
   lineKey,
-  normalizeQuantity,
+  lineQuantity,
   reconcileCart,
   sanitizeCartItems,
   type CartLineInput,
@@ -88,7 +88,7 @@ export const useCartStore = create<CartState>()(
       updateQuantity: (key, quantity) =>
         set((state) => ({
           items: state.items.map((i) =>
-            lineKey(i) === key ? { ...i, quantity: normalizeQuantity(quantity, i.maxQuantity) } : i,
+            lineKey(i) === key ? { ...i, quantity: lineQuantity(i, quantity) } : i,
           ),
         })),
 

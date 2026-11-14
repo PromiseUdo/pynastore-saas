@@ -393,6 +393,8 @@ model Organization {
    * registered; retail prices always include it.
    */
   wholesaleVatAdded     Boolean       @default(false)
+  /** the least a trade order's goods may come to, before any discount and delivery (ROADMAP 21.3); null = no minimum */
+  tradeMinOrderValue    Decimal?      @db.Decimal(12, 2)
 
   /**
    * Messages (ROADMAP 17): whether shoppers can message the store from the
@@ -943,6 +945,11 @@ model InventoryItem {
   /// What an approved trade buyer pays (ROADMAP 21.2). On a VARIANT, null = use the parent's wholesale price;
   /// null on both = trade buyers pay the selling price. Includes VAT or has it added, per Organization.wholesaleVatAdded.
   wholesalePrice Decimal?   @db.Decimal(12, 2)
+  /// Trade quantity rules (ROADMAP 21.3), on the top-level product only; a variant follows its product.
+  /// tradeMinQuantity: a trade buyer orders at least this many, all variants together. null = no minimum.
+  tradeMinQuantity Int?
+  /// tradePackSize: a trade buyer orders each variant in whole packs of this many ("1 carton = 24"). null = singles.
+  tradePackSize    Int?
   status         ItemStatus @default(ACTIVE)
 
   // Online store (one catalogue: the inventory item IS the online product).

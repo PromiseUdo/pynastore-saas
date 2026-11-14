@@ -74,6 +74,8 @@ const ERROR_ANCHOR: Record<string, string> = {
   sellingPrice: 'pricing',
   compareAtPrice: 'pricing',
   wholesalePrice: 'pricing',
+  tradeMinQuantity: 'pricing',
+  tradePackSize: 'pricing',
   sku: 'inventory',
   reorderPoint: 'inventory',
   options: 'variants',
@@ -381,6 +383,46 @@ export function ProductForm({ product, categories, brands: initialBrands, suppli
                   </Field>
                 )}
               </FormGrid>
+              {wholesale && (
+                <FormGrid>
+                  <Field>
+                    <Label htmlFor="p-trade-min">Trade minimum</Label>
+                    <Input
+                      id="p-trade-min"
+                      inputMode="numeric"
+                      value={state.tradeMinQuantity}
+                      onChange={(e) => set('tradeMinQuantity', e.target.value)}
+                      aria-invalid={Boolean(errors.tradeMinQuantity)}
+                      placeholder="No minimum"
+                    />
+                    {errors.tradeMinQuantity ? (
+                      <FieldError>{errors.tradeMinQuantity}</FieldError>
+                    ) : (
+                      <FieldDescription>
+                        The fewest a trade buyer can order{state.hasVariants ? ', all variants together' : ''}.
+                      </FieldDescription>
+                    )}
+                  </Field>
+                  <Field>
+                    <Label htmlFor="p-trade-pack">Trade pack size</Label>
+                    <Input
+                      id="p-trade-pack"
+                      inputMode="numeric"
+                      value={state.tradePackSize}
+                      onChange={(e) => set('tradePackSize', e.target.value)}
+                      aria-invalid={Boolean(errors.tradePackSize)}
+                      placeholder="Singles"
+                    />
+                    {errors.tradePackSize ? (
+                      <FieldError>{errors.tradePackSize}</FieldError>
+                    ) : (
+                      <FieldDescription>
+                        For a carton of 24, enter 24: trade buyers then order {state.hasVariants ? 'each variant ' : ''}in whole cartons.
+                      </FieldDescription>
+                    )}
+                  </Field>
+                </FormGrid>
+              )}
               {product && product.averageCost > 0 && (
                 <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                   Average cost {formatMoney(product.averageCost)}

@@ -20,7 +20,8 @@ import { VariantPicker } from './variant-picker';
 import { QuantityStepper } from './quantity-stepper';
 import type { Product } from '@/lib/storefront/types';
 import { useStorefront } from '@/lib/storefront/context';
-import { WholesaleNote } from '@/components/storefront/common/wholesale-note';
+import { firstTradeQuantity } from '@/lib/trade/quantity';
+import { TradeRulesNote, WholesaleNote } from '@/components/storefront/common/wholesale-note';
 import { discountPercent, formatMoney } from '@/lib/storefront/format';
 import { useHydrated } from '@/lib/storefront/context';
 import { useUIStore } from '@/lib/storefront/stores/ui-store';
@@ -98,7 +99,8 @@ function QuickViewBody({ product, onClose }: { product: Product; onClose: () => 
   const hydrated = useHydrated();
   const { addToCart } = useCartActions();
   const [selection, setSelection] = React.useState<Selection>(() => initialSelection(product));
-  const [quantity, setQuantity] = React.useState(1);
+  // A trade buyer starts at the first quantity their rules allow (ROADMAP 21.3).
+  const [quantity, setQuantity] = React.useState(() => (product.trade ? firstTradeQuantity(product.trade) : 1));
   const [imageIndex, setImageIndex] = React.useState(0);
 
   /* The same selection rules as the product page (lib/storefront/
@@ -209,6 +211,7 @@ function QuickViewBody({ product, onClose }: { product: Product; onClose: () => 
           )}
           <WholesaleNote product={product} variant={variant} />
         </div>
+        <TradeRulesNote product={product} className="mt-1" />
 
         <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
           {product.shortDescription}
@@ -233,7 +236,7 @@ function QuickViewBody({ product, onClose }: { product: Product; onClose: () => 
         </p>
 
         <div className="mt-4 flex items-center gap-3">
-          <QuantityStepper value={quantity} max={stock} onChange={setQuantity} className="shrink-0" />
+          <QuantityStepper value={quantity} max={stock} onChange={setQuantity} step={product.trade?.packSize ?? 1} className="shrink-0" />
           <button
             type="button"
             onClick={onAdd}

@@ -112,6 +112,8 @@ export async function getStoreCheckoutConfig(
     transferAccounts,
     // A trade buyer at a shop that quotes wholesale before VAT has it added to those lines (21.2).
     vat: vat && wholesale?.vatAdded ? { ...vat, addedToWholesale: true } : vat,
+    // A trade buyer's order must reach the shop's minimum (21.3). Admin money is major units.
+    ...(wholesale?.minOrderValue ? { tradeMinOrderValue: Math.round(wholesale.minOrderValue * 100) } : {}),
     guestCheckoutEnabled: base.guestCheckoutEnabled && rules.guestAllowed,
     orderNotesEnabled: base.orderNotesEnabled && rules.orderNotes,
   };

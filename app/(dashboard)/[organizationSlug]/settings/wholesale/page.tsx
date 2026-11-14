@@ -41,6 +41,7 @@ export default async function WholesaleSettingsPage() {
         tradePayTransfer: settings.tradePayTransfer,
         tradePayOnDelivery: settings.tradePayOnDelivery,
         vatAdded: settings.vatAddedChosen,
+        minOrderValue: settings.minOrderValue,
       }}
       vatRegistered={org.vatRegistered}
       offered={{ online: online.ready, transfer: bankAccounts > 0, onDelivery: org.checkoutPayOnDelivery }}

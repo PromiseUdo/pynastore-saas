@@ -23,6 +23,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import { loadLiveCampaignPrices, type SalePrice } from './campaign-prices';
+import { cleanRules } from '@/lib/trade/quantity';
 import type { Prisma } from '@/lib/generated/prisma/client';
 import type {
   Brand,
@@ -165,9 +166,11 @@ export interface BuyerPricing {
   trade: boolean;
   /** the shop adds VAT to wholesale prices (and is VAT registered) */
   vatAdded: boolean;
+  /** the shop's minimum trade order, minor units (ROADMAP 21.3); null = none */
+  minOrderValue: number | null;
 }
 
-export const RETAIL_PRICING: BuyerPricing = { trade: false, vatAdded: false };
+export const RETAIL_PRICING: BuyerPricing = { trade: false, vatAdded: false, minOrderValue: null };
 
 function mapProduct(
   row: ProductRow,
@@ -325,6 +328,8 @@ function mapProduct(
     createdAt: row.createdAt.toISOString(),
     relatedIds: [],
     ...(variants.some((v) => v.atWholesale) ? { wholesale: { vatAdded: pricing.vatAdded } } : {}),
+    // Every product in a trade buyer's catalogue carries their quantity rules (21.3) — even none.
+    ...(pricing.trade ? { trade: cleanRules(row.tradeMinQuantity, row.tradePackSize) } : {}),
   };
 }
 

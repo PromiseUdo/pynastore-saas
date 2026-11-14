@@ -27,6 +27,8 @@ const WholesaleSchema = z.object({
   tradePayOnDelivery: z.boolean(),
   /** wholesale prices are before VAT: it's added for trade buyers (21.2) */
   vatAdded: z.boolean(),
+  /** the least a trade order's goods may come to, naira (21.3); null = no minimum */
+  minOrderValue: z.number().nonnegative().max(9_999_999_999).nullable(),
 });
 
 export type WholesaleSettingsInput = z.infer<typeof WholesaleSchema>;
@@ -53,6 +55,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
         tradePayTransfer: true,
         tradePayOnDelivery: true,
         wholesaleVatAdded: true,
+        tradeMinOrderValue: true,
       },
     });
     await prisma.organization.update({
@@ -64,6 +67,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
         tradePayTransfer: next.tradePayTransfer,
         tradePayOnDelivery: next.tradePayOnDelivery,
         wholesaleVatAdded: next.vatAdded,
+        tradeMinOrderValue: next.minOrderValue && next.minOrderValue > 0 ? next.minOrderValue : null,
       },
     });
 
@@ -81,6 +85,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
           tradePayTransfer: before.tradePayTransfer,
           tradePayOnDelivery: before.tradePayOnDelivery,
           vatAdded: before.wholesaleVatAdded,
+          minOrderValue: before.tradeMinOrderValue === null ? null : Number(before.tradeMinOrderValue),
         },
         after: next,
       },

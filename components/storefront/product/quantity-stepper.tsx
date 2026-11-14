@@ -20,6 +20,7 @@ export function QuantityStepper({
   itemLabel,
   size = 'lg',
   className,
+  step: stepBy = 1,
 }: {
   value: number;
   /** stock ceiling; 0 means nothing selectable */
@@ -29,11 +30,18 @@ export function QuantityStepper({
   itemLabel?: string;
   size?: 'sm' | 'lg';
   className?: string;
+  /** move in whole packs of this many — a trade buyer's carton (ROADMAP 21.3) */
+  step?: number;
 }) {
-  const atMin = value <= 1;
-  const atMax = max > 0 && value >= max;
+  const pack = stepBy > 1 ? Math.floor(stepBy) : 1;
+  const atMin = value <= pack;
+  const atMax = max > 0 && value + pack > max;
 
-  const step = (delta: number) => onChange(clampQuantity(value + delta, max));
+  const step = (delta: number) => {
+    const next = clampQuantity(value + delta * pack, max);
+    // Whole packs only, and never less than one.
+    onChange(pack > 1 ? Math.max(pack, Math.floor(next / pack) * pack) : next);
+  };
 
   const of = itemLabel ? ` of ${itemLabel}` : '';
 

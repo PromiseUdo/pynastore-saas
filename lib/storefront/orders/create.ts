@@ -48,6 +48,7 @@ import { resolveDiscount } from '../discounts/resolve';
 import { cartSubtotal } from '../pricing';
 import { toCartLine } from '../cart';
 import { MAX_LINE_QUANTITY } from '../cart';
+import { TRADE_MAX_LINE_QUANTITY, tradeBagProblems } from '@/lib/trade/quantity';
 import { OutOfStockError, plannedStockOf, reserveOrderStock } from './stock';
 import { writeShipments } from './shipments';
 import { expireUnpaidOrders } from './lifecycle';
@@ -87,6 +88,8 @@ export type PlaceOrderFailure =
   | 'store-closed'
   | 'store-not-open'
   | 'sign-in-required'
+  /** a trade buyer's bag breaks the merchant's quantity rules (ROADMAP 21.3) */
+  | 'trade-rules'
   | 'order-failed';
 
 export type PlaceOrderResult =
@@ -106,6 +109,7 @@ const MESSAGES: Record<PlaceOrderFailure, string> = {
   'store-closed': 'This shop is closed for now, so it can’t take orders. Nothing has been charged.',
   'store-not-open': 'This shop isn’t open yet, so it can’t take orders. Nothing has been charged.',
   'sign-in-required': 'Sign in or create an account to order from this shop. Your bag is saved.',
+  'trade-rules': 'Your bag doesn’t meet this shop’s trade order rules yet. Go back to your bag to see what to change.',
   'order-failed': 'We couldn’t place your order. Nothing has been charged — please try again.',
 };
 
@@ -183,7 +187,9 @@ export async function resolveLines(
     if (!variant) return null;
 
     const quantity = Math.floor(line.quantity);
-    if (!Number.isFinite(quantity) || quantity < 1 || quantity > MAX_LINE_QUANTITY) return null;
+    // A trade buyer's catalogue (ROADMAP 21.3) allows bigger lines; the rules below still apply.
+    const ceiling = product.trade ? TRADE_MAX_LINE_QUANTITY : MAX_LINE_QUANTITY;
+    if (!Number.isFinite(quantity) || quantity < 1 || quantity > ceiling) return null;
     if (variant.stock < quantity) return null;
 
     const resolved = toCartLine(product, variant.id);
@@ -312,6 +318,12 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   if (!isPaymentMethodAllowed(paymentMethod, items)) {
     return fail('invalid-payment-method', PREPAYMENT_REQUIRED_MESSAGE);
   }
+
+  /* A trade buyer's minimums, packs and minimum order (ROADMAP 21.3), on the
+   * re-resolved bag: the lines carry the rules only when the catalogue was
+   * built for an approved trade buyer, so nobody else is touched. */
+  const tradeProblem = tradeBagProblems(items, input.config.tradeMinOrderValue ?? null)[0];
+  if (tradeProblem) return fail('trade-rules', tradeProblem.message);
 
   /* Delivery is planned and quoted HERE, from the merchant's zones and each
    * store's stock, for this address and this re-priced bag — whatever the

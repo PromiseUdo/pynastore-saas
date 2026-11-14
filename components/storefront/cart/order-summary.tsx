@@ -45,11 +45,14 @@ export function OrderSummary({
   totals,
   itemCount,
   discountLabel,
+  problems = [],
 }: {
   totals: OrderTotals;
   /** units, matching the header badge */
   itemCount: number;
   discountLabel?: string;
+  /** what stops this bag being ordered — a trade buyer's minimums and packs (ROADMAP 21.3) */
+  problems?: string[];
 }) {
   const { subtotal, discount, shipping, tax, total, currency } = totals;
   // VAT added on top of wholesale prices (ROADMAP 21.2) is its own line; the rest is inside the prices.
@@ -91,12 +94,32 @@ export function OrderSummary({
         </div>
       </div>
 
-      <Link
-        href="/checkout"
-        className="mt-5 flex h-12 w-full items-center justify-center rounded-(--sf-radius-button) bg-brand text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
-      >
-        Checkout
-      </Link>
+      {problems.length > 0 ? (
+        <>
+          {/* Said before the button, not after a failed checkout (ROADMAP 21.3). */}
+          <div role="status" className="mt-5 space-y-1.5 rounded-xl border border-border bg-secondary/60 p-3 text-sm">
+            <p className="font-semibold">Before you can order</p>
+            <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+              {problems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </ul>
+          </div>
+          <span
+            aria-disabled="true"
+            className="mt-3 flex h-12 w-full cursor-not-allowed items-center justify-center rounded-(--sf-radius-button) bg-brand text-sm font-semibold text-primary-foreground opacity-50"
+          >
+            Checkout
+          </span>
+        </>
+      ) : (
+        <Link
+          href="/checkout"
+          className="mt-5 flex h-12 w-full items-center justify-center rounded-(--sf-radius-button) bg-brand text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover"
+        >
+          Checkout
+        </Link>
+      )}
 
       <Link
         href="/products"
