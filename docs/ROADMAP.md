@@ -1343,6 +1343,7 @@ Launch (C) needs both.
 |---|---|---|
 | D3 | 14.4 SMS/WhatsApp order updates | needs a provider decision first (cost per message) |
 | D4 | 13.5 Custom domains bought through Namecheap's API | staff handle them by hand until then |
+| D5 | Phase 21 Wholesale — 21.1–21.3 first, then 21.4 pay on account | confirm the open questions with vendors first; can move before launch if a launch vendor needs it |
 
 ### Deliberately not planned yet
 
@@ -7724,6 +7725,215 @@ it, and a password registration proved nothing. Now:
   straight after signing in (`phoneStepUrl`), and older accounts are sent
   there the next time they open their account (`requireShopper`).
 
+
+## Phase 21 — Wholesale: selling to other businesses on the same website — TODO
+
+Agreed 2026-11-14. Talks with potential vendors showed that many of them sell
+**wholesale** — to shops and resellers — as well as, or instead of, to end
+consumers. Today the admin can already sell to a business on account (quotes,
+invoices with due dates, part payments, reminders and "overdue", invoices
+picked and sent from a store, drop-ship lines), but the website treats every
+buyer as a retail shopper:
+
+- one price for everyone (`InventoryItem.sellingPrice`, plus campaign prices);
+  no trade prices, no quantity breaks;
+- a cart line stops at 99 (`MAX_LINE_QUANTITY`, `lib/storefront/cart.ts`); no
+  minimum quantity, no "sold in cartons of 24", no minimum order value;
+- no way to mark a customer as a trade buyer;
+- online orders are paid up front or on delivery — buying on credit terms
+  needs a hand-made invoice;
+- checkout asks for no business name or tax ID (`Customer.taxId` exists, but
+  only the admin fills it in).
+
+**The standard shape, and ours.** One shop, one catalogue, one stock count —
+**different prices and rules depending on who is signed in.** A retailer and
+an end consumer visit the same website and see the same products; an
+approved trade buyer sees wholesale prices, buys in trade quantities and may
+pay on account. A vendor who sells only wholesale switches the shop to
+"Trade only". No second website, no second product model (AGENTS §11).
+
+### The flow
+
+1. **The vendor sets it up once:** turns wholesale on (retail and trade, or
+   trade only), gives products wholesale prices (and quantity breaks), sets
+   minimums and carton sizes, and decides whether trade buyers may pay later
+   and on what terms.
+2. **A retailer becomes a trade buyer** — the vendor decides who counts:
+   - **invited** (the usual case: the vendor already supplies them): the
+     vendor adds or marks the customer as Trade in Customers, and the buyer
+     gets an email to set up their sign-in;
+   - **requested** (optional): a "Buy wholesale" form on the shop; the vendor
+     approves or declines it in Customers.
+3. **The retailer shops** on the same website, signed in: wholesale prices and
+   breaks ("48+: ₦350"), trade quantities, an optional quick-order page.
+4. **Checkout:** business name and tax ID filled in from the account; pay now
+   (Paystack, transfer — as today) or **pay on account** when the vendor
+   allows it.
+5. **The vendor fulfils it** like any order — Orders (marked **Trade**) →
+   Packing and delivery → stock moves the same way.
+6. **Getting paid (on account):** the order shows what's owed and by when;
+   reminders go out; the vendor records payments as they arrive; an overdue
+   buyer pays up front until they settle.
+7. **Afterwards:** returns and refunds as today; Reports splits retail and
+   trade.
+
+### Decisions already taken
+
+1. **Same website, same products.** Trade is a layer on the shop — a price
+   list and rules attached to a customer — never a separate catalogue or
+   storefront product model.
+2. **The vendor decides who is a trade buyer.** Inviting known buyers comes
+   first; a public "Buy wholesale" request is an option the vendor turns on.
+   Nobody becomes a trade buyer by saying so.
+3. **Prices are worked out on the server, for this buyer, in the existing
+   seam.** The catalogue (`lib/storefront/catalog.ts` → `data/from-prisma.ts`,
+   where campaign prices are already applied via `data/campaign-prices.ts`)
+   takes the signed-in buyer and returns their price; `placeOrder`
+   re-resolves every line through it, so the price shown and the price
+   charged can't disagree (as with campaigns). The browser never names a
+   price list.
+4. **Trade prices never leak.** Everything that isn't a signed-in trade
+   buyer's own page sees retail only: signed-out visitors, search engines
+   (structured data, sitemaps), shared links' previews, the shopping
+   assistant's and visual search's answers, Social Commerce posts and AI copy
+   (`ProductFacts`), emails to other shoppers. The cart re-prices on sign-in
+   and sign-out (`reconcileCart`).
+5. **Campaigns and discount codes are retail by default.** A trade price
+   already is the discount; a campaign or code applies to trade buyers only
+   when the vendor ticks it. A buyer always gets the LOWER of the prices that
+   apply to them, never two discounts stacked unless the vendor allows it.
+6. **Pay on account keeps the goods on the order.** Invoices have their own
+   way of sending goods (`Fulfillment` on `Invoice`), so a website order
+   paid on account does NOT become an `Invoice` — the same goods would be
+   tracked twice. The order goes through Orders and Packing and delivery like
+   any other; the money owed is recorded on the order (a new payment status,
+   a due date, payments against it). The buyer gets an invoice document from
+   the order (as the order receipt is today), and overdue reminders reuse the
+   invoice reminder emails. A buyer's **account balance** is their unpaid
+   on-account orders plus their unpaid invoices — one figure, from both.
+7. **The platform still holds no money** (Phase 10). On-account money goes
+   from the buyer to the vendor directly, and the vendor records it. Paying
+   an order or invoice online by Paystack stays "not planned yet".
+8. **Prices include VAT,** as every price does (14.1). The business invoice
+   shows the VAT and the buyer's tax ID.
+9. **Language:** "Trade buyer", "Wholesale price", "Pay on account",
+   "Buy wholesale" — never "B2B", "price list ID" or "tier" on screen.
+
+### 21.1 Trade buyers — TODO
+
+- **Schema:** a `TradeAccount` per `Customer` (shopper accounts are already
+  per store): status (`REQUESTED` → `APPROVED` | `DECLINED`, and
+  `SUSPENDED`), business name, tax ID, optional CAC number, who approved and
+  when, the price list (21.2) and the credit terms (21.4).
+- **Settings → Wholesale** (new; `settings.edit`): off / **retail and trade**
+  / **trade only**; whether the "Buy wholesale" request form is shown.
+- **Customers:** a **Trade** filter and badge; "Make trade buyer" on a
+  customer; "Invite a trade buyer" (name, business, email, phone) creates the
+  customer and emails a set-up-your-sign-in link (the password-reset token
+  flow; following it proves the email, as 20.1 requires). A **Trade
+  requests** list with approve / decline (`AlertDialog`, reason optional,
+  the buyer is told through `notify()`).
+- **Storefront:** "Buy wholesale" page and form (signed-in shoppers only; the
+  form fills from the account) when the vendor turns it on; the account shows
+  the trade status.
+- **Trade only:** visitors see the front page and a "This shop sells to
+  businesses — sign in or ask for an account" page; products and prices only
+  after sign-in as an approved buyer. The shop asks search engines not to
+  list product pages.
+- **Permission:** `customer.trade.manage` (approve, decline, suspend, set
+  price list and terms) — Owner and Admin by default.
+- **Audit:** every approval, decline, suspension and change of terms.
+
+### 21.2 Wholesale prices and quantity breaks — TODO
+
+- **Schema:** `PriceList` (per organization: name, e.g. "Wholesale",
+  "Distributor") and `PriceListPrice` (price list, product or variant,
+  `minQuantity` ≥ 1, price — several rows make the breaks: 1+ ₦380, 48+
+  ₦350). A trade account points at one price list. One list ("Wholesale")
+  is created when wholesale is first turned on; more are optional.
+- **Admin:** on the product editor, a **Wholesale prices** section (per
+  variant, like selling price); a price list page for bulk editing; CSV
+  import and export of wholesale prices (14.2's importer). Margin shown
+  against average cost. `inventory.edit`.
+- **Storefront:** the trade buyer sees their price and the breaks on the
+  product page and in lists ("₦380 · 48+: ₦350"); the cart shows which break
+  each line is on and how many more reach the next one. A product with no
+  wholesale price sells to trade buyers at retail.
+- **Seam:** decision 3 — the catalogue resolves `(variant, quantity, buyer)`
+  to a price; `placeOrder` re-resolves; the order line keeps the price and
+  which list it came from.
+
+### 21.3 Trade quantity rules — TODO
+
+- **Per product (trade buyers only):** minimum quantity, and **sold in packs
+  of N** (shown as "1 carton (24 pcs)"; quantities step by N).
+- **Per shop:** minimum order value for trade orders.
+- **The 99 cap** lifts for trade buyers to what stock allows (with a sane
+  ceiling); retail keeps 99.
+- Checked in the cart, at checkout and again in `placeOrder` (the server is
+  the one that counts, as with payment terms).
+
+### 21.4 Pay on account — TODO
+
+- **Terms per trade buyer:** may pay on account (yes / no), days to pay (7,
+  14, 30, 60), credit limit.
+- **Checkout:** "Pay on account — due by 14 Dec 2026" appears only for an
+  approved buyer whose order fits their remaining limit and who has nothing
+  overdue; otherwise it's shown greyed out with the reason ("You have ₦120,000
+  overdue — pay that first, or pay for this order now").
+- **The order:** a new payment status (`ON_ACCOUNT`, "On account — due 14
+  Dec") with a due date; stock is held and the order is confirmed like a paid
+  one (the vendor chose to trust this buyer); it goes through Packing and
+  delivery as usual. The vendor records payments against it (part payments
+  allowed) until it's paid; "overdue" after the due date.
+- **Reminders:** before and after the due date, through `notify()` (reusing
+  the invoice reminder email), stopping when paid.
+- **Customer page:** the buyer's account balance (decision 6), what's overdue,
+  and a statement they can be sent; the buyer sees the same in their
+  account.
+- **Platform:** no money moves through us; terms and the vendor's record of
+  payment are the whole of it.
+
+### 21.5 Business details and documents — TODO
+
+- Business name and tax ID on the trade account, filled in at checkout.
+- An invoice document for every trade order (business name, tax ID, VAT,
+  due date when on account), from the order — downloadable by the buyer and
+  sent with the order email.
+
+### 21.6 Quick ordering — TODO
+
+- A quick-order page for trade buyers: type item codes (SKU) and quantities,
+  or upload a spreadsheet; lines go to the bag through the same checks.
+- "Order again" on a past order (it exists for shoppers) brings the lines in
+  at today's prices.
+
+### 21.7 Reports and the rest — TODO
+
+- Reports: retail vs trade split on Sales; top trade buyers; amounts owed and
+  overdue (a "Money owed" view with the ageing: due, 1–30, 31–60, 60+ days).
+- Orders and Customers filter by Trade; the order shows the price list used.
+- Business app (Phase 19): trade badge, balances and recording payments.
+
+### Build order
+
+**21.1 + 21.2 + 21.3 together** are the smallest version a wholesale vendor
+can use — approved buyers, their own prices, trade quantities. **21.4 next**
+(pay on account is usually what closes wholesale deals), with 21.5 alongside
+it. 21.6 and 21.7 as vendors ask.
+
+### To confirm with vendors before 21.4
+
+- Do they sell retail and wholesale from one shop, or wholesale only?
+- Do their buyers expect credit, and for how long (7 / 30 / 60 days)?
+- Is one wholesale price enough, or several (distributor vs retailer)?
+- Large orders: is delivery priced per area enough, or do they need
+  "delivery to be arranged" (a fee agreed after ordering)? If so, it is
+  only offered with pay on account or bank transfer, and it must still go
+  through `quoteDelivery` / `planOrder` (Phase 9) — designed in 21.4, not
+  bolted on.
+- Do they quote wholesale prices with or without VAT? (We show VAT-inclusive
+  prices everywhere — decision 8 — and state the VAT.)
 
 ## Sequencing
 
