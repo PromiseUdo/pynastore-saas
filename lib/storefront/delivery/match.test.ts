@@ -5,7 +5,9 @@
 import { describe, expect, it } from 'vitest';
 import { normalizePlace, parsePlaceList } from '@/lib/geo/nigeria';
 import {
+  deliveryFor,
   hasAnyDelivery,
+  offeredTo,
   matchZone,
   quoteEachStore,
   quoteFromSetup,
@@ -166,5 +168,48 @@ describe('delivery from several stores', () => {
       ['Port Harcourt', 'Within Port Harcourt'],
       ['Lagos', 'Rivers'],
     ]);
+  });
+});
+
+describe('delivery for trade buyers (ROADMAP 21.4A)', () => {
+  const setup: DeliverySetup = {
+    zones: [
+      zone({
+        id: 'ng',
+        kind: 'NATIONWIDE',
+        rates: [
+          rate('standard', 350_000, { freeOver: 5_000_000, tradeFreeOver: 50_000_000 }),
+          rate('bike', 700_000, { audience: 'RETAIL' }),
+          rate('van', 1_500_000, { audience: 'TRADE' }),
+        ],
+      }),
+    ],
+    pickups: [
+      { id: 'shop', name: 'Shop', address: '1 Road', city: 'Aba', state: 'Abia', instructions: null, readyMinutes: 0, readyUnit: 'DAYS', price: 0, isActive: true },
+      { id: 'gate', name: 'Warehouse gate', address: '2 Road', city: 'Aba', state: 'Abia', instructions: null, readyMinutes: 0, readyUnit: 'DAYS', price: 0, isActive: true, audience: 'TRADE' },
+    ],
+  };
+  const ids = (s: DeliverySetup) => [...s.zones[0].rates.map((r) => r.id), ...s.pickups.map((p) => p.id)];
+
+  it('offers each buyer only what is meant for them', () => {
+    expect(ids(deliveryFor(setup, 'retail'))).toEqual(['standard', 'bike', 'shop']);
+    expect(ids(deliveryFor(setup, 'trade'))).toEqual(['standard', 'van', 'shop', 'gate']);
+    expect(offeredTo(undefined, 'trade')).toBe(true);
+    expect(offeredTo('RETAIL', 'trade')).toBe(false);
+    expect(offeredTo('TRADE', 'retail')).toBe(false);
+  });
+
+  it('gives a trade buyer their own free-delivery threshold, and everyone else the usual one', () => {
+    const address = { state: 'Lagos', city: 'Ikeja' };
+    const at = (buyer: 'retail' | 'trade', subtotal: number) =>
+      quoteFromSetup(deliveryFor(setup, buyer), address, subtotal).options.find((o) => o.id === 'rate_standard')!.price;
+    expect(at('retail', 6_000_000)).toBe(0);
+    expect(at('trade', 6_000_000)).toBe(350_000);
+    expect(at('trade', 50_000_000)).toBe(0);
+  });
+
+  it('falls back to the usual threshold for trade when the merchant set none', () => {
+    const plain: DeliverySetup = { zones: [zone({ id: 'ng', kind: 'NATIONWIDE', rates: [rate('std', 350_000, { freeOver: 100 })] })], pickups: [] };
+    expect(deliveryFor(plain, 'trade').zones[0].rates[0].freeOver).toBe(100);
   });
 });

@@ -15,6 +15,7 @@ import { isNigerianState } from '@/lib/geo/nigeria';
 import { resolveLines } from '../orders/create';
 import type { DeliveryEta } from './eta';
 import { quoteDelivery } from './quote';
+import type { DeliveryBuyer } from './match';
 
 export interface DeliverTo {
   state: string;
@@ -48,6 +49,8 @@ export async function estimateDelivery(
   organizationSlug: string,
   item: { productId: string; variantId: string },
   to: DeliverTo,
+  /** the person looking: a trade buyer is quoted the trade options (ROADMAP 21.4A) */
+  buyer: DeliveryBuyer = 'retail',
 ): Promise<EstimateResult> {
   const items = await resolveLines(organizationSlug, [{ productId: item.productId, variantId: item.variantId, quantity: 1 }]);
   if (!items) return { ok: false, reason: 'unavailable', pickupCount: 0 };
@@ -56,6 +59,7 @@ export async function estimateDelivery(
     organizationSlug,
     to,
     items.map((line) => ({ itemId: line.variantId, quantity: 1, unitPrice: line.unitPrice })),
+    { buyer },
   );
   const pickupCount = quote.options.filter((o) => o.kind === 'pickup').length;
   // One unit always comes from one store — one parcel, whose options are the delivery ones.

@@ -26,6 +26,8 @@ import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
 import { savePickupLocation, type DeliveryStoreRow, type PickupLocationRow } from '@/features/settings/delivery';
 import { StoreSelectField } from './StoreSelectField';
 import { ETA_UNITS, ETA_UNIT_LABELS, formatReady, fromMinutes, toMinutes, type DeliveryEtaUnit } from '@/lib/storefront/delivery/eta';
+import type { DeliveryAudience } from '@/lib/storefront/delivery/match';
+import { AUDIENCES, AUDIENCE_LABEL } from './audience';
 
 const UNIT_NOUN: Record<DeliveryEtaUnit, string> = { MINUTES: 'minutes', HOURS: 'hours', DAYS: 'working days' };
 
@@ -35,6 +37,7 @@ export function PickupDialog({
   editing,
   stores,
   defaultStoreId,
+  wholesaleOn = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,6 +45,8 @@ export function PickupDialog({
   stores: DeliveryStoreRow[];
   /** the store a new location starts on — the section it was added from */
   defaultStoreId: string | null;
+  /** the shop has trade buyers: say who may collect here (ROADMAP 21.4A) */
+  wholesaleOn?: boolean;
 }) {
   const router = useRouter();
   const startStore = editing ? null : stores.find((s) => s.id === defaultStoreId) ?? null;
@@ -54,6 +59,8 @@ export function PickupDialog({
   const [readyTime, setReadyTime] = React.useState(editing ? String(fromMinutes(editing.readyMinutes, editing.readyUnit)) : '1');
   const [instructions, setInstructions] = React.useState(editing?.instructions ?? '');
   const [isActive, setIsActive] = React.useState(editing?.isActive ?? true);
+  const [audience, setAudience] = React.useState<DeliveryAudience>(editing?.audience ?? 'EVERYONE');
+  const showAudience = wholesaleOn || audience !== 'EVERYONE';
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [formError, setFormError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState(false);
@@ -85,6 +92,7 @@ export function PickupDialog({
       readyUnit,
       readyTime: Number(readyTime),
       instructions,
+      audience,
       isActive,
     });
     setPending(false);
@@ -225,6 +233,29 @@ export function PickupDialog({
               />
               {errors.instructions && <FieldError>{errors.instructions}</FieldError>}
             </Field>
+
+            {showAudience && (
+              <Field>
+                <Label htmlFor="pickup-audience">Who can collect here *</Label>
+                <SelectRoot value={audience} onValueChange={(value) => setAudience(value as DeliveryAudience)}>
+                  <SelectTrigger id="pickup-audience">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AUDIENCES.map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {AUDIENCE_LABEL[value]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </SelectRoot>
+                {errors.audience ? (
+                  <FieldError>{errors.audience}</FieldError>
+                ) : (
+                  <FieldDescription>Collection is usually for everyone. A trade-only point suits a warehouse gate, say.</FieldDescription>
+                )}
+              </Field>
+            )}
 
             <div className="flex items-start justify-between gap-4 rounded-md border p-3">
               <div>

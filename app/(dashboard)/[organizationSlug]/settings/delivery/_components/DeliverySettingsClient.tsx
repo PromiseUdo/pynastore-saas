@@ -51,6 +51,7 @@ import {
 import { ZoneSheet } from './ZoneSheet';
 import { RateDialog } from './RateDialog';
 import { PickupDialog } from './PickupDialog';
+import { AUDIENCE_BADGE } from './audience';
 import { ReturnsPolicyCard } from './ReturnsPolicyCard';
 import { ConsolidationCard } from './ConsolidationCard';
 
@@ -263,7 +264,7 @@ export function DeliverySettingsClient({ settings, canManage }: { settings: Deli
               </section>
             )}
 
-            {!nothingSetUp && <AddressCheck />}
+            {!nothingSetUp && <AddressCheck wholesaleOn={settings.wholesaleOn} />}
           </div>
         )}
 
@@ -290,6 +291,7 @@ export function DeliverySettingsClient({ settings, canManage }: { settings: Deli
             onOpenChange={(open) => setRateDialog((s) => ({ ...s, open }))}
             zone={rateDialog.zone}
             editing={rateDialog.editing}
+            wholesaleOn={settings.wholesaleOn}
           />
           <PickupDialog
             key={`pickup-${pickupDialog.editing?.id ?? 'new'}-${pickupDialog.storeId}-${pickupDialog.open}`}
@@ -298,6 +300,7 @@ export function DeliverySettingsClient({ settings, canManage }: { settings: Deli
             editing={pickupDialog.editing}
             stores={stores}
             defaultStoreId={pickupDialog.storeId}
+            wholesaleOn={settings.wholesaleOn}
           />
           <AlertDialogRoot open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>
             <AlertDialogContent>
@@ -516,7 +519,14 @@ function PickupTable({ pickups, canManage, onEdit, onRemove }: { pickups: Pickup
           {pickups.map((pickup) => (
             <TableRow key={pickup.id}>
               <TableCell>
-                <span className="block font-medium text-foreground">{pickup.name}</span>
+                <span className="block font-medium text-foreground">
+                  {pickup.name}
+                  {AUDIENCE_BADGE[pickup.audience] && (
+                    <Badge variant="info" className="ml-2">
+                      {AUDIENCE_BADGE[pickup.audience]}
+                    </Badge>
+                  )}
+                </span>
                 <span className="text-xs text-muted-foreground">
                   {pickup.address}, {pickup.city}, {pickup.state}
                 </span>
@@ -629,6 +639,11 @@ function ZoneCard({
                 <TableRow key={rate.id}>
                   <TableCell>
                     <span className="font-medium text-foreground">{rate.name}</span>
+                    {AUDIENCE_BADGE[rate.audience] && (
+                      <Badge variant="info" className="ml-2">
+                        {AUDIENCE_BADGE[rate.audience]}
+                      </Badge>
+                    )}
                     {!rate.isActive && (
                       <Badge variant="draft" className="ml-2">
                         Off
@@ -641,6 +656,9 @@ function ZoneCard({
                   <TableCell className="tabular-nums">{rateTime(rate)}</TableCell>
                   <TableCell align="right" className="tabular-nums">
                     {rate.freeOver === null ? '—' : formatMoney(rate.freeOver)}
+                    {rate.tradeFreeOver !== null && rate.audience !== 'RETAIL' && (
+                      <span className="block text-xs text-muted-foreground">Trade: {formatMoney(rate.tradeFreeOver)}</span>
+                    )}
                   </TableCell>
                   <TableCell align="right">
                     {canManage && <RowMenu label={rate.name} onEdit={() => onEditRate(rate)} onRemove={() => onRemoveRate(rate)} />}
@@ -656,8 +674,10 @@ function ZoneCard({
 }
 
 /** "What would a customer here see?" — runs the same matching checkout uses. */
-function AddressCheck() {
+function AddressCheck({ wholesaleOn }: { wholesaleOn: boolean }) {
   const [state, setState] = React.useState('');
+  // See it as a trade buyer would (ROADMAP 21.4A).
+  const [buyer, setBuyer] = React.useState<'retail' | 'trade'>('retail');
   const [city, setCity] = React.useState('');
   const [subtotal, setSubtotal] = React.useState('');
   const [pending, setPending] = React.useState(false);
@@ -672,7 +692,7 @@ function AddressCheck() {
     }
     setPending(true);
     setError(null);
-    const response = await previewDelivery({ state, city, subtotal: subtotal ? Number(subtotal.replace(/,/g, '')) : 0 });
+    const response = await previewDelivery({ state, city, subtotal: subtotal ? Number(subtotal.replace(/,/g, '')) : 0, buyer });
     setPending(false);
     if (!response.success) {
       setError(response.error);
@@ -718,6 +738,20 @@ function AddressCheck() {
           {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Search className="size-3.5" />}
           Check
         </Button>
+        {wholesaleOn && (
+          <div className="space-y-1.5 sm:col-span-4 sm:max-w-xs">
+            <Label htmlFor="check-buyer">Customer</Label>
+            <SelectRoot value={buyer} onValueChange={(value) => setBuyer(value as 'retail' | 'trade')}>
+              <SelectTrigger id="check-buyer">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="retail">A retail customer</SelectItem>
+                <SelectItem value="trade">A trade buyer</SelectItem>
+              </SelectContent>
+            </SelectRoot>
+          </div>
+        )}
       </form>
 
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}

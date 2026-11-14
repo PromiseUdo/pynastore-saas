@@ -341,6 +341,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     input.organizationSlug,
     { state: input.address.state, city: input.address.city },
     items.map((item) => ({ itemId: item.variantId, quantity: item.quantity, unitPrice: item.unitPrice })),
+    // A trade buyer is charged the trade options and thresholds they were quoted (21.4A).
+    { buyer: input.config.tradeBuyer ? 'trade' : 'retail' },
   );
   // One option or pickup, or a choice per parcel (Phase 9.5) — resolved against THIS quote.
   const chosen = resolveDeliveryChoice(quote, input.deliveryMethodId);

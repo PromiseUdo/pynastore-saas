@@ -382,6 +382,7 @@ export async function reReserveOrderStock(tx: Tx, input: { organizationId: strin
       deliveryFee: true,
       shipState: true,
       shipCity: true,
+      buyerBusinessName: true,
       organization: { select: { slug: true } },
       lineItems: { select: { id: true, variantId: true, productId: true, quantity: true, unitPrice: true } },
     },
@@ -397,6 +398,8 @@ export async function reReserveOrderStock(tx: Tx, input: { organizationId: strin
     order.organization.slug,
     { state: order.shipState ?? '', city: order.shipCity ?? '' },
     lines.map((line) => ({ itemId: line.inventoryItemId, quantity: line.quantity, unitPrice: line.unitPrice })),
+    // A trade order is re-quoted as one (21.4A): its options and thresholds.
+    { buyer: order.buyerBusinessName ? 'trade' : 'retail' },
   );
   const chosen = order.deliveryMethodId ? resolveDeliveryChoice(quote, order.deliveryMethodId) : null;
   const paidFee = Math.round(Number(order.deliveryFee ?? 0) * 100);

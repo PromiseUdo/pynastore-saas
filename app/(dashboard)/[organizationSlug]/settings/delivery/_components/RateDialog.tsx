@@ -1,6 +1,7 @@
 'use client';
 
-/* Add or edit one delivery option within a zone — six fields, so a dialog. */
+/* Add or edit one delivery option within a zone — six fields (eight with
+ * wholesale on: who sees it and a trade free-delivery threshold), so a dialog. */
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -22,6 +23,8 @@ import {
 } from '@/components/ui/dialog';
 import { saveDeliveryRate, type DeliveryRateRow } from '@/features/settings/delivery';
 import { ETA_UNITS, ETA_UNIT_LABELS, formatEta, fromMinutes, toMinutes, type DeliveryEtaUnit } from '@/lib/storefront/delivery/eta';
+import type { DeliveryAudience } from '@/lib/storefront/delivery/match';
+import { AUDIENCES, AUDIENCE_LABEL } from './audience';
 
 /* What each unit means for the two number boxes, in the merchant's words. */
 const UNIT_HINT: Record<DeliveryEtaUnit, string> = {
@@ -36,11 +39,14 @@ export function RateDialog({
   onOpenChange,
   zone,
   editing,
+  wholesaleOn = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   zone: { id: string; name: string } | null;
   editing: DeliveryRateRow | null;
+  /** the shop has trade buyers: offer the trade settings (ROADMAP 21.4A) */
+  wholesaleOn?: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = React.useState(editing?.name ?? 'Standard');
@@ -49,7 +55,11 @@ export function RateDialog({
   const [minTime, setMinTime] = React.useState(editing ? String(fromMinutes(editing.minMinutes, editing.etaUnit)) : '1');
   const [maxTime, setMaxTime] = React.useState(editing ? String(fromMinutes(editing.maxMinutes, editing.etaUnit)) : '3');
   const [freeOver, setFreeOver] = React.useState(editing?.freeOver != null ? String(editing.freeOver) : '');
+  const [tradeFreeOver, setTradeFreeOver] = React.useState(editing?.tradeFreeOver != null ? String(editing.tradeFreeOver) : '');
+  const [audience, setAudience] = React.useState<DeliveryAudience>(editing?.audience ?? 'EVERYONE');
   const [isActive, setIsActive] = React.useState(editing?.isActive ?? true);
+  // Shown while wholesale is on, or when this option already has a trade setting to keep visible.
+  const showTrade = wholesaleOn || audience !== 'EVERYONE' || tradeFreeOver !== '';
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [formError, setFormError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState(false);
@@ -74,6 +84,8 @@ export function RateDialog({
       minTime: Number(minTime),
       maxTime: Number(maxTime),
       freeOver: freeOver.trim() === '' ? null : Number(freeOver.replace(/,/g, '')),
+      tradeFreeOver: audience === 'RETAIL' || tradeFreeOver.trim() === '' ? null : Number(tradeFreeOver.replace(/,/g, '')),
+      audience,
       isActive,
     });
     setPending(false);
@@ -188,9 +200,60 @@ export function RateDialog({
               {errors.freeOver ? (
                 <FieldError>{errors.freeOver}</FieldError>
               ) : (
-                <FieldDescription>When the items in an order come to at least this much, this option is free.</FieldDescription>
+                <FieldDescription>
+                  When the items in an order come to at least this much, this option is free.
+                  {showTrade && audience !== 'RETAIL' ? ' Applies to trade buyers too, unless you set their own amount below.' : ''}
+                </FieldDescription>
               )}
             </Field>
+
+            {showTrade && (
+              <>
+                <Field>
+                  <Label htmlFor="rate-audience">Show to *</Label>
+                  <SelectRoot value={audience} onValueChange={(value) => setAudience(value as DeliveryAudience)}>
+                    <SelectTrigger id="rate-audience" aria-invalid={errors.audience ? true : undefined}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AUDIENCES.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {AUDIENCE_LABEL[value]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </SelectRoot>
+                  {errors.audience ? (
+                    <FieldError>{errors.audience}</FieldError>
+                  ) : (
+                    <FieldDescription>
+                      Trade buyers are the businesses you’ve approved to buy wholesale. Each customer only sees the options meant for them.
+                    </FieldDescription>
+                  )}
+                </Field>
+
+                {audience !== 'RETAIL' && (
+                  <Field>
+                    <Label htmlFor="rate-trade-free">Free for trade orders over (₦)</Label>
+                    <Input
+                      id="rate-trade-free"
+                      inputMode="decimal"
+                      placeholder="Leave blank to use the amount above"
+                      value={tradeFreeOver}
+                      onChange={(e) => setTradeFreeOver(e.target.value)}
+                      aria-invalid={errors.tradeFreeOver ? true : undefined}
+                    />
+                    {errors.tradeFreeOver ? (
+                      <FieldError>{errors.tradeFreeOver}</FieldError>
+                    ) : (
+                      <FieldDescription>
+                        Trade orders are bigger, so they often need their own amount — ₦50,000 is a big retail order and a small trade one.
+                      </FieldDescription>
+                    )}
+                  </Field>
+                )}
+              </>
+            )}
 
             <div className="flex items-start justify-between gap-4 rounded-md border p-3">
               <div>

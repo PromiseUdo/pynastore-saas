@@ -32,6 +32,12 @@ import { eta, formatEta, type DeliveryEta, type DeliveryEtaUnit } from './eta';
 
 export type ZoneKind = 'CITIES' | 'STATES' | 'NATIONWIDE';
 
+/** Who an option is offered to (ROADMAP 21.4A). Absent = everyone. */
+export type DeliveryAudience = 'EVERYONE' | 'RETAIL' | 'TRADE';
+
+/** Whom a quote is for: an approved trade buyer, or anyone else. */
+export type DeliveryBuyer = 'retail' | 'trade';
+
 export interface ZoneSetup {
   id: string;
   name: string;
@@ -52,6 +58,9 @@ export interface RateSetup {
   maxMinutes: number;
   etaUnit: DeliveryEtaUnit;
   freeOver: Money | null;
+  /** a trade buyer's own free-delivery threshold (21.4A); null/absent = `freeOver` */
+  tradeFreeOver?: Money | null;
+  audience?: DeliveryAudience;
   isActive: boolean;
 }
 
@@ -65,6 +74,7 @@ export interface PickupSetup {
   readyMinutes: number;
   readyUnit: DeliveryEtaUnit;
   price: Money;
+  audience?: DeliveryAudience;
   isActive: boolean;
 }
 
@@ -97,6 +107,35 @@ export interface DeliveryQuote {
 
 export const RATE_ID_PREFIX = 'rate_';
 export const PICKUP_ID_PREFIX = 'pickup_';
+
+/** Is an option for this audience offered to this buyer? */
+export function offeredTo(audience: DeliveryAudience | undefined, buyer: DeliveryBuyer): boolean {
+  if (!audience || audience === 'EVERYONE') return true;
+  return buyer === 'trade' ? audience === 'TRADE' : audience === 'RETAIL';
+}
+
+/**
+ * A store's delivery as one buyer sees it (ROADMAP 21.4A): options and
+ * pickups not offered to them are gone, and a trade buyer's free-delivery
+ * threshold is the trade one where the merchant set it. Everything after —
+ * matching, planning, the stock hold — runs on this, so there's one price
+ * calculation and a shopper never sees a trade-only option, nor the reverse.
+ */
+export function deliveryFor<T extends DeliverySetup>(setup: T, buyer: DeliveryBuyer): T {
+  return {
+    ...setup,
+    zones: setup.zones.map((zone) => ({
+      ...zone,
+      rates: zone.rates
+        .filter((rate) => offeredTo(rate.audience, buyer))
+        .map((rate) => ({
+          ...rate,
+          freeOver: buyer === 'trade' && rate.tradeFreeOver != null ? rate.tradeFreeOver : rate.freeOver,
+        })),
+    })),
+    pickups: setup.pickups.filter((pickup) => offeredTo(pickup.audience, buyer)),
+  };
+}
 
 /** Does this zone cover the address, and how specifically (lower = more specific)? */
 function specificity(zone: ZoneSetup, address: DeliveryAddress): number | null {

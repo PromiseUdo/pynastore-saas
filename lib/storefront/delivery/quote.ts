@@ -26,7 +26,14 @@ import { useFixtures } from '../data/current';
 import { SHIPPING_METHODS } from '../pricing';
 import type { DeliveryPromise, Money, ShippingMethod } from '../types';
 import { formatEtaSpan } from './eta';
-import { hasAnyDelivery, type DeliveryAddress, type DeliveryQuote, type StoreDeliverySetup } from './match';
+import {
+  deliveryFor,
+  hasAnyDelivery,
+  type DeliveryAddress,
+  type DeliveryBuyer,
+  type DeliveryQuote,
+  type StoreDeliverySetup,
+} from './match';
 import { planOrder, type BagLine, type ConsolidationPolicy, type PlannedQuote, type StockByStore } from './plan';
 import { ONLINE_SUPPLY_WHERE } from './supply';
 
@@ -84,7 +91,18 @@ export const loadDeliverySetup = cache(async (organizationSlug: string): Promise
           isActive: true,
           rates: {
             orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-            select: { id: true, name: true, price: true, minMinutes: true, maxMinutes: true, etaUnit: true, freeOver: true, isActive: true },
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              minMinutes: true,
+              maxMinutes: true,
+              etaUnit: true,
+              freeOver: true,
+              tradeFreeOver: true,
+              audience: true,
+              isActive: true,
+            },
           },
         },
       },
@@ -100,6 +118,7 @@ export const loadDeliverySetup = cache(async (organizationSlug: string): Promise
           readyMinutes: true,
           readyUnit: true,
           price: true,
+          audience: true,
           isActive: true,
         },
       },
@@ -116,6 +135,7 @@ export const loadDeliverySetup = cache(async (organizationSlug: string): Promise
         ...rate,
         price: toMinor(rate.price) ?? 0,
         freeOver: toMinor(rate.freeOver),
+        tradeFreeOver: toMinor(rate.tradeFreeOver),
       })),
     })),
     pickups: store.pickupLocations.map((pickup) => ({ ...pickup, price: toMinor(pickup.price) ?? 0 })),
@@ -167,17 +187,29 @@ export const loadConsolidation = cache(async (organizationSlug: string): Promise
  * behind each — which store sends what (./plan.ts). The plans stay on the
  * server: order placement asks again and holds stock where its plan says.
  */
-export async function quoteDelivery(organizationSlug: string, address: DeliveryAddress, bag: BagLine[]): Promise<PlannedQuote> {
+export async function quoteDelivery(
+  organizationSlug: string,
+  address: DeliveryAddress,
+  bag: BagLine[],
+  /** an approved trade buyer sees the options offered to trade, at trade thresholds (ROADMAP 21.4A) */
+  { buyer = 'retail' }: { buyer?: DeliveryBuyer } = {},
+): Promise<PlannedQuote> {
   const [stores, stock, consolidation] = await Promise.all([
     loadDeliverySetup(organizationSlug),
     loadStockFor(organizationSlug, bag.map((line) => line.itemId)),
     loadConsolidation(organizationSlug),
   ]);
-  return planOrder(stores, stock, bag, address, consolidation);
+  return planOrder(
+    stores.map((store) => deliveryFor(store, buyer)),
+    stock,
+    bag,
+    address,
+    consolidation,
+  );
 }
 
-export async function storeHasDelivery(organizationSlug: string): Promise<boolean> {
-  return (await loadDeliverySetup(organizationSlug)).some(hasAnyDelivery);
+export async function storeHasDelivery(organizationSlug: string, buyer: DeliveryBuyer = 'retail'): Promise<boolean> {
+  return (await loadDeliverySetup(organizationSlug)).some((store) => hasAnyDelivery(deliveryFor(store, buyer)));
 }
 
 /**
@@ -191,7 +223,10 @@ export async function storeHasDelivery(organizationSlug: string): Promise<boolea
  * same address can cost a different amount from each.
  */
 export async function deliveryOverview(organizationSlug: string): Promise<DeliveryPromise['options']> {
-  const stores = await loadDeliverySetup(organizationSlug);
+  /* Public: the product page, homepage and assistant are read by anyone, so
+   * they promise what a retail shopper gets — never a trade-only option or
+   * threshold (ROADMAP 21.4A). */
+  const stores = (await loadDeliverySetup(organizationSlug)).map((store) => deliveryFor(store, 'retail'));
   const options: DeliveryPromise['options'] = [];
   const several = stores.filter(hasAnyDelivery).length > 1;
 

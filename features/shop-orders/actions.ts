@@ -93,6 +93,12 @@ async function storeLocation(slug: string): Promise<{ origin: string; pathPrefix
   return { origin: `${proto}://${host}`, pathPrefix };
 }
 
+/** Whom delivery is quoted for: an approved trade buyer sees trade options (ROADMAP 21.4A). */
+async function deliveryBuyer(): Promise<'retail' | 'trade'> {
+  const shopper = await getShopper();
+  return shopper && (await isTradeBuyer(shopper.organizationId, shopper.id)) ? 'trade' : 'retail';
+}
+
 const confirmationPathFor = (pathPrefix: string, token: string) =>
   `${pathPrefix}/checkout/confirmation?t=${encodeURIComponent(token)}`;
 
@@ -310,6 +316,7 @@ export async function quoteDeliveryAction(input: {
       slug,
       { state: String(input.state ?? '').slice(0, 80), city: String(input.city ?? '').slice(0, 120) },
       items.map((item) => ({ itemId: item.variantId, quantity: item.quantity, unitPrice: item.unitPrice })),
+      { buyer: await deliveryBuyer() },
     );
     return {
       ok: true,
@@ -369,6 +376,7 @@ export async function estimateDeliveryAction(input: {
       slug,
       { productId: String(input.productId ?? ''), variantId: String(input.variantId ?? '') },
       deliverTo,
+      await deliveryBuyer(),
     );
     return { ok: true, deliverTo: { ...deliverTo, fromAccount }, result };
   } catch (error) {

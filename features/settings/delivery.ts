@@ -35,7 +35,7 @@ import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { NIGERIAN_STATES, normalizePlace, parsePlaceList } from '@/lib/geo/nigeria';
-import { quoteEachStore, type StoreDeliverySetup } from '@/lib/storefront/delivery/match';
+import { deliveryFor, quoteEachStore, type DeliveryAudience, type StoreDeliverySetup } from '@/lib/storefront/delivery/match';
 import { planWithAnyStock } from '@/lib/storefront/delivery/plan';
 import { HAS_LIVE_DELIVERY_WHERE, ONLINE_SUPPLY_WHERE } from '@/lib/storefront/delivery/supply';
 import { ETA_UNITS, toMinutes, type DeliveryEtaUnit } from '@/lib/storefront/delivery/eta';
@@ -54,6 +54,10 @@ export interface DeliveryRateRow {
   maxMinutes: number;
   etaUnit: DeliveryEtaUnit;
   freeOver: number | null;
+  /** a trade buyer's free-delivery threshold (ROADMAP 21.4A); null = `freeOver` */
+  tradeFreeOver: number | null;
+  /** who is offered it (21.4A) */
+  audience: DeliveryAudience;
   isActive: boolean;
 }
 
@@ -82,6 +86,8 @@ export interface PickupLocationRow {
   readyMinutes: number;
   readyUnit: DeliveryEtaUnit;
   price: number;
+  /** who may collect here (21.4A) */
+  audience: DeliveryAudience;
   isActive: boolean;
 }
 
@@ -110,6 +116,8 @@ export interface DeliverySettings {
   returnWindowDays: number | null;
   /** a bag no single store holds: bring it to one store first? (ROADMAP Phase 9.7) */
   consolidation: { enabled: boolean; fee: number; leadMinutes: number; leadUnit: DeliveryEtaUnit };
+  /** the shop has trade buyers (ROADMAP 21): the trade delivery settings are shown */
+  wholesaleOn: boolean;
 }
 
 const num = (value: Prisma.Decimal | null) => (value === null ? null : Number(value));
@@ -161,6 +169,7 @@ async function loadSettings(organizationId: string): Promise<DeliverySettings> {
         consolidationFee: true,
         consolidationLeadMinutes: true,
         consolidationLeadUnit: true,
+        wholesaleMode: true,
       },
     }),
   ]);
@@ -197,6 +206,8 @@ async function loadSettings(organizationId: string): Promise<DeliverySettings> {
         maxMinutes: rate.maxMinutes,
         etaUnit: rate.etaUnit,
         freeOver: num(rate.freeOver),
+        tradeFreeOver: num(rate.tradeFreeOver),
+        audience: rate.audience,
         isActive: rate.isActive,
       })),
     })),
@@ -211,6 +222,7 @@ async function loadSettings(organizationId: string): Promise<DeliverySettings> {
       readyMinutes: p.readyMinutes,
       readyUnit: p.readyUnit,
       price: Number(p.price),
+      audience: p.audience,
       isActive: p.isActive,
     })),
     returnWindowDays: organization?.returnWindowDays ?? null,
@@ -220,6 +232,7 @@ async function loadSettings(organizationId: string): Promise<DeliverySettings> {
       leadMinutes: organization?.consolidationLeadMinutes ?? 1440,
       leadUnit: organization?.consolidationLeadUnit ?? 'DAYS',
     },
+    wholesaleOn: (organization?.wholesaleMode ?? 'OFF') !== 'OFF',
   };
 }
 
@@ -498,6 +511,8 @@ function checkEtaAmount(ctx: z.RefinementCtx, unit: DeliveryEtaUnit, value: numb
   }
 }
 
+const audienceEnum = z.enum(['EVERYONE', 'RETAIL', 'TRADE'], { error: 'Choose who sees this' });
+
 const RateSchema = z
   .object({
     name: z.string().trim().min(2, 'Name this option, e.g. Standard or Same day').max(40, 'Keep the name under 40 characters'),
@@ -509,6 +524,11 @@ const RateSchema = z
       .union([z.literal(''), z.null(), money('an amount')])
       .transform((v) => (v === '' || v === null ? null : v))
       .default(null),
+    tradeFreeOver: z
+      .union([z.literal(''), z.null(), money('an amount')])
+      .transform((v) => (v === '' || v === null ? null : v))
+      .default(null),
+    audience: audienceEnum.default('EVERYONE'),
     isActive: z.boolean().default(true),
   })
   .superRefine((rate, ctx) => {
@@ -555,7 +575,7 @@ export async function saveDeliveryRate(zoneId: string, rateId: string | null, in
       action: rateId ? 'settings.delivery_rate.update' : 'settings.delivery_rate.create',
       entityType: 'DeliveryRate',
       entityId: id,
-      metadata: { name: data.name, price: data.price },
+      metadata: { name: data.name, price: data.price, audience: data.audience, tradeFreeOver: data.tradeFreeOver },
     });
     return { success: true, data: { id } };
   } catch (error) {
@@ -598,6 +618,7 @@ const PickupSchema = z
     .nullish(),
   readyUnit: etaUnitEnum.default('DAYS'),
   readyTime: etaAmount,
+  audience: audienceEnum.default('EVERYONE'),
   isActive: z.boolean().default(true),
 }).superRefine((pickup, ctx) => {
   checkEtaAmount(ctx, pickup.readyUnit, pickup.readyTime, 'readyTime');
@@ -638,7 +659,7 @@ export async function savePickupLocation(pickupId: string | null, input: PickupL
       action: pickupId ? 'settings.pickup_location.update' : 'settings.pickup_location.create',
       entityType: 'PickupLocation',
       entityId: id,
-      metadata: { name: data.name, city: data.city, warehouseId: store.id, store: store.name },
+      metadata: { name: data.name, city: data.city, warehouseId: store.id, store: store.name, audience: data.audience },
     });
     return { success: true, data: { id } };
   } catch (error) {
@@ -754,7 +775,13 @@ export interface DeliveryPreview {
  * skips them), store by store, and then what checkout charges. Only stores
  * whose stock is sold online count, as at checkout. `subtotal` is in naira.
  */
-export async function previewDelivery(input: { state: string; city: string; subtotal?: number }): Promise<Result<DeliveryPreview>> {
+export async function previewDelivery(input: {
+  state: string;
+  city: string;
+  subtotal?: number;
+  /** as a trade buyer would see it (ROADMAP 21.4A) */
+  buyer?: 'retail' | 'trade';
+}): Promise<Result<DeliveryPreview>> {
   try {
     const ctx = await context('view');
     const settings = await loadSettings(ctx.organization.id);
@@ -769,10 +796,17 @@ export async function previewDelivery(input: { state: string; city: string; subt
           .filter((z) => z.warehouseId === store.id)
           .map((z) => ({
             ...z,
-            rates: z.rates.map((r) => ({ ...r, price: kobo(r.price), freeOver: r.freeOver === null ? null : kobo(r.freeOver) })),
+            rates: z.rates.map((r) => ({
+              ...r,
+              price: kobo(r.price),
+              freeOver: r.freeOver === null ? null : kobo(r.freeOver),
+              tradeFreeOver: r.tradeFreeOver === null ? null : kobo(r.tradeFreeOver),
+            })),
           })),
         pickups: settings.pickups.filter((p) => p.warehouseId === store.id).map((p) => ({ ...p, price: kobo(p.price) })),
-      }));
+      }))
+      // The same filter checkout applies for this buyer.
+      .map((setup) => deliveryFor(setup, input.buyer === 'trade' ? 'trade' : 'retail'));
 
     const address = { state: input.state, city: input.city };
     const subtotal = kobo(input.subtotal ?? 0);

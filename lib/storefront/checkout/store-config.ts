@@ -82,7 +82,7 @@ export async function getStoreCheckoutConfig(
   const [base, transferAccounts, hasDelivery, onlineReady, rules, vat, wholesale] = await Promise.all([
     getCheckoutConfig(scope),
     activeTransferAccounts(scope.organizationSlug),
-    storeHasDelivery(scope.organizationSlug),
+    storeHasDelivery(scope.organizationSlug, tradeBuyer ? 'trade' : 'retail'),
     onlinePaymentsReady(scope.organizationSlug),
     storeCheckoutRules(scope.organizationSlug),
     shopVatBySlug(scope.organizationSlug),

@@ -2455,6 +2455,13 @@ model DeliveryRate {
    * delivery is free when the goods come to at least this much; null = never
    */
   freeOver       Decimal?        @db.Decimal(12, 2)
+  /**
+   * Free for an approved trade buyer once their goods reach this (ROADMAP
+   * 21.4A); null = trade buyers get `freeOver` like everyone else. Major units.
+   */
+  tradeFreeOver  Decimal?         @db.Decimal(12, 2)
+  /** who is offered this option (21.4A) — everyone unless the merchant says otherwise */
+  audience       DeliveryAudience @default(EVERYONE)
   isActive       Boolean         @default(true)
   sortOrder      Int             @default(0)
 
@@ -2498,6 +2505,8 @@ model PickupLocation {
    * major units; usually free
    */
   price          Decimal         @default(0) @db.Decimal(12, 2)
+  /** who may collect here (21.4A) — normally everyone */
+  audience       DeliveryAudience @default(EVERYONE)
   isActive       Boolean         @default(true)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -2509,6 +2518,17 @@ model PickupLocation {
   @@index([organizationId])
   @@index([warehouseId])
   @@map("pickup_locations")
+}
+
+/**
+ * Who a delivery option or pickup point is offered to (ROADMAP 21.4A): a
+ * trade-only "Van, next working day", or an "Express bike" kept for retail.
+ * Trade = an approved trade buyer of the shop; retail = everyone else.
+ */
+enum DeliveryAudience {
+  EVERYONE
+  RETAIL
+  TRADE
 }
 
 /**
