@@ -1343,7 +1343,7 @@ Launch (C) needs both.
 |---|---|---|
 | D3 | 14.4 SMS/WhatsApp order updates | needs a provider decision first (cost per message) |
 | D4 | 13.5 Custom domains bought through Namecheap's API | staff handle them by hand until then |
-| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.5) first, then 21.4 pay on account | vendor answers in; can move before launch if a launch vendor needs it |
+| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | vendor answers in; can move before launch if a launch vendor needs it |
 
 ### Deliberately not planned yet
 
@@ -7759,9 +7759,12 @@ pay on account. A vendor who sells only wholesale switches the shop to
   levels (distributor vs retailer) and quantity breaks wait (see "Later").
 - **Most want their money before delivery or on delivery.** Pay on account is
   an option a vendor switches on per buyer, off by default, and built after
-  the rest (21.4). How long a buyer has to pay is whatever the vendor sets.
+  the rest (21.5). How long a buyer has to pay is whatever the vendor sets.
 - **Wholesale prices are usually quoted before VAT,** so the vendor chooses
   whether their wholesale prices include VAT or have it added (decision 8).
+- **Delivery:** a normal-sized trade order uses the same delivery options as
+  retail unless the vendor says otherwise; a very large one can be
+  "delivery to be arranged" — priced by the vendor after ordering (21.4).
 
 ### The flow
 
@@ -7778,7 +7781,10 @@ pay on account. A vendor who sells only wholesale switches the shop to
 3. **The retailer shops** on the same website, signed in: wholesale prices
    ("₦380 + VAT" when the vendor adds VAT), trade quantities, an optional
    quick-order page.
-4. **Checkout:** business name and tax ID filled in from the account; pay
+4. **Checkout:** business name and tax ID filled in from the account;
+   delivery from the store's usual options (plus any trade-only ones, and
+   free above the trade threshold), collection, or "delivery to be
+   arranged" for a very large order (21.4); pay
    now (Paystack, transfer) or on delivery — as today, limited to the methods
    the vendor allows for trade orders — or **pay on account** for a buyer the
    vendor has given credit.
@@ -7848,7 +7854,7 @@ pay on account. A vendor who sells only wholesale switches the shop to
 - **Schema:** a `TradeAccount` per `Customer` (shopper accounts are already
   per store): status (`REQUESTED` → `APPROVED` | `DECLINED`, and
   `SUSPENDED`), business name, tax ID, optional CAC number, who approved and
-  when, and the credit terms (21.4, empty until given).
+  when, and the credit terms (21.5, empty until given).
 - **Settings → Wholesale** (new; `settings.edit`):
   - off / **retail and trade** (built and tested first) / trade only;
   - whether the "Buy wholesale" request form is shown;
@@ -7856,7 +7862,7 @@ pay on account. A vendor who sells only wholesale switches the shop to
   - **how trade orders may be paid:** any of pay now (Paystack), bank
     transfer, pay on delivery — e.g. a vendor who wants every trade order
     paid before it leaves turns pay on delivery off for trade. Pay on
-    account is never here: it's given per buyer (21.4).
+    account is never here: it's given per buyer (21.5).
 - **Customers:** a **Trade** filter and badge; "Make trade buyer" on a
   customer; "Invite a trade buyer" (name, business, email, phone) creates the
   customer and emails a set-up-your-sign-in link (the password-reset token
@@ -7902,7 +7908,69 @@ pay on account. A vendor who sells only wholesale switches the shop to
 - Checked in the cart, at checkout and again in `placeOrder` (the server is
   the one that counts, as with payment terms).
 
-### 21.4 Pay on account (optional, per buyer) — TODO
+### 21.4 Delivery for trade orders — TODO
+
+Delivery is priced per store, per area, per option (Phase 9: `DeliveryZone`
+→ `DeliveryRate` with price, arrival time and `freeOver`; `PickupLocation`).
+**By default a trade buyer sees exactly what a retail shopper sees** — the
+cost of taking a box across town doesn't depend on who bought it. This step
+adds two optional settings for normal-sized trade orders and one way out for
+very large ones. Everything still goes through `quoteDelivery` /
+`planOrder` / `estimateDelivery` (AGENTS, Phase 9): they learn whether the
+buyer is trade; no second price calculation is written anywhere.
+
+**A. Two optional settings on each delivery option** (Settings → Delivery
+and returns, per store):
+- **"Free for trade orders over ₦…"** — a separate free-delivery threshold for
+  trade buyers (`DeliveryRate.tradeFreeOver`), beside today's `freeOver`,
+  which keeps applying to retail. ₦50,000 is a big retail order and a small
+  trade one, so one threshold can't serve both.
+- **"Show to: everyone / retail only / trade only"** (`DeliveryRate.audience`)
+  — a vendor can add a trade-only "Van delivery, next working day" or keep
+  "Express bike" for retail. Same for pickup points, though collection is
+  normally for everyone.
+- Shown to the shopper only as what applies to them: a trade buyer never sees
+  a retail-only option, and the reverse.
+
+**B. "Delivery to be arranged"** — for orders too big for any fixed price (a
+truck, not a bike). The buyer orders the goods; the vendor prices delivery
+afterwards; the buyer sees the price before paying anything.
+- **Offered:** per store, trade orders only, from a value and/or an item
+  count the vendor sets (e.g. ₦500,000 or 100 items); with the vendor's
+  promise of how soon they'll price it (default 24 hours). The planner still
+  decides which store sends what, so the vendor knows where the truck leaves
+  from; only the fee is left open.
+- **At checkout:** "Delivery to be arranged — the store will work out the
+  delivery cost for an order this size and send it to you within 24 hours.
+  You pay once you've seen it." Beside the normal options and collection.
+- **Price first, pay once.** The order is placed with **nothing charged**,
+  waiting for a delivery price ("Waiting for delivery price"; a new
+  `OrderPaymentStatus`, e.g. `AWAITING_DELIVERY_PRICE`). Stock is held. The
+  vendor is notified and the order is flagged **"Set delivery price"**:
+  fee, and optionally a date and how it's going ("our truck, Thursday").
+  The buyer is notified with the fee and the new total, and pays the WHOLE
+  amount once, with the method they chose (Paystack, transfer, on delivery,
+  or on account — 21.5). From then on it's a normal order.
+- **The buyer can say no** — cancel at no cost (nothing was paid), or switch
+  to collecting it — and the stock is released.
+- **Two deadlines, so stock is never held forever** (vendor settings with
+  defaults): the vendor's to set the price (24 hours: a reminder, then the
+  order is cancelled and released, and the buyer is told why); the buyer's to
+  pay once priced (48 hours, like `TRANSFER_HOLD_HOURS`). Run by the existing
+  unpaid-order job (`expireUnpaidOrders`), not a new one.
+- **Said honestly everywhere:** the order, the invoice and reports show the
+  fee the vendor set, labelled "arranged by the store"; no estimate is ever
+  shown before it's set, and the product page's delivery estimate
+  (`estimateDelivery`) says "arranged by the store for large trade orders"
+  rather than a number.
+- **Audit and notifications:** the price set (and changed, before payment)
+  is audited; vendor and buyer hear through `notify()`.
+
+**Not in this step:** separate trade prices for the same option, and prices
+by weight or size (needs every product's weight and per-kilo rates — a lot
+of setup for vendors). Both in "Later" if vendors ask.
+
+### 21.5 Pay on account (optional, per buyer) — TODO
 
 Most vendors want paying before or on delivery, which 21.1's trade payment
 setting already covers with today's methods. This step is for the vendor who
@@ -7929,21 +7997,21 @@ the vendor gives it**.
 - **Platform:** no money moves through us; terms and the vendor's record of
   payment are the whole of it.
 
-### 21.5 Business details and documents — TODO
+### 21.6 Business details and documents — TODO
 
 - Business name and tax ID on the trade account, filled in at checkout.
 - An invoice document for every trade order (business name, tax ID, VAT,
   due date when on account), from the order — downloadable by the buyer and
   sent with the order email.
 
-### 21.6 Quick ordering — TODO
+### 21.7 Quick ordering — TODO
 
 - A quick-order page for trade buyers: type item codes (SKU) and quantities,
   or upload a spreadsheet; lines go to the bag through the same checks.
 - "Order again" on a past order (it exists for shoppers) brings the lines in
   at today's prices.
 
-### 21.7 Reports and the rest — TODO
+### 21.8 Reports and the rest — TODO
 
 - Reports: retail vs trade split on Sales; top trade buyers; amounts owed and
   overdue (a "Money owed" view with the ageing: due, 1–30, 31–60, 60+ days).
@@ -7955,29 +8023,28 @@ the vendor gives it**.
 **21.1 + 21.2 + 21.3 together** are the smallest version a wholesale vendor
 can use — approved buyers, their wholesale price, trade quantities, and the
 payment methods the vendor allows for trade (pay now, transfer, on delivery).
-21.5 alongside. **21.4 after**, for vendors who give credit. 21.6 and 21.7
-as vendors ask.
+21.6 (business documents) alongside. **21.4 delivery next** — trade delivery
+settings and "delivery to be arranged". **21.5 pay on account after**, for
+vendors who give credit. 21.7 and 21.8 as vendors ask.
 
 ### Later (not in this phase)
 
 - Several wholesale price levels (distributor vs retailer): a `PriceList`
   table with a buyer pointed at one; `wholesalePrice` becomes the first list.
 - Quantity breaks ("48+: ₦350").
+- Separate trade prices for the same delivery option; delivery priced by
+  weight or size.
 - Several staff logins under one buying company.
 - Paying an order or invoice online after delivery (Paystack) — still "not
   planned yet".
 
-### Still to confirm with vendors
+### Vendor questions
 
-Answered 2026-11-14: retail and trade from one shop; one wholesale price;
-days to pay set freely (most want paying before or on delivery); VAT on
-wholesale prices optional. Still open:
-
-- Large orders: is delivery priced per area enough, or do they need
-  "delivery to be arranged" (a fee agreed after ordering)? If so, it is
-  only offered with pay on account or bank transfer, and it must still go
-  through `quoteDelivery` / `planOrder` (Phase 9) — designed with 21.4, not
-  bolted on.
+All answered 2026-11-14: retail and trade from one shop; one wholesale
+price; days to pay set freely (most want paying before or on delivery); VAT
+on wholesale prices optional; normal trade orders share retail delivery
+unless the vendor sets otherwise, very large ones can be "delivery to be
+arranged" (21.4).
 
 ## Sequencing
 
