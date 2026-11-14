@@ -375,10 +375,15 @@ function trendWords(current: number, before: number): string {
   return `${change > 0 ? 'Up' : 'Down'} on the 7 days before`;
 }
 
-/* Each stat leads to the list it counts (AGENTS §2). */
+/* Each stat leads to the list it counts (AGENTS §2). The link fills its grid
+ * cell and the card fills the link, so every card in a row is the same height
+ * however many lines its description takes. */
 function ClickableStat({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="rounded-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+    <Link
+      href={href}
+      className="block h-full rounded-lg transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&>*]:h-full"
+    >
       {children}
     </Link>
   );
