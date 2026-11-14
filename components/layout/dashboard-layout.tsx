@@ -55,12 +55,17 @@ export function DashboardLayout({
   return (
     <NoBuyingProvider value={noBuying}>
       <SidebarProvider>
-        <div data-admin-shell className="flex h-screen overflow-hidden">
+        {/* `relative` on the shell and on <main>: hidden helpers that use
+          * `position: absolute` (screen-reader text, the native inputs behind
+          * Radix switches, selects and checkboxes) are otherwise laid out
+          * against the page itself, outside every overflow box, and one far
+          * down a long page stretched the window into an empty second scroll. */}
+        <div data-admin-shell className="relative flex h-dvh overflow-hidden">
           <Sidebar org={org} orgs={orgs} user={user} showMessageCount={canViewMessages} />
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <Header breadcrumbs={breadcrumbs} actions={headerActions} user={user} />
             {notice}
-            <main className="flex-1 overflow-y-auto">{children}</main>
+            <main className="relative flex-1 overflow-y-auto">{children}</main>
           </div>
         </div>
         <Toaster />
