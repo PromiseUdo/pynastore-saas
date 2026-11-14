@@ -33,6 +33,34 @@ export interface RecentOrder {
   placedAt: string;
 }
 
+/** Sales over a stretch of days, as Reports → Sales counts them. */
+export interface PeriodFigures {
+  sales: number;
+  orders: number;
+  /** sales ÷ orders; null with no orders */
+  averageOrder: number | null;
+}
+
+/**
+ * The home page's figures (dashboard recommendation 2): the last 7 days
+ * against the 7 before — a fair comparison at any hour, unlike "today",
+ * which is ₦0 every morning — with today so far, and what's owed.
+ */
+export interface WeekFigures {
+  current: PeriodFigures;
+  previous: PeriodFigures;
+  /** placed today so far (Lagos), not cancelled */
+  todaySales: number;
+  /** the 7 days' orders by where they came from */
+  byChannel: { channel: string; count: number }[];
+  /**
+   * Owed to the business now: orders on a trade buyer's account (21.5) and
+   * unpaid invoices, less what's been recorded — and how much of it is past
+   * due. The same two sources as Reports → Money owed.
+   */
+  owed: { total: number; overdue: number };
+}
+
 /** One day of the home page's sales chart, and the same weekday-position 30 days earlier. */
 export interface TrendDay {
   /** YYYY-MM-DD, Lagos */
@@ -63,10 +91,6 @@ export interface DashboardOverview {
   canViewInventory: boolean;
   /** null wherever the member may not see that part of the business. */
   sales: {
-    revenueToday: number;
-    ordersToday: number;
-    /** today's orders split by where they came from */
-    todayByChannel: { channel: string; count: number }[];
     openOrders: number;
     returnsAwaiting: number;
     unansweredQuestions: number;
@@ -87,6 +111,8 @@ export interface DashboardOverview {
   recentOrders: RecentOrder[];
   /** null when the member may not see sales */
   trend: SalesTrend | null;
+  /** null when the member may not see sales */
+  week: WeekFigures | null;
   /**
    * What stands between this shop and taking online payments (ROADMAP 10.8),
    * for members who can change settings — null when nothing does, or when the
@@ -103,14 +129,13 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const canViewInventory = hasPermission(perms, PERMISSIONS.INVENTORY_VIEW);
   const canEditSettings = hasPermission(perms, PERMISSIONS.SETTINGS_EDIT);
 
-  const since = startOfTodayInLagos();
-
-  const [sales, inventory, recentOrders, readiness, trend] = await Promise.all([
-    canViewSales ? salesSnapshot(organizationId, since) : Promise.resolve(null),
+  const [sales, inventory, recentOrders, readiness, trend, week] = await Promise.all([
+    canViewSales ? salesSnapshot(organizationId) : Promise.resolve(null),
     canViewInventory ? inventorySnapshot(organizationId) : Promise.resolve(null),
     canViewSales ? recentOrdersFor(organizationId) : Promise.resolve([]),
     canEditSettings ? getOnlinePaymentReadiness(organizationId) : Promise.resolve(null),
     canViewSales ? salesTrend(organizationId) : Promise.resolve(null),
+    canViewSales ? weekFigures(organizationId) : Promise.resolve(null),
   ]);
 
   return {
@@ -123,6 +148,60 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     inventory,
     recentOrders,
     trend,
+    week,
+  };
+}
+
+const UNPAID_INVOICE = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] as const;
+
+/** Exported for the test; the page reads it through getDashboardOverview. */
+export async function weekFigures(organizationId: string, now: Date = new Date()): Promise<WeekFigures> {
+  const period = resolvePeriod({ range: '7d' }, now);
+  const before = previousPeriod(period);
+  const counted = (from: Date, to: Date) => ({ organizationId, status: { not: 'CANCELLED' as const }, placedAt: { gte: from, lt: to } });
+  const today = startOfTodayInLagos();
+
+  const [current, previous, todaySales, byChannel, owedOrders, overdueOrders, owedInvoices, overdueInvoices] = await Promise.all([
+    prisma.order.aggregate({ where: counted(period.from, period.to), _sum: { totalAmount: true }, _count: { _all: true } }),
+    prisma.order.aggregate({ where: counted(before.from, before.to), _sum: { totalAmount: true }, _count: { _all: true } }),
+    prisma.order.aggregate({ where: counted(today, period.to), _sum: { totalAmount: true } }),
+    prisma.order.groupBy({ by: ['channel'], where: counted(period.from, period.to), _count: { _all: true } }),
+    // What's owed: totals less what's been recorded, summed as two columns.
+    prisma.order.aggregate({
+      where: { organizationId, paymentStatus: 'ON_ACCOUNT', status: { not: 'CANCELLED' } },
+      _sum: { totalAmount: true, accountPaidAmount: true },
+    }),
+    prisma.order.aggregate({
+      where: { organizationId, paymentStatus: 'ON_ACCOUNT', status: { not: 'CANCELLED' }, accountDueAt: { lt: now } },
+      _sum: { totalAmount: true, accountPaidAmount: true },
+    }),
+    prisma.invoice.aggregate({
+      where: { organizationId, status: { in: [...UNPAID_INVOICE] } },
+      _sum: { totalAmount: true, paidAmount: true },
+    }),
+    prisma.invoice.aggregate({
+      where: { organizationId, status: { in: [...UNPAID_INVOICE] }, dueDate: { lt: now } },
+      _sum: { totalAmount: true, paidAmount: true },
+    }),
+  ]);
+
+  const figures = (agg: { _sum: { totalAmount: Prisma.Decimal | null }; _count: { _all: number } }): PeriodFigures => {
+    const sales = Number(agg._sum.totalAmount ?? 0);
+    const orders = agg._count._all;
+    return { sales, orders, averageOrder: orders > 0 ? Math.round((sales / orders) * 100) / 100 : null };
+  };
+  const left = (total: Prisma.Decimal | null, paid: Prisma.Decimal | null) => Math.max(0, Number(total ?? 0) - Number(paid ?? 0));
+  const round = (value: number) => Math.round(value * 100) / 100;
+
+  return {
+    current: figures(current),
+    previous: figures(previous),
+    todaySales: Number(todaySales._sum.totalAmount ?? 0),
+    byChannel: byChannel.map((g) => ({ channel: g.channel, count: g._count._all })),
+    owed: {
+      total: round(left(owedOrders._sum.totalAmount, owedOrders._sum.accountPaidAmount) + left(owedInvoices._sum.totalAmount, owedInvoices._sum.paidAmount)),
+      overdue: round(left(overdueOrders._sum.totalAmount, overdueOrders._sum.accountPaidAmount) + left(overdueInvoices._sum.totalAmount, overdueInvoices._sum.paidAmount)),
+    },
   };
 }
 
@@ -163,11 +242,8 @@ export async function salesTrend(organizationId: string, now: Date = new Date())
   };
 }
 
-async function salesSnapshot(organizationId: string, since: Date) {
+async function salesSnapshot(organizationId: string) {
   const [
-    paidToday,
-    ordersToday,
-    byChannel,
     openOrders,
     returnsAwaiting,
     unansweredQuestions,
@@ -175,18 +251,6 @@ async function salesSnapshot(organizationId: string, since: Date) {
     refundsOwed,
     openDisputes,
   ] = await Promise.all([
-      /* Money counts from the moment it actually arrived, not from when the
-       * order was placed — an unpaid order is not revenue. */
-      prisma.order.aggregate({
-        where: { organizationId, paidAt: { gte: since } },
-        _sum: { totalAmount: true },
-      }),
-      prisma.order.count({ where: { organizationId, placedAt: { gte: since } } }),
-      prisma.order.groupBy({
-        by: ['channel'],
-        where: { organizationId, placedAt: { gte: since } },
-        _count: { _all: true },
-      }),
       /* Only an online order can be "waiting on you" — a counter sale is
        * finished the moment it is rung up. */
       prisma.order.count({ where: { organizationId, status: { in: [...OPEN_ORDER_STATUSES] } } }),
@@ -213,9 +277,6 @@ async function salesSnapshot(organizationId: string, since: Date) {
     ]);
 
   return {
-    revenueToday: Number(paidToday._sum.totalAmount ?? 0),
-    ordersToday,
-    todayByChannel: byChannel.map((g) => ({ channel: g.channel, count: g._count._all })),
     openOrders,
     returnsAwaiting,
     unansweredQuestions,

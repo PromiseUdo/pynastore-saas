@@ -11,7 +11,7 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { AlertCircle, ArrowUpRight, Banknote, CreditCard, HelpCircle, PackageX, ShoppingBag, Undo2 } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Banknote, CreditCard, HelpCircle, PackageX, Receipt, ShoppingBag, Undo2, Wallet } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/layout/page-header';
 import { StatCard, StatGrid } from '@/components/dashboard/stat-card';
 import { EmptyState } from '@/components/layout/empty-state';
@@ -34,6 +34,7 @@ import {
   ORDER_PAYMENT_VARIANT,
 } from '@/lib/sales/order-labels';
 import { getDashboardOverview } from '@/features/dashboard/overview';
+import { changePct } from '@/lib/reports/period';
 import { SetupGuideSection } from '@/components/dashboard/setup-guide-section';
 import { SalesTrendChart } from '@/components/dashboard/sales-trend-chart';
 import { domainAttention } from '@/lib/domains/attention';
@@ -48,7 +49,7 @@ export default async function DashboardPage() {
   const domainNote = hasPermission(ctx.membership.role.permissions, PERMISSIONS.SETTINGS_VIEW)
     ? await domainAttention(ctx.organization.id)
     : null;
-  const { sales, inventory, currency } = overview;
+  const { sales, inventory, currency, week } = overview;
   const now = new Date();
 
   /* Things that are actually waiting on someone, in the order a shop owner
@@ -186,37 +187,64 @@ export default async function DashboardPage() {
           </section>
         )}
 
-        {(sales || inventory) && (
+        {(week || inventory) && (
           <StatGrid>
-            {sales && (
+            {week && (
               <>
-                <ClickableStat href="/sales/orders">
+                {/* The last 7 days against the 7 before: fair at any hour, unlike "today". */}
+                <ClickableStat href="/reports?view=sales&range=7d">
                   <StatCard
-                    title="Paid today"
-                    value={formatMoney(sales.revenueToday, currency)}
-                    description="Money confirmed since midnight"
+                    title="Sales, last 7 days"
+                    value={formatMoney(week.current.sales, currency)}
+                    trend={trendOf(week.current.sales, week.previous.sales)}
+                    description={`${trendWords(week.current.sales, week.previous.sales)} · ${formatMoney(week.todaySales, currency)} today`}
                     icon={Banknote}
                   />
                 </ClickableStat>
                 <ClickableStat href="/sales/orders">
                   <StatCard
-                    title="Orders today"
-                    value={formatNumber(sales.ordersToday)}
-                    description={channelSplit(sales.todayByChannel)}
+                    title="Orders, last 7 days"
+                    value={formatNumber(week.current.orders)}
+                    trend={trendOf(week.current.orders, week.previous.orders)}
+                    description={channelSplit(week.byChannel) ?? trendWords(week.current.orders, week.previous.orders)}
                     icon={ShoppingBag}
                   />
                 </ClickableStat>
-                <ClickableStat href="/sales/orders">
+                <ClickableStat href="/reports?view=sales&range=7d">
                   <StatCard
-                    title="Waiting on you"
-                    value={formatNumber(sales.openOrders)}
-                    description="Not yet shipped"
-                    icon={AlertCircle}
+                    title="Average order"
+                    value={week.current.averageOrder === null ? '—' : formatMoney(week.current.averageOrder, currency)}
+                    trend={
+                      week.current.averageOrder !== null && week.previous.averageOrder !== null
+                        ? trendOf(week.current.averageOrder, week.previous.averageOrder)
+                        : undefined
+                    }
+                    description={
+                      week.previous.averageOrder === null
+                        ? 'What an order comes to, last 7 days'
+                        : `${formatMoney(week.previous.averageOrder, currency)} the 7 days before`
+                    }
+                    icon={Receipt}
+                  />
+                </ClickableStat>
+                <ClickableStat href="/reports?view=owed">
+                  <StatCard
+                    title="Owed to you"
+                    value={formatMoney(week.owed.total, currency)}
+                    description={
+                      week.owed.total === 0
+                        ? 'Nothing owed right now'
+                        : week.owed.overdue > 0
+                          ? `${formatMoney(week.owed.overdue, currency)} of it overdue`
+                          : 'None of it overdue'
+                    }
+                    icon={Wallet}
                   />
                 </ClickableStat>
               </>
             )}
-            {inventory && (
+            {/* Stock-only members see their one figure; with sales showing, low stock is in the list above. */}
+            {inventory && !week && (
               <ClickableStat href="/inventory/reports">
                 <StatCard
                   title="Low stock"
@@ -322,15 +350,29 @@ export default async function DashboardPage() {
 }
 
 /**
- * "8 online · 3 in store" — or just "Placed since midnight" when everything
- * came from one place, because naming a single channel adds nothing.
+ * "8 online · 3 in store" — or null when everything came from one place,
+ * because naming a single channel adds nothing.
  */
-function channelSplit(counts: { channel: string; count: number }[]): string {
+function channelSplit(counts: { channel: string; count: number }[]): string | null {
   const named = counts.filter((c) => c.count > 0);
-  if (named.length < 2) return 'Placed since midnight';
+  if (named.length < 2) return null;
   return named
     .map((c) => `${formatNumber(c.count)} ${(ORDER_CHANNEL_LABEL[c.channel] ?? c.channel).toLowerCase()}`)
     .join(' · ');
+}
+
+/** The card's arrow and percentage, when there's something to compare with. */
+function trendOf(current: number, before: number) {
+  const change = changePct(current, before);
+  return change === null ? undefined : { value: change };
+}
+
+/** The same comparison in words, so colour is never the only signal. */
+function trendWords(current: number, before: number): string {
+  const change = changePct(current, before);
+  if (change === null) return before === 0 && current > 0 ? 'Nothing the 7 days before' : 'Nothing to compare yet';
+  if (change === 0) return 'Same as the 7 days before';
+  return `${change > 0 ? 'Up' : 'Down'} on the 7 days before`;
 }
 
 /* Each stat leads to the list it counts (AGENTS §2). */
