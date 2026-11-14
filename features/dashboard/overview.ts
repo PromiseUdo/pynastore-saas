@@ -61,6 +61,17 @@ export interface WeekFigures {
   owed: { total: number; overdue: number };
 }
 
+/**
+ * What sold best in the last 7 days (dashboard recommendation 3), counted as
+ * Reports → Top products counts it: each product's lines on orders placed in
+ * the period, cancelled ones left out, at the price charged.
+ */
+export interface TopProductsWeek {
+  rows: { productId: string | null; name: string; unitsSold: number; revenue: number; shareRatio: number }[];
+  /** different products sold in the 7 days */
+  productCount: number;
+}
+
 /** One day of the home page's sales chart, and the same weekday-position 30 days earlier. */
 export interface TrendDay {
   /** YYYY-MM-DD, Lagos */
@@ -113,6 +124,8 @@ export interface DashboardOverview {
   trend: SalesTrend | null;
   /** null when the member may not see sales */
   week: WeekFigures | null;
+  /** null when the member may not see sales */
+  topProducts: TopProductsWeek | null;
   /**
    * What stands between this shop and taking online payments (ROADMAP 10.8),
    * for members who can change settings — null when nothing does, or when the
@@ -129,13 +142,14 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
   const canViewInventory = hasPermission(perms, PERMISSIONS.INVENTORY_VIEW);
   const canEditSettings = hasPermission(perms, PERMISSIONS.SETTINGS_EDIT);
 
-  const [sales, inventory, recentOrders, readiness, trend, week] = await Promise.all([
+  const [sales, inventory, recentOrders, readiness, trend, week, topProducts] = await Promise.all([
     canViewSales ? salesSnapshot(organizationId) : Promise.resolve(null),
     canViewInventory ? inventorySnapshot(organizationId) : Promise.resolve(null),
     canViewSales ? recentOrdersFor(organizationId) : Promise.resolve([]),
     canEditSettings ? getOnlinePaymentReadiness(organizationId) : Promise.resolve(null),
     canViewSales ? salesTrend(organizationId) : Promise.resolve(null),
     canViewSales ? weekFigures(organizationId) : Promise.resolve(null),
+    canViewSales ? topProductsWeek(organizationId) : Promise.resolve(null),
   ]);
 
   return {
@@ -149,6 +163,61 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     recentOrders,
     trend,
     week,
+    topProducts,
+  };
+}
+
+/** Exported for the test; the page reads it through getDashboardOverview. */
+export async function topProductsWeek(organizationId: string, now: Date = new Date(), limit = 5): Promise<TopProductsWeek> {
+  const period = resolvePeriod({ range: '7d' }, now);
+  const where = Prisma.sql`
+    o."organizationId" = ${organizationId}
+    AND o."status" <> 'CANCELLED'
+    AND o."placedAt" >= ${period.from}
+    AND o."placedAt" < ${period.to}
+  `;
+  // A deleted product has no id left, so its lines are kept apart by name.
+  const product = Prisma.sql`COALESCE(li."productId", 'deleted:' || li."name")`;
+  const [rows, totals] = await Promise.all([
+    prisma.$queryRaw<{ product_id: string | null; name: string; units: bigint | null; revenue: Prisma.Decimal | null }[]>`
+      SELECT MAX(li."productId") AS product_id,
+             MAX(li."name") AS name,
+             SUM(li."quantity") AS units,
+             SUM(li."totalPrice") AS revenue
+        FROM "order_line_items" li
+        JOIN "orders" o ON o."id" = li."orderId"
+       WHERE ${where}
+       GROUP BY ${product}
+       ORDER BY revenue DESC, units DESC, name ASC
+       LIMIT ${limit}
+    `,
+    prisma.$queryRaw<{ products: bigint; revenue: Prisma.Decimal | null }[]>`
+      SELECT COUNT(DISTINCT ${product}) AS products, COALESCE(SUM(li."totalPrice"), 0) AS revenue
+        FROM "order_line_items" li
+        JOIN "orders" o ON o."id" = li."orderId"
+       WHERE ${where}
+    `,
+  ]);
+  const ids = rows.map((row) => row.product_id).filter((id): id is string => Boolean(id));
+  const items = ids.length
+    ? await prisma.inventoryItem.findMany({ where: { id: { in: ids }, organizationId }, select: { id: true, name: true } })
+    : [];
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const total = Number(totals[0]?.revenue ?? 0);
+  return {
+    rows: rows.map((row) => {
+      const item = row.product_id ? byId.get(row.product_id) : undefined;
+      const revenue = Number(row.revenue ?? 0);
+      return {
+        productId: item?.id ?? null,
+        // Today's name when the product still exists; the name it sold under otherwise.
+        name: item?.name ?? row.name,
+        unitsSold: Number(row.units ?? 0),
+        revenue,
+        shareRatio: total > 0 ? revenue / total : 0,
+      };
+    }),
+    productCount: Number(totals[0]?.products ?? 0),
   };
 }
 

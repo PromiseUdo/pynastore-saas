@@ -37,7 +37,7 @@ export function SalesTrendChart({ trend, currency }: { trend: SalesTrend; curren
   const every = Math.ceil(trend.days.length / 5);
 
   return (
-    <section aria-labelledby="sales-trend-heading" className="rounded-lg border bg-card p-4">
+    <section aria-labelledby="sales-trend-heading" className="h-full rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 id="sales-trend-heading" className="text-sm font-semibold">

@@ -37,6 +37,7 @@ import { getDashboardOverview } from '@/features/dashboard/overview';
 import { changePct } from '@/lib/reports/period';
 import { SetupGuideSection } from '@/components/dashboard/setup-guide-section';
 import { SalesTrendChart } from '@/components/dashboard/sales-trend-chart';
+import { TopProductsCard } from '@/components/dashboard/top-products-card';
 import { domainAttention } from '@/lib/domains/attention';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -258,7 +259,15 @@ export default async function DashboardPage() {
         )}
 
         {/* The last 30 days against the 30 before — counted as Reports → Sales counts them. */}
-        {overview.trend && <SalesTrendChart trend={overview.trend} currency={currency} />}
+        {/* Beside each other on a wide screen: how sales are going, and what's selling. */}
+        {overview.trend && (
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <SalesTrendChart trend={overview.trend} currency={currency} />
+            </div>
+            {overview.topProducts && <TopProductsCard top={overview.topProducts} currency={currency} />}
+          </div>
+        )}
 
         {overview.canViewSales && (
           <section className="rounded-lg border bg-card">
