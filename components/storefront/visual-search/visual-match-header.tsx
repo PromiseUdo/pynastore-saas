@@ -24,8 +24,7 @@ const HEADINGS: Record<
 > = {
   high: {
     title: 'Visual matches',
-    blurb:
-      'Products from this store that look closest to your image, best matches first.',
+    blurb: 'Products from this store that look closest to your image.',
   },
   medium: {
     title: 'Best visual matches',

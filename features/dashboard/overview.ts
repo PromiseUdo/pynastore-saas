@@ -51,6 +51,7 @@ export interface WeekFigures {
   previous: PeriodFigures;
   /** placed today so far (Lagos), not cancelled */
   todaySales: number;
+  todayOrders: number;
   /** the 7 days' orders by where they came from */
   byChannel: { channel: string; count: number }[];
   /**
@@ -233,7 +234,7 @@ export async function weekFigures(organizationId: string, now: Date = new Date()
   const [current, previous, todaySales, byChannel, owedOrders, overdueOrders, owedInvoices, overdueInvoices] = await Promise.all([
     prisma.order.aggregate({ where: counted(period.from, period.to), _sum: { totalAmount: true }, _count: { _all: true } }),
     prisma.order.aggregate({ where: counted(before.from, before.to), _sum: { totalAmount: true }, _count: { _all: true } }),
-    prisma.order.aggregate({ where: counted(today, period.to), _sum: { totalAmount: true } }),
+    prisma.order.aggregate({ where: counted(today, period.to), _sum: { totalAmount: true }, _count: { _all: true } }),
     prisma.order.groupBy({ by: ['channel'], where: counted(period.from, period.to), _count: { _all: true } }),
     // What's owed: totals less what's been recorded, summed as two columns.
     prisma.order.aggregate({
@@ -266,6 +267,7 @@ export async function weekFigures(organizationId: string, now: Date = new Date()
     current: figures(current),
     previous: figures(previous),
     todaySales: Number(todaySales._sum.totalAmount ?? 0),
+    todayOrders: todaySales._count._all,
     byChannel: byChannel.map((g) => ({ channel: g.channel, count: g._count._all })),
     owed: {
       total: round(left(owedOrders._sum.totalAmount, owedOrders._sum.accountPaidAmount) + left(owedInvoices._sum.totalAmount, owedInvoices._sum.paidAmount)),

@@ -136,6 +136,7 @@ describe('the home page figures', () => {
     expect(week.current).toEqual({ sales: 50_000, orders: 5, averageOrder: 10_000 });
     expect(week.previous).toEqual({ sales: 6_000, orders: 1, averageOrder: 6_000 });
     expect(week.todaySales).toBe(15_000);
+    expect(week.todayOrders).toBe(2);
     expect(week.byChannel).toEqual([{ channel: 'WALK_IN', count: 5 }]);
   });
 

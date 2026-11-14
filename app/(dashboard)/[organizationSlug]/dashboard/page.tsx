@@ -34,6 +34,8 @@ import {
   ORDER_PAYMENT_VARIANT,
 } from '@/lib/sales/order-labels';
 import { getDashboardOverview } from '@/features/dashboard/overview';
+import { headline } from '@/lib/dashboard/headline';
+import { prisma } from '@/lib/prisma';
 import { changePct } from '@/lib/reports/period';
 import { SetupGuideSection } from '@/components/dashboard/setup-guide-section';
 import { SalesTrendChart } from '@/components/dashboard/sales-trend-chart';
@@ -51,6 +53,8 @@ export default async function DashboardPage() {
     ? await domainAttention(ctx.organization.id)
     : null;
   const { sales, inventory, currency, week } = overview;
+  const member = ctx.userId ? await prisma.user.findUnique({ where: { id: ctx.userId }, select: { name: true } }) : null;
+  const firstName = member?.name?.trim().split(/\s+/)[0] ?? null;
   const now = new Date();
 
   /* Things that are actually waiting on someone, in the order a shop owner
@@ -164,7 +168,8 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Home" description={`What's happening at ${overview.organizationName} today.`} />
+      {/* Greeted by name and the Lagos time of day, with today's figures in one sentence. */}
+      <PageHeader title="Home" description={headline(firstName, week, currency, overview.organizationName, now)} />
 
       <PageBody className="space-y-6">
         <SetupGuideSection variant="dashboard" />
@@ -198,7 +203,7 @@ export default async function DashboardPage() {
                     title="Sales, last 7 days"
                     value={formatMoney(week.current.sales, currency)}
                     trend={trendOf(week.current.sales, week.previous.sales)}
-                    description={`${trendWords(week.current.sales, week.previous.sales)} · ${formatMoney(week.todaySales, currency)} today`}
+                    description={trendWords(week.current.sales, week.previous.sales)}
                     icon={Banknote}
                   />
                 </ClickableStat>
