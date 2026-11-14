@@ -1,20 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import { Home, LayoutGrid, Heart, ShoppingBag, User } from 'lucide-react';
+import { Home, LayoutGrid, MessageCircle, ShoppingBag, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useHydrated } from '@/lib/storefront/context';
 import { usePublicPathname } from '@/lib/storefront/use-public-pathname';
 import { useUIStore } from '@/lib/storefront/stores/ui-store';
 import { useCartCount } from '@/lib/storefront/stores/cart-store';
-import { useWishlistStore } from '@/lib/storefront/stores/wishlist-store';
-import { useChatUnread } from '@/components/storefront/chat/chat-config';
+import { useChatStore } from '@/lib/storefront/stores/chat-store';
+import { useChatConfig, useChatUnread } from '@/components/storefront/chat/chat-config';
 
 /**
  * Bottom navigation on every phone-width screen — the app and phone
  * browsers alike (ROADMAP 16.5). It is the phone's whole navigation: the
  * header there is only a search box and there is no footer, so Account is a
- * tab, and leads to the account, the shop's own pages and the settings.
+ * tab, and leads to the account, saved items, the shop's own pages and the
+ * settings.
+ *
+ * Home · Shop · Bag · Messages · Account. Messages opens the chat with the
+ * store, and is there only while the shop takes messages (ROADMAP 17) — a tab
+ * that leads nowhere is worse than one fewer. Saved items live under Account.
  */
 export function MobileTabBar() {
   const pathname = usePublicPathname();
@@ -22,9 +27,10 @@ export function MobileTabBar() {
   const openMenu = useUIStore((s) => s.openMenu);
   const openCart = useUIStore((s) => s.openCart);
   const cartCount = useCartCount();
-  const wishCount = useWishlistStore((s) => s.items.length);
-  // The store replied: the way to it is the Account screen, one tap away.
+  // Messages: only while the shop takes them; its badge is the store's unread replies.
+  const chat = useChatConfig();
   const chatUnread = useChatUnread();
+  const openChat = useChatStore((s) => s.openChat);
 
   const isActive = (href: string) => pathname === href;
 
@@ -39,17 +45,6 @@ export function MobileTabBar() {
       <button onClick={openMenu} className={cn(tab, 'text-muted-foreground')}>
         <LayoutGrid className="size-5" /> Shop
       </button>
-      <Link href="/wishlist" className={cn(tab, isActive('/wishlist') ? 'text-brand' : 'text-muted-foreground')}>
-        <span className="relative">
-          <Heart className="size-5" />
-          {hydrated && wishCount > 0 && (
-            <span className="absolute -right-2 -top-1 rounded-full bg-brand px-1 text-[9px] leading-3 text-primary-foreground">
-              {wishCount}
-            </span>
-          )}
-        </span>
-        Saved
-      </Link>
       <button onClick={openCart} className={cn(tab, 'text-muted-foreground')}>
         <span className="relative">
           <ShoppingBag className="size-5" />
@@ -61,18 +56,26 @@ export function MobileTabBar() {
         </span>
         Bag
       </button>
+      {chat && (
+        <button type="button" onClick={() => openChat(null)} className={cn(tab, 'text-muted-foreground')}>
+          <span className="relative">
+            <MessageCircle className="size-5" />
+            {hydrated && chatUnread > 0 && (
+              <span className="absolute -right-2 -top-1 rounded-full bg-brand px-1 text-[9px] leading-3 text-primary-foreground">
+                {chatUnread > 99 ? '99+' : chatUnread}
+              </span>
+            )}
+          </span>
+          Messages
+          {hydrated && chatUnread > 0 && <span className="sr-only"> — the store has replied to your message</span>}
+        </button>
+      )}
       <Link
         href="/account/menu"
         className={cn(tab, pathname.startsWith('/account') ? 'text-brand' : 'text-muted-foreground')}
       >
-        <span className="relative">
-          <User className="size-5" />
-          {hydrated && chatUnread > 0 && (
-            <span aria-hidden className="absolute -right-1 -top-0.5 size-2 rounded-full bg-brand ring-2 ring-background" />
-          )}
-        </span>
+        <User className="size-5" />
         Account
-        {hydrated && chatUnread > 0 && <span className="sr-only"> — the store has replied to your message</span>}
       </Link>
     </nav>
   );

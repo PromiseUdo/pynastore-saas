@@ -12,7 +12,7 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Bell, ChevronRight, LayoutGrid, Mail, MapPin, Package, PackageSearch, Phone, ShieldCheck, UserRound } from 'lucide-react';
+import { Bell, ChevronRight, Heart, LayoutGrid, Mail, MapPin, Package, PackageSearch, Phone, ShieldCheck, UserRound } from 'lucide-react';
 import { getShopper } from '@/lib/storefront/account/session';
 import { unreadCount } from '@/lib/notifications/inbox';
 import { getStorePages, getStorefrontLook } from '@/lib/storefront/catalog';
@@ -48,6 +48,8 @@ export default async function AccountMenuPage({ params }: Props) {
             <Group title="Your account">
               <Row href="/account" icon={LayoutGrid}>Overview</Row>
               <Row href="/account/orders" icon={Package}>Orders</Row>
+              {/* Saved items moved here from the tab bar, which now has Messages. */}
+              <Row href="/wishlist" icon={Heart}>Saved items</Row>
               <Row href="/account/notifications" icon={Bell} count={unread}>Notifications</Row>
               <Row href="/account/addresses" icon={MapPin}>Addresses</Row>
               <Row href="/account/profile" icon={UserRound}>Profile</Row>
@@ -76,6 +78,7 @@ export default async function AccountMenuPage({ params }: Props) {
               </Link>
             </div>
             <Group>
+              <Row href="/wishlist" icon={Heart}>Saved items</Row>
               <Row href="/track-order" icon={PackageSearch}>Track an order</Row>
             </Group>
           </>
