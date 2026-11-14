@@ -50,6 +50,8 @@ export interface ShopperExport {
     currency: string;
     total: string;
     contact: { name: string; email: string | null; phone: string | null };
+    /** a trade order: the business it was invoiced to (ROADMAP 21.6) */
+    business?: { name: string; taxId: string | null; cacNumber: string | null };
     deliverTo: string | null;
     items: { name: string; variant: string | null; quantity: number; unitPrice: string }[];
   }[];
@@ -131,6 +133,7 @@ export async function exportShopperData(organizationId: string, customerId: stri
       currency: o.currency,
       total: money(o.totalAmount),
       contact: { name: [o.firstName, o.lastName].filter(Boolean).join(' '), email: o.email, phone: o.phone },
+      ...(o.buyerBusinessName ? { business: { name: o.buyerBusinessName, taxId: o.buyerTaxId, cacNumber: o.buyerCacNumber } } : {}),
       deliverTo: o.shipLine1
         ? [o.shipFullName, o.shipLine1, o.shipLine2, o.shipCity, o.shipState, o.shipCountry, o.shipPostalCode].filter(Boolean).join(', ')
         : null,

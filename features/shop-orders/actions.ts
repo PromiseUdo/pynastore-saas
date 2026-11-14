@@ -37,7 +37,7 @@ import type { AppliedCoupon, ShippingMethod } from '@/lib/storefront/types';
 import { findPaymentMethod } from '@/lib/storefront/checkout/config';
 import { notifyShopper, notifyStoreOfOrder } from '@/lib/storefront/orders/notifications';
 import { isLocalHostname } from '@/lib/tenant/resolveHostname';
-import type { CheckoutAddress, CheckoutContact } from '@/lib/storefront/checkout/types';
+import type { CheckoutAddress, CheckoutBusiness, CheckoutContact } from '@/lib/storefront/checkout/types';
 import type { StorefrontOrder } from '@/lib/storefront/orders/types';
 
 export interface PlaceOrderRequest {
@@ -47,6 +47,8 @@ export interface PlaceOrderRequest {
   deliveryMethodId: string;
   paymentMethodId: string;
   note: string;
+  /** a trade buyer's business for their invoice (ROADMAP 21.6) — used only if they are one */
+  business?: CheckoutBusiness;
   /** the code the shopper typed, if any — re-checked on the server */
   discountCode?: string | null;
   /** checking out inside the phone app, where payment opens in an in-app browser */
@@ -120,6 +122,7 @@ export async function placeOrderAction(
     deliveryMethodId: request.deliveryMethodId,
     paymentMethodId: request.paymentMethodId,
     note: request.note ?? '',
+    business: request.business ?? null,
     discountCode: request.discountCode ?? null,
     config,
   });

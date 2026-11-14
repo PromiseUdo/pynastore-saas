@@ -105,6 +105,10 @@ export async function runDataRetention(options: { now?: Date; only?: string[] } 
       shipState: null,
       shipPostalCode: null,
       note: null,
+      // A trade order's registration numbers go too (21.6). The business name
+      // stays, as a supplier's record of whom it sold to, not of a person.
+      buyerTaxId: null,
+      buyerCacNumber: null,
       anonymizedAt: now,
     },
   });

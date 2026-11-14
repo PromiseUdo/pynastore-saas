@@ -24,6 +24,7 @@ import { ReorderButton } from './reorder-button';
 import { OrderSelfService } from './order-self-service';
 import { OrderReturns } from './order-returns';
 import { TransferInstructions } from './transfer-instructions';
+import { InvoiceLink } from './invoice-link';
 
 export function OrderDetail({
   order,
@@ -31,6 +32,7 @@ export function OrderDetail({
   showReorder = false,
   selfService = 'guest',
   paymentAction,
+  invoiceHref,
 }: {
   order: StorefrontOrder;
   locale: string;
@@ -39,6 +41,8 @@ export function OrderDetail({
   selfService?: 'account' | 'guest';
   /** e.g. "Pay now", when the order can still be paid online */
   paymentAction?: React.ReactNode;
+  /** a trade order's business invoice (ROADMAP 21.6) */
+  invoiceHref?: string | null;
 }) {
   const { totals } = order;
 
@@ -77,6 +81,12 @@ export function OrderDetail({
         )}
 
         {paymentAction && <div className="mt-4">{paymentAction}</div>}
+
+        {invoiceHref && (
+          <div className="mt-4">
+            <InvoiceLink href={invoiceHref} />
+          </div>
+        )}
 
         <div className="mt-4 empty:hidden">
           <OrderSelfService order={order} mode={selfService} locale={locale} />

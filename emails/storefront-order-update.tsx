@@ -61,7 +61,12 @@ export type StorefrontOrderUpdateEmailProps = {
   storeNote?: string;
   /** refund emails: the amount the store recorded, formatted */
   refundAmount?: string;
+  /** a trade order's business invoice (ROADMAP 21.6) — linked from the emails about buying it */
+  invoiceUrl?: string;
 };
+
+/** The emails a business invoice belongs with: buying it, not cancelling or returning it. */
+const WITH_INVOICE: OrderEmailKind[] = ['placed-pay-on-delivery', 'placed-bank-transfer', 'payment-received', 'shipped', 'delivered'];
 
 const COPY: Record<OrderEmailKind, { subject: string; heading: string }> = {
   'placed-pay-on-delivery': { subject: 'We’ve got your order', heading: 'Thanks — we’ve got your order' },
@@ -236,6 +241,16 @@ export function StorefrontOrderUpdateEmail(props: StorefrontOrderUpdateEmailProp
               View your order
             </Button>
 
+            {props.invoiceUrl && WITH_INVOICE.includes(props.kind) && (
+              <Text style={invoiceLine}>
+                Your invoice for this order, made out to your business:{' '}
+                <a href={props.invoiceUrl} style={invoiceLink}>
+                  view or print it
+                </a>
+                .
+              </Text>
+            )}
+
             <Text style={footer}>Keep your order number handy if you get in touch with {props.storeName}.</Text>
           </Section>
         </Container>
@@ -323,4 +338,6 @@ const storeNote: React.CSSProperties = {
   padding: '4px 0 4px 14px',
   margin: '0 0 12px',
 };
+const invoiceLine: React.CSSProperties = { fontSize: '14px', lineHeight: '22px', color: '#3f4a4f', margin: '0 0 16px' };
+const invoiceLink: React.CSSProperties = { color: '#001822', fontWeight: '600', textDecoration: 'underline' };
 const footer: React.CSSProperties = { fontSize: '13px', lineHeight: '20px', color: '#6b7478', margin: '0' };

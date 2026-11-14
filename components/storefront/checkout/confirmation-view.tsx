@@ -16,6 +16,7 @@
  * says it is waiting for payment and offers "Pay now"; the payment line is
  * the order's real state with the one sentence that says what happens next.
  */
+import { InvoiceLink } from '@/components/storefront/orders/invoice-link';
 import { formatEtaWindow } from '@/lib/storefront/delivery/eta';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -37,6 +38,7 @@ export function ConfirmationView({
   signedIn,
   payment,
   updatesPrompt = null,
+  invoiceHref = null,
 }: {
   order: StorefrontOrder;
   config: CheckoutConfig;
@@ -48,6 +50,8 @@ export function ConfirmationView({
   };
   /** "Get updates on this order", inside a store's own app (ROADMAP 16.4) */
   updatesPrompt?: React.ReactNode;
+  /** a trade order's business invoice (ROADMAP 21.6) */
+  invoiceHref?: string | null;
 }) {
   const { totals } = order;
   const paid = order.paymentStatus === 'PAID';
@@ -103,6 +107,12 @@ export function ConfirmationView({
           <span className="text-xs uppercase tracking-wide text-muted-foreground">Order</span>
           <span className="font-semibold tabular-nums">{order.reference}</span>
         </p>
+
+        {invoiceHref && (
+          <div className="mt-4">
+            <InvoiceLink href={invoiceHref} />
+          </div>
+        )}
       </header>
 
       <p className="mt-6 flex items-start gap-2.5 rounded-xl border bg-secondary/40 p-4 text-sm leading-relaxed">

@@ -26,6 +26,7 @@ import { storeUrl } from '../account/return-url';
 import { formatMoney } from '../format';
 import { TRANSFER_HOLD_HOURS } from './holds';
 import { readTransferDetails } from './read';
+import { tradeInvoicePath } from './trade-invoice';
 import { RETURN_REASONS, isReturnReason } from './policy';
 
 /** Decimal major units → minor units, for the storefront's money formatter. */
@@ -85,6 +86,7 @@ export async function notifyShopper(
         totalAmount: true,
         paymentStatus: true,
         transferDetails: true,
+        buyerBusinessName: true,
         deliveryMethodLabel: true,
         shipFullName: true,
         shipLine1: true,
@@ -156,6 +158,10 @@ export async function notifyShopper(
           wasPaid: order.paymentStatus === 'PAID',
           transferAccounts: readTransferDetails(order.transferDetails) ?? undefined,
           transferHoldHours: TRANSFER_HOLD_HOURS,
+          // A trade order comes with a business invoice (ROADMAP 21.6).
+          invoiceUrl: order.buyerBusinessName
+            ? storeUrl(order.organization, tradeInvoicePath(order.confirmationToken))
+            : undefined,
         },
       },
     });

@@ -87,6 +87,17 @@ export const addressSchema = z.object({
 });
 
 /**
+ * A trade buyer's business, for the invoice their order comes with (ROADMAP
+ * 21.6). Lengths match the trade account's own (lib/trade/rules.ts). Whether
+ * the name is required depends on who is buying, so it is checked in
+ * `checkoutSchema` with the config to hand; for anyone else both stay blank.
+ */
+export const businessSchema = z.object({
+  name: z.string().trim().max(150, 'Keep the business name under 150 characters.'),
+  taxId: z.string().trim().max(60, 'That tax ID looks too long.'),
+});
+
+/**
  * The whole checkout draft.
  *
  * Built from the store's config so the delivery and payment ids it accepts
@@ -111,8 +122,18 @@ export function checkoutSchema(config: CheckoutConfig) {
         .min(1, 'Choose how you’d like to pay.')
         .refine((id) => paymentIds.includes(id), 'That payment method isn’t available.'),
       orderNote: z.string().trim().max(500, 'Keep your note under 500 characters.'),
+      // Only a trade buyer has one to give; everyone else's stays blank.
+      business: businessSchema.default({ name: '', taxId: '' }),
     })
     .superRefine((draft, ctx) => {
+      if (config.tradeBuyer && draft.business.name.length < 2) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['business', 'name'],
+          message: 'Enter the business name your invoice should show.',
+        });
+      }
+
       const country = config.countries.find((c) => c.code === draft.address.country);
 
       if (!countryCodes.includes(draft.address.country)) {
@@ -156,7 +177,7 @@ export type CheckoutFormValues = z.input<ReturnType<typeof checkoutSchema>>;
 
 /** The fields each step owns, so a step can be validated without the rest. */
 export const STEP_FIELDS = {
-  information: ['contact', 'address'],
+  information: ['contact', 'address', 'business'],
   delivery: ['deliveryMethodId'],
   payment: ['paymentMethodId'],
   review: [],

@@ -25,6 +25,7 @@ import { formatMoney } from '@/lib/storefront/format';
 import { PayNowButton } from '@/components/storefront/checkout/pay-now-button';
 import { markThreadRead } from '@/lib/notifications/inbox';
 import { runAfter } from '@/lib/run-after';
+import { tradeInvoicePath } from '@/lib/storefront/orders/trade-invoice';
 
 export const metadata: Metadata = { title: 'Your order' };
 
@@ -41,7 +42,7 @@ export default async function OrderDetailPage({
   const row = await prisma.order.findFirst({
     // Online orders only: an in-store purchase has no payment link to offer.
     where: { organizationId: shopper.organizationId, customerId: shopper.id, reference, channel: 'ONLINE' },
-    select: { id: true, paymentStatus: true, confirmationToken: true },
+    select: { id: true, paymentStatus: true, confirmationToken: true, buyerBusinessName: true },
   });
   // Looking at the order is reading its notifications (ROADMAP 18.4: the app icon's count).
   if (row) {
@@ -82,6 +83,7 @@ export default async function OrderDetailPage({
         locale={config.locale}
         showReorder
         selfService="account"
+        invoiceHref={row?.buyerBusinessName && row.confirmationToken ? `${prefix}${tradeInvoicePath(row.confirmationToken)}` : null}
         paymentAction={
           payment?.canPay && row?.confirmationToken ? (
             <div className="space-y-2">

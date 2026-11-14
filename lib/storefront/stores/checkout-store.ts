@@ -25,6 +25,7 @@
 import { create } from 'zustand';
 import type {
   CheckoutAddress,
+  CheckoutBusiness,
   CheckoutConfig,
   CheckoutContact,
   CheckoutStepId,
@@ -37,6 +38,7 @@ import { useCartStore } from './cart-store';
 import type { ShippingMethod } from '../types';
 
 const EMPTY_CONTACT: CheckoutContact = { firstName: '', lastName: '', email: '', phone: '' };
+const EMPTY_BUSINESS: CheckoutBusiness = { name: '', taxId: '' };
 
 interface CheckoutState {
   contact: CheckoutContact;
@@ -44,6 +46,8 @@ interface CheckoutState {
   deliveryMethodId: string | null;
   paymentMethodId: string | null;
   orderNote: string;
+  /** a trade buyer's business, for their invoice (ROADMAP 21.6) */
+  business: CheckoutBusiness;
 
   step: CheckoutStepId;
   /** the furthest step reached, so a shopper can jump back and forth */
@@ -64,6 +68,7 @@ interface CheckoutState {
   setDeliveryMethod: (id: string) => void;
   setPaymentMethod: (id: string) => void;
   setOrderNote: (note: string) => void;
+  setBusiness: (business: CheckoutBusiness) => void;
   setStep: (step: CheckoutStepId) => void;
   clearFailure: () => void;
   /** seed the defaults that come from the store's config */
@@ -90,6 +95,7 @@ export const useCheckoutStore = create<CheckoutState>((set, get) => ({
   deliveryMethodId: null,
   paymentMethodId: null,
   orderNote: '',
+  business: EMPTY_BUSINESS,
 
   step: 'information',
   furthestStep: 'information',
@@ -102,6 +108,7 @@ export const useCheckoutStore = create<CheckoutState>((set, get) => ({
   setDeliveryMethod: (id) => set({ deliveryMethodId: id, failure: null }),
   setPaymentMethod: (id) => set({ paymentMethodId: id, failure: null }),
   setOrderNote: (orderNote) => set({ orderNote }),
+  setBusiness: (business) => set({ business }),
 
   setStep: (step) =>
     set((s) => ({ step, furthestStep: furthest(s.furthestStep, step), failure: null })),
@@ -127,6 +134,7 @@ export const useCheckoutStore = create<CheckoutState>((set, get) => ({
       deliveryMethodId: config?.defaultDeliveryMethodId ?? null,
       paymentMethodId: null,
       orderNote: '',
+      business: EMPTY_BUSINESS,
       step: 'information',
       furthestStep: 'information',
       status: 'idle',
@@ -178,6 +186,7 @@ export const useCheckoutStore = create<CheckoutState>((set, get) => ({
       deliveryMethodId: state.deliveryMethodId,
       paymentMethodId: state.paymentMethodId,
       orderNote: state.orderNote,
+      business: state.business,
       /* The bag owns the code, the same way it owns the lines — checkout
        * never keeps its own copy of either. */
       coupon: useCartStore.getState().coupon,

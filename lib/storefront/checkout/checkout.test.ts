@@ -402,6 +402,14 @@ describe('checkout validation', () => {
     expect(validateCheckout(draft({ paymentMethodId: null }))?.code).toBe('invalid-payment-method');
   });
 
+  it('asks a trade buyer which business the invoice is made out to, and nobody else (21.6)', () => {
+    const trade = { ...config, tradeBuyer: true };
+    const failure = validateCheckout(draft({ config: trade, business: { name: '', taxId: '' } }));
+    expect(failure?.code).toBe('invalid-details');
+    expect(validateCheckout(draft({ config: trade, business: { name: 'Bola Stores', taxId: '' } }))).toBeNull();
+    expect(validateCheckout(draft({ business: { name: '', taxId: '' } }))).toBeNull();
+  });
+
   it('catches a line asking for more than the snapshot had in stock', () => {
     const item = { ...line(A, 1), quantity: 5, maxQuantity: 2 };
     const failure = validateCheckout(draft({ items: [item] }));
@@ -497,6 +505,14 @@ describe('handing a valid checkout to the server', () => {
     const payload = JSON.stringify(sent);
     expect(payload).not.toContain('unitPrice');
     expect(payload).not.toContain('totals');
+  });
+
+  it('sends a trade buyer’s business, and nobody else’s (21.6)', async () => {
+    const business = { name: 'Bola Stores', taxId: '1234' };
+    await submitCheckout(draft({ config: { ...config, tradeBuyer: true }, business }));
+    expect((placeOrderAction.mock.calls[0][0] as { business?: unknown }).business).toEqual(business);
+    await submitCheckout(draft({ business }));
+    expect((placeOrderAction.mock.calls[1][0] as { business?: unknown }).business).toBeUndefined();
   });
 
   it('returns the reference and the confirmation token it was given', async () => {

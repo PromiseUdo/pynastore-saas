@@ -87,7 +87,7 @@ function previousOf(step: CheckoutStepId): CheckoutStepId | null {
 
 /** Which step owns the first thing that failed, so we can send them there. */
 function stepForField(path: string): CheckoutStepId {
-  if (path.startsWith('contact') || path.startsWith('address')) return 'information';
+  if (path.startsWith('contact') || path.startsWith('address') || path.startsWith('business')) return 'information';
   if (path.startsWith('deliveryMethodId')) return 'delivery';
   if (path.startsWith('paymentMethodId')) return 'payment';
   return 'review';
@@ -178,6 +178,13 @@ export function CheckoutView({
       deliveryMethodId: draft.deliveryMethodId ?? config.defaultDeliveryMethodId ?? '',
       paymentMethodId: draft.paymentMethodId ?? '',
       orderNote: draft.orderNote,
+      /* A trade buyer's invoice is made out to the business on their trade
+       * account (ROADMAP 21.6); what they typed this time wins. */
+      business: config.tradeBuyer
+        ? draft.business.name || draft.business.taxId
+          ? draft.business
+          : (account?.business ?? { name: '', taxId: '' })
+        : { name: '', taxId: '' },
     };
   }, [config, account]);
 
@@ -316,6 +323,7 @@ export function CheckoutView({
       if (which === 'information' || which === 'all') {
         store.setContact(values.contact);
         store.setAddress(values.address);
+        store.setBusiness(values.business ?? { name: '', taxId: '' });
       }
       if (which === 'delivery' || which === 'all') {
         if (values.deliveryMethodId) store.setDeliveryMethod(values.deliveryMethodId);

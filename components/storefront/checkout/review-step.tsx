@@ -90,9 +90,9 @@ export function ReviewStep({
   const { register, control, formState } = form;
   /* useWatch, not form.watch(): with the React Compiler on (next.config.ts)
    * a watch() call is memoised away and the choice never re-renders. */
-  const [contact, address, paymentMethodId] = useWatch({
+  const [contact, address, paymentMethodId, business] = useWatch({
     control,
-    name: ['contact', 'address', 'paymentMethodId'],
+    name: ['contact', 'address', 'paymentMethodId', 'business'],
   });
   const payment = findPaymentMethod(config, paymentMethodId ?? null);
 
@@ -118,6 +118,13 @@ export function ReviewStep({
           <p className="text-muted-foreground">{contact.email}</p>
           <p className="text-muted-foreground">{contact.phone}</p>
         </ReviewBlock>
+
+        {config.tradeBuyer && business?.name && (
+          <ReviewBlock title="Invoice to" step="information" onEdit={onEdit}>
+            <p>{business.name}</p>
+            {business.taxId && <p className="text-muted-foreground">Tax ID {business.taxId}</p>}
+          </ReviewBlock>
+        )}
 
         <ReviewBlock title="Delivery address" step="information" onEdit={onEdit}>
           {lines.map((line) => (

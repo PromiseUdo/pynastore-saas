@@ -9,7 +9,7 @@
  */
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, Printer } from 'lucide-react';
+import { ChevronLeft, FileText, Printer } from 'lucide-react';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { requireFeature } from '@/lib/billing/entitlements';
@@ -142,6 +142,16 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
               <Printer className="size-3.5" />
               Receipt
             </Link>
+            {/* A trade order's business invoice — the same page the buyer opens (ROADMAP 21.6). */}
+            {order.buyer && (
+              <Link
+                href={`/sales/orders/${order.id}/invoice`}
+                className="inline-flex h-8 items-center gap-1 rounded-md border px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                <FileText className="size-3.5" />
+                Business invoice
+              </Link>
+            )}
             {canTakeBack && (
               <CounterReturnButton
                 orderId={order.id}
@@ -277,6 +287,24 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
                 <dt className="text-xs text-muted-foreground">Phone</dt>
                 <dd>{order.phone || '—'}</dd>
               </div>
+              {order.buyer && (
+                <>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Business (trade buyer)</dt>
+                    <dd>{order.buyer.businessName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Tax ID</dt>
+                    <dd>{order.buyer.taxId ?? '—'}</dd>
+                  </div>
+                  {order.buyer.cacNumber && (
+                    <div>
+                      <dt className="text-xs text-muted-foreground">RC/BN number</dt>
+                      <dd>{order.buyer.cacNumber}</dd>
+                    </div>
+                  )}
+                </>
+              )}
             </dl>
           </section>
 

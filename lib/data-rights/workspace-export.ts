@@ -80,6 +80,9 @@ export async function workspaceCsv(organizationId: string, dataset: WorkspaceDat
         { header: 'Customer', value: ({ o }) => [o.firstName, o.lastName].filter(Boolean).join(' ') },
         { header: 'Email', value: ({ o }) => o.email },
         { header: 'Phone', value: ({ o }) => o.phone },
+        // A trade order's business, as invoiced (ROADMAP 21.6).
+        { header: 'Business', value: ({ o }) => o.buyerBusinessName },
+        { header: 'Business tax ID', value: ({ o }) => o.buyerTaxId },
         { header: 'Deliver to', value: ({ o }) => [o.shipLine1, o.shipLine2, o.shipCity, o.shipState].filter(Boolean).join(', ') },
         { header: 'Item', value: ({ l }) => (l.variantName ? `${l.name} (${l.variantName})` : l.name) },
         { header: 'SKU', value: ({ l }) => l.sku },

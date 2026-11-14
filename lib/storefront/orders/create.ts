@@ -53,7 +53,8 @@ import { OutOfStockError, plannedStockOf, reserveOrderStock } from './stock';
 import { writeShipments } from './shipments';
 import { expireUnpaidOrders } from './lifecycle';
 import type { AppliedCoupon, CartItem } from '../types';
-import type { CheckoutAddress, CheckoutConfig, CheckoutContact } from '../checkout/types';
+import type { CheckoutAddress, CheckoutBusiness, CheckoutConfig, CheckoutContact } from '../checkout/types';
+import { orderBusinessFor } from '@/lib/trade/business';
 import { storefrontIsOpen } from '@/lib/billing/workspace-access';
 
 /** What the browser may say about one line. */
@@ -75,6 +76,12 @@ export interface PlaceOrderInput {
   note: string;
   /** what the shopper typed in the bag, if anything — re-checked here */
   discountCode?: string | null;
+  /**
+   * The business a trade buyer typed at checkout (ROADMAP 21.6). Used only
+   * when `config.tradeBuyer` says they are one; anything blank falls back
+   * to their trade account. Ignored for everyone else.
+   */
+  business?: CheckoutBusiness | null;
   config: CheckoutConfig;
 }
 
@@ -350,6 +357,13 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   if (customer === 'sign-in-required') return fail('sign-in-required');
   if (!customer) return fail('order-failed');
 
+  /* A trade buyer's order is made out to their business (ROADMAP 21.6) —
+   * re-checked against their trade account now, not taken from the browser. */
+  const trade =
+    input.config.tradeBuyer && !customer.isGuest
+      ? await orderBusinessFor(organization.id, customer.id, input.business)
+      : null;
+
   const now = new Date();
 
   /* The discount code is checked HERE, against the re-priced bag and this
@@ -439,6 +453,11 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           vatNumber: totals.tax > 0 ? (input.config.vat?.vatNumber ?? null) : null,
           totalAmount: toMajor(totals.total),
 
+          // Who a trade order's invoice is made out to, as it stood when ordered (21.6).
+          buyerBusinessName: trade?.business.name ?? null,
+          buyerTaxId: trade?.business.taxId ?? null,
+          buyerCacNumber: trade?.business.cacNumber ?? null,
+
           discountCodeId,
           discountCode: coupon?.code ?? null,
           discountCodeLabel: coupon?.label ?? null,
@@ -511,6 +530,13 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
        * to a database that may be a region away: Prisma's 5s default is too
        * tight for a bag of a few lines on a slow day. */
       { timeout: 20_000, maxWait: 10_000 });
+
+      // A tax ID given for the first time is kept for next time. Never fails the order.
+      if (trade?.rememberTaxId && trade.business.taxId) {
+        await prisma.customer
+          .updateMany({ where: { id: customer.id, organizationId: organization.id, OR: [{ taxId: null }, { taxId: '' }] }, data: { taxId: trade.business.taxId } })
+          .catch((error) => console.error('[orders] Could not save the trade buyer’s tax ID:', error));
+      }
 
       return { ok: true, orderId: created.id, organizationId: organization.id, reference, confirmationToken };
     } catch (error) {

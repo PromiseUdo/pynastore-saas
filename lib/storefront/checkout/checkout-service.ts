@@ -22,6 +22,7 @@ import { isNativeApp } from '../payments/open-payment-page';
 import type { AppliedCoupon, CartItem, ShippingMethod } from '../types';
 import type {
   CheckoutAddress,
+  CheckoutBusiness,
   CheckoutConfig,
   CheckoutContact,
 } from './types';
@@ -73,6 +74,8 @@ export interface SubmitCheckoutInput {
   deliveryMethodId: string | null;
   paymentMethodId: string | null;
   orderNote: string;
+  /** a trade buyer's business, for their invoice (ROADMAP 21.6); ignored for anyone else */
+  business?: CheckoutBusiness;
   /** the code applied in the bag, if any — the server checks it again */
   coupon?: AppliedCoupon | null;
   config: CheckoutConfig;
@@ -136,6 +139,7 @@ export function validateCheckout(input: SubmitCheckoutInput): CheckoutFailure | 
     deliveryMethodId: input.deliveryMethodId ?? '',
     paymentMethodId: input.paymentMethodId ?? '',
     orderNote: input.orderNote,
+    business: input.business ?? { name: '', taxId: '' },
   });
 
   if (!parsed.success) {
@@ -226,6 +230,7 @@ export async function submitCheckout(input: SubmitCheckoutInput): Promise<Checko
       deliveryMethodId: deliveryMethod.id,
       paymentMethodId: paymentMethod.id,
       note: input.orderNote,
+      ...(input.config.tradeBuyer && input.business ? { business: input.business } : {}),
       discountCode: input.coupon?.code ?? null,
       nativeApp: isNativeApp(),
     });

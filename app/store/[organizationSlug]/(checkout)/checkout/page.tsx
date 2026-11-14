@@ -27,6 +27,7 @@
 import type { Metadata } from 'next';
 import { getStoreCheckoutConfig } from '@/lib/storefront/checkout/store-config';
 import { isTradeBuyer } from '@/lib/trade/accounts';
+import { tradeBusinessOnFile } from '@/lib/trade/business';
 import { getShopper } from '@/lib/storefront/account/session';
 import { listAddresses } from '@/lib/storefront/account/addresses';
 import type { CheckoutAccount } from '@/lib/storefront/checkout/types';
@@ -52,6 +53,8 @@ export default async function CheckoutPage({
   let account: CheckoutAccount | null = null;
   if (shopper) {
     const [firstName = '', ...rest] = shopper.name.trim().split(/\s+/);
+    // The business their invoice is made out to, from their trade account (ROADMAP 21.6).
+    const business = tradeBuyer ? await tradeBusinessOnFile(shopper.organizationId, shopper.id) : null;
     account = {
       contact: {
         firstName,
@@ -63,6 +66,7 @@ export default async function CheckoutPage({
         organizationId: shopper.organizationId,
         customerId: shopper.id,
       }),
+      ...(business ? { business } : {}),
     };
   }
 

@@ -729,4 +729,25 @@ describe('order emails', () => {
       expect(html).not.toMatch(/refund (has been|was) issued|out for delivery today/i);
     }
   });
+
+  it('links a trade order’s business invoice from the emails about buying it, not cancelling it (21.6)', async () => {
+    const email = (kind: OrderEmailKind) =>
+      render(
+        StorefrontOrderUpdateEmail({
+          kind,
+          storeName: 'Ada’s Store',
+          firstName: 'Ada',
+          reference: 'ORD-2026-000010',
+          orderUrl: 'https://shop.example/checkout/confirmation?t=abc',
+          total: '₦12,500',
+          lines: [{ name: 'Tote', quantity: 2, total: '₦10,000' }],
+          deliveryLabel: 'Standard delivery',
+          address: ['Ada Okoro'],
+          invoiceUrl: 'https://shop.example/order-invoice/abc',
+        }),
+      );
+    expect(await email('placed-pay-on-delivery')).toContain('https://shop.example/order-invoice/abc');
+    expect(await email('delivered')).toContain('https://shop.example/order-invoice/abc');
+    expect(await email('cancelled')).not.toContain('order-invoice');
+  });
 });

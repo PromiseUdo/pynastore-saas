@@ -1923,6 +1923,19 @@ model Order {
   vatAddedAmount Decimal @default(0) @db.Decimal(12, 2)
 
   /**
+   * The buyer's business, copied onto the order when an approved trade
+   * buyer placed it (ROADMAP 21.6) — what their business invoice is made
+   * out to. A snapshot, like the address: renaming the trade account later
+   * doesn't rewrite an invoice already issued. Null on every other order,
+   * so `buyerBusinessName` being set is what makes an order a trade order.
+   */
+  buyerBusinessName String?
+  /** their Tax Identification Number, if they gave one */
+  buyerTaxId        String?
+  /** their Corporate Affairs Commission number (RC/BN), if the account has one */
+  buyerCacNumber    String?
+
+  /**
    * The code the shopper typed, and what it was worth, copied onto the order.
    * A snapshot: editing or deleting the code later never rewrites an order
    * that already used it. `discountCodeId` is the live record, kept only so

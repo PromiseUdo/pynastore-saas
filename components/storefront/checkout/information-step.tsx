@@ -144,6 +144,31 @@ export function InformationStep({
         />
       </FormSection>
 
+      {/* A trade buyer's order comes with an invoice made out to their business (ROADMAP 21.6). */}
+      {config.tradeBuyer && (
+        <FormSection
+          title="Your business"
+          description="Your invoice for this order is made out to this business. We’ve filled it in from your trade account."
+        >
+          <TextField
+            id="business-name"
+            label="Business name"
+            autoComplete="organization"
+            error={errors.business?.name?.message}
+            {...register('business.name')}
+          />
+          <TextField
+            id="business-tax-id"
+            label="Tax ID (TIN)"
+            optional
+            className="sm:max-w-72"
+            hint="Your Tax Identification Number, if you’d like it on the invoice."
+            error={errors.business?.taxId?.message}
+            {...register('business.taxId')}
+          />
+        </FormSection>
+      )}
+
       <FormSection title="Delivery address" description="Where should we send this order?">
         {savedAddresses.length > 0 && (
           <SavedAddressPicker

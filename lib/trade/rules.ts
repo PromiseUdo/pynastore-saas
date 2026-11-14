@@ -51,10 +51,13 @@ export function wholesaleOn(mode: WholesaleMode): boolean {
  * The pages of a "Trade only" shop everyone may open: signing in or
  * creating an account, their account (where the request form is), the
  * merchant's own pages (terms, delivery, about), and the page that explains
- * wholesale. Everything that shows a product or a price is behind the gate.
+ * wholesale. Everything that shows a product or a price is behind the gate —
+ * except a bill: an invoice link (the merchant's, or a trade order's, 21.6)
+ * is opened by its secret token, often from an email before signing in, and
+ * shows one customer only what they were billed.
  * `path` is the store-relative path (proxy.ts's `x-store-path`).
  */
-const OPEN_IN_TRADE_ONLY = ['/account', '/pages', '/wholesale'];
+const OPEN_IN_TRADE_ONLY = ['/account', '/pages', '/wholesale', '/invoice', '/order-invoice'];
 
 export function openInTradeOnly(path: string | null | undefined): boolean {
   const clean = (path ?? '/').split(/[?#]/)[0] || '/';

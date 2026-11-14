@@ -147,6 +147,12 @@ export interface CheckoutConfig {
    */
   /** an approved trade buyer's minimum order, minor units, on the goods (ROADMAP 21.3); absent otherwise */
   tradeMinOrderValue?: number | null;
+  /**
+   * The shopper is an approved trade buyer here (ROADMAP 21.1). Checkout then
+   * asks for the business their invoice is made out to (21.6). Absent for
+   * everyone else.
+   */
+  tradeBuyer?: boolean;
   vat: {
     ratePct: number;
     vatNumber: string | null;
@@ -176,6 +182,15 @@ export interface CheckoutDraft {
   deliveryMethodId: string | null;
   paymentMethodId: string | null;
   orderNote: string;
+  /** a trade buyer's business, for their invoice (ROADMAP 21.6); empty for anyone else */
+  business: CheckoutBusiness;
+}
+
+/** Who a trade order's invoice is made out to. */
+export interface CheckoutBusiness {
+  name: string;
+  /** Tax Identification Number; may be blank */
+  taxId: string;
 }
 
 export type CheckoutSubmissionStatus = 'idle' | 'validating' | 'submitting' | 'placed' | 'failed';
@@ -196,4 +211,6 @@ export interface CheckoutAccount {
   contact: Pick<CheckoutContact, 'firstName' | 'lastName' | 'email' | 'phone'>;
   /** the address book, default first (lib/storefront/account/addresses.ts) */
   addresses: Address[];
+  /** a trade buyer's business details on file, to prefill checkout (ROADMAP 21.6) */
+  business?: CheckoutBusiness;
 }

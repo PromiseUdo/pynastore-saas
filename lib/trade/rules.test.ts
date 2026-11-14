@@ -3,13 +3,13 @@ import { BusinessDetailsSchema, openInTradeOnly, tradeMayPayWith, TRADE_STATUS_L
 
 describe('a Trade only shop', () => {
   it('keeps sign-in, the account, the merchant’s pages and the wholesale page open', () => {
-    for (const path of ['/account', '/account/sign-in?next=%2F', '/account/trade', '/pages/terms', '/wholesale']) {
+    for (const path of ['/account', '/account/sign-in?next=%2F', '/account/trade', '/pages/terms', '/wholesale', '/invoice/abc', '/order-invoice/abc']) {
       expect(openInTradeOnly(path), path).toBe(true);
     }
   });
 
   it('closes everything that shows a product or a price', () => {
-    for (const path of ['/', '/products', '/products/shoe', '/c/men', '/search?q=rice', '/cart', '/checkout', '/accountant', null]) {
+    for (const path of ['/', '/products', '/products/shoe', '/c/men', '/search?q=rice', '/cart', '/checkout', '/accountant', '/invoices', null]) {
       expect(openInTradeOnly(path), String(path)).toBe(false);
     }
   });

@@ -154,6 +154,8 @@ export interface StoreOrderDetail extends StoreOrderRow {
   vatAddedAmount: number;
   /** the shop's VAT number when it was placed; null when no VAT was charged (ROADMAP 14.1) */
   vatNumber: string | null;
+  /** a trade order: the business it's invoiced to, as given at checkout (ROADMAP 21.6); null otherwise */
+  buyer: { businessName: string; taxId: string | null; cacNumber: string | null } | null;
   note: string | null;
   lines: {
     id: string;
@@ -674,6 +676,9 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
         taxAmount: Number(order.taxAmount),
         vatAddedAmount: Number(order.vatAddedAmount),
         vatNumber: order.vatNumber,
+        buyer: order.buyerBusinessName
+          ? { businessName: order.buyerBusinessName, taxId: order.buyerTaxId, cacNumber: order.buyerCacNumber }
+          : null,
         totalAmount: Number(order.totalAmount),
         itemCount: order.lineItems.reduce((sum, line) => sum + line.quantity, 0),
         note: order.note,

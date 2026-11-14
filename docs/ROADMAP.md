@@ -1343,7 +1343,7 @@ Launch (C) needs both.
 |---|---|---|
 | D3 | 14.4 SMS/WhatsApp order updates | needs a provider decision first (cost per message) |
 | D4 | 13.5 Custom domains bought through Namecheap's API | staff handle them by hand until then |
-| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | 21.1, 21.2 DONE 2026-11-14, 21.3 DONE 2026-11-15; next 21.6 business documents; can move before launch if a launch vendor needs it |
+| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | 21.1, 21.2 DONE 2026-11-14, 21.3 + 21.6 DONE 2026-11-15; next 21.4 trade delivery; can move before launch if a launch vendor needs it |
 
 ### Deliberately not planned yet
 
@@ -8090,12 +8090,47 @@ the vendor gives it**.
 - **Platform:** no money moves through us; terms and the vendor's record of
   payment are the whole of it.
 
-### 21.6 Business details and documents — TODO
+### 21.6 Business details and documents — DONE (2026-11-15)
 
 - Business name and tax ID on the trade account, filled in at checkout.
 - An invoice document for every trade order (business name, tax ID, VAT,
   due date when on account), from the order — downloadable by the buyer and
   sent with the order email.
+
+As built:
+- **Checkout** has a "Your business" section for an approved trade buyer
+  (`CheckoutConfig.tradeBuyer`), filled in from their trade account (name)
+  and customer record (tax ID); the review step shows "Invoice to". The
+  server re-checks the trade account (`lib/trade/business.ts`
+  `orderBusinessFor`): blanks fall back to the account, and nobody else's
+  order gets a business whatever the browser sends. A tax ID given for the
+  first time is saved to the customer; one on file is never overwritten from
+  checkout.
+- **The order keeps a snapshot** (`Order.buyerBusinessName`, `buyerTaxId`,
+  `buyerCacNumber`), like the address: renaming the account later doesn't
+  rewrite an issued invoice. `buyerBusinessName` set = a trade order (21.8's
+  filter can use it).
+- **The invoice is the order written up**, never an `Invoice` record
+  (decision 6): number = order reference, every figure as the order stored
+  it — VAT added to wholesale prices as its own line, VAT included as small
+  print, the shop's VAT number, the buyer's tax ID and RC/BN, transfer
+  details while a transfer is awaited. One reader
+  (`lib/storefront/orders/trade-invoice.ts`), one document
+  (`components/sales/trade-invoice-document.tsx`), on the shared invoice
+  paper (`components/sales/invoice-paper.tsx`, which the merchant's invoice
+  page now uses too).
+- **Where it opens:** `/order-invoice/{confirmation token}` on the shop (the
+  same key as the confirmation page; open even in a Trade only shop, like
+  `/invoice/…`), linked from the buyer's order page, the confirmation and the
+  order emails about buying (placed, paid, shipped, delivered — not
+  cancellations or returns). The merchant has "Business invoice" on the order
+  in Sales, and the order's Customer card shows the business and tax ID.
+- **No PDF generator** — "Print or save as PDF", as for every document here.
+  The due date waits for 21.5 (pay on account); until then the invoice says
+  how it was or will be paid.
+- **Data rights:** the business is in the shopper's export and the workspace
+  orders export; the retention job clears the tax ID and RC/BN with the rest
+  of an old order's personal details.
 
 ### 21.7 Quick ordering — TODO
 

@@ -28,6 +28,7 @@ import { OrderUpdatesPrompt } from '@/components/storefront/checkout/order-updat
 import { pushReadyFor } from '@/lib/mobile/push/watch';
 import { webPushConfigured } from '@/lib/notifications/channels/web-push';
 import { headers } from 'next/headers';
+import { tradeInvoicePath } from '@/lib/storefront/orders/trade-invoice';
 
 export const metadata: Metadata = {
   title: 'Your order',
@@ -59,7 +60,7 @@ export default async function ConfirmationPage({
   const row = token
     ? await prisma.order.findFirst({
         where: { organizationId: organization.id, confirmationToken: token },
-        select: { id: true, paymentStatus: true },
+        select: { id: true, paymentStatus: true, buyerBusinessName: true },
       })
     : null;
 
@@ -100,6 +101,7 @@ export default async function ConfirmationPage({
       config={config}
       signedIn={Boolean(shopper)}
       payment={{ ...payment, confirmationToken: token, confirmationPath: confirmationPath(prefix, token) }}
+      invoiceHref={row.buyerBusinessName ? `${prefix}${tradeInvoicePath(token)}` : null}
       updatesPrompt={channel ? <OrderUpdatesPrompt confirmationToken={token} channel={channel} signedIn={Boolean(shopper)} /> : null}
     />
   );
