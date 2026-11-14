@@ -275,7 +275,7 @@ export async function getShopperForStore(slug: string): Promise<Shopper | null> 
 export async function requireShopper(returnTo: string): Promise<Shopper> {
   const shopper = await getShopper();
   if (!shopper) redirect(`/account/sign-in?next=${encodeURIComponent(returnTo)}`);
-  // Every account's wallet needs a phone (ROADMAP 20.2). Google gives us
+  // Every account has a phone, so the store can reach them. Google gives us
   // none, and older accounts may predate the rule: ask once, then carry on.
   if (!shopper.phone) redirect(`/account/phone?next=${encodeURIComponent(returnTo)}`);
   return shopper;

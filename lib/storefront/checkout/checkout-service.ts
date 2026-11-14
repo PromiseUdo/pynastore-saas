@@ -156,7 +156,6 @@ export function validateCheckout(input: SubmitCheckoutInput): CheckoutFailure | 
   if (!paymentMethod) {
     return fail('invalid-payment-method', 'That payment method is no longer available. Pick another one.');
   }
-  if (paymentMethod.unavailableReason) return fail('invalid-payment-method', paymentMethod.unavailableReason);
   /* Pay on delivery against a bag the merchant wants paid up front. The
    * payment step already greys this out; a bag edited in another tab, or a
    * hand-edited draft, arrives here. */

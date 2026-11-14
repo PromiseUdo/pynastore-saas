@@ -44,7 +44,7 @@ export default async function CheckoutPage({
   const { organizationSlug } = await params;
   /* The tenant seam: this store's checkout, not "the" checkout. */
   const shopper = await getShopper();
-  const config = await getStoreCheckoutConfig({ organizationSlug }, { customerId: shopper?.id ?? null });
+  const config = await getStoreCheckoutConfig({ organizationSlug });
 
   let account: CheckoutAccount | null = null;
   if (shopper) {

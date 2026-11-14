@@ -3,10 +3,9 @@
  *
  * Four fields and a Google button. The delivery address is asked for at
  * checkout, where it is obvious why it is being asked; the phone is asked
- * for here because every account's wallet needs one (ROADMAP 20.2).
+ * for here so the store can reach the shopper about an order.
  */
 import type { Metadata } from 'next';
-import { edupayConfigured } from '@/lib/wallet/edupay';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getShopper } from '@/lib/storefront/account/session';
@@ -59,7 +58,7 @@ export default async function RegisterPage({ params, searchParams }: Props) {
         </>
       )}
 
-      <RegisterForm next={next} walletNotice={edupayConfigured()} />
+      <RegisterForm next={next} />
     </AuthShell>
   );
 }

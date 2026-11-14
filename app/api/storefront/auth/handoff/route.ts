@@ -69,8 +69,8 @@ export async function GET(request: Request) {
   if (!store) return NextResponse.redirect(getMarketingUrl('/'));
 
   const returnUrl = storeReturnUrl(to, store) ?? storeUrl(store, '/account');
-  // Google shares no phone number, and every account's wallet needs one
-  // (ROADMAP 20.2): a shopper without one is asked for it once, first.
+  // Google shares no phone number, and every account has one: a shopper
+  // without one is asked for it once, first.
   const customer = await prisma.customer.findFirst({
     where: { id: claims.customerId, organizationId: store.id },
     select: { phone: true },

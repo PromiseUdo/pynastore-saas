@@ -11,8 +11,8 @@
  * enforces the rule for sessions issued before it existed.
  *
  * Why it matters beyond the account itself: a shopper record can carry
- * guest orders placed with that address and, from Phase 20, a wallet
- * connected by email. Whoever registers an address must own it.
+ * guest orders placed with that address. Whoever registers an address must
+ * own it.
  *
  * A CODE, NOT A LINK. The store apps (Phase 16) and the mobile host keep the
  * shopper on the store's page; a code typed there works everywhere, while a

@@ -7,8 +7,7 @@ import { TextField } from '@/components/storefront/checkout/checkout-fields';
 import { SubmitButton } from './submit-button';
 import { AuthError } from './auth-shell';
 
-/** `walletNotice`: wallets are switched on, so say what is shared with EduPay (ROADMAP 20.2). */
-export function AddPhoneForm({ next, walletNotice = false }: { next: string; walletNotice?: boolean }) {
+export function AddPhoneForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState<ProfileFormState, FormData>(addPhoneAction, null);
 
   return (
@@ -32,12 +31,6 @@ export function AddPhoneForm({ next, walletNotice = false }: { next: string; wal
         Save and continue
       </SubmitButton>
 
-      {walletNotice && (
-        <p className="text-center text-xs text-muted-foreground">
-          Your account includes a wallet provided by EduPay. We share your name, email and phone number with EduPay to
-          set it up.
-        </p>
-      )}
     </form>
   );
 }

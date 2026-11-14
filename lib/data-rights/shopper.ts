@@ -164,8 +164,6 @@ export async function deleteShopperAccount(organizationId: string, customerId: s
     await tx.customerOAuthAccount.deleteMany({ where: { customerId } });
     await tx.customerPasswordResetToken.deleteMany({ where: { customerId } });
     await tx.customerEmailVerification.deleteMany({ where: { customerId } });
-    // Our link to their EduPay wallet; the wallet itself is theirs, at EduPay.
-    await tx.shopperWallet.deleteMany({ where: { customerId } });
     await tx.customerEmailChange.deleteMany({ where: { customerId } });
     await tx.customerAddress.deleteMany({ where: { customerId } });
     await tx.customerWishlistItem.deleteMany({ where: { customerId } });

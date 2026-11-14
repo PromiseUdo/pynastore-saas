@@ -3,8 +3,8 @@
 /*
  * Create an account: name, email, phone, password.
  *
- * Phone is asked for here because every account comes with a wallet, and
- * the wallet needs one (ROADMAP 20.2). The address is still NOT: checkout
+ * Phone is asked for here so the store can reach the shopper about an
+ * order. The address is still NOT: checkout
  * collects it when it is actually needed, and saves it then.
  */
 import { useActionState } from 'react';
@@ -14,8 +14,7 @@ import { PasswordField } from './password-field';
 import { SubmitButton } from './submit-button';
 import { AuthError } from './auth-shell';
 
-/** `walletNotice`: wallets are switched on, so say what is shared with EduPay (ROADMAP 20.2). */
-export function RegisterForm({ next, walletNotice = false }: { next: string; walletNotice?: boolean }) {
+export function RegisterForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState<AccountFormState, FormData>(registerAction, null);
 
   return (
@@ -78,12 +77,6 @@ export function RegisterForm({ next, walletNotice = false }: { next: string; wal
         Create account
       </SubmitButton>
 
-      {walletNotice && (
-        <p className="text-center text-xs text-muted-foreground">
-          Your account includes a wallet provided by EduPay. We share your name, email and phone number with EduPay to
-          set it up.
-        </p>
-      )}
     </form>
   );
 }

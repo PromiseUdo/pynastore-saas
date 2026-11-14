@@ -89,8 +89,7 @@ export interface CheckoutCountry {
  * `provider` says who takes the money: 'paystack' sends the shopper to
  * Paystack's hosted page after the order exists, and the money settles to the
  * shop's own subaccount (lib/storefront/checkout/payment-service.ts);
- * 'edupay' moves it from the shopper's wallet to the shop's once the order
- * exists (./wallet-payment.ts); 'manual' is settled outside the app (a
+ * 'manual' is settled outside the app (a
  * transfer the merchant checks, cash on delivery). Components don't branch on
  * it — the server does.
  */
@@ -100,7 +99,7 @@ export interface PaymentMethodOption {
   description: string;
   /** what happens after Place Order, in the shopper's words */
   handoffNote: string;
-  provider: 'paystack' | 'edupay' | 'manual';
+  provider: 'paystack' | 'manual';
   /**
    * The money is collected when the goods arrive, not before.
    *
@@ -110,12 +109,6 @@ export interface PaymentMethodOption {
    */
   settlesOnDelivery: boolean;
   enabled: boolean;
-  /**
-   * Offered by the store but not to this shopper yet, and why ("Sign in to
-   * pay from your wallet."). Shown greyed out with the reason; the server
-   * refuses it the same way.
-   */
-  unavailableReason?: string | null;
 }
 
 /** A merchant bank account as a shopper is shown it (no ids, nothing internal). */

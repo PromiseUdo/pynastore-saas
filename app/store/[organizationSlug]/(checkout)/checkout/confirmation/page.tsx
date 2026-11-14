@@ -2,8 +2,7 @@
  * /checkout/confirmation?t=…
  *
  * Also where Paystack returns the shopper after paying (via
- * /api/payments/paystack/callback). An unpaid order gets a "Pay now" here —
- * or, paid from the wallet (ROADMAP 20.5), the balance and a PIN.
+ * /api/payments/paystack/callback). An unpaid order gets a "Pay now" here.
  *
  * Its own route rather than a fourth state of the checkout page, for one
  * concrete reason: the checkout navigates here with `router.replace`, so the
@@ -25,9 +24,6 @@ import { getOrderByConfirmationToken } from '@/lib/storefront/orders/read';
 import { getOrderPaymentState, reconcileOpenAttempts } from '@/lib/storefront/checkout/payment-service';
 import { confirmationPath, storePathPrefix } from '@/lib/storefront/store-path';
 import { ConfirmationView, NoOrder } from '@/components/storefront/checkout/confirmation-view';
-import { WalletPayPanel } from '@/components/storefront/checkout/wallet-pay-panel';
-import { walletPayView } from '@/lib/storefront/checkout/wallet-payment';
-import { WalletTopUp } from '../../../(shop)/account/_components/wallet-top-up';
 import { OrderUpdatesPrompt } from '@/components/storefront/checkout/order-updates-prompt';
 import { pushReadyFor } from '@/lib/mobile/push/watch';
 import { webPushConfigured } from '@/lib/notifications/channels/web-push';
@@ -86,22 +82,6 @@ export default async function ConfirmationPage({
 
   if (!order) return <NoOrder />;
 
-  const walletPanel =
-    payment.canPay && payment.method === 'wallet' ? (
-      <WalletPayPanel
-        target={{ confirmationToken: token }}
-        view={
-          payment.checking
-            ? { state: 'unavailable' }
-            : await walletPayView({ organizationId: organization.id, orderId: row.id, customerId: shopper?.id ?? null })
-        }
-        checking={payment.checking}
-        walletHref="/account/wallet"
-        signInHref={`/account/sign-in?next=${encodeURIComponent(`/checkout/confirmation?t=${token}`)}`}
-        topUp={<WalletTopUp />}
-      />
-    ) : null;
-
   /* Updates by notification: inside a store's own app that can be reached
    * by push (ROADMAP 16.4), or in the browser on the shop's website (18.3). */
   const requestHeaders = await headers();
@@ -120,7 +100,6 @@ export default async function ConfirmationPage({
       config={config}
       signedIn={Boolean(shopper)}
       payment={{ ...payment, confirmationToken: token, confirmationPath: confirmationPath(prefix, token) }}
-      walletPanel={walletPanel}
       updatesPrompt={channel ? <OrderUpdatesPrompt confirmationToken={token} channel={channel} signedIn={Boolean(shopper)} /> : null}
     />
   );

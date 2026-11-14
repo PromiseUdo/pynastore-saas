@@ -14,7 +14,7 @@ describe('Nigerian phone numbers', () => {
     }
   });
 
-  it('gives EduPay the local spelling (ROADMAP 20.2)', () => {
+  it('gives the local spelling', () => {
     expect(toLocalNigerianPhone('+2348031234567')).toBe('08031234567');
     expect(toLocalNigerianPhone('nonsense')).toBeNull();
   });

@@ -99,20 +99,3 @@ describe('nonces and the switch', () => {
     expect(on['connect-src']).not.toContain('wss:');
   });
 });
-
-describe('Paystack’s window for wallet top-ups (ROADMAP 20.3)', () => {
-  it('is allowed only when wallets are switched on, and adds exactly its two origins', () => {
-    const off = parse(buildCsp({ nonce: 'n', storefront: true, dev: false, https: true }));
-    expect(off['frame-src']).toEqual(["'none'"]);
-    expect(off['connect-src']).not.toContain('https://api.paystack.co');
-
-    const on = parse(buildCsp({ nonce: 'n', storefront: true, dev: false, https: true, paystackPopup: true }));
-    expect(on['frame-src']).toEqual(['https://checkout.paystack.com']);
-    expect(on['connect-src']).toContain('https://api.paystack.co');
-  });
-
-  it('keeps the admin’s own preview frame alongside it', () => {
-    const admin = parse(buildCsp({ nonce: 'n', storefront: false, dev: false, https: true, frameSrc: ['https://shop-ada.getnotely.io'], paystackPopup: true }));
-    expect(admin['frame-src']).toEqual(['https://shop-ada.getnotely.io', 'https://checkout.paystack.com']);
-  });
-});

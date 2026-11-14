@@ -130,6 +130,7 @@ const OVERRIDES: Record<string, string> = {
   'settings.payment_setup.saved': 'Saved the online payment details',
   'settings.payment_setup.submitted': 'Sent the business details for review',
   'settings.payment_setup.withdrawn': 'Took the business details back from review',
+  // Shop wallet (EduPay, ROADMAP 20 — removed 2026-11-14): kept so older log rows still read.
   'settings.shop_wallet.bank_account_added': 'Connected the bank account to the shop wallet',
   'settings.shop_wallet.withdrawal_requested': 'Started a withdrawal from the shop wallet',
   'settings.shop_wallet.withdrawal_confirmed': 'Confirmed a withdrawal from the shop wallet',

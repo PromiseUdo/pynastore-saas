@@ -45,7 +45,6 @@ import { OrderReturnsPanel } from './_components/OrderReturnsPanel';
 import { DISPUTE_STATUS_VARIANT, disputeLabel, disputeOutcome } from '@/lib/sales/dispute-labels';
 import { ParcelsPanel } from './_components/ParcelsPanel';
 import { RecordOrderRefundButton } from './_components/RefundDialog';
-import { walletRefundOption } from '@/lib/storefront/orders/wallet-refunds';
 import { canUseStore } from '@/lib/store-access';
 import { CounterReturnButton } from './_components/CounterReturnSheet';
 
@@ -72,12 +71,6 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
   const canManage = hasPermission(ctx.membership.role.permissions, PERMISSIONS.SALES_FULFILLMENT_MANAGE);
   const canManageReturns = hasPermission(ctx.membership.role.permissions, PERMISSIONS.SALES_RETURN_MANAGE);
   const refundOwed = order.status === 'CANCELLED' && order.refundable > 0;
-  /* Paid from the customer's wallet: refunds go straight back there (ROADMAP
-   * 20.6). Asks EduPay for the shop wallet's balance, so only when it matters. */
-  const walletRefund =
-    canManageReturns && order.paymentMethod === 'wallet' && (refundOwed || order.returns.some((r) => r.status === 'REQUESTED' || r.status === 'APPROVED'))
-      ? await walletRefundOption(ctx.organization.id, order.id)
-      : null;
   /* A counter sale never went through confirming, packing and shipping — it
    * happened all at once — so the online progress track would be a row of
    * ticks for steps nobody took. */
@@ -175,7 +168,6 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
                 refundable={order.refundable}
                 currency={order.currency}
                 paymentMethod={order.paymentMethod}
-                wallet={walletRefund}
               />
             )}
             {canManage && (
@@ -503,7 +495,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
           </dl>
         </div>
 
-        <OrderReturnsPanel order={order} canManage={canManageReturns} wallet={walletRefund} />
+        <OrderReturnsPanel order={order} canManage={canManageReturns} />
       </PageBody>
     </>
   );

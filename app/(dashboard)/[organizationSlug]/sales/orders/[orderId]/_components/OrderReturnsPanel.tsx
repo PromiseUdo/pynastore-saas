@@ -41,7 +41,6 @@ import { ORDER_RETURN_LABEL, ORDER_RETURN_VARIANT, returnNextStep } from '@/lib/
 import { approveOrderReturn, rejectOrderReturn } from '@/features/sales/order-returns';
 import type { StoreOrderDetail, StoreOrderReturn } from '@/features/sales/orders';
 import { RefundDialog } from './RefundDialog';
-import type { WalletRefundOption } from '@/lib/storefront/orders/wallet-refunds';
 
 type Dialog =
   | { kind: 'approve'; ret: StoreOrderReturn }
@@ -52,12 +51,9 @@ type Dialog =
 export function OrderReturnsPanel({
   order,
   canManage,
-  wallet = null,
 }: {
   order: StoreOrderDetail;
   canManage: boolean;
-  /** paid from the customer's wallet: refunds go back there (ROADMAP 20.6) */
-  wallet?: WalletRefundOption | null;
 }) {
   const [dialog, setDialog] = React.useState<Dialog>(null);
   const close = () => setDialog(null);
@@ -147,7 +143,7 @@ export function OrderReturnsPanel({
                           variant={ret.status === 'APPROVED' ? 'default' : 'outline'}
                           onClick={() => setDialog({ kind: 'refund', ret })}
                         >
-                          {wallet ? 'Refund to wallet' : 'Record refund'}
+                          Record refund
                         </Button>
                       )}
                       <Button size="sm" variant="outline" onClick={() => setDialog({ kind: 'reject', ret })}>
@@ -202,7 +198,6 @@ export function OrderReturnsPanel({
           max={order.refundable}
           currency={order.currency}
           paymentMethod={order.paymentMethod}
-          wallet={wallet}
           deliveryFees={order.parcels
             .filter((parcel) => parcel.fee > 0)
             .map((parcel) => ({

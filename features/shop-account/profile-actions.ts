@@ -31,7 +31,6 @@ import {
   sendStorefrontEmailChangeNotice,
 } from '@/lib/email';
 import { safeNextPath, storeUrl } from '@/lib/storefront/account/return-url';
-import { retryAfterPhoneChange } from '@/lib/wallet/shopper';
 import { findStoreBySlug, issueSessionToken } from '@/lib/storefront/account/shopper';
 import { currentStoreSlug, getShopper, setSessionCookie } from '@/lib/storefront/account/session';
 
@@ -64,7 +63,7 @@ async function keepSignedIn(
 
 /* ---------------- name and phone ---------------- */
 
-/** Required: every account's wallet needs one (ROADMAP 20.2). Stored as +234…. */
+/** Required, so the store can reach the shopper about an order. Stored as +234…. */
 const PHONE = z
   .string()
   .trim()
@@ -101,7 +100,6 @@ export async function updateProfileAction(
     return { fieldErrors, values };
   }
 
-  const phoneChanged = parsed.data.phone !== ctx.shopper.phone;
   const updated = await updateProfile({
     organizationId: ctx.store.id,
     customerId: ctx.shopper.id,
@@ -110,8 +108,6 @@ export async function updateProfileAction(
   });
 
   if (!updated) return { error: NOT_SIGNED_IN };
-  // A wallet held up by the old number tries again with this one (ROADMAP 20.2).
-  if (phoneChanged) await retryAfterPhoneChange(ctx.shopper.id);
 
   // The header greets by first name, so the whole shell has to catch up.
   revalidatePath('/', 'layout');
@@ -136,8 +132,6 @@ export async function addPhoneAction(
 
   const saved = await setPhone({ organizationId: ctx.store.id, customerId: ctx.shopper.id, phone: parsed.data });
   if (!saved) return { error: NOT_SIGNED_IN };
-  // The last thing the account's wallet was waiting for (ROADMAP 20.2).
-  await retryAfterPhoneChange(ctx.shopper.id);
 
   redirect(safeNextPath(formData.get('next') as string | null));
 }

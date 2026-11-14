@@ -544,10 +544,6 @@ export default async function proxy(req: NextRequest, event: NextFetchEvent) {
     frameAncestors: slug && isDesignPreview(req, hostInfo) ? [new URL(getAdminUrl(slug)).origin, new URL(getBusinessUrl()).origin] : undefined,
     // The chat's real-time hints (lib/chat/ably.ts) — only when configured.
     realtime: Boolean(process.env.ABLY_API_KEY),
-    // Wallet top-ups open Paystack's window on the page (ROADMAP 20.3) — only
-    // when EduPay wallets are switched on (the same three settings as
-    // lib/wallet/edupay.ts edupayConfigured, read here without its imports).
-    paystackPopup: Boolean(process.env.EDUPAY_SERVICE_URL && process.env.EDUPAY_SERVICE_KEY && process.env.EDUPAY_MODE),
   });
   req.headers.set('x-nonce', nonce);
   req.headers.set('content-security-policy', policy);

@@ -306,7 +306,7 @@ export function AccountSecurity({ name, email, hasPassword, otherSignIns, twoFac
             codes left.
           </>
         ) : (
-          'After your password, ask for a code from an authenticator app on your phone. Withdrawing from the shop wallet needs it.'
+          'After your password, ask for a code from an authenticator app on your phone.'
         )}
       </Card>
 
@@ -481,8 +481,7 @@ export function AccountSecurity({ name, email, hasPassword, otherSignIns, twoFac
               <DialogHeader>
                 <DialogTitle>Turn off two-step sign-in?</DialogTitle>
                 <DialogDescription>
-                  Your password alone will sign you in again, and you won’t be able to withdraw from a shop wallet until it’s back
-                  on. We’ll email you that it was turned off.
+                  Your password alone will sign you in again. We’ll email you that it was turned off.
                 </DialogDescription>
               </DialogHeader>
               {errors.form && <FormError>{errors.form}</FormError>}

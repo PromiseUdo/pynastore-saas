@@ -46,12 +46,11 @@ export async function getGoLive(): Promise<ActionResult<GoLivePage>> {
   try {
     await requirePlatformStaff();
     const dayAgo = new Date(Date.now() - 86_400_000);
-    const [note, payoutsToMove, lastRetry, failedDeliveries24h, lastWalletJob] = await Promise.all([
+    const [note, payoutsToMove, lastRetry, failedDeliveries24h] = await Promise.all([
       prisma.platformSetting.findUnique({ where: { key: LAST_WEBHOOK_KEY } }),
       paystackKeyMode() ? prisma.merchantPaymentAccount.count({ where: payoutsToMoveWhere() }) : Promise.resolve(0),
       prisma.cronRun.findFirst({ where: { job: 'notification-retries', ok: true }, orderBy: { startedAt: 'desc' }, select: { finishedAt: true } }),
       prisma.notificationDelivery.count({ where: { status: 'FAILED', createdAt: { gte: dayAgo } } }),
-      prisma.cronRun.findFirst({ where: { job: 'wallet-setup', ok: true }, orderBy: { startedAt: 'desc' }, select: { finishedAt: true } }),
     ]);
     let lastWebhook: { at: string; mode: string | null } | null = null;
     try {
@@ -69,7 +68,6 @@ export async function getGoLive(): Promise<ActionResult<GoLivePage>> {
           expectedMetaRedirect: metaRedirectUri(),
           lastRetryRun: lastRetry?.finishedAt?.toISOString() ?? null,
           failedDeliveries24h,
-          lastWalletJobRun: lastWalletJob?.finishedAt?.toISOString() ?? null,
           now: new Date(),
         }),
         manual: MANUAL_STEPS,

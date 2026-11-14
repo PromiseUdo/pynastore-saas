@@ -23,9 +23,6 @@ import { getOrderPaymentState, reconcileOpenAttempts } from '@/lib/storefront/ch
 import { confirmationPath, storePathPrefix } from '@/lib/storefront/store-path';
 import { formatMoney } from '@/lib/storefront/format';
 import { PayNowButton } from '@/components/storefront/checkout/pay-now-button';
-import { WalletPayPanel } from '@/components/storefront/checkout/wallet-pay-panel';
-import { walletPayView } from '@/lib/storefront/checkout/wallet-payment';
-import { WalletTopUp } from '../../../_components/wallet-top-up';
 import { markThreadRead } from '@/lib/notifications/inbox';
 import { runAfter } from '@/lib/run-after';
 
@@ -76,13 +73,6 @@ export default async function OrderDetailPage({
     );
   }
 
-  const wallet =
-    payment?.canPay && payment.method === 'wallet' && row
-      ? payment.checking
-        ? ({ state: 'unavailable' } as const)
-        : await walletPayView({ organizationId: shopper.organizationId, orderId: row.id, customerId: shopper.id })
-      : null;
-
   return (
     <div className="space-y-4">
       <BackLink href="/account/orders">Your orders</BackLink>
@@ -100,22 +90,11 @@ export default async function OrderDetailPage({
                   Your last payment didn’t go through, and you haven’t been charged for it.
                 </p>
               )}
-              {wallet && payment.method === 'wallet' ? (
-                <WalletPayPanel
-                  target={{ reference: order.reference }}
-                  view={wallet}
-                  checking={payment.checking}
-                  walletHref="/account/wallet"
-                  signInHref="/account/sign-in"
-                  topUp={<WalletTopUp />}
-                />
-              ) : (
-                <PayNowButton
-                  target={{ reference: order.reference }}
-                  confirmationPath={confirmationPath(prefix, row.confirmationToken)}
-                  label={`Pay ${formatMoney(order.totals.total, order.currency)}`}
-                />
-              )}
+              <PayNowButton
+                target={{ reference: order.reference }}
+                confirmationPath={confirmationPath(prefix, row.confirmationToken)}
+                label={`Pay ${formatMoney(order.totals.total, order.currency)}`}
+              />
             </div>
           ) : undefined
         }

@@ -287,8 +287,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   if (!input.config.guestCheckoutEnabled && !input.customerId) return fail('sign-in-required');
 
   const paymentMethod = findPaymentMethod(input.config, input.paymentMethodId);
-  // Offered, but not to this shopper (a wallet they don't have yet).
-  if (!paymentMethod || paymentMethod.unavailableReason) return fail('invalid-payment-method');
+  if (!paymentMethod) return fail('invalid-payment-method');
 
   /* A transfer needs somewhere to send the money. The config is resolved on
    * the server per store (checkout/store-config.ts), so this is the merchant's

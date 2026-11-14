@@ -17,11 +17,6 @@
  * courier collects it (Sales → Orders). Offered unless the merchant turned it
  * off (Organization.checkoutPayOnDelivery).
  *
- * 'wallet' — the shopper's EduPay wallet (ROADMAP 20.5). Offered only by a
- * shop that may take online payments and has an active wallet; usable only
- * by a signed-in shopper whose own wallet is active. Paid after the order
- * exists, with the wallet PIN.
- *
  * 'transfer' — bank transfer to the merchant's own account. Offered only when
  * the store has an active bank account.
  *
@@ -41,18 +36,6 @@ export const ONLINE_PAYMENT_METHOD: PaymentMethodOption = {
   handoffNote:
     'After you place this order you’ll go to Paystack’s secure payment page to pay by card, bank transfer or USSD. No card details are entered on this site.',
   provider: 'paystack',
-  settlesOnDelivery: false,
-  enabled: true,
-};
-
-/** Second, and only to a shop with an active wallet (./store-config.ts). */
-export const WALLET_PAYMENT_METHOD: PaymentMethodOption = {
-  id: 'wallet',
-  label: 'Pay from wallet',
-  description: 'The money in your wallet, powered by EduPay',
-  handoffNote:
-    'After you place this order you’ll see your wallet balance and confirm the payment with your 4-digit wallet PIN. Short of money? You can add some there first.',
-  provider: 'edupay',
   settlesOnDelivery: false,
   enabled: true,
 };

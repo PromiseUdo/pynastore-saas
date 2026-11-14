@@ -4,9 +4,8 @@
  * Nigerian mobile numbers, in one place. Pure — safe on client and server.
  *
  * Stored as +234XXXXXXXXXX: one spelling, so the same number typed as
- * "0803 123 4567" and "+234 803 123 4567" is the same number. A service that
- * wants the local spelling (EduPay takes 08031234567, ROADMAP 20.2) converts
- * at its own edge with `toLocalNigerianPhone`.
+ * "0803 123 4567" and "+234 803 123 4567" is the same number. The local
+ * spelling (08031234567) comes from `toLocalNigerianPhone`.
  */
 
 /** Nigerian mobile numbers, as +234XXXXXXXXXX. Null when it isn't one. */

@@ -4,10 +4,9 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowRight, Banknote, CircleCheck, CreditCard, Landmark, Loader2, MoreHorizontal, Pencil, Plus, RotateCw, ShieldCheck, Trash2, TriangleAlert, Wallet } from 'lucide-react';
+import { ArrowRight, Banknote, CircleCheck, CreditCard, Landmark, Loader2, MoreHorizontal, Pencil, Plus, RotateCw, ShieldCheck, Trash2, TriangleAlert } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { ShopWalletState } from '@/lib/wallet/shop';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SwitchRoot } from '@/components/ui/switch';
@@ -66,7 +65,6 @@ export function PaymentSettingsClient({
   canManage,
   transferHoldHours,
   onlineSetup,
-  walletState,
   checkoutRules,
   onlineReady,
   banks,
@@ -77,8 +75,6 @@ export function PaymentSettingsClient({
   canManage: boolean;
   transferHoldHours: number;
   onlineSetup: OnlineSetupSummary;
-  /** Where the shop's EduPay wallet stands (ROADMAP 20.4); 'unavailable' hides the card */
-  walletState: ShopWalletState;
   /** the merchant's checkout rules, as saved */
   checkoutRules: CheckoutRulesInput;
   /** online payments are on at checkout right now */
@@ -175,7 +171,6 @@ export function PaymentSettingsClient({
           </div>
         )}
         <OnlineSetupCard setup={onlineSetup} canManage={canManage} />
-        {walletState !== 'unavailable' && <ShopWalletCard state={walletState} />}
 
         <section className="mt-6 rounded-lg border bg-card">
           <h2 className="border-b px-4 py-3 text-sm font-semibold">Payment options at checkout</h2>
@@ -486,44 +481,6 @@ function OnlineSetupCard({ setup, canManage }: { setup: OnlineSetupSummary; canM
             className={buttonVariants({ variant: primary ? 'default' : 'outline', size: 'sm', className: 'shrink-0 self-start' })}
           >
             {action}
-            <ArrowRight className="size-3.5" />
-          </Link>
-        )}
-      </div>
-    </section>
-  );
-}
-
-const WALLET_STATUS: Record<Exclude<ShopWalletState, 'unavailable'>, { label: string; variant: 'success' | 'pending' | 'destructive' | 'draft'; hint: string }> = {
-  'not-approved': { label: 'After approval', variant: 'draft', hint: 'Your shop gets an EduPay wallet once you’re approved for online payments.' },
-  'setting-up': { label: 'Setting up', variant: 'pending', hint: 'Your EduPay wallet is being set up. This usually takes a moment.' },
-  problem: { label: 'Needs attention', variant: 'destructive', hint: 'We couldn’t set up your wallet. Please try again later.' },
-  active: { label: 'Active', variant: 'success', hint: 'Its balance and every payment in and out are on the wallet page.' },
-};
-
-/** The shop's EduPay wallet (ROADMAP 20.4): where it stands, and a way to its page. */
-function ShopWalletCard({ state }: { state: Exclude<ShopWalletState, 'unavailable'> }) {
-  const status = WALLET_STATUS[state];
-  return (
-    <section className="mt-6 rounded-lg border bg-card p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 gap-3">
-          <Wallet className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold">Shop wallet</h2>
-              <Badge variant={status.variant}>{status.label}</Badge>
-            </div>
-            <p className="mt-0.5 text-sm text-muted-foreground">{status.hint}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Provided by EduPay.</p>
-          </div>
-        </div>
-        {state !== 'not-approved' && (
-          <Link
-            href="/settings/payments/wallet"
-            className={buttonVariants({ variant: 'outline', size: 'sm', className: 'shrink-0 self-start' })}
-          >
-            View wallet
             <ArrowRight className="size-3.5" />
           </Link>
         )}

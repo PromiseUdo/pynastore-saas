@@ -27,7 +27,6 @@ import { privateDownloadUrl } from '@/lib/cloudinary/sign';
 import { sendPaymentVerificationResultEmail } from '@/lib/email';
 import { getAdminUrl } from '@/lib/tenant/urls';
 import { provisionSubaccount, syncSubaccount } from '@/lib/payments/subaccounts';
-import { requestShopWallet } from '@/lib/wallet/shop';
 import type { BusinessType, DocumentKind, IdType, SetupStatus, VerificationStatus } from '@/lib/payments/payment-setup';
 import type { ProvisionOutcome } from '@/lib/payments/subaccounts';
 
@@ -323,9 +322,6 @@ export async function approveVerification(
     // Approval stands whatever Paystack says: a subaccount that can't be
     // created yet is left as "needs attention", retryable from this page (10.3).
     const payouts = await provisionSubaccount(organizationId, staff.userId);
-    // The shop's EduPay wallet, from the reviewed contact details (ROADMAP
-    // 20.4). Set up after the response; approval never waits on EduPay.
-    await requestShopWallet(organizationId).catch((error) => console.error('[wallet] Shop wallet request failed:', error));
 
     await notifyMerchant(organizationId, 'approved', null);
     return { success: true, data: { payouts: payouts.outcome } };

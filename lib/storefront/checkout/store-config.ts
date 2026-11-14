@@ -9,9 +9,6 @@
  *   - "Pay online" (Paystack), listed first, only while the shop may take
  *     online payments — verified by us, subaccount active, not suspended
  *     (onlinePaymentReadiness, ROADMAP 10.8);
- *   - "Pay from wallet" (EduPay, ROADMAP 20.5), second, on the same
- *     condition and only while the shop's wallet is active — greyed out,
- *     with the reason, for a shopper who can't use it yet (pass `customerId`);
  *   - pay on delivery, unless the merchant turned it off;
  *   - bank transfer, listed last, only while the merchant has an active bank
  *     account (Settings → Payments);
@@ -26,8 +23,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import type { StoreScope } from '../types';
-import { BANK_TRANSFER_METHOD, ONLINE_PAYMENT_METHOD, PAY_ON_DELIVERY_METHOD, WALLET_PAYMENT_METHOD } from './payment-methods';
-import { walletCheckoutAvailability, type WalletCheckoutAvailability } from './wallet-payment';
+import { BANK_TRANSFER_METHOD, ONLINE_PAYMENT_METHOD, PAY_ON_DELIVERY_METHOD } from './payment-methods';
 import { onlinePaymentReadiness } from '@/lib/payments/payment-setup';
 import { getCheckoutConfig } from './config';
 import { shopVatBySlug } from '@/lib/tax-settings';
@@ -73,23 +69,13 @@ export async function storeCheckoutRules(organizationSlug: string): Promise<Chec
   };
 }
 
-async function walletFor(organizationSlug: string, customerId: string | null): Promise<WalletCheckoutAvailability> {
-  const organization = await prisma.organization.findUnique({ where: { slug: organizationSlug }, select: { id: true } });
-  return organization ? walletCheckoutAvailability(organization.id, customerId) : { offered: false };
-}
-
-export async function getStoreCheckoutConfig(
-  scope: StoreScope,
-  /** the signed-in shopper, so "Pay from wallet" can say whether they can use it */
-  { customerId = null }: { customerId?: string | null } = {},
-): Promise<CheckoutConfig> {
-  const [base, transferAccounts, hasDelivery, onlineReady, rules, wallet, vat] = await Promise.all([
+export async function getStoreCheckoutConfig(scope: StoreScope): Promise<CheckoutConfig> {
+  const [base, transferAccounts, hasDelivery, onlineReady, rules, vat] = await Promise.all([
     getCheckoutConfig(scope),
     activeTransferAccounts(scope.organizationSlug),
     storeHasDelivery(scope.organizationSlug),
     onlinePaymentsReady(scope.organizationSlug),
     storeCheckoutRules(scope.organizationSlug),
-    walletFor(scope.organizationSlug, customerId),
     shopVatBySlug(scope.organizationSlug),
   ]);
 
@@ -110,7 +96,6 @@ export async function getStoreCheckoutConfig(
     ...delivery,
     paymentMethods: [
       ...(onlineReady ? [ONLINE_PAYMENT_METHOD] : []),
-      ...(onlineReady && wallet.offered ? [{ ...WALLET_PAYMENT_METHOD, unavailableReason: wallet.reason }] : []),
       ...base.paymentMethods.filter((method) => rules.payOnDelivery || method.id !== PAY_ON_DELIVERY_METHOD.id),
       ...(transferAccounts.length ? [BANK_TRANSFER_METHOD] : []),
     ],

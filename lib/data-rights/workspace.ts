@@ -210,8 +210,6 @@ export async function purgeClosedWorkspace(organizationId: string, now: Date = n
       await tx.customerOAuthAccount.deleteMany({ where });
       await tx.customerPasswordResetToken.deleteMany({ where: customer });
       await tx.customerEmailVerification.deleteMany({ where: customer });
-      await tx.shopperWallet.deleteMany({ where });
-      await tx.shopWallet.deleteMany({ where }); // our record; the wallet itself is at EduPay
       await tx.customerEmailChange.deleteMany({ where: customer });
       await tx.customerAddress.deleteMany({ where: customer });
       await tx.customerWishlistItem.deleteMany({ where: customer });

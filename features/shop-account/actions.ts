@@ -48,7 +48,6 @@ import {
 import { clearSessionCookie, setSessionCookie, currentStoreSlug } from '@/lib/storefront/account/session';
 import { safeNextPath, storeUrl } from '@/lib/storefront/account/return-url';
 import { adoptGuestChatOnSignIn } from '@/lib/chat/storefront';
-import { requestShopperWallet } from '@/lib/wallet/shopper';
 import {
   CODE_TTL_MINUTES,
   clearVerifyCookie,
@@ -72,7 +71,7 @@ const RESET_SENT_MESSAGE =
 
 const PASSWORD = z.string().min(8, 'Use at least 8 characters');
 
-/** Required: the wallet every account gets needs one (ROADMAP 20.2). Stored as +234…. */
+/** Required, so the store can reach the shopper about an order. Stored as +234…. */
 const PHONE = z
   .string()
   .trim()
@@ -283,8 +282,6 @@ export async function verifyEmailAction(
   await setSessionCookie(store.slug, await issueSessionToken(store.slug, customer));
   await clearVerifyCookie(store.slug);
   await adoptGuestChatOnSignIn(store, customer.id);
-  // The proved email is what the wallet hangs on (ROADMAP 20.2).
-  await requestShopperWallet(customer.id);
 
   redirect(next);
 }

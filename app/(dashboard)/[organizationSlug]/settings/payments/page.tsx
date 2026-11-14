@@ -18,7 +18,6 @@ import { isPaystackTestMode } from '@/lib/payments/paystack';
 import { syncSubaccount } from '@/lib/payments/subaccounts';
 import { paymentSetupState, requiredDocuments, setupChecklist } from '@/lib/payments/payment-setup';
 import { TRANSFER_HOLD_HOURS } from '@/lib/storefront/orders/holds';
-import { shopWalletState } from '@/lib/wallet/shop';
 import { prisma } from '@/lib/prisma';
 import { getOnlinePaymentReadiness } from '@/lib/payments/online-readiness';
 import { PaymentSettingsClient } from './_components/PaymentSettingsClient';
@@ -34,13 +33,11 @@ export default async function PaymentSettingsPage() {
   // so a subaccount Paystack switched off shows as such (ROADMAP 10.3).
   await syncSubaccount(ctx.organization.id);
   const canManage = hasPermission(perms, PERMISSIONS.SETTINGS_EDIT);
-  const [result, setup, banks, walletState, rules, online] = await Promise.all([
+  const [result, setup, banks, rules, online] = await Promise.all([
     listBankAccounts(),
     getPaymentSetup(),
     // Only someone who can add an account needs the bank list.
     canManage ? listSettlementBanks() : null,
-    // Our records only — the balance is read on the wallet's own page.
-    shopWalletState(ctx.organization.id),
     prisma.organization.findUniqueOrThrow({
       where: { id: ctx.organization.id },
       select: { checkoutPayOnDelivery: true, checkoutGuestAllowed: true, checkoutOrderNotes: true },
@@ -67,7 +64,6 @@ export default async function PaymentSettingsPage() {
       banksError={banks && !banks.success ? banks.error : null}
       testMode={isPaystackTestMode()}
       transferHoldHours={TRANSFER_HOLD_HOURS}
-      walletState={walletState}
       checkoutRules={{
         payOnDelivery: rules.checkoutPayOnDelivery,
         guestAllowed: rules.checkoutGuestAllowed,

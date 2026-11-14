@@ -36,8 +36,6 @@ export interface NotificationDetail {
   returnId?: string;
   /** major units */
   refundAmount?: number;
-  /** the refund went to the shopper's EduPay wallet, and EduPay confirmed it (ROADMAP 20.6) */
-  toWallet?: boolean;
 }
 
 async function returnSummary(returnId: string, money: (value: { toString(): string }) => string) {
@@ -146,7 +144,6 @@ export async function notifyShopper(
           returnReason: returned?.reason,
           storeNote: returned?.merchantNote ?? undefined,
           refundAmount: detail.refundAmount !== undefined ? money(detail.refundAmount) : undefined,
-          refundToWallet: detail.toWallet || undefined,
           deliveryLabel: order.deliveryMethodLabel ?? '',
           parcels: order.shipments.map((s) => (s.warehouse ? `from ${s.warehouse.name}: ${s.deliveryMethodLabel}` : s.deliveryMethodLabel)),
           address: [

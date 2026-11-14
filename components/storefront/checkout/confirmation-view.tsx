@@ -15,8 +15,6 @@
  * PAID is only ever set by a server-side check with Paystack. An unpaid order
  * says it is waiting for payment and offers "Pay now"; the payment line is
  * the order's real state with the one sentence that says what happens next.
- * An order to be paid from the wallet (ROADMAP 20.5) gets the wallet panel
- * in place of "Pay now" (`walletPanel`, built by the page).
  */
 import { formatEtaWindow } from '@/lib/storefront/delivery/eta';
 import Link from 'next/link';
@@ -39,7 +37,6 @@ export function ConfirmationView({
   signedIn,
   payment,
   updatesPrompt = null,
-  walletPanel = null,
 }: {
   order: StorefrontOrder;
   config: CheckoutConfig;
@@ -51,8 +48,6 @@ export function ConfirmationView({
   };
   /** "Get updates on this order", inside a store's own app (ROADMAP 16.4) */
   updatesPrompt?: React.ReactNode;
-  /** balance and PIN, for an order to be paid from the wallet */
-  walletPanel?: React.ReactNode;
 }) {
   const { totals } = order;
   const paid = order.paymentStatus === 'PAID';
@@ -135,14 +130,11 @@ export function ConfirmationView({
           <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
             {payment.lastAttemptFailed
               ? 'Your payment was cancelled or declined, and you haven’t been charged for it. You can try again below.'
-              : needsPayment && payment.method === 'wallet'
-                ? 'Pay from your wallet below to confirm your order.'
-                : needsPayment
-                  ? 'If you’ve just paid, it can take a minute to show here — refresh this page before paying again.'
-                  : paymentHint(order.paymentStatus)}
+              : needsPayment
+                ? 'If you’ve just paid, it can take a minute to show here — refresh this page before paying again.'
+                : paymentHint(order.paymentStatus)}
           </p>
-          {needsPayment && payment.method === 'wallet' && walletPanel && <div className="mt-4">{walletPanel}</div>}
-          {needsPayment && payment.method !== 'wallet' && (
+          {needsPayment && (
             <div className="mt-4">
               <PayNowButton
                 target={{ confirmationToken: payment.confirmationToken }}
