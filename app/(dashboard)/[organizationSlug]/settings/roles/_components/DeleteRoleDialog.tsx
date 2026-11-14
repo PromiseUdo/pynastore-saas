@@ -74,7 +74,7 @@ export function DeleteRoleDialog({
                 href="/settings/members"
                 className="text-sm text-primary underline-offset-4 hover:underline"
               >
-                Go to Members settings →
+                Go to Team →
               </a>
             </div>
             <AlertDialogFooter>

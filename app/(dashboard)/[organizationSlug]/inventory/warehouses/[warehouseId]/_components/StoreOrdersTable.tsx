@@ -94,7 +94,7 @@ export function StoreOrdersTable({ storeName, list }: { storeName: string; list:
             </SelectContent>
           </SelectRoot>
           <Link href="/sales/orders" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-            Open in Sales
+            Open in Orders
           </Link>
         </div>
       </PageToolbar>

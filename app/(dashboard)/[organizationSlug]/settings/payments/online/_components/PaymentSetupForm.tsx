@@ -258,7 +258,7 @@ export function PaymentSetupForm({
           href="/settings/payments"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="size-3" /> Payments
+          <ArrowLeft className="size-3" /> Payment setup
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <h1 className="text-lg font-semibold tracking-tight text-foreground">Get paid online</h1>

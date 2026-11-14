@@ -39,7 +39,7 @@ import { domainAttention } from '@/lib/domains/attention';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 
-export const metadata: Metadata = { title: 'Dashboard' };
+export const metadata: Metadata = { title: 'Home' };
 
 export default async function DashboardPage() {
   const overview = await getDashboardOverview();
@@ -161,7 +161,7 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Dashboard" description={`What's happening at ${overview.organizationName} today.`} />
+      <PageHeader title="Home" description={`What's happening at ${overview.organizationName} today.`} />
 
       <PageBody className="space-y-6">
         <SetupGuideSection variant="dashboard" />

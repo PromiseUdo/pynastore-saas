@@ -493,13 +493,13 @@ export default function PrivacyPolicyPage() {
           <li>
             <strong className="font-medium text-foreground">A copy of your data.</strong> A shopper can download
             everything a store holds about their account from “Your data” in their store account. A store owner can
-            download the store’s customers, products, orders and invoices from Settings → Your data.
+            download the store’s customers, products, orders and invoices from Settings → Export or close shop.
           </li>
           <li>
             <strong className="font-medium text-foreground">Deletion.</strong> A shopper can delete their account from
-            “Your data” in their store account, and a store owner can close their store from Settings → Your data —
+            “Your data” in their store account, and a store owner can close their store from Settings → Export or close shop —
             section 8 says exactly what each removes and what the law requires us to keep. Anyone can delete their own{' '}
-            {PLATFORM_NAME} sign-in from Settings → Your account, in the dashboard or the app (or before making a store,
+            {PLATFORM_NAME} sign-in from Your account (the menu under their initials), in the dashboard or the app (or before making a store,
             from the “Create your shop” page). The only Owner of an open store first makes another member an Owner, or
             closes the store. If you can’t sign in, email <LegalContact /> from the address on the account; we will verify
             that you own it, act on the request, and confirm when it is done.

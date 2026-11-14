@@ -10,7 +10,7 @@ import { CLOSURE_GRACE_DAYS, FINANCIAL_RETENTION_YEARS } from '@/lib/data-rights
 import { WORKSPACE_DATASETS } from '@/lib/data-rights/workspace-export';
 import { YourDataClient } from './_components/YourDataClient';
 
-export const metadata: Metadata = { title: 'Your data' };
+export const metadata: Metadata = { title: 'Export or close shop' };
 
 export default async function YourDataPage() {
   const ctx = await getOrganizationContext();

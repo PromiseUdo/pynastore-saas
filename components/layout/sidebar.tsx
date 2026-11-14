@@ -6,16 +6,19 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard,
-  ShoppingCart,
+  House,
+  ListChecks,
+  ShoppingBag,
+  Users,
+  FileText,
+  Tag,
   Package,
-  TrendingUp,
+  ClipboardList,
   Settings,
   ChevronLeft,
   ChevronRight,
   LogOut,
   Megaphone,
-  Share2,
   ArrowUpCircle,
   Store,
   MessagesSquare,
@@ -29,11 +32,27 @@ import { useInboxStore } from '@/lib/chat/inbox-client';
 
 /* ─── Nav data ─────────────────────────────────────────────────────────── */
 
+/*
+ * Grouped by what a shop owner is doing, not by how the app is built: selling
+ * first, then the catalogue and stock, then growing the shop, then settings.
+ * Labels only — every address is unchanged, so bookmarks and emailed links
+ * keep working. Every entry must lead to a real page (AGENTS §7).
+ *
+ * A group can hold pages from different addresses (Online store holds
+ * /settings/domain), so which entry is "you are here" is decided by the
+ * longest address that matches (`activeItem`), not by the parent's own href.
+ */
+
+type NavChild = { title: string; href: string };
+
 type NavItem = {
   title: string;
+  /** where the entry itself goes: the section's overview, or its first page */
   href: string;
   icon: React.ElementType;
-  children?: Omit<NavItem, 'icon' | 'children' | 'count'>[];
+  children?: NavChild[];
+  /** more addresses that belong to this entry (its href and children's count already) */
+  match?: string[];
   /** shows a live count next to the entry */
   count?: 'messages';
 };
@@ -43,103 +62,182 @@ type NavGroup = {
   items: NavItem[];
 };
 
-const navGroups: NavGroup[] = [
-  {
-    items: [
-      { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: 'Operations',
-    items: [
-      {
-        title: 'Procurement',
-        href: '/procurement',
-        icon: ShoppingCart,
-        children: [
-          { title: 'Purchase Orders', href: '/procurement/purchase-orders' },
-          { title: 'Suppliers', href: '/procurement/suppliers' },
-          { title: 'Reorder Suggestions', href: '/procurement/reorder' },
-        ],
-      },
-      {
-        title: 'Inventory',
-        href: '/inventory',
-        icon: Package,
-        children: [
-          { title: 'Products', href: '/inventory/products' },
-          { title: 'Categories', href: '/inventory/categories' },
-          { title: 'Collections', href: '/inventory/collections' },
-          { title: 'Brands', href: '/inventory/brands' },
-          { title: 'Stores', href: '/inventory/warehouses' },
-          { title: 'Stock movements', href: '/inventory/movements' },
-          { title: 'Transfers', href: '/inventory/transfers' },
-          { title: 'Shelf locations', href: '/inventory/putaway' },
-          { title: 'Stock counts', href: '/inventory/cycle-counts' },
-          { title: 'Stock reports', href: '/inventory/reports' },
-          { title: 'Sales-based reports', href: '/inventory/reports/advanced' },
-        ],
-      },
-      {
-        title: 'Sales',
-        href: '/sales',
-        icon: TrendingUp,
-        children: [
-          { title: 'Orders', href: '/sales/orders' },
-          { title: 'Payments', href: '/sales/payments' },
-          { title: 'Customers', href: '/sales/customers' },
-          { title: 'Quotes', href: '/sales/quotes' },
-          { title: 'Invoices', href: '/sales/invoices' },
-          { title: 'Fulfillment', href: '/sales/fulfillment' },
-          { title: 'Returns', href: '/sales/returns' },
-          { title: 'Discount codes', href: '/sales/discounts' },
-          { title: 'Reviews', href: '/sales/reviews' },
-          { title: 'Questions', href: '/sales/questions' },
-        ],
-      },
-    ],
-  },
-  {
-    label: 'Business',
-    items: [
-      /* Every entry here must lead to a real page (AGENTS §7). "Suppliers"
-       * and "Staff" used to sit here pointing at routes that never existed —
-       * they live at /procurement/suppliers and /settings/members. */
-      { title: 'Reports', href: '/reports', icon: BarChart3 },
-      { title: 'Online store', href: '/online-store/customize', icon: Store },
-      { title: 'Messages', href: '/messages', icon: MessagesSquare, count: 'messages' },
-      { title: 'Marketing', href: '/marketing/campaigns', icon: Megaphone },
-      { title: 'Social', href: '/social', icon: Share2 },
-    ],
-  },
-  {
-    label: 'System',
-    items: [
-      {
-        title: 'Settings',
-        href: '/settings',
-        icon: Settings,
-        children: [
-          { title: 'General', href: '/settings' },
-          { title: 'Setup guide', href: '/settings/setup' },
-          { title: 'Members', href: '/settings/members' },
-          { title: 'Activity', href: '/settings/activity' },
-          { title: 'Roles & Permissions', href: '/settings/roles' },
-          { title: 'Storefront', href: '/settings/storefront' },
-          { title: 'Payments', href: '/settings/payments' },
-          { title: 'Delivery and returns', href: '/settings/delivery' },
-          { title: 'Store pages', href: '/settings/pages' },
-          { title: 'Domain', href: '/settings/domain' },
-          { title: 'Mobile app', href: '/settings/mobile-app' },
-          { title: 'Billing', href: '/settings/billing' },
-          { title: 'Your data', href: '/settings/data' },
-          { title: 'Notifications', href: '/settings/notifications' },
-          { title: 'Your account', href: '/settings/account' },
-        ],
-      },
-    ],
-  },
-];
+const SETUP_GUIDE: NavChild = { title: 'Setup guide', href: '/settings/setup' };
+
+/** Personal pages, reached from the account menu (header) — they light up no entry here. */
+const ACCOUNT_PATHS = ['/settings/account', '/settings/notifications', '/notifications'];
+
+export function buildNav(shopOpen: boolean): NavGroup[] {
+  return [
+    {
+      items: [
+        { title: 'Home', href: '/dashboard', icon: House },
+        // Until the shop opens, getting it ready IS the job; afterwards it lives in Settings.
+        ...(shopOpen ? [] : [{ ...SETUP_GUIDE, icon: ListChecks }]),
+        { title: 'Messages', href: '/messages', icon: MessagesSquare, count: 'messages' as const },
+      ],
+    },
+    {
+      label: 'Sell',
+      items: [
+        {
+          title: 'Orders',
+          href: '/sales',
+          icon: ShoppingBag,
+          children: [
+            { title: 'All orders', href: '/sales/orders' },
+            { title: 'Packing and delivery', href: '/sales/fulfillment' },
+            { title: 'Returns', href: '/sales/returns' },
+            { title: 'Payouts', href: '/sales/payments' },
+          ],
+        },
+        {
+          title: 'Customers',
+          href: '/sales/customers',
+          icon: Users,
+          children: [
+            { title: 'All customers', href: '/sales/customers' },
+            { title: 'Reviews', href: '/sales/reviews' },
+            { title: 'Questions', href: '/sales/questions' },
+          ],
+        },
+        {
+          title: 'Invoices and quotes',
+          href: '/sales/invoices',
+          icon: FileText,
+          children: [
+            { title: 'Invoices', href: '/sales/invoices' },
+            { title: 'Quotes', href: '/sales/quotes' },
+          ],
+        },
+      ],
+    },
+    {
+      label: 'Products and stock',
+      items: [
+        {
+          title: 'Products',
+          href: '/inventory/products',
+          icon: Tag,
+          children: [
+            { title: 'All products', href: '/inventory/products' },
+            { title: 'Categories', href: '/inventory/categories' },
+            { title: 'Collections', href: '/inventory/collections' },
+            { title: 'Brands', href: '/inventory/brands' },
+          ],
+          // A single stock item's page (/inventory/items/…) is a product's.
+          match: ['/inventory/items'],
+        },
+        {
+          title: 'Inventory',
+          href: '/inventory',
+          icon: Package,
+          children: [
+            { title: 'Stores', href: '/inventory/warehouses' },
+            { title: 'Stock history', href: '/inventory/movements' },
+            { title: 'Transfers', href: '/inventory/transfers' },
+            { title: 'Stock counts', href: '/inventory/cycle-counts' },
+            { title: 'Shelf locations', href: '/inventory/putaway' },
+          ],
+        },
+        {
+          title: 'Purchasing',
+          href: '/procurement',
+          icon: ClipboardList,
+          children: [
+            { title: 'Purchase orders', href: '/procurement/purchase-orders' },
+            { title: 'Suppliers', href: '/procurement/suppliers' },
+            { title: 'Reorder suggestions', href: '/procurement/reorder' },
+          ],
+        },
+      ],
+    },
+    {
+      label: 'Grow',
+      items: [
+        {
+          title: 'Online store',
+          href: '/online-store/customize',
+          icon: Store,
+          children: [
+            { title: 'Design', href: '/online-store/customize' },
+            { title: 'Pages', href: '/settings/pages' },
+            { title: 'Domain', href: '/settings/domain' },
+            { title: 'Search and sharing', href: '/settings/storefront' },
+            { title: 'Mobile app', href: '/settings/mobile-app' },
+          ],
+          match: ['/online-store'],
+        },
+        {
+          title: 'Marketing',
+          href: '/marketing/campaigns',
+          icon: Megaphone,
+          children: [
+            { title: 'Campaigns', href: '/marketing/campaigns' },
+            { title: 'Discount codes', href: '/sales/discounts' },
+            { title: 'Social posts', href: '/social' },
+          ],
+          match: ['/marketing'],
+        },
+        // The stock reports live under /inventory/reports; the hub links to them.
+        { title: 'Reports', href: '/reports', icon: BarChart3, match: ['/inventory/reports'] },
+      ],
+    },
+    {
+      items: [
+        {
+          title: 'Settings',
+          href: '/settings',
+          icon: Settings,
+          children: [
+            { title: 'Business details', href: '/settings' },
+            ...(shopOpen ? [SETUP_GUIDE] : []),
+            { title: 'Payment setup', href: '/settings/payments' },
+            { title: 'Delivery and returns', href: '/settings/delivery' },
+            { title: 'Team', href: '/settings/members' },
+            { title: 'Roles and permissions', href: '/settings/roles' },
+            { title: 'Activity log', href: '/settings/activity' },
+            { title: 'Plan and billing', href: '/settings/billing' },
+            { title: 'Export or close shop', href: '/settings/data' },
+          ],
+        },
+      ],
+    },
+  ];
+}
+
+/** `pathname` is `prefix` or a page under it. */
+function under(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
+/**
+ * The entry for this page: the one owning the longest matching address. Home
+ * matches only itself; account pages match nothing.
+ */
+export function activeItem(groups: NavGroup[], pathname: string): NavItem | null {
+  let best: { item: NavItem | null; length: number } = { item: null, length: 0 };
+  const consider = (item: NavItem | null, prefix: string) => {
+    const hit = prefix === '/dashboard' ? pathname === prefix : under(pathname, prefix);
+    if (hit && prefix.length > best.length) best = { item, length: prefix.length };
+  };
+  for (const group of groups) {
+    for (const item of group.items) {
+      for (const prefix of [item.href, ...(item.children ?? []).map((c) => c.href), ...(item.match ?? [])]) consider(item, prefix);
+    }
+  }
+  for (const prefix of ACCOUNT_PATHS) consider(null, prefix);
+  return best.item;
+}
+
+/** Within the open entry, the child owning the longest matching address. */
+export function activeChild(item: NavItem, pathname: string): string | null {
+  let best: string | null = null;
+  for (const child of item.children ?? []) {
+    if (under(pathname, child.href) && (!best || child.href.length > best.length)) best = child.href;
+  }
+  return best;
+}
 
 /* ─── Sidebar context ───────────────────────────────────────────────────── */
 
@@ -241,7 +339,7 @@ export function Sidebar(props: SidebarProps) {
             collapsed={false}
             onToggle={() => setMobileOpen(false)}
             // `flex`, like the desktop panel: without it the menu list has no
-            // height to scroll in, and a long open section (Inventory) ran
+            // height to scroll in, and a long open section (Settings) ran
             // off the bottom of the screen. `safe-y` keeps it clear of a
             // phone's status bar and home indicator in the business app.
             className="safe-y relative flex w-[272px] max-w-[85vw] shadow-xl animate-in slide-in-from-left"
@@ -282,6 +380,8 @@ function SidebarPanel({
       ? '/'
       : rawPathname;
   const pathname = stripped === '/' ? '/dashboard' : stripped;
+  const navGroups = React.useMemo(() => buildNav(org.shopOpen), [org.shopOpen]);
+  const current = activeItem(navGroups, pathname);
 
   return (
     <aside
@@ -359,15 +459,14 @@ function SidebarPanel({
               <ul className="space-y-0.5">
                 {group.items.map((item) => {
                   const href = item.href;
-                  const active =
-                    pathname === href ||
-                    (href !== '/dashboard' && pathname.startsWith(`${href}/`));
+                  const active = current === item;
                   const count = item.count === 'messages' && showMessageCount ? unreadMessages : 0;
                   const countLabel = count > 99 ? '99+' : String(count);
                   return (
                     <li key={href}>
                       <Link
                         href={href}
+                        aria-current={active && !item.children ? 'page' : undefined}
                         title={collapsed ? (count ? `${item.title} (${countLabel} unread)` : item.title) : undefined}
                         className={cn(
                           'flex h-8 items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors',
@@ -404,17 +503,14 @@ function SidebarPanel({
                         <ul className="mt-0.5 space-y-0.5 border-l border-sidebar-border pl-3">
                           {item.children.map((child) => {
                             const childHref = child.href;
-                            // childHref !== href guards against a child reusing the parent's
-                            // own path (e.g. Settings' "General" at "/settings"): without it,
-                            // startsWith(`${childHref}/`) would match every sibling subpage
-                            // too, since they all start with "/settings/".
-                            const childActive =
-                              pathname === childHref ||
-                              (childHref !== href && pathname.startsWith(`${childHref}/`));
+                            // The longest match wins, so "Business details" at /settings
+                            // doesn't also light up for /settings/members.
+                            const childActive = activeChild(item, pathname) === childHref;
                             return (
                               <li key={childHref}>
                                 <Link
                                   href={childHref}
+                                  aria-current={childActive ? 'page' : undefined}
                                   className={cn(
                                     'flex h-7 items-center rounded-md px-2 text-[12.5px] transition-colors',
                                     childActive
@@ -453,7 +549,11 @@ function SidebarPanel({
           </div>
 
           {!collapsed && (
-            <div className="min-w-0 flex-1">
+            <Link
+              href="/settings/account"
+              title="Your account"
+              className="min-w-0 flex-1 rounded-sm hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               <p className="truncate text-[12px] font-medium text-sidebar-foreground leading-snug">
                 {user.name ?? user.email}
               </p>
@@ -462,7 +562,7 @@ function SidebarPanel({
                   {user.email}
                 </p>
               )}
-            </div>
+            </Link>
           )}
 
           {!collapsed && (

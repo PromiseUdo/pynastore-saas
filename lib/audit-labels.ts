@@ -200,11 +200,11 @@ export function auditActionLabel(action: string): string {
  */
 export const AUDIT_AREAS = [
   { value: 'inventory', label: 'Inventory' },
-  { value: 'procurement', label: 'Procurement' },
+  { value: 'procurement', label: 'Purchasing' },
   { value: 'sales', label: 'Sales' },
   { value: 'social', label: 'Social' },
   { value: 'messages', label: 'Messages' },
-  { value: 'staff', label: 'Members' },
+  { value: 'staff', label: 'Team' },
   { value: 'role', label: 'Roles' },
   { value: 'settings', label: 'Settings' },
   { value: 'marketing', label: 'Marketing' },

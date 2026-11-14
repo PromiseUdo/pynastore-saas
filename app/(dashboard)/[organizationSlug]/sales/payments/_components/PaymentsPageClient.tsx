@@ -88,7 +88,7 @@ export function PaymentsPageClient({ list, canSetUp }: { list: PaymentList; canS
 
   const header = (
     <PageHeader
-      title="Payments"
+      title="Payouts"
       description="What customers paid online, Paystack’s fee, and what reaches your bank."
       actions={
         list.historySize > 0 ? (

@@ -30,7 +30,7 @@ export default async function ProcurementDashboardPage() {
   return (
     <div className="space-y-6 px-6 py-6">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight text-foreground">Procurement</h1>
+        <h1 className="text-lg font-semibold tracking-tight text-foreground">Purchasing</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">Suppliers, purchase orders, and restock automation.</p>
       </div>
 

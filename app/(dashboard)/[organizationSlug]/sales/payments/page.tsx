@@ -12,7 +12,7 @@ import { AccessDenied } from '@/components/layout/access-denied';
 import { listOnlinePayments } from '@/features/sales/payments';
 import { PaymentsPageClient } from './_components/PaymentsPageClient';
 
-export const metadata: Metadata = { title: 'Payments' };
+export const metadata: Metadata = { title: 'Payouts' };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 

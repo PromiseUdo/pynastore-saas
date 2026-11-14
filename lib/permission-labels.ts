@@ -79,7 +79,7 @@ const LABELS: Record<PermissionKey, string> = {
 // Display name for each first-segment module
 const MODULE_LABELS: Record<string, string> = {
   inventory: 'Inventory',
-  procurement: 'Procurement',
+  procurement: 'Purchasing',
   supplier: 'Suppliers',
   project: 'Projects',
   task: 'Tasks',
@@ -88,7 +88,7 @@ const MODULE_LABELS: Record<string, string> = {
   social: 'Social commerce',
   messages: 'Messages',
   storefront: 'Online store',
-  staff: 'Staff',
+  staff: 'Team',
   role: 'Roles',
   settings: 'Settings',
   billing: 'Billing',

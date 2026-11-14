@@ -8,7 +8,7 @@ import { AccessDenied } from '@/components/layout/access-denied';
 import { getAgingInventoryReport, getSellThroughReport, getProfitabilityReport } from '@/features/inventory/actions';
 import { AdvancedReportsPageClient, type AdvancedView } from './_components/AdvancedReportsPageClient';
 
-export const metadata: Metadata = { title: 'Sales-based reports' };
+export const metadata: Metadata = { title: 'Stock over time' };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v || undefined);
@@ -30,7 +30,7 @@ export default async function AdvancedReportsPage({ searchParams }: { searchPara
     !hasPermission(ctx.membership.role.permissions, PERMISSIONS.INVENTORY_VIEW) ||
     !hasPermission(ctx.membership.role.permissions, PERMISSIONS.SALES_VIEW)
   ) {
-    return <AccessDenied what="sales-based reports" />;
+    return <AccessDenied what="the stock over time report" />;
   }
 
   const viewParam = one(raw.view);

@@ -58,7 +58,7 @@ export function YourDataClient({
 
   return (
     <>
-      <PageHeader title="Your data" description="Download your workspace’s records, or close the workspace." />
+      <PageHeader title="Export or close shop" description="Download your workspace’s records, or close the workspace." />
       <PageBody>
         <div className="max-w-3xl space-y-8">
           <section aria-labelledby="downloads" className="space-y-3">

@@ -145,7 +145,7 @@ export function PaymentSettingsClient({
   return (
     <>
       <PageHeader
-        title="Payments"
+        title="Payment setup"
         description="How customers can pay on your online store."
         actions={
           canManage && accounts.length > 0 ? (

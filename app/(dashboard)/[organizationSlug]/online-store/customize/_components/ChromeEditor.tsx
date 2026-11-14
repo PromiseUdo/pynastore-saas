@@ -243,7 +243,7 @@ export function ChromeEditor({
                 Left to right on a computer, top to bottom on a phone. Your name, contact details and social links
                 always come first — change them in{' '}
                 <Link href="/settings" className="underline underline-offset-2">
-                  Settings → General
+                  Settings → Business details
                 </Link>
                 .
               </p>

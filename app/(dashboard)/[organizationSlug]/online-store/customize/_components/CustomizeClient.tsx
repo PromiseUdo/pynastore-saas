@@ -45,7 +45,7 @@ export function CustomizeClient({
   return (
     <>
       <PageHeader
-        title="Customize your store"
+        title="Store design"
         description="Choose how your online shop looks and what greets customers on its front page."
         actions={
           <Button variant="outline" size="sm" asChild>

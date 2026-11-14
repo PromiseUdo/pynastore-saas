@@ -13,6 +13,8 @@ export type OrgInfo = {
   /** the plan as shown: "Pro", "Pro · Trial", "Plan ended" (planLabel) */
   plan: string;
   planState: import('@/lib/billing/access').AccessState;
+  /** the online shop is open to customers; until then the menu leads with the setup guide */
+  shopOpen: boolean;
 };
 
 export type UserInfo = {

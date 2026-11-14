@@ -7,7 +7,7 @@
  */
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { BadgePercent, Lock, Package, ShoppingBag, TrendingUp, Users, Wallet } from 'lucide-react';
+import { ArrowUpRight, BadgePercent, Boxes, History, Lock, Package, ShoppingBag, TrendingUp, Users, Wallet } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { UpgradeLink } from '@/components/business-app/no-buying';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -35,6 +35,16 @@ export type ReportsData =
   | { view: 'by-store'; report: StoreSalesReport }
   /** a view this plan doesn't include: shown with what it does, not hidden (AGENTS §7) */
   | { view: 'locked'; locked: 'discounts' | 'by-store' };
+
+/**
+ * The stock reports (/inventory/reports), which the hub links to rather than
+ * repeats. 'hidden': this member can't see stock, or the plan has no inventory.
+ */
+export interface StockReportsAccess {
+  onHand: boolean;
+  /** "Stock over time" is an Advanced report: shown locked rather than hidden (AGENTS §7) */
+  overTime: 'open' | 'locked' | 'hidden';
+}
 
 export interface ReportsPeriodView {
   key: ReportPreset | 'custom';
@@ -78,11 +88,13 @@ export function ReportsHub({
   tabs,
   period,
   data,
+  stock,
 }: {
   view: ReportsView;
   tabs: { key: ReportsView; label: string; locked?: boolean }[];
   period: ReportsPeriodView;
   data: ReportsData;
+  stock: StockReportsAccess;
 }) {
   const periodText = period.label;
   const fileSuffix = `${period.firstDay} to ${period.lastDay}`;
@@ -121,8 +133,73 @@ export function ReportsHub({
         {data.view === 'customers' && <CustomersView report={data.report} />}
         {data.view === 'discounts' && <DiscountsView report={data.report} />}
         {data.view === 'by-store' && <StoreSalesView report={data.report} periodLabel={periodText} />}
+
+        <StockReportLinks stock={stock} />
       </PageBody>
     </>
+  );
+}
+
+/** For a member who can see stock but not sales: the hub is just its stock reports. */
+export function StockReportsOnly({ stock }: { stock: StockReportsAccess }) {
+  return (
+    <>
+      <PageHeader title="Reports" description="What you hold and what it's worth." />
+      <PageBody>
+        <StockReportLinks stock={stock} />
+      </PageBody>
+    </>
+  );
+}
+
+function StockReportLinks({ stock }: { stock: StockReportsAccess }) {
+  if (!stock.onHand && stock.overTime === 'hidden') return null;
+  const card =
+    'flex items-start gap-3 rounded-lg border bg-card p-4 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  return (
+    <section aria-labelledby="stock-reports" className="space-y-2 border-t pt-5">
+      <h2 id="stock-reports" className="text-sm font-semibold">
+        Stock reports
+      </h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {stock.onHand && (
+          <Link href="/inventory/reports" className={card}>
+            <Boxes className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">Stock on hand</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                What you hold in each store, what it’s worth, and what needs restocking.
+              </span>
+            </span>
+            <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          </Link>
+        )}
+        {stock.overTime === 'open' && (
+          <Link href="/inventory/reports/advanced" className={card}>
+            <History className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">Stock over time</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                What’s stuck on the shelf, what’s selling through, and what each product earned.
+              </span>
+            </span>
+            <ArrowUpRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          </Link>
+        )}
+        {stock.overTime === 'locked' && (
+          <UpgradeLink href="/upgrade?feature=reports.advanced" className={card}>
+            <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">Stock over time</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                What’s stuck, what’s selling through and what each product earned. Part of Advanced reports — see
+                plans.
+              </span>
+            </span>
+          </UpgradeLink>
+        )}
+      </div>
+    </section>
   );
 }
 

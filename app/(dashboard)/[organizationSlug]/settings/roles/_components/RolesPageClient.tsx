@@ -30,7 +30,7 @@ export function RolesPageClient({
       <div className="flex items-center justify-between border-b bg-background px-6 py-5">
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-foreground">
-            Roles &amp; permissions
+            Roles and permissions
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Define what each role can do in your organization.

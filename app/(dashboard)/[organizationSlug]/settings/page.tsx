@@ -13,7 +13,7 @@ import { SUPPORTED_CURRENCIES } from '@/lib/currencies';
 import { GeneralSettingsClient } from './_components/GeneralSettingsClient';
 import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
-export const metadata: Metadata = { title: 'General' };
+export const metadata: Metadata = { title: 'Business details' };
 
 export default async function GeneralSettingsPage() {
   const ctx = await getOrganizationContext();

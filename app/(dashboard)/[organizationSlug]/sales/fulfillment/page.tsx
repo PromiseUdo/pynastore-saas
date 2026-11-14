@@ -12,7 +12,7 @@ import { FEATURES } from '@/lib/billing/plans';
 import { listToSend, type SourceFilter, type ToSendFilter } from '@/features/sales/work-lists';
 import { FulfillmentPageClient } from './_components/FulfillmentPageClient';
 
-export const metadata: Metadata = { title: 'Fulfillment' };
+export const metadata: Metadata = { title: 'Packing and delivery' };
 
 type Props = { searchParams: Promise<{ status?: string; source?: string; q?: string; page?: string }> };
 

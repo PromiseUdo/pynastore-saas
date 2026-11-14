@@ -79,6 +79,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         slug: ctx.organization.slug,
         plan: planLabel(access.state, plan.name),
         planState: access.state,
+        shopOpen: ctx.organization.storefrontOpen ?? true,
       }}
       orgs={orgs}
       noBuying={noBuying}

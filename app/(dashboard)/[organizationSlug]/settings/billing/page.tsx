@@ -23,7 +23,7 @@ import { formatDate, formatMoney } from '@/lib/format';
 import { ACCESS_BADGE, planStatusLine } from '@/lib/billing/status-line';
 import { isBusinessAppRequest } from '@/lib/business-app/request';
 
-export const metadata: Metadata = { title: 'Billing' };
+export const metadata: Metadata = { title: 'Plan and billing' };
 
 export default async function BillingSettingsPage({
   searchParams,
@@ -55,7 +55,7 @@ export default async function BillingSettingsPage({
   return (
     <>
       <PageHeader
-        title="Billing"
+        title="Plan and billing"
         description={noBuying ? 'Your workspace’s plan.' : "Manage your workspace's subscription and payment history."}
         actions={
           <UpgradeLink className={buttonVariants({ size: 'sm', variant: 'outline' })}>
@@ -115,7 +115,7 @@ export default async function BillingSettingsPage({
                 {organization.customStoreDomain
                   ? `Your shop is at ${organization.customStoreDomain}.`
                   : 'Use your own domain, like yourshop.com, for your shop.'}{' '}
-                Managed in Settings → Domain.
+                Managed in Online store → Domain.
               </p>
             </div>
             <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />

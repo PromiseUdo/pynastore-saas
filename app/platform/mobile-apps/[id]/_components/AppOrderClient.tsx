@@ -357,7 +357,7 @@ function Listings({ app }: { app: AppOrderDetail }) {
           </label>
         )}
         <p className="text-xs text-muted-foreground">
-          The merchant’s website {app.listing.promoteOnWebsite ? 'offers' : 'doesn’t offer'} the app (their choice, in Settings → Mobile app).
+          The merchant’s website {app.listing.promoteOnWebsite ? 'offers' : 'doesn’t offer'} the app (their choice, in Online store → Mobile app).
         </p>
         <Button type="submit" size="sm" disabled={saving}>
           {saving && <Loader2 className="size-3.5 animate-spin" />}

@@ -33,6 +33,8 @@ export type OrganizationContext = {
     status: string;
     /** ISO 4217. Every amount in this org is in this currency (AGENTS §4/§6). */
     currency: string;
+    /** the online shop is open to customers (the setup guide opens it) */
+    storefrontOpen?: boolean;
   };
   membership: {
     id: string;
@@ -82,6 +84,7 @@ export const getOrganizationContext = cache(
             logoUrl: true,
             status: true,
             currency: true,
+            storefrontOpen: true,
           },
         },
         role: {

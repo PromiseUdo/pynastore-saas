@@ -71,12 +71,12 @@ export function AdvancedReportsPageClient({ view, days, periods, aging, sellThro
     <>
       <div className="border-b bg-background px-4 pt-4 sm:px-6">
         <Link href="/inventory/reports" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="size-3" /> Reports
+          <ArrowLeft className="size-3" /> Stock on hand
         </Link>
       </div>
 
       <PageHeader
-        title="Sales-based reports"
+        title="Stock over time"
         description="What your stock is doing over time: what's stuck, what's selling, and what it earned."
       />
 

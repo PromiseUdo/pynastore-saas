@@ -8,7 +8,7 @@ import { getStockMovements, listStockableItems, listWarehouses, type MovementLis
 import { MovementType } from '@/lib/generated/prisma/enums';
 import { MovementsPageClient } from './_components/MovementsPageClient';
 
-export const metadata: Metadata = { title: 'Stock movements' };
+export const metadata: Metadata = { title: 'Stock history' };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 

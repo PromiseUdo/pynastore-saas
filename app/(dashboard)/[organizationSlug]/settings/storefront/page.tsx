@@ -13,7 +13,7 @@ import { getStorefrontAppearance } from '@/features/settings/storefront';
 import { StorefrontSettingsClient } from './_components/StorefrontSettingsClient';
 import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
-export const metadata: Metadata = { title: 'Storefront' };
+export const metadata: Metadata = { title: 'Search and sharing' };
 
 export default async function StorefrontSettingsPage() {
   const ctx = await getOrganizationContext();

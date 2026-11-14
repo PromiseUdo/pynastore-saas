@@ -4,7 +4,7 @@ import { UpgradeLink } from '@/components/business-app/no-buying';
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowUpRight, Lock, PackageX, Search, Wallet, Boxes } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Lock, PackageX, Search, Wallet, Boxes } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,8 +97,14 @@ export function ReportsPageClient({
 
   return (
     <>
+      <div className="border-b bg-background px-4 pt-4 sm:px-6">
+        <Link href="/reports" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="size-3" /> Reports
+        </Link>
+      </div>
+
       <PageHeader
-        title="Reports"
+        title="Stock on hand"
         description={`What you hold${storeName ? ` in ${storeName}` : ' across every store'}, what it's worth, and what needs restocking.`}
         actions={
           advancedEnabled && canSeeAdvanced ? (
@@ -106,7 +112,7 @@ export function ReportsPageClient({
               href="/inventory/reports/advanced"
               className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             >
-              Sales-based reports <ArrowUpRight className="size-3.5" />
+              Stock over time <ArrowUpRight className="size-3.5" />
             </Link>
           ) : !advancedEnabled ? (
             <UpgradeLink
@@ -114,7 +120,7 @@ export function ReportsPageClient({
               title="Aging, sell-through and profitability reports"
             >
               <Lock className="size-3.5" />
-              Unlock sales-based reports
+              Unlock stock over time
             </UpgradeLink>
           ) : undefined
         }

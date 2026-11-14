@@ -76,6 +76,9 @@ The goal is a calm, professional tool that a busy shop owner or warehouse clerk 
 - Links are slug-free (hostname-based tenancy; see `proxy.ts`).
 - **Hostnames.** Every platform host is one label under `NEXT_PUBLIC_ROOT_DOMAIN`: `{PLATFORM_HOST}` (marketing/auth, `app.` in production), `{slug}.` (admin), `shop-{slug}.` (storefront), `m.` (mobile). Never build one of these by hand — use `getMarketingUrl`/`getAdminUrl`/`getStorefrontUrl` in `lib/tenant/urls.ts`, and `storefrontHostsFor()` in `lib/tenant/resolveHostname.ts` if you need the host itself. A slug is therefore a hostname, so new orgs are checked against `lib/tenant/reserved-slugs.ts`; existing orgs are never renamed.
 
+## 7a. The menu
+The sidebar (`components/layout/sidebar.tsx`) is grouped by what a shop owner is doing — Home, Messages; **Sell** (Orders, Customers, Invoices and quotes); **Products and stock** (Products, Inventory, Purchasing); **Grow** (Online store, Marketing, Reports); Settings. Personal pages (Your account, Notification settings) are in the account menu under the initials, not the sidebar. A group may hold pages from several addresses, so the highlighted entry is the longest matching address — add a new page's address to the right entry (`href`, `children` or `match`), and name it in the menu, the page title and any "X → Y" hint the same way. Addresses never change when the menu does.
+
 ## 8. Responsive and accessible
 - The admin must work on a tablet and stay usable on a phone. Below `lg`, the sidebar becomes an off-canvas drawer, and page actions wrap instead of overflowing.
 - All interactive elements are real `button`/`a` elements with visible focus rings, and icon-only buttons need an `aria-label`. Dialogs trap focus and close on Escape (Radix does this, so don't bypass it).
@@ -103,7 +106,7 @@ A report states, in one line under the toolbar, what it measures and how it's wo
 ## 11. One catalogue
 Inventory products ARE the online store's products. Online-store fields (web address, images, tags, publish state) live on `InventoryItem`; only stores that sell online AND can deliver supply online stock — one definition, `ONLINE_SUPPLY_WHERE` in `lib/storefront/delivery/supply.ts`, used by the catalogue, the stock hold and the admin alike. Don't create a separate storefront product model.
 
-Merchandising lives under Inventory: categories (what a product is), collections (why products are grouped — hand-picked or rule-based), brands (who makes it). All three are managed with `inventory.category.manage`. A **web address is never regenerated on rename** — links customers saved must keep working; only a new record gets one generated, and only an explicit edit changes it.
+Merchandising is part of the inventory catalogue (the menu shows it under **Products**): categories (what a product is), collections (why products are grouped — hand-picked or rule-based), brands (who makes it). All three are managed with `inventory.category.manage`. A **web address is never regenerated on rename** — links customers saved must keep working; only a new record gets one generated, and only an explicit edit changes it.
 
 # Social Commerce rules
 
@@ -130,7 +133,7 @@ One Meta app belongs to the PLATFORM (`META_APP_ID`/`META_APP_SECRET`, server-si
 # Messages rules
 
 Shoppers chat privately with the store (ROADMAP Phase 17). This isn't the
-public product Q&A, which is Sales → Questions. People only: no AI, bot or
+public product Q&A, which is Customers → Questions. People only: no AI, bot or
 automatic replies.
 
 - **One seam.** Every read and write goes through `lib/chat/service.ts`. Each
@@ -198,7 +201,7 @@ The customer storefront reads the merchant's real records. These rules keep that
 - **Server only.** `catalog.ts` reaches Prisma. Client components use `lib/storefront/product-helpers.ts` (variant/price helpers) and `lib/storefront/nav-types.ts` (nav shape and links) instead. Run `npx next build` after touching this boundary.
 - **Never invent a merchant's content.** No fabricated reviews, ratings, testimonials, Q&A, press, social posts, urgency countdowns or campaign copy. If there's no source for it yet, show nothing and let the page's empty state do the talking. Claims about delivery, returns or payment must restate what the app actually enforces.
 - **Reviews are earned, not collected.** A review can only be written by a signed-in shopper with a DELIVERED order containing that product, one per shopper per product, and that gate is re-checked server-side on every write (`lib/storefront/reviews/`). Ratings on products come from published reviews only. A merchant can hide a review (`sales.review.moderate`) — never write, edit or delete one. Don't add a review form anywhere the server hasn't already confirmed the purchase.
-- **Questions are answered, not generated.** A signed-in shopper asks from the product page; the question waits in the merchant's inbox (Sales → Questions, `sales.question.answer`) and reaches the storefront only when a human answers it — answering is publishing. A merchant never writes the question, never edits a shopper's words, and may hide a pair rather than delete it. `lib/storefront/questions/` is the seam; the catalogue exposes only the answered ones.
+- **Questions are answered, not generated.** A signed-in shopper asks from the product page; the question waits in the merchant's inbox (Customers → Questions, `sales.question.answer`) and reaches the storefront only when a human answers it — answering is publishing. A merchant never writes the question, never edits a shopper's words, and may hide a pair rather than delete it. `lib/storefront/questions/` is the seam; the catalogue exposes only the answered ones.
 - **What a shopper may see** is decided once, in `lib/storefront/data/from-prisma.ts`: published + active products, active variants, stock only from stores that supply online (`ONLINE_SUPPLY_WHERE`: sells online and has its own live delivery, unless no store delivers yet), visible categories, visible collections. Don't re-implement those rules elsewhere.
 - Prices are minor units (kobo) on the storefront and major units in the admin; the mapper is the only place that converts.
 - **Delivery belongs to the store a parcel leaves from.** Every `DeliveryZone` and `PickupLocation` names its `warehouseId`; one with none is never offered. Checkout quotes only through `quoteDelivery` in `lib/storefront/delivery/quote.ts` — never from an organization-wide list of zones. Which store sends which part of a bag is decided once, by `planOrder` in `lib/storefront/delivery/plan.ts`; the quote, order placement and the stock hold all use its plan, and an online order's stock is held exactly where that plan says (`reserveOrderStock({ planned })`) — never topped up from another store. Any delivery figure shown before checkout for a specific product ("Ships from Lagos Store · ₦4,500") comes from `estimateDelivery` in `lib/storefront/delivery/estimate.ts`, which is the same planner for a bag of one — never a separate calculation. Read ROADMAP Phase 9 before changing it.

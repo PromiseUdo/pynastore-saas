@@ -111,7 +111,7 @@ export async function sendDailyDigests(options: { now?: Date } = {}) {
             paragraphs: [`What came in about ${sections.join(' and ')} since your last summary that you haven’t looked at yet:`],
             list: lines,
             button: { label: 'Open notifications', url: getAdminUrl(organization.slug, '/notifications') },
-            footer: `One summary a day from ${PLATFORM_NAME}. Choose what you get in Settings → Notifications.`,
+            footer: `One summary a day from ${PLATFORM_NAME}. Choose what you get in Notification settings, in the menu under your initials.`,
           },
         },
         [user.email],

@@ -12,7 +12,7 @@ import {
 } from '@/features/inventory/actions';
 import { ReportsPageClient, type ReportView } from './_components/ReportsPageClient';
 
-export const metadata: Metadata = { title: 'Reports' };
+export const metadata: Metadata = { title: 'Stock on hand' };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v || undefined);

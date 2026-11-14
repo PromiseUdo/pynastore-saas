@@ -64,7 +64,7 @@ export function SetupGuide({
         ? 'Your shop is open — customers can order now'
         : kind === 'close'
           ? 'Your shop is closed. Open it again any time from here.'
-          : 'Guide hidden. It’s always in Settings → Setup guide.',
+          : 'Guide hidden. You can open it again from Setup guide in the menu.',
     );
     router.refresh();
   }

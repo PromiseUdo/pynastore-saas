@@ -16,7 +16,7 @@ import { getDesignEditor } from '@/features/storefront/design';
 import { listHeroSlides } from '@/features/storefront/slides';
 import { CustomizeClient, type CustomizeView } from './_components/CustomizeClient';
 
-export const metadata: Metadata = { title: 'Customize your store' };
+export const metadata: Metadata = { title: 'Store design' };
 
 export default async function CustomizePage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const ctx = await getOrganizationContext();

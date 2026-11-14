@@ -83,7 +83,7 @@ export function StorefrontSettingsClient({
   return (
     <>
       <PageHeader
-        title="Storefront"
+        title="Search and sharing"
         description="How your online shop appears in search results and shared links, and your tracking."
         actions={
           <Button variant="outline" size="sm" asChild>
@@ -104,7 +104,7 @@ export function StorefrontSettingsClient({
             <Paintbrush className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-semibold">Looking for colours, fonts or front page slides?</span>
-              <span className="block text-xs text-muted-foreground">They’re in Online store → Customize.</span>
+              <span className="block text-xs text-muted-foreground">They’re in Online store → Design.</span>
             </span>
             <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           </Link>

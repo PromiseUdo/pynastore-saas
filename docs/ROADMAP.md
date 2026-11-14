@@ -1313,6 +1313,7 @@ Launch (C) needs both.
 | A2 | EduPay in the go-live checklist and docs/GO-LIVE.md | WITHDRAWN 2026-11-14 — EduPay removed (Phase 20) |
 | A3 | 14.7 Returns for counter sales (unpaused: the wallet decision is made) | DONE 2026-11-12 |
 | A4 | Remove EduPay wallets everywhere (Phase 20) | DONE 2026-11-14 |
+| A5 | Admin menu regrouped and renamed for shop owners (Sell / Products and stock / Grow / Settings; account menu in the header; stock reports reached from Reports) — labels only, no address changed; see AGENTS §7a | DONE 2026-11-14 |
 
 **B. Owner (docs/GO-LIVE.md)**
 

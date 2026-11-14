@@ -22,7 +22,7 @@ import { prisma } from '@/lib/prisma';
 import { getOnlinePaymentReadiness } from '@/lib/payments/online-readiness';
 import { PaymentSettingsClient } from './_components/PaymentSettingsClient';
 
-export const metadata: Metadata = { title: 'Payments' };
+export const metadata: Metadata = { title: 'Payment setup' };
 
 export default async function PaymentSettingsPage() {
   const ctx = await getOrganizationContext();

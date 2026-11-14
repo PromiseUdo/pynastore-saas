@@ -327,7 +327,7 @@ export default async function StorefrontRootLayout({
         {!opening.open && (
           <div role="status" className="sticky top-[var(--inset-top)] z-50 bg-foreground px-4 py-2 text-center text-xs text-background">
             Preview — your shop is closed, so only your team can see this and nothing can be ordered. Open it from
-            Settings → Setup guide.
+            Setup guide in your dashboard menu.
           </div>
         )}
         {children}

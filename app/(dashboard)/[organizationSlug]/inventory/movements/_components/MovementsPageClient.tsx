@@ -67,7 +67,7 @@ export function MovementsPageClient({ result, params, items, warehouses, canReco
   return (
     <>
       <PageHeader
-        title="Stock movements"
+        title="Stock history"
         description="Every change to your stock, newest first. This record is never edited — corrections are added as new entries."
         actions={
           canRecord ? (
@@ -181,7 +181,7 @@ export function MovementsPageClient({ result, params, items, warehouses, canReco
         {result.ledgerSize === 0 ? (
           <EmptyState
             icon={History}
-            title="No stock movements yet"
+            title="No stock history yet"
             description="Every time stock arrives, leaves or is counted, it lands here — with what changed, where, and why. Receiving a purchase order or packing an order writes entries for you."
             action={
               canRecord ? (
@@ -195,7 +195,7 @@ export function MovementsPageClient({ result, params, items, warehouses, canReco
         ) : result.rows.length === 0 ? (
           <EmptyState
             variant="filtered"
-            title="No movements match these filters"
+            title="No stock changes match these filters"
             action={
               <Button variant="outline" size="sm" onClick={clearFilters}>
                 Clear filters

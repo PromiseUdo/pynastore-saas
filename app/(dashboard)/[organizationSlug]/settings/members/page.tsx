@@ -101,7 +101,7 @@ export default async function MembersPage() {
   return (
     <>
       <PageHeader
-        title="Team Members"
+        title="Team"
         description={`${memberRows.length} active member${memberRows.length !== 1 ? 's' : ''}`}
         actions={canInvite ? <InviteMemberButton roles={roles} /> : undefined}
       />

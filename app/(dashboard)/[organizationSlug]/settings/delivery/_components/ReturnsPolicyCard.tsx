@@ -49,7 +49,7 @@ export function ReturnsPolicyCard({ returnWindowDays, canManage }: { returnWindo
       </h2>
       <p className="mt-0.5 text-xs text-muted-foreground">
         Let customers ask to send items back from their account, for a set number of days after delivery. You approve or
-        decline each request and record any refund in Sales → Returns. Customers can always cancel an order themselves
+        decline each request and record any refund in Orders → Returns. Customers can always cancel an order themselves
         until you start packing it.
       </p>
 

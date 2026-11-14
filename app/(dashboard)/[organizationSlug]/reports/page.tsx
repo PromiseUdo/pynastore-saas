@@ -13,7 +13,7 @@ import {
   getTopProductsReport,
 } from '@/features/reports/sales-reports';
 import { getSalesByStore } from '@/features/sales/store-sales';
-import { ReportsHub, type ReportsData, type ReportsView } from './_components/ReportsHub';
+import { ReportsHub, StockReportsOnly, type ReportsData, type ReportsView, type StockReportsAccess } from './_components/ReportsHub';
 
 export const metadata: Metadata = { title: 'Reports' };
 
@@ -24,18 +24,26 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v |
  * The reports hub (ROADMAP 14.6). Sales, products and customers come with
  * every plan; discounts and the store comparison are Advanced reports, shown
  * with what they do rather than hidden (AGENTS §7). Only the view on screen
- * is queried.
+ * is queried. The stock reports live under /inventory/reports; the hub links
+ * to them, and is all a member who sees stock but not sales gets here.
  */
 export default async function ReportsPage({ searchParams }: { searchParams: SearchParams }) {
   await requireFeature(FEATURES.SALES_MODULE);
   const ctx = await getOrganizationContext();
   const perms = ctx.membership.role.permissions;
-  if (!hasPermission(perms, PERMISSIONS.SALES_VIEW)) {
-    return <AccessDenied what="reports" />;
-  }
-
   const { plan } = await getOrganizationEntitlements();
   const advanced = hasFeature(plan, FEATURES.REPORTS_ADVANCED);
+  const canSeeSales = hasPermission(perms, PERMISSIONS.SALES_VIEW);
+  const canSeeStock = hasFeature(plan, FEATURES.INVENTORY_MODULE) && hasPermission(perms, PERMISSIONS.INVENTORY_VIEW);
+  // The same rules as the stock report pages themselves.
+  const stock: StockReportsAccess = {
+    onHand: canSeeStock,
+    overTime: canSeeStock && canSeeSales ? (advanced ? 'open' : 'locked') : 'hidden',
+  };
+  if (!canSeeSales) {
+    return canSeeStock ? <StockReportsOnly stock={stock} /> : <AccessDenied what="reports" />;
+  }
+
   const canSeeCustomers = hasPermission(perms, PERMISSIONS.CUSTOMER_VIEW);
 
   const tabs: { key: ReportsView; label: string; locked?: boolean }[] = [
@@ -82,6 +90,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
         label: first === last ? first : `${first} – ${last}`,
       }}
       data={data}
+      stock={stock}
     />
   );
 }

@@ -254,7 +254,7 @@ export function NewInvoiceForm({
                   onSearch={searchSalesCustomers}
                   onPick={setCustomer}
                   getKey={(c) => c.id}
-                  emptyHint="Nobody matches. Add them under Sales → Customers first."
+                  emptyHint="Nobody matches. Add them under Customers first."
                   renderItem={(c) => (
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium text-foreground">{c.name}</span>

@@ -15,7 +15,7 @@ import { AccessDenied } from '@/components/layout/access-denied';
 import { listActivity, type ActivityFilters } from '@/features/settings/activity';
 import { ActivityClient } from './_components/ActivityClient';
 
-export const metadata: Metadata = { title: 'Activity' };
+export const metadata: Metadata = { title: 'Activity log' };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 

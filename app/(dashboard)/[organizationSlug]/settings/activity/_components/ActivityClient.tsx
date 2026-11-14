@@ -103,7 +103,7 @@ export function ActivityClient({ result }: { result: ActivityResult }) {
   const noBuying = useNoBuying();
   const header = (
     <PageHeader
-      title="Activity"
+      title="Activity log"
       description="Who changed what in this workspace, newest first."
       actions={
         result.canExport ? (

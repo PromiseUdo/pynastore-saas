@@ -93,7 +93,7 @@ export function QueueClient({ data, status, q }: { data: QueuePage; status: Queu
             title={status === 'PENDING' ? 'Nothing waiting for review' : 'Nothing here yet'}
             description={
               status === 'PENDING'
-                ? 'When a business submits its details in Settings → Payments → Get paid online, it appears here.'
+                ? 'When a business submits its details in Settings → Payment setup → Get paid online, it appears here.'
                 : 'Businesses appear here once they have been reviewed.'
             }
           />

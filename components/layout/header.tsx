@@ -1,11 +1,21 @@
 'use client';
 
 import * as React from 'react';
-import { Menu } from 'lucide-react';
+import Link from 'next/link';
+import { Bell, LogOut, Menu, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSidebar } from './sidebar';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import type { UserInfo } from './dashboard-layout';
+import { signOutHere } from '@/components/account/sign-out';
+import {
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 type Breadcrumb = { label: string; href?: string };
 
@@ -78,14 +88,47 @@ export function Header({ breadcrumbs, actions, user, className }: HeaderProps) {
       <div className="ml-auto flex items-center gap-1.5">
         <NotificationBell base="/notifications" />
 
-        {/* User avatar */}
-        <div
-          aria-label="User menu"
-          className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary"
-          title={user?.name ?? user?.email ?? ''}
-        >
-          {user?.initials ?? '?'}
-        </div>
+        {/* The account menu: what belongs to this person rather than the shop. */}
+        <DropdownMenuRoot>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Account menu"
+              title={user?.name ?? user?.email ?? ''}
+              className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {user?.initials ?? '?'}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            {(user?.name || user?.email) && (
+              <>
+                <DropdownMenuLabel className="font-normal">
+                  {user?.name && <span className="block truncate text-sm font-medium">{user.name}</span>}
+                  {user?.email && <span className="block truncate text-xs text-muted-foreground">{user.email}</span>}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem asChild>
+              <Link href="/settings/account">
+                <UserRound />
+                Your account
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/settings/notifications">
+                <Bell />
+                Notification settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => void signOutHere()}>
+              <LogOut />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenuRoot>
 
         {actions && <div className="ml-1 flex items-center gap-2">{actions}</div>}
       </div>

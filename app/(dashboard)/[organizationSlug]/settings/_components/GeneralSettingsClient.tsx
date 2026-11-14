@@ -120,7 +120,7 @@ export function GeneralSettingsClient({
   return (
     <form onSubmit={onSubmit}>
       <PageHeader
-        title="General"
+        title="Business details"
         description="Your business name, logo, tab icon, contact details, VAT and social media."
         actions={
           canManage ? (
@@ -356,12 +356,12 @@ export function GeneralSettingsClient({
             />
             <SettingLink
               href="/settings/payments"
-              title="Payments"
+              title="Payment setup"
               description="How customers can pay, and the bank accounts behind bank transfer."
             />
             <SettingLink
               href="/settings/members"
-              title="Members"
+              title="Team"
               description="Who can sign in to this workspace, and what they're allowed to do."
             />
           </ul>

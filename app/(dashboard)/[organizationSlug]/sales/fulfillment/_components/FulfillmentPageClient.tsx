@@ -58,7 +58,7 @@ export function FulfillmentPageClient({
   return (
     <>
       <PageHeader
-        title="Fulfillment"
+        title="Packing and delivery"
         description="Everything waiting to go out — online order parcels and invoices — oldest first. Each opens where you send it."
       />
       <PageToolbar className="gap-y-2">
