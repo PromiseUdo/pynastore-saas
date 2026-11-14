@@ -422,6 +422,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           discount: toMajor(totals.discount),
           // The VAT inside the price, at the shop's setting now (ROADMAP 14.1), and its number for the receipt.
           taxAmount: toMajor(totals.tax),
+          // Of which added on top of wholesale prices (ROADMAP 21.2) — the receipt shows it as its own line.
+          vatAddedAmount: toMajor(totals.taxAdded ?? 0),
           vatNumber: totals.tax > 0 ? (input.config.vat?.vatNumber ?? null) : null,
           totalAmount: toMajor(totals.total),
 
@@ -445,6 +447,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
               quantity: item.quantity,
               unitPrice: toMajor(item.unitPrice),
               totalPrice: toMajor(item.unitPrice * item.quantity),
+              // Priced for a trade buyer at the wholesale price (ROADMAP 21.2), by the catalogue — not the browser.
+              atWholesalePrice: item.atWholesale === true,
             })),
           },
         },

@@ -52,6 +52,9 @@ export function OrderSummary({
   discountLabel?: string;
 }) {
   const { subtotal, discount, shipping, tax, total, currency } = totals;
+  // VAT added on top of wholesale prices (ROADMAP 21.2) is its own line; the rest is inside the prices.
+  const vatAdded = totals.taxAdded ?? 0;
+  const vatIncluded = tax - vatAdded;
 
   return (
     <section aria-labelledby="order-summary-heading" className="rounded-2xl border bg-card p-5 sm:p-6">
@@ -79,10 +82,12 @@ export function OrderSummary({
           value={totals.shippingPending ? 'Calculated at checkout' : formatMoney(shipping, currency)}
         />
 
+        {vatAdded > 0 && <Row label="VAT" hint="Added to wholesale prices" value={formatMoney(vatAdded, currency)} />}
+
         <div className="border-t pt-3">
           <Row label={totals.shippingPending ? 'Total before delivery' : 'Total'} value={formatMoney(total, currency)} strong />
-          {/* Only a VAT-registered store has any (ROADMAP 14.1): stated, never added. */}
-          {tax > 0 && <p className="mt-1 text-xs text-muted-foreground">Includes {formatMoney(tax, currency)} VAT</p>}
+          {/* Only a VAT-registered store has any (ROADMAP 14.1): stated, not added — except on wholesale (above). */}
+          {vatIncluded > 0 && <p className="mt-1 text-xs text-muted-foreground">Includes {formatMoney(vatIncluded, currency)} VAT</p>}
         </div>
       </div>
 

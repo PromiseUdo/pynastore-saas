@@ -194,6 +194,12 @@ export function ConfirmationView({
               {totals.shipping === 0 ? 'Free' : formatMoney(totals.shipping, order.currency)}
             </dd>
           </div>
+          {totals.taxAdded > 0 && (
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">VAT (added to wholesale prices)</dt>
+              <dd className="tabular-nums">{formatMoney(totals.taxAdded, order.currency)}</dd>
+            </div>
+          )}
           <div className="flex justify-between border-t pt-2.5">
             <dt className="font-semibold">Total</dt>
             <dd className="text-lg font-bold tabular-nums">{formatMoney(totals.total, order.currency)}</dd>
@@ -201,9 +207,12 @@ export function ConfirmationView({
           {/* VAT is INCLUDED in the listed prices (lib/storefront/pricing.ts),
            * so it is stated, never added — a row that made the column stop
            * adding up would look like an overcharge. */}
-          {totals.tax > 0 && (
+          {totals.taxAdded > 0 && totals.tax - totals.taxAdded <= 0 && order.vatNumber && (
+            <p className="text-xs text-muted-foreground">VAT number {order.vatNumber}</p>
+          )}
+          {totals.tax - totals.taxAdded > 0 && (
             <p className="text-xs text-muted-foreground">
-              Includes {formatMoney(totals.tax, order.currency)} VAT
+              Includes {formatMoney(totals.tax - totals.taxAdded, order.currency)} VAT
               {order.vatNumber ? ` · VAT number ${order.vatNumber}` : ''}
             </p>
           )}

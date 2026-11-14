@@ -150,6 +150,8 @@ export interface StoreOrderDetail extends StoreOrderRow {
   /** the code the shopper used, as it was when they used it */
   discountCode: string | null;
   taxAmount: number;
+  /** of `taxAmount`, the part added on top of wholesale prices (ROADMAP 21.2); 0 otherwise */
+  vatAddedAmount: number;
   /** the shop's VAT number when it was placed; null when no VAT was charged (ROADMAP 14.1) */
   vatNumber: string | null;
   note: string | null;
@@ -160,6 +162,8 @@ export interface StoreOrderDetail extends StoreOrderRow {
     quantity: number;
     unitPrice: number;
     totalPrice: number;
+    /** sold to a trade buyer at the wholesale price (ROADMAP 21.2) */
+    atWholesalePrice: boolean;
     productId: string | null;
     /** Which store(s) this line's units came off — see `fulfilledFrom`. */
     fromStores: OrderStoreShare[];
@@ -668,6 +672,7 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
         discount: Number(order.discount),
         discountCode: order.discountCode,
         taxAmount: Number(order.taxAmount),
+        vatAddedAmount: Number(order.vatAddedAmount),
         vatNumber: order.vatNumber,
         totalAmount: Number(order.totalAmount),
         itemCount: order.lineItems.reduce((sum, line) => sum + line.quantity, 0),
@@ -688,6 +693,7 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
           quantity: line.quantity,
           unitPrice: Number(line.unitPrice),
           totalPrice: Number(line.totalPrice),
+          atWholesalePrice: line.atWholesalePrice,
           productId: line.productId,
           fromStores: lineShares(order, line.id),
           returnable: Math.max(

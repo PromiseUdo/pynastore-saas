@@ -4,7 +4,7 @@
  * cart store, checkout, and the mock order API all call `computeTotals`.
  */
 import type { AppliedCoupon, CartItem, Money, OrderTotals, ShippingMethod } from './types';
-import { includedVat } from '@/lib/tax';
+import { bagVat } from '@/lib/tax';
 
 /*
  * Delivery prices belong to each merchant and depend on the address
@@ -87,6 +87,12 @@ export interface ComputeTotalsInput {
    * null — then there is no VAT in the total at all (lib/tax.ts, ROADMAP 14.1).
    */
   vatRatePct?: number | null;
+  /**
+   * VAT is ADDED to wholesale lines (`atWholesale`) rather than included —
+   * a trade buyer at a shop whose wholesale prices are before VAT (ROADMAP
+   * 21.2). Retail lines in the same bag still include it.
+   */
+  vatAdded?: boolean;
 }
 
 export function computeTotals({
@@ -95,6 +101,7 @@ export function computeTotals({
   shippingMethod = null,
   currency = 'NGN',
   vatRatePct = null,
+  vatAdded = false,
 }: ComputeTotalsInput): OrderTotals {
   const subtotal = cartSubtotal(items);
 
@@ -107,11 +114,14 @@ export function computeTotals({
   const shipping = shippingMethod?.price ?? 0;
 
   // VAT is already in the listed prices — stated, never added.
-  const tax = includedVat(discountedSubtotal, vatRatePct);
+  // Except a trade buyer's wholesale lines, where the shop adds it (21.2).
+  const beforeVat = vatAdded ? cartSubtotal(items.filter((i) => i.atWholesale)) : 0;
+  const vat = bagVat({ beforeVat, inclusive: subtotal - beforeVat, discount, ratePct: vatRatePct });
+  const tax = vat.added + vat.included;
 
-  const total = discountedSubtotal + shipping;
+  const total = discountedSubtotal + vat.added + shipping;
 
-  return { subtotal, discount, shipping, tax, total, currency, shippingPending: !shippingMethod };
+  return { subtotal, discount, shipping, tax, taxAdded: vat.added, total, currency, shippingPending: !shippingMethod };
 }
 
 /* An order reference is not money, and there must be exactly one generator

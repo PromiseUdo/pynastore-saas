@@ -20,6 +20,7 @@ import { VariantPicker } from './variant-picker';
 import { QuantityStepper } from './quantity-stepper';
 import type { Product } from '@/lib/storefront/types';
 import { useStorefront } from '@/lib/storefront/context';
+import { WholesaleNote } from '@/components/storefront/common/wholesale-note';
 import { discountPercent, formatMoney } from '@/lib/storefront/format';
 import { useHydrated } from '@/lib/storefront/context';
 import { useUIStore } from '@/lib/storefront/stores/ui-store';
@@ -206,6 +207,7 @@ function QuickViewBody({ product, onClose }: { product: Product; onClose: () => 
               </span>
             </>
           )}
+          <WholesaleNote product={product} variant={variant} />
         </div>
 
         <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-muted-foreground">

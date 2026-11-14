@@ -54,6 +54,11 @@ type ProductFormProps = {
   can: { save: boolean; createBrand: boolean; recordStock: boolean };
   /** saved products only: how ready their photos are for search by image */
   imageSearch?: ProductImageSearchStatus | null;
+  /**
+   * The shop sells wholesale (ROADMAP 21.2): show the wholesale price field.
+   * `vatAdded`: its wholesale prices are before VAT, so the field says so.
+   */
+  wholesale?: { vatAdded: boolean } | null;
 };
 
 const STATUS_HELP = {
@@ -68,6 +73,7 @@ const ERROR_ANCHOR: Record<string, string> = {
   shortDescription: 'basics',
   sellingPrice: 'pricing',
   compareAtPrice: 'pricing',
+  wholesalePrice: 'pricing',
   sku: 'inventory',
   reorderPoint: 'inventory',
   options: 'variants',
@@ -92,7 +98,7 @@ function categoryIsVisible(categories: CategoryWithCounts[], id: string | null):
   return Boolean(byId.get(id));
 }
 
-export function ProductForm({ product, categories, brands: initialBrands, suppliers, warehouses, can, imageSearch }: ProductFormProps) {
+export function ProductForm({ product, categories, brands: initialBrands, suppliers, warehouses, can, imageSearch, wholesale = null }: ProductFormProps) {
   const router = useRouter();
   const isNew = product === null;
   const isKit = product?.itemType === 'KIT';
@@ -242,6 +248,9 @@ export function ProductForm({ product, categories, brands: initialBrands, suppli
   const pct = discountPercent(price, was);
   const slug = effectiveSlug(state);
   const margin = product && price && product.averageCost > 0 ? Math.round(((price - product.averageCost) / price) * 100) : null;
+  const wholesalePrice = Number(state.wholesalePrice.replace(/,/g, '')) || null;
+  const wholesaleMargin =
+    product && wholesalePrice && product.averageCost > 0 ? Math.round(((wholesalePrice - product.averageCost) / wholesalePrice) * 100) : null;
   const canUseVariants = !isKit && !(product && !initial.hasVariants && product.hasStockHistory);
 
   return (
@@ -348,11 +357,37 @@ export function ProductForm({ product, categories, brands: initialBrands, suppli
                     )}
                   </Field>
                 )}
+                {wholesale && (
+                  <Field>
+                    <Label htmlFor="p-wholesale">Wholesale price</Label>
+                    <Input
+                      id="p-wholesale"
+                      inputMode="decimal"
+                      startAdornment={<span className="text-xs">₦</span>}
+                      endAdornment={wholesale.vatAdded ? <span className="text-xs">+ VAT</span> : undefined}
+                      value={state.wholesalePrice}
+                      onChange={(e) => set('wholesalePrice', e.target.value)}
+                      aria-invalid={Boolean(errors.wholesalePrice)}
+                      placeholder="Optional"
+                    />
+                    {errors.wholesalePrice ? (
+                      <FieldError>{errors.wholesalePrice}</FieldError>
+                    ) : (
+                      <FieldDescription>
+                        What your approved trade buyers pay{wholesale.vatAdded ? ', before VAT' : ''}. Leave it empty and they pay the selling price.
+                        {state.hasVariants ? ' Variants without their own use this one.' : ''}
+                      </FieldDescription>
+                    )}
+                  </Field>
+                )}
               </FormGrid>
               {product && product.averageCost > 0 && (
                 <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                   Average cost {formatMoney(product.averageCost)}
                   {margin !== null && <> · Margin at this price <span className={cn('font-medium', margin < 0 ? 'text-destructive' : 'text-foreground')}>{margin}%</span></>}
+                  {wholesale && wholesaleMargin !== null && (
+                    <> · At the wholesale price <span className={cn('font-medium', wholesaleMargin < 0 ? 'text-destructive' : 'text-foreground')}>{wholesaleMargin}%</span></>
+                  )}
                 </p>
               )}
             </FormCard>
@@ -390,6 +425,7 @@ export function ProductForm({ product, categories, brands: initialBrands, suppli
                     variants={state.variants}
                     parentSku={state.sku}
                     basePrice={state.sellingPrice}
+                    wholesale={wholesale ? { basePrice: state.wholesalePrice } : null}
                     images={state.images}
                     errors={{ options: errors.options, variants: errors.variants }}
                     disabled={readOnly}

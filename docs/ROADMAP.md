@@ -1343,7 +1343,7 @@ Launch (C) needs both.
 |---|---|---|
 | D3 | 14.4 SMS/WhatsApp order updates | needs a provider decision first (cost per message) |
 | D4 | 13.5 Custom domains bought through Namecheap's API | staff handle them by hand until then |
-| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | vendor answers in; can move before launch if a launch vendor needs it |
+| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | 21.1 and 21.2 DONE 2026-11-14; next 21.3; can move before launch if a launch vendor needs it |
 
 ### Deliberately not planned yet
 
@@ -7916,7 +7916,37 @@ pay on account. A vendor who sells only wholesale switches the shop to
   terms) — Owner and Admin by default.
 - **Audit:** every approval, decline, suspension and change of terms.
 
-### 21.2 One wholesale price per product — TODO
+### 21.2 One wholesale price per product — DONE (2026-11-14)
+
+**As built** (migration `20261114200000_wholesale_prices`):
+- `InventoryItem.wholesalePrice` (variant's own, else the product's; none =
+  retail), `Organization.wholesaleVatAdded`, `OrderLineItem.atWholesalePrice`,
+  `Order.vatAddedAmount` (the part of `taxAmount` added on top; 0 for every
+  other order, so reports that read `taxAmount` are unchanged).
+- Prices are chosen once per request where the catalogue loads:
+  `getBuyerPricing` (lib/storefront/trade-gate.ts) → `loadCatalogueFromDb(slug,
+  pricing)` (data/from-prisma.ts). Retail for everyone but an approved trade
+  buyer of THIS shop — the team previewing sees retail too. Campaigns are
+  retail: a wholesale price replaces the sale price for a trade buyer, with no
+  strike-through. `placeOrder` re-resolves through the same catalogue.
+- VAT added: `addedVat` / `bagVat` in `lib/tax.ts`; `computeTotals` adds it
+  to `atWholesale` lines only — a retail line in the same bag keeps it inside
+  — and shares a discount code between the two parts. `OrderTotals.taxAdded`
+  is shown as its own "VAT" line in the bag, checkout, confirmation, the
+  shopper's order page, the admin order page and the receipt.
+- Shown to trade buyers: "Wholesale price · + VAT" beside prices
+  (`components/storefront/common/wholesale-note.tsx`), "wholesale" on bag
+  lines.
+- Admin: Wholesale price in the product editor (with its margin) and a
+  per-variant column, shown only while wholesale is on; under the price in
+  the product list; the import sheet's "Wholesale price" column; the
+  workspace export. Settings → Wholesale: "My wholesale prices include VAT" /
+  "VAT is added" (only while VAT registered); admin order lines say
+  "Wholesale".
+- Tests: `tests/wholesale-prices.test.ts`, `lib/tax.test.ts`,
+  `lib/storefront/pricing.test.ts`.
+
+**Plan as written:**
 
 - **Also here (moved from 21.1):** the Settings → Wholesale choice "my
   wholesale prices include VAT / VAT is added" (decision 8).

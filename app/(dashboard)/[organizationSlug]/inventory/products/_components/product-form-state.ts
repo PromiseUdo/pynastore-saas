@@ -29,6 +29,8 @@ export type VariantDraft = {
   barcode: string;
   sellingPrice: string;
   compareAtPrice: string;
+  /** blank = the product's wholesale price (ROADMAP 21.2) */
+  wholesalePrice: string;
   imageUrl: string | null;
   available?: number;
 };
@@ -46,6 +48,8 @@ export type FormState = {
   reorderPoint: string;
   sellingPrice: string;
   compareAtPrice: string;
+  /** what an approved trade buyer pays; blank = the selling price (ROADMAP 21.2) */
+  wholesalePrice: string;
   status: ItemStatus;
   isPublished: boolean;
   /** true = customers must pay before delivery; pay on delivery isn't offered */
@@ -80,6 +84,7 @@ export function emptyFormState(): FormState {
     reorderPoint: '',
     sellingPrice: '',
     compareAtPrice: '',
+    wholesalePrice: '',
     status: 'ACTIVE',
     isPublished: false,
     requiresPrepayment: false,
@@ -124,6 +129,7 @@ export function formStateFromProduct(p: ProductDetail): FormState {
     barcode: v.barcode ?? '',
     sellingPrice: str(v.sellingPrice),
     compareAtPrice: str(v.compareAtPrice),
+    wholesalePrice: str(v.wholesalePrice),
     imageUrl: v.imageUrl,
     available: v.available,
     };
@@ -141,6 +147,7 @@ export function formStateFromProduct(p: ProductDetail): FormState {
     reorderPoint: str(p.reorderPoint),
     sellingPrice: str(p.sellingPrice),
     compareAtPrice: str(p.compareAtPrice),
+    wholesalePrice: str(p.wholesalePrice),
     status: p.status,
     isPublished: p.isPublished,
     requiresPrepayment: p.requiresPrepayment,
@@ -202,6 +209,7 @@ export function syncVariants(
       barcode: '',
       sellingPrice: '',
       compareAtPrice: '',
+      wholesalePrice: '',
       imageUrl: null,
     };
   });
@@ -231,6 +239,7 @@ export function validateForm(state: FormState): FieldErrors {
   const was = parseMoney(state.compareAtPrice);
   if (price === 'invalid') errors.sellingPrice = 'Enter a price like 5000 or 4999.99.';
   if (was === 'invalid') errors.compareAtPrice = 'Enter a price like 7500.';
+  if (parseMoney(state.wholesalePrice) === 'invalid') errors.wholesalePrice = 'Enter a price like 4000.';
   if (price !== 'invalid' && was !== 'invalid' && !state.hasVariants) {
     const problem = compareAtProblem(price, was);
     if (problem) errors.compareAtPrice = problem;
@@ -266,7 +275,7 @@ export function validateForm(state: FormState): FieldErrors {
       skus.add(v.sku.trim().toLowerCase());
       const vp = parseMoney(v.sellingPrice);
       const vw = parseMoney(v.compareAtPrice);
-      if (vp === 'invalid' || vw === 'invalid') {
+      if (vp === 'invalid' || vw === 'invalid' || parseMoney(v.wholesalePrice) === 'invalid') {
         errors.variants = `${label} has a price that isn’t a number.`;
         break;
       }
@@ -318,6 +327,7 @@ export function toProductInput(state: FormState): ProductInput {
     reorderPoint: money(state.reorderPoint),
     sellingPrice: money(state.sellingPrice),
     compareAtPrice: state.hasVariants ? null : money(state.compareAtPrice),
+    wholesalePrice: money(state.wholesalePrice),
     status: state.status,
     isPublished: state.isPublished,
     requiresPrepayment: state.requiresPrepayment,
@@ -337,6 +347,7 @@ export function toProductInput(state: FormState): ProductInput {
             attributes: v.attributes,
             sellingPrice: money(v.sellingPrice),
             compareAtPrice: money(v.compareAtPrice),
+            wholesalePrice: money(v.wholesalePrice),
             imageUrl: v.imageUrl && state.images.some((i) => i.url === v.imageUrl) ? v.imageUrl : null,
           }))
       : [],

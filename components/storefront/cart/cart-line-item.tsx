@@ -67,7 +67,7 @@ export function CartLineItem({
               <p className="mt-1 text-sm text-muted-foreground">{item.optionSummary}</p>
             )}
             <p className="mt-1 text-sm text-muted-foreground">
-              {formatMoney(item.unitPrice, item.currency)} each
+              {formatMoney(item.unitPrice, item.currency)} each{item.atWholesale ? ' · wholesale' : ''}
             </p>
             {item.maxQuantity <= LOW_STOCK && (
               <p className="mt-1 text-xs font-medium text-sale">Only {item.maxQuantity} left</p>

@@ -44,9 +44,12 @@ import { computeTotals } from '@/lib/storefront/pricing';
 
 export function CartView({
   vatRatePct = null,
+  vatAdded = false,
 }: {
   /** the store's VAT rate when it is VAT registered (ROADMAP 14.1), else null */
   vatRatePct?: number | null;
+  /** VAT is added to wholesale lines for this trade buyer (ROADMAP 21.2) */
+  vatAdded?: boolean;
 } = {}) {
   const hydrated = useCartStore((s) => s.hydrated);
   const items = useCartStore((s) => s.items);
@@ -58,7 +61,7 @@ export function CartView({
    * returns a fresh object, and a selector that returns a new object every
    * call re-renders forever under zustand's snapshot checks. The numbers
    * still come from exactly one place (lib/storefront/pricing.ts). */
-  const totals = React.useMemo(() => computeTotals({ items, coupon, vatRatePct }), [items, coupon, vatRatePct]);
+  const totals = React.useMemo(() => computeTotals({ items, coupon, vatRatePct, vatAdded }), [items, coupon, vatRatePct, vatAdded]);
 
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
@@ -255,6 +258,7 @@ function SavedForLater({
                 )}
                 <p className="mt-0.5 text-sm font-semibold">
                   {formatMoney(item.unitPrice, item.currency)}
+                  {item.atWholesale && <span className="ml-1.5 text-xs font-normal text-muted-foreground">wholesale</span>}
                 </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">

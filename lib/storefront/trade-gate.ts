@@ -15,6 +15,7 @@ import { cache } from 'react';
 import { getWholesaleSettingsBySlug, isTradeBuyer } from '@/lib/trade/accounts';
 import { getShopperForStore } from './account/session';
 import { isTeamMember } from './opening';
+import { RETAIL_PRICING, type BuyerPricing } from './data/from-prisma';
 
 export interface TradeGate {
   /** the shop is Trade only */
@@ -22,6 +23,24 @@ export interface TradeGate {
   /** the person looking may see the catalogue */
   allowed: boolean;
 }
+
+/**
+ * Whose prices the person looking gets (ROADMAP 21.2): wholesale for an
+ * approved trade buyer of THIS shop, retail for everyone else — including
+ * the team previewing the shop, and anyone the session can't be read for.
+ */
+export const getBuyerPricing = cache(async (organizationSlug: string): Promise<BuyerPricing> => {
+  const settings = await getWholesaleSettingsBySlug(organizationSlug);
+  if (settings.mode === 'OFF' || !settings.organizationId) return RETAIL_PRICING;
+  try {
+    const shopper = await getShopperForStore(organizationSlug);
+    if (!shopper || shopper.organizationId !== settings.organizationId) return RETAIL_PRICING;
+    if (!(await isTradeBuyer(settings.organizationId, shopper.id))) return RETAIL_PRICING;
+    return { trade: true, vatAdded: settings.vatAdded };
+  } catch {
+    return RETAIL_PRICING;
+  }
+});
 
 export const getTradeGate = cache(async (organizationSlug: string): Promise<TradeGate> => {
   const settings = await getWholesaleSettingsBySlug(organizationSlug);

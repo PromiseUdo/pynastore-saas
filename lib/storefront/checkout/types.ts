@@ -145,7 +145,12 @@ export interface CheckoutConfig {
    * The store's VAT when it is VAT registered (ROADMAP 14.1), else null and
    * checkout shows no VAT at all. Always included in prices, never added.
    */
-  vat: { ratePct: number; vatNumber: string | null } | null;
+  vat: {
+    ratePct: number;
+    vatNumber: string | null;
+    /** VAT is added to wholesale lines for this (trade) buyer, not included (ROADMAP 21.2) */
+    addedToWholesale?: boolean;
+  } | null;
   /** false: only a signed-in shopper may order (the merchant's choice) */
   guestCheckoutEnabled: boolean;
   orderNotesEnabled: boolean;

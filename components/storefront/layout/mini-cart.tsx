@@ -101,7 +101,7 @@ export function MiniCart() {
                             <p className="mt-0.5 text-xs text-muted-foreground">{item.optionSummary}</p>
                           )}
                           <p className="mt-0.5 text-xs text-muted-foreground">
-                            {formatMoney(item.unitPrice, item.currency)} each
+                            {formatMoney(item.unitPrice, item.currency)} each{item.atWholesale ? ' · wholesale' : ''}
                           </p>
                         </div>
                         <button

@@ -385,6 +385,14 @@ model Organization {
   tradePayOnline        Boolean       @default(true)
   tradePayTransfer      Boolean       @default(true)
   tradePayOnDelivery    Boolean       @default(true)
+  /**
+   * Wholesale prices and VAT (ROADMAP 21.2, decision 8). false: wholesale
+   * prices include VAT, like every retail price. true: VAT is ADDED to a
+   * trade buyer's order — said beside every price they see ("+ VAT") and as
+   * a line at checkout. Only means anything while the shop is VAT
+   * registered; retail prices always include it.
+   */
+  wholesaleVatAdded     Boolean       @default(false)
 
   /**
    * Messages (ROADMAP 17): whether shoppers can message the store from the
@@ -932,6 +940,9 @@ model InventoryItem {
   averageCost    Decimal    @default(0) @db.Decimal(12, 4) // moving-average unit cost, for valuation
   sellingPrice   Decimal?   @db.Decimal(12, 2) // on a VARIANT, null = use the parent's price
   compareAtPrice Decimal?   @db.Decimal(12, 2) // "was" price shown struck through online; must exceed sellingPrice
+  /// What an approved trade buyer pays (ROADMAP 21.2). On a VARIANT, null = use the parent's wholesale price;
+  /// null on both = trade buyers pay the selling price. Includes VAT or has it added, per Organization.wholesaleVatAdded.
+  wholesalePrice Decimal?   @db.Decimal(12, 2)
   status         ItemStatus @default(ACTIVE)
 
   // Online store (one catalogue: the inventory item IS the online product).
@@ -1895,6 +1906,14 @@ model Order {
    * when the shop wasn't VAT registered (ROADMAP 14.1).
    */
   vatNumber   String?
+  /**
+   * The part of `taxAmount` that was ADDED on top of the goods rather than
+   * included in their prices: a trade buyer's wholesale lines at a shop whose
+   * wholesale prices are before VAT (ROADMAP 21.2). 0 for every other order.
+   * `taxAmount` is all the VAT in `totalAmount` either way; this says how
+   * much of it the receipt shows as its own line.
+   */
+  vatAddedAmount Decimal @default(0) @db.Decimal(12, 2)
 
   /**
    * The code the shopper typed, and what it was worth, copied onto the order.
@@ -2688,6 +2707,8 @@ model OrderLineItem {
   quantity   Int
   unitPrice  Decimal @db.Decimal(12, 2)
   totalPrice Decimal @db.Decimal(12, 2)
+  /// sold to a trade buyer at the wholesale price (ROADMAP 21.2)
+  atWholesalePrice Boolean @default(false)
 
   order       Order                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product     InventoryItem?         @relation(fields: [productId], references: [id], onDelete: SetNull)

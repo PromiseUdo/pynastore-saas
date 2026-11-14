@@ -54,6 +54,9 @@ export type ProductListRow = {
   variantCount: number;
   priceMin: number | null;
   priceMax: number | null;
+  /** what trade buyers pay (ROADMAP 21.2); null when no unit has a wholesale price */
+  wholesaleMin: number | null;
+  wholesaleMax: number | null;
   /** on hand minus reserved, across every store */
   available: number;
   /** available in stores that sell online */
@@ -104,6 +107,8 @@ export type ProductDetail = {
   reorderPoint: number | null;
   sellingPrice: number | null;
   compareAtPrice: number | null;
+  /** what an approved trade buyer pays (ROADMAP 21.2); null = they pay the selling price */
+  wholesalePrice: number | null;
   averageCost: number;
   slug: string | null;
   isPublished: boolean;
@@ -122,6 +127,8 @@ export type ProductDetail = {
     attributes: Record<string, string>;
     sellingPrice: number | null;
     compareAtPrice: number | null;
+    /** null = the product's wholesale price */
+    wholesalePrice: number | null;
     imageUrl: string | null;
     status: ItemStatus;
     available: number;
@@ -158,6 +165,7 @@ const ProductSchema = z.object({
   reorderPoint: z.number().nonnegative('Reorder point can’t be negative').nullish(),
   sellingPrice: money,
   compareAtPrice: money,
+  wholesalePrice: money,
   status: z.enum(ItemStatus).default(ItemStatus.ACTIVE),
   isPublished: z.boolean().default(false),
   requiresPrepayment: z.boolean().default(false),
@@ -198,6 +206,7 @@ const ProductSchema = z.object({
         attributes: z.record(z.string(), z.string()),
         sellingPrice: money,
         compareAtPrice: money,
+        wholesalePrice: money,
         /** refers to one of `images` by URL (images have no id before saving) */
         imageUrl: z.string().nullish(),
       }),
@@ -421,6 +430,7 @@ export async function listProducts(params: ProductListParams = {}): Promise<Acti
           status: true,
           isPublished: true,
           sellingPrice: true,
+          wholesalePrice: true,
           reorderPoint: true,
           categoryId: true,
           updatedAt: true,
@@ -430,7 +440,7 @@ export async function listProducts(params: ProductListParams = {}): Promise<Acti
           inventoryLevels: levelSelect,
           variants: {
             where: { status: { not: ItemStatus.ARCHIVED } },
-            select: { sellingPrice: true, reorderPoint: true, inventoryLevels: levelSelect },
+            select: { sellingPrice: true, wholesalePrice: true, reorderPoint: true, inventoryLevels: levelSelect },
           },
         },
       }),
@@ -446,9 +456,15 @@ export async function listProducts(params: ProductListParams = {}): Promise<Acti
 
     let rows: (ProductListRow & { createdAt: Date })[] = items.map((item) => {
       const units = item.variants.length
-        ? item.variants.map((v) => ({ price: num(v.sellingPrice) ?? num(item.sellingPrice), reorderPoint: num(v.reorderPoint), ...sumLevels(v.inventoryLevels, supplying) }))
-        : [{ price: num(item.sellingPrice), reorderPoint: num(item.reorderPoint), ...sumLevels(item.inventoryLevels, supplying) }];
+        ? item.variants.map((v) => ({
+            price: num(v.sellingPrice) ?? num(item.sellingPrice),
+            wholesale: num(v.wholesalePrice) ?? num(item.wholesalePrice),
+            reorderPoint: num(v.reorderPoint),
+            ...sumLevels(v.inventoryLevels, supplying),
+          }))
+        : [{ price: num(item.sellingPrice), wholesale: num(item.wholesalePrice), reorderPoint: num(item.reorderPoint), ...sumLevels(item.inventoryLevels, supplying) }];
       const prices = units.map((u) => u.price).filter((p): p is number => p !== null);
+      const wholesale = units.map((u) => u.wholesale).filter((p): p is number => p !== null && p > 0);
       const available = units.reduce((s, u) => s + u.available, 0);
       const stockState: StockState =
         available <= 0 ? 'out' : units.some((u) => u.reorderPoint !== null && u.available <= u.reorderPoint) ? 'low' : 'in';
@@ -466,6 +482,8 @@ export async function listProducts(params: ProductListParams = {}): Promise<Acti
         variantCount: item.variants.length,
         priceMin: prices.length ? Math.min(...prices) : null,
         priceMax: prices.length ? Math.max(...prices) : null,
+        wholesaleMin: wholesale.length ? Math.min(...wholesale) : null,
+        wholesaleMax: wholesale.length ? Math.max(...wholesale) : null,
         available,
         onlineAvailable: units.reduce((s, u) => s + u.onlineAvailable, 0),
         stockState,
@@ -579,6 +597,7 @@ export async function getProduct(productId: string): Promise<ActionResult<Produc
         reorderPoint: num(item.reorderPoint),
         sellingPrice: num(item.sellingPrice),
         compareAtPrice: num(item.compareAtPrice),
+        wholesalePrice: num(item.wholesalePrice),
         averageCost: Number(item.averageCost),
         slug: item.slug,
         isPublished: item.isPublished,
@@ -596,6 +615,7 @@ export async function getProduct(productId: string): Promise<ActionResult<Produc
           attributes: attributesOf(v),
           sellingPrice: num(v.sellingPrice),
           compareAtPrice: num(v.compareAtPrice),
+          wholesalePrice: num(v.wholesalePrice),
           imageUrl: v.image?.url ?? null,
           status: v.status,
           ...sumLevels(v.inventoryLevels, supplying),
@@ -633,6 +653,8 @@ function sharedFields(data: ParsedProduct, slug: string) {
     reorderPoint: data.reorderPoint ?? null,
     sellingPrice: data.sellingPrice ?? null,
     compareAtPrice: data.compareAtPrice ?? null,
+    // 0 means nothing: a trade buyer then pays the selling price (ROADMAP 21.2).
+    wholesalePrice: data.wholesalePrice || null,
     status: data.status,
     slug,
     isPublished: data.isPublished,
@@ -657,6 +679,7 @@ function variantFields(data: ParsedProduct, variant: ParsedProduct['variants'][n
     reorderPoint: data.reorderPoint ?? null,
     sellingPrice: variant.sellingPrice ?? null,
     compareAtPrice: variant.compareAtPrice ?? null,
+    wholesalePrice: variant.wholesalePrice || null,
     variantAttributes: Object.fromEntries(options.map((o) => [o.name, variant.attributes[o.name]])),
     imageId: variant.imageUrl ? (imageIds.get(variant.imageUrl) ?? null) : null,
     status: data.status,
@@ -890,7 +913,7 @@ export async function setProductPublished(productId: string, isPublished: boolea
     images: p.images.map(({ id: _id, ...i }) => i),
     variants: p.variants
       .filter((v) => v.status !== ItemStatus.ARCHIVED)
-      .map((v) => ({ id: v.id, sku: v.sku, barcode: v.barcode, attributes: v.attributes, sellingPrice: v.sellingPrice, compareAtPrice: v.compareAtPrice, imageUrl: v.imageUrl })),
+      .map((v) => ({ id: v.id, sku: v.sku, barcode: v.barcode, attributes: v.attributes, sellingPrice: v.sellingPrice, compareAtPrice: v.compareAtPrice, wholesalePrice: v.wholesalePrice, imageUrl: v.imageUrl })),
   });
 }
 

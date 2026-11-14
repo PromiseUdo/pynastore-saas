@@ -63,7 +63,7 @@ function Line({ item }: { item: CartItem }) {
           <p className="mt-0.5 text-xs text-muted-foreground">{item.optionSummary}</p>
         )}
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {item.quantity} × {formatMoney(item.unitPrice, item.currency)}
+          {item.quantity} × {formatMoney(item.unitPrice, item.currency)}{item.atWholesale ? ' · wholesale' : ''}
         </p>
       </div>
 
@@ -114,6 +114,9 @@ function SummaryBody({
   config: CheckoutConfig;
 }) {
   const { subtotal, discount, shipping, tax, total, currency } = totals;
+  // VAT added on top of wholesale prices (ROADMAP 21.2) is its own line; the rest is inside the prices.
+  const vatAdded = totals.taxAdded ?? 0;
+  const vatIncluded = tax - vatAdded;
 
   return (
     <>
@@ -147,13 +150,16 @@ function SummaryBody({
           }
         />
 
+        {config.vat && vatAdded > 0 && <Row label="VAT" hint="Added to wholesale prices" value={formatMoney(vatAdded, currency)} />}
+
         <div className="border-t pt-3">
           <Row label={totals.shippingPending ? 'Total before delivery' : 'Total'} value={formatMoney(total, currency)} strong />
           {/* Only a VAT-registered store has any (ROADMAP 14.1), and it is in
-           * the prices — stated, never added, so the column still adds up. */}
-          {config.vat && tax > 0 && (
+           * the prices — stated, not added, so the column still adds up. The
+           * one exception, a trade buyer's wholesale lines, has its row above. */}
+          {config.vat && vatIncluded > 0 && (
             <p className="mt-1 text-xs text-muted-foreground">
-              Includes {formatMoney(tax, currency)} VAT
+              Includes {formatMoney(vatIncluded, currency)} VAT
             </p>
           )}
         </div>

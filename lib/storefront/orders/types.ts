@@ -108,7 +108,8 @@ export interface StorefrontOrder {
   };
 
   currency: string;
-  totals: { subtotal: Money; discount: Money; shipping: Money; tax: Money; total: Money };
+  /** `tax` is all the VAT in `total`; `taxAdded` the part added on top of wholesale prices (ROADMAP 21.2) */
+  totals: { subtotal: Money; discount: Money; shipping: Money; tax: Money; taxAdded: Money; total: Money };
   /** the code used, as it read when the order was placed; null if none */
   discountCode: string | null;
   /** the store's VAT number when the order was placed; null if it charged no VAT (ROADMAP 14.1) */

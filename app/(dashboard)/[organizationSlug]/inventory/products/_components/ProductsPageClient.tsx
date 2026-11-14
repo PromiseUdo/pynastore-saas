@@ -47,6 +47,8 @@ type ProductsPageClientProps = {
   kitCandidates: ItemListRow[];
   can: { create: boolean; edit: boolean; assembleKits: boolean; recordStock: boolean };
   kitsEnabled: boolean;
+  /** the shop sells wholesale: show each product's wholesale price (ROADMAP 21.2) */
+  wholesaleOn?: boolean;
 };
 
 const VIEWS = [
@@ -74,6 +76,7 @@ export function ProductsPageClient({
   kitCandidates,
   can,
   kitsEnabled,
+  wholesaleOn = false,
 }: ProductsPageClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -392,6 +395,11 @@ export function ProductsPageClient({
                     </TableCell>
                     <TableCell align="right" className="hidden whitespace-nowrap tabular-nums sm:table-cell">
                       {formatMoneyRange(row.priceMin, row.priceMax)}
+                      {wholesaleOn && row.wholesaleMin !== null && (
+                        <span className="block text-xs text-muted-foreground">
+                          Wholesale {formatMoneyRange(row.wholesaleMin, row.wholesaleMax)}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell align="right" className="hidden whitespace-nowrap sm:table-cell">
                       <div className="flex flex-col items-end gap-0.5">

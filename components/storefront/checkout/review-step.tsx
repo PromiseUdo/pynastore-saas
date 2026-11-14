@@ -201,7 +201,7 @@ export function ReviewStep({
                   <p className="text-xs text-muted-foreground">{item.optionSummary}</p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Qty {item.quantity} · {formatMoney(item.unitPrice, item.currency)} each
+                  Qty {item.quantity} · {formatMoney(item.unitPrice, item.currency)} each{item.atWholesale ? ' · wholesale' : ''}
                 </p>
               </div>
               <p className="shrink-0 text-sm font-semibold tabular-nums">

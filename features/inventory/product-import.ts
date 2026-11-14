@@ -210,6 +210,7 @@ async function analyse(ctx: OrganizationContext, text: string): Promise<{ previe
             reorderPoint: p.reorderPoint,
             sellingPrice: variants ? (prices[0] ?? null) : first.price,
             compareAtPrice: variants ? null : first.compareAtPrice,
+            wholesalePrice: variants ? null : first.wholesalePrice,
             isPublished: false,
             options: p.options,
             variants: variants
@@ -219,6 +220,7 @@ async function analyse(ctx: OrganizationContext, text: string): Promise<{ previe
                   attributes: u.attributes,
                   sellingPrice: u.price,
                   compareAtPrice: u.compareAtPrice,
+                  wholesalePrice: u.wholesalePrice,
                 }))
               : [],
           }

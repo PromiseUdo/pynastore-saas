@@ -969,7 +969,7 @@ describe('confirmation', () => {
       parcels: [{ storeName: 'Main', label: 'Standard delivery', fee: 250_000, kind: 'delivery' as const, status: 'pending' as const }],
     },
     currency: 'NGN',
-    totals: { subtotal: 1_000_000, discount: 0, shipping: 250_000, tax: 0, total: 1_250_000 },
+    totals: { subtotal: 1_000_000, discount: 0, shipping: 250_000, tax: 0, taxAdded: 0, total: 1_250_000 },
     discountCode: null,
     vatNumber: null,
     note: null,

@@ -117,6 +117,8 @@ export function sanitizeCartItems(value: unknown): CartItem[] {
       /* A bag stored before this rule existed has no flag; false is the safe
        * reading, because the server re-checks the real terms either way. */
       requiresPrepayment: raw.requiresPrepayment === true,
+      // Only ever a label and a VAT basis: the server re-prices every line anyway.
+      ...(raw.atWholesale === true ? { atWholesale: true } : {}),
       addedAt: typeof raw.addedAt === 'number' && Number.isFinite(raw.addedAt) ? raw.addedAt : Date.now(),
     };
 
@@ -155,6 +157,7 @@ export function toCartLine(product: Product, variantId: string): CartLineInput |
     maxQuantity: variant.stock,
     currency: product.currency,
     requiresPrepayment: product.requiresPrepayment,
+    atWholesale: variant.atWholesale === true,
   };
 }
 

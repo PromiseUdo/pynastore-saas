@@ -3,9 +3,10 @@
 /*
  * features/settings/wholesale.ts
  *
- * Settings → Wholesale (ROADMAP 21.1): whether the shop sells to trade
+ * Settings → Wholesale (ROADMAP 21.1, 21.2): whether the shop sells to trade
  * buyers (and to anyone else), whether shoppers may ask for a trade account,
- * and which ways a trade buyer may pay. Needs `settings.edit`.
+ * which ways a trade buyer may pay, and whether wholesale prices include VAT
+ * or have it added. Needs `settings.edit`.
  *
  * The payment choices narrow what the shop already offers
  * (lib/storefront/checkout/store-config.ts); they can't add a method the
@@ -24,6 +25,8 @@ const WholesaleSchema = z.object({
   tradePayOnline: z.boolean(),
   tradePayTransfer: z.boolean(),
   tradePayOnDelivery: z.boolean(),
+  /** wholesale prices are before VAT: it's added for trade buyers (21.2) */
+  vatAdded: z.boolean(),
 });
 
 export type WholesaleSettingsInput = z.infer<typeof WholesaleSchema>;
@@ -49,6 +52,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
         tradePayOnline: true,
         tradePayTransfer: true,
         tradePayOnDelivery: true,
+        wholesaleVatAdded: true,
       },
     });
     await prisma.organization.update({
@@ -59,6 +63,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
         tradePayOnline: next.tradePayOnline,
         tradePayTransfer: next.tradePayTransfer,
         tradePayOnDelivery: next.tradePayOnDelivery,
+        wholesaleVatAdded: next.vatAdded,
       },
     });
 
@@ -75,6 +80,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
           tradePayOnline: before.tradePayOnline,
           tradePayTransfer: before.tradePayTransfer,
           tradePayOnDelivery: before.tradePayOnDelivery,
+          vatAdded: before.wholesaleVatAdded,
         },
         after: next,
       },

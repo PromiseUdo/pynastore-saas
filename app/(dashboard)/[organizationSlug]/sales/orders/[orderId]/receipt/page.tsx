@@ -51,6 +51,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ orderI
   if (order.deliveryFee !== null && order.deliveryFee > 0) {
     totals.push({ label: 'Delivery', value: money(order.deliveryFee) });
   }
+  if (order.vatAddedAmount > 0) totals.push({ label: 'VAT (added to wholesale prices)', value: money(order.vatAddedAmount) });
 
   return (
     <ReceiptDocument
@@ -69,8 +70,9 @@ export default async function ReceiptPage({ params }: { params: Promise<{ orderI
       totals={totals}
       total={{ label: 'Total', value: money(order.totalAmount) }}
       footerFacts={[
-        // VAT is in the prices (ROADMAP 14.1): stated under the total, never a line that looks added.
-        ...(order.taxAmount > 0 ? [{ label: 'Includes VAT', value: money(order.taxAmount) }] : []),
+        // VAT is in the prices (ROADMAP 14.1): stated under the total, never a line that looks added —
+        // except VAT added to a trade buyer's wholesale lines (21.2), which is a line of its own above.
+        ...(order.taxAmount - order.vatAddedAmount > 0 ? [{ label: 'Includes VAT', value: money(order.taxAmount - order.vatAddedAmount) }] : []),
         { label: 'Paid by', value: paymentLabel },
         {
           label: 'Status',

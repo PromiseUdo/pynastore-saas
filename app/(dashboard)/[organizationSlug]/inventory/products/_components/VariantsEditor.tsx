@@ -24,6 +24,8 @@ type VariantsEditorProps = {
   variants: VariantDraft[];
   parentSku: string;
   basePrice: string;
+  /** the shop sells wholesale (ROADMAP 21.2): a wholesale price per variant, blank = the product's */
+  wholesale?: { basePrice: string } | null;
   images: UploadedImage[];
   errors: { options?: string; variants?: string };
   disabled?: boolean;
@@ -62,7 +64,7 @@ function ValueInput({ onAdd, disabled, placeholder }: { onAdd: (labels: string[]
   );
 }
 
-export function VariantsEditor({ options, variants, parentSku, basePrice, images, errors, disabled, showStock, onChange }: VariantsEditorProps) {
+export function VariantsEditor({ options, variants, parentSku, basePrice, wholesale = null, images, errors, disabled, showStock, onChange }: VariantsEditorProps) {
   const [bulkPrice, setBulkPrice] = React.useState('');
 
   function setOptions(next: OptionDraft[]) {
@@ -266,6 +268,7 @@ export function VariantsEditor({ options, variants, parentSku, basePrice, images
                   <TableColumnHeader>Variant</TableColumnHeader>
                   <TableColumnHeader>Price</TableColumnHeader>
                   <TableColumnHeader>Was</TableColumnHeader>
+                  {wholesale && <TableColumnHeader>Wholesale</TableColumnHeader>}
                   <TableColumnHeader>SKU</TableColumnHeader>
                   <TableColumnHeader>Barcode</TableColumnHeader>
                   {images.length > 0 && <TableColumnHeader>Image</TableColumnHeader>}
@@ -315,6 +318,19 @@ export function VariantsEditor({ options, variants, parentSku, basePrice, images
                           onChange={(e) => patchVariant(v.key, { compareAtPrice: e.target.value })}
                         />
                       </TableCell>
+                      {wholesale && (
+                        <TableCell>
+                          <Input
+                            aria-label={`Wholesale price for ${label}`}
+                            inputMode="decimal"
+                            className="h-7 w-24 text-xs"
+                            placeholder={wholesale.basePrice || '—'}
+                            value={v.wholesalePrice}
+                            disabled={disabled || !v.enabled}
+                            onChange={(e) => patchVariant(v.key, { wholesalePrice: e.target.value })}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell>
                         <Input
                           aria-label={`SKU for ${label}`}

@@ -110,7 +110,8 @@ export async function getStoreCheckoutConfig(
       ...(transferAccounts.length ? [BANK_TRANSFER_METHOD] : []),
     ].filter((method) => !wholesale || tradeMayPayWith(method.id, wholesale)),
     transferAccounts,
-    vat,
+    // A trade buyer at a shop that quotes wholesale before VAT has it added to those lines (21.2).
+    vat: vat && wholesale?.vatAdded ? { ...vat, addedToWholesale: true } : vat,
     guestCheckoutEnabled: base.guestCheckoutEnabled && rules.guestAllowed,
     orderNotesEnabled: base.orderNotesEnabled && rules.orderNotes,
   };

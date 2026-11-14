@@ -119,3 +119,21 @@ describe('discount codes', () => {
     expect(t.shipping).toBe(express.price);
   });
 });
+
+describe('a trade buyer’s bag when VAT is added to wholesale prices (ROADMAP 21.2)', () => {
+  const wholesale = item({ atWholesale: true, unitPrice: 1_000_000 }); // ₦10,000 before VAT
+  const retail = item({ variantId: 'v2', unitPrice: 1_075_000 }); // ₦10,750, VAT inside
+
+  it('adds VAT on the wholesale line only, and says how much was added', () => {
+    const totals = computeTotals({ items: [wholesale, retail], vatRatePct: 7.5, vatAdded: true });
+    expect(totals.taxAdded).toBe(75_000);
+    expect(totals.tax).toBe(150_000); // ₦750 added + ₦750 already in the retail price
+    expect(totals.total).toBe(1_000_000 + 1_075_000 + 75_000);
+  });
+
+  it('changes nothing for anyone else', () => {
+    const totals = computeTotals({ items: [wholesale, retail], vatRatePct: 7.5 });
+    expect(totals.taxAdded).toBe(0);
+    expect(totals.total).toBe(2_075_000);
+  });
+});

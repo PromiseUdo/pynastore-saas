@@ -56,6 +56,7 @@ export async function workspaceCsv(organizationId: string, dataset: WorkspaceDat
         { header: 'Category', value: (r) => r.category?.name },
         { header: 'Brand', value: (r) => r.brand?.name },
         { header: 'Price', value: (r) => money(r.sellingPrice) },
+        { header: 'Wholesale price', value: (r) => money(r.wholesalePrice) },
         { header: 'Average cost', value: (r) => money(r.averageCost) },
         { header: 'Status', value: (r) => enumLabel(r.status) },
         { header: 'On the online store', value: (r) => (r.isPublished ? 'Yes' : 'No') },

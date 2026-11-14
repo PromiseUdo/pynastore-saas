@@ -13,6 +13,7 @@ import {
   type ProductListParams,
 } from '@/features/inventory/actions';
 import { ItemStatus } from '@/lib/generated/prisma/enums';
+import { getWholesaleSettings } from '@/lib/trade/accounts';
 import { ProductsPageClient } from './_components/ProductsPageClient';
 
 export const metadata: Metadata = { title: 'Products' };
@@ -76,6 +77,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
         recordStock: hasPermission(perms, PERMISSIONS.INVENTORY_MOVEMENT_CREATE),
       }}
       kitsEnabled={hasFeature(plan, FEATURES.INVENTORY_KITS)}
+      wholesaleOn={(await getWholesaleSettings(ctx.organization.id)).mode !== 'OFF'}
     />
   );
 }

@@ -80,6 +80,7 @@ export type ImportField =
   | 'productSku'
   | 'price'
   | 'compareAtPrice'
+  | 'wholesalePrice'
   | 'costPrice'
   | 'barcode'
   | 'unit'
@@ -103,6 +104,7 @@ export const IMPORT_COLUMNS: { field: ImportField; header: string; required?: bo
   { field: 'option3Value', header: 'Option 3 value', help: 'Optional third option value', aliases: ['option3 value'] },
   { field: 'price', header: 'Price', help: 'Selling price in naira, e.g. 15000.', aliases: ['selling price', 'price (ngn)'] },
   { field: 'compareAtPrice', header: 'Compare-at price', help: 'Optional “was” price, higher than Price.', aliases: ['compare at price', 'was price', 'old price'] },
+  { field: 'wholesalePrice', header: 'Wholesale price', help: 'Optional. What approved trade buyers pay, if you sell wholesale (Settings → Wholesale).', aliases: ['trade price'] },
   { field: 'costPrice', header: 'Cost price', help: 'Optional. What you paid per item — used for the opening stock’s value and your profit reports.', aliases: ['cost', 'unit cost'] },
   { field: 'barcode', header: 'Barcode', help: 'Optional.', aliases: ['ean', 'upc'] },
   { field: 'unit', header: 'Unit', help: 'Optional. How it’s counted, e.g. pcs, kg, pack. Defaults to pcs.' },
@@ -156,6 +158,8 @@ export interface ImportUnit {
   attributes: Record<string, string>;
   price: number | null;
   compareAtPrice: number | null;
+  /** what an approved trade buyer pays (ROADMAP 21.2) */
+  wholesalePrice: number | null;
   costPrice: number | null;
   barcode: string | null;
   /** store name as written → quantity */
@@ -299,6 +303,7 @@ export function parseProductImport(text: string): ParsedImport {
     const price = money('price', 'Price');
     const compareAtPrice = money('compareAtPrice', 'Compare-at price');
     const costPrice = money('costPrice', 'Cost price');
+    const wholesalePrice = money('wholesalePrice', 'Wholesale price');
     if (price !== null && compareAtPrice !== null && compareAtPrice <= price) {
       rowError('Compare-at price must be higher than Price.');
     }
@@ -330,6 +335,7 @@ export function parseProductImport(text: string): ParsedImport {
       attributes,
       price,
       compareAtPrice,
+      wholesalePrice,
       costPrice,
       barcode: cell(r, 'barcode').slice(0, 60) || null,
       stock,

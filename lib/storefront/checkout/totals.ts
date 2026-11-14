@@ -49,6 +49,7 @@ export function calculateCheckoutTotals({
     shippingMethod: deliveryMethod,
     currency: checkoutCurrency(items, config),
     vatRatePct: config.vat?.ratePct ?? null,
+    vatAdded: Boolean(config.vat?.addedToWholesale),
   });
 }
 

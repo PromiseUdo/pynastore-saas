@@ -12,6 +12,7 @@ import type { Metadata } from 'next';
 import { Breadcrumbs } from '@/components/storefront/common/breadcrumbs';
 import { CartView } from '@/components/storefront/cart/cart-view';
 import { shopVatBySlug } from '@/lib/tax-settings';
+import { getBuyerPricing } from '@/lib/storefront/trade-gate';
 
 export const metadata: Metadata = {
   title: 'Your bag',
@@ -20,7 +21,8 @@ export const metadata: Metadata = {
 
 export default async function CartPage({ params }: { params: Promise<{ organizationSlug: string }> }) {
   // Only a VAT-registered store states any VAT (ROADMAP 14.1).
-  const vat = await shopVatBySlug((await params).organizationSlug);
+  const { organizationSlug } = await params;
+  const [vat, pricing] = await Promise.all([shopVatBySlug(organizationSlug), getBuyerPricing(organizationSlug)]);
   return (
     <div className="sf-container py-6 lg:py-10">
       <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Bag' }]} className="mb-4" />
@@ -32,7 +34,8 @@ export default async function CartPage({ params }: { params: Promise<{ organizat
         </p>
       </header>
 
-      <CartView vatRatePct={vat?.ratePct ?? null} />
+      {/* A trade buyer at a shop that quotes wholesale before VAT has it added (ROADMAP 21.2). */}
+      <CartView vatRatePct={vat?.ratePct ?? null} vatAdded={pricing.vatAdded} />
     </div>
   );
 }

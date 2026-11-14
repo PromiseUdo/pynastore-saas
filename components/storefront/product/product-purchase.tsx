@@ -27,6 +27,7 @@ import { ProductGallery } from './product-gallery';
 import { VariantPicker } from './variant-picker';
 import { QuantityStepper } from './quantity-stepper';
 import type { Product } from '@/lib/storefront/types';
+import { WholesaleNote } from '@/components/storefront/common/wholesale-note';
 import { discountPercent, formatCompact, formatMoney } from '@/lib/storefront/format';
 import { useCartActions } from '@/lib/storefront/use-cart-actions';
 import { useWishlistStore } from '@/lib/storefront/stores/wishlist-store';
@@ -204,6 +205,7 @@ export function ProductPurchase({
                 </span>
               </>
             )}
+            <WholesaleNote product={product} variant={variant} className="text-sm" />
           </div>
 
           <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
@@ -311,6 +313,7 @@ export function ProductPurchase({
       <StickyBuyBar
         product={product}
         price={price}
+        variant={variant}
         stock={stock}
         addable={addable}
         needsOptions={missing.length > 0}
@@ -330,6 +333,7 @@ export function ProductPurchase({
 function StickyBuyBar({
   product,
   price,
+  variant,
   stock,
   addable,
   needsOptions,
@@ -337,6 +341,8 @@ function StickyBuyBar({
 }: {
   product: Product;
   price: number;
+  /** the chosen variant, for the wholesale label (ROADMAP 21.2) */
+  variant?: { atWholesale?: boolean } | null;
   stock: number;
   addable: boolean;
   /** options still unchosen — the bar stays tappable so it can say which */
@@ -379,7 +385,9 @@ function StickyBuyBar({
     >
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs text-muted-foreground">{product.name}</p>
-        <p className="text-base font-bold text-price">{formatMoney(price, product.currency)}</p>
+        <p className="text-base font-bold text-price">
+          {formatMoney(price, product.currency)} <WholesaleNote product={product} variant={variant} className="font-normal" />
+        </p>
       </div>
       <button
         type="button"

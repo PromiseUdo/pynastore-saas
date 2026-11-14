@@ -431,7 +431,10 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
                 {order.lines.map((line) => (
                   <TableRow key={line.id}>
                     <TableCell>
-                      <span className="block text-foreground">{line.name}</span>
+                      <span className="flex flex-wrap items-center gap-1.5 text-foreground">
+                        {line.name}
+                        {line.atWholesalePrice && <Badge variant="info">Wholesale</Badge>}
+                      </span>
                       {line.variantName && (
                         <span className="text-xs text-muted-foreground">{line.variantName}</span>
                       )}
@@ -480,15 +483,24 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
               <dt className="text-muted-foreground">Delivery</dt>
               <dd className="tabular-nums">{formatMoney(order.deliveryFee, order.currency)}</dd>
             </div>
+            {/* A trade buyer's wholesale lines had VAT added (ROADMAP 21.2): its own line. */}
+            {order.vatAddedAmount > 0 && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">VAT (added to wholesale prices)</dt>
+                <dd className="tabular-nums">{formatMoney(order.vatAddedAmount, order.currency)}</dd>
+              </div>
+            )}
             <div className="flex justify-between border-t pt-1.5 font-semibold">
               <dt>Total</dt>
               <dd className="tabular-nums">{formatMoney(order.totalAmount, order.currency)}</dd>
             </div>
-            {/* VAT is included in the listed prices, not added on top — stated
-             * here so the column adds up and the figure is still to hand. */}
+            {/* Otherwise VAT is included in the listed prices, not added on top —
+             * stated here so the column adds up and the figure is still to hand. */}
             {order.taxAmount > 0 && (
               <p className="text-xs text-muted-foreground">
-                Includes {formatMoney(order.taxAmount, order.currency)} VAT
+                {order.taxAmount - order.vatAddedAmount > 0
+                  ? `Includes ${formatMoney(order.taxAmount - order.vatAddedAmount, order.currency)} VAT`
+                  : 'VAT added above'}
                 {order.vatNumber ? ` · VAT number ${order.vatNumber}` : ''}
               </p>
             )}

@@ -40,6 +40,7 @@ export function WholesaleSettingsClient({
   buyers,
   waiting,
   canEdit,
+  vatRegistered,
 }: {
   initial: WholesaleSettingsInput;
   /** what the shop offers everyone today; trade choices can only narrow it */
@@ -47,6 +48,8 @@ export function WholesaleSettingsClient({
   buyers: number;
   waiting: number;
   canEdit: boolean;
+  /** VAT only exists for a registered shop (14.1); otherwise the choice is shown as not applying */
+  vatRegistered: boolean;
 }) {
   const router = useRouter();
   const [values, setValues] = React.useState<WholesaleSettingsInput>(initial);
@@ -165,6 +168,66 @@ export function WholesaleSettingsClient({
                   disabled={!canEdit}
                 />
               </div>
+            </section>
+
+            <section aria-labelledby="wholesale-vat" className="space-y-3">
+              <div>
+                <h2 id="wholesale-vat" className="text-sm font-semibold">
+                  Wholesale prices and VAT
+                </h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Your retail prices always include VAT. Many wholesalers quote trade prices before VAT instead.
+                </p>
+              </div>
+              {vatRegistered ? (
+                <RadioGroupPrimitive.Root
+                  value={values.vatAdded ? 'added' : 'included'}
+                  onValueChange={(choice) => setValues((v) => ({ ...v, vatAdded: choice === 'added' }))}
+                  disabled={!canEdit}
+                  aria-labelledby="wholesale-vat"
+                  className="grid gap-2"
+                >
+                  {[
+                    { value: 'included', label: 'My wholesale prices include VAT', hint: 'Like your retail prices: what trade buyers see is what they pay.' },
+                    {
+                      value: 'added',
+                      label: 'VAT is added to my wholesale prices',
+                      hint: 'Trade buyers see “+ VAT” beside every wholesale price, and VAT is added as its own line at checkout and on their receipt.',
+                    },
+                  ].map((choice) => (
+                    <label
+                      key={choice.value}
+                      htmlFor={`wholesale-vat-${choice.value}`}
+                      className={cn(
+                        'flex cursor-pointer items-start gap-3 rounded-lg border bg-card p-3.5 transition-colors hover:bg-muted/40',
+                        'has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:ring-1 has-[[data-state=checked]]:ring-primary',
+                        'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring',
+                        !canEdit && 'cursor-not-allowed opacity-70',
+                      )}
+                    >
+                      <RadioGroupPrimitive.Item
+                        id={`wholesale-vat-${choice.value}`}
+                        value={choice.value}
+                        className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border border-input data-[state=checked]:border-primary focus-visible:outline-none"
+                      >
+                        <RadioGroupPrimitive.Indicator className="size-2 rounded-full bg-primary" />
+                      </RadioGroupPrimitive.Item>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium">{choice.label}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">{choice.hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </RadioGroupPrimitive.Root>
+              ) : (
+                <p className="rounded-lg border bg-card p-3.5 text-sm text-muted-foreground">
+                  Your shop isn’t VAT registered, so no VAT is charged on anything — wholesale included. If that changes, set it in{' '}
+                  <Link href="/settings" className="font-medium text-primary hover:underline">
+                    Settings → Business details
+                  </Link>
+                  .
+                </p>
+              )}
             </section>
 
             <section aria-labelledby="wholesale-pay" className="space-y-3">

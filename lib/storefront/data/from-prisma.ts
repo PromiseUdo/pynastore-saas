@@ -155,6 +155,20 @@ const PRODUCT_INCLUDE = {
 
 type ProductRow = Prisma.InventoryItemGetPayload<{ include: typeof PRODUCT_INCLUDE }>;
 
+/**
+ * Whose prices this catalogue is built with (ROADMAP 21.2). Retail for
+ * everyone except an approved trade buyer, who gets the merchant's
+ * wholesale price wherever there is one. Decided once per request
+ * (lib/storefront/trade-gate.ts → ./current.ts), never from the browser.
+ */
+export interface BuyerPricing {
+  trade: boolean;
+  /** the shop adds VAT to wholesale prices (and is VAT registered) */
+  vatAdded: boolean;
+}
+
+export const RETAIL_PRICING: BuyerPricing = { trade: false, vatAdded: false };
+
 function mapProduct(
   row: ProductRow,
   categoryPathIds: Map<string, string[]>,
@@ -162,6 +176,7 @@ function mapProduct(
   rating: ReviewSummary,
   /** sale prices in force right now, keyed by InventoryItem id */
   salePrices?: Map<string, SalePrice>,
+  pricing: BuyerPricing = RETAIL_PRICING,
 ): Product | null {
   // A product must be reachable by URL; admin always assigns a slug.
   if (!row.slug) return null;
@@ -196,9 +211,21 @@ function mapProduct(
     return { price: minor(sale.price), compareAtPrice: minor(sale.originalPrice) };
   };
 
+  /*
+   * A trade buyer pays the wholesale price where there is one — a variant's
+   * own, else the product's — instead of the retail price, sale or not:
+   * campaigns are retail (ROADMAP 21, decision 5), and the wholesale price is
+   * already the trade discount. No strike-through: it isn't a reduction from
+   * a "was" price, it's their price. Without one, they pay retail like
+   * anyone else.
+   */
+  const baseWholesale = pricing.trade ? toMinor(row.wholesalePrice) : null;
+  const tradePrice = (own: number | null, retail: { price: number | null; compareAtPrice: number | null }) =>
+    own !== null && own > 0 ? { price: own, compareAtPrice: null, atWholesale: true as const } : retail;
+
   const basePrice = toMinor(row.sellingPrice);
   const baseCompareAt = toMinor(row.compareAtPrice);
-  const base = saleFor(row.id, basePrice, baseCompareAt);
+  const base = tradePrice(baseWholesale, saleFor(row.id, basePrice, baseCompareAt));
 
   const variants: ProductVariant[] = row.variants.length
     ? row.variants.map((variant) => {
@@ -212,8 +239,9 @@ function mapProduct(
           ...(() => {
             const listed = toMinor(variant.sellingPrice) ?? basePrice ?? 0;
             const compareAt = toMinor(variant.compareAtPrice) ?? baseCompareAt;
-            const sale = saleFor(variant.id, listed, compareAt);
-            return { price: sale.price ?? 0, compareAtPrice: sale.compareAtPrice };
+            const wholesale = pricing.trade ? (toMinor(variant.wholesalePrice) ?? baseWholesale) : null;
+            const priced = tradePrice(wholesale, saleFor(variant.id, listed, compareAt));
+            return { price: priced.price ?? 0, compareAtPrice: priced.compareAtPrice, ...('atWholesale' in priced ? { atWholesale: true } : {}) };
           })(),
           stock: onlineStock(variant.inventoryLevels),
           imageId: variant.imageId,
@@ -229,6 +257,7 @@ function mapProduct(
           optionValueIds: [],
           price: base.price ?? 0,
           compareAtPrice: base.compareAtPrice,
+          ...('atWholesale' in base ? { atWholesale: true } : {}),
           stock: onlineStock(row.inventoryLevels),
           imageId: row.images[0]?.id ?? null,
         },
@@ -284,7 +313,9 @@ function mapProduct(
     variants,
     priceFrom: Math.min(...prices),
     priceTo: Math.max(...prices),
-    compareAtPrice: baseCompareAt ?? variants.map((v) => v.compareAtPrice).find((p): p is number => p !== null) ?? null,
+    compareAtPrice: variants.some((v) => v.atWholesale)
+      ? null
+      : (baseCompareAt ?? variants.map((v) => v.compareAtPrice).find((p): p is number => p !== null) ?? null),
     currency: CURRENCY,
     inStock: variants.some((v) => v.stock > 0),
     tags: row.tags.filter((t): t is ProductTag => VALID_TAGS.has(t)),
@@ -293,6 +324,7 @@ function mapProduct(
     requiresPrepayment: row.requiresPrepayment,
     createdAt: row.createdAt.toISOString(),
     relatedIds: [],
+    ...(variants.some((v) => v.atWholesale) ? { wholesale: { vatAdded: pricing.vatAdded } } : {}),
   };
 }
 
@@ -362,7 +394,11 @@ function mapCollection(row: CollectionRow, categories: Category[], sellableIds: 
 /* ─── Entry point ───────────────────────────────────────────────────────── */
 
 /** The published catalogue of one store. Returns null when the store doesn't exist. */
-export async function loadCatalogueFromDb(organizationSlug: string): Promise<Catalogue | null> {
+export async function loadCatalogueFromDb(
+  organizationSlug: string,
+  /** whose prices (ROADMAP 21.2) — retail unless the caller has established a trade buyer */
+  pricing: BuyerPricing = RETAIL_PRICING,
+): Promise<Catalogue | null> {
   const organization = await prisma.organization.findFirst({
     where: { slug: organizationSlug, status: 'ACTIVE' },
     select: { id: true, name: true, slug: true, returnWindowDays: true },
@@ -440,6 +476,7 @@ export async function loadCatalogueFromDb(organizationSlug: string): Promise<Cat
         // note on the empty state in components/storefront/product/product-reviews.tsx.
         ratings.get(row.id) ?? NO_RATING,
         salePrices,
+        pricing,
       ),
     )
     .filter((p): p is Product => p !== null);

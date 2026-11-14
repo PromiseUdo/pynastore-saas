@@ -85,6 +85,8 @@ export interface ProductVariant {
   compareAtPrice: Money | null;
   stock: number;
   imageId: string | null;
+  /** priced at the merchant's wholesale price, for the signed-in trade buyer (ROADMAP 21.2) */
+  atWholesale?: boolean;
 }
 
 export interface ReviewSummary {
@@ -133,6 +135,12 @@ export interface Product {
   createdAt: string; // ISO
   /** merchandising: related product ids (falls back to same-category) */
   relatedIds: string[];
+  /**
+   * Set only for a signed-in trade buyer, on a product with a wholesale
+   * price (ROADMAP 21.2): the prices shown are wholesale, and `vatAdded` says
+   * VAT is added to them at checkout ("+ VAT").
+   */
+  wholesale?: { vatAdded: boolean };
 }
 
 export interface Review {
@@ -519,6 +527,8 @@ export interface CartItem {
   /** snapshot of the product's payment terms — re-derived by `reconcileCart` */
   requiresPrepayment: boolean;
   addedAt: number;
+  /** at the wholesale price (ROADMAP 21.2) — VAT may be added to it rather than included */
+  atWholesale?: boolean;
 }
 
 /**
@@ -583,7 +593,10 @@ export interface OrderTotals {
   shipping: Money;
   /** no delivery option chosen yet: `shipping` is 0 and `total` excludes delivery */
   shippingPending?: boolean;
+  /** all the VAT in `total`: included in prices, plus any added */
   tax: Money;
+  /** the part of `tax` ADDED on top of wholesale lines (ROADMAP 21.2); 0 otherwise */
+  taxAdded?: Money;
   total: Money;
   currency: string;
 }
