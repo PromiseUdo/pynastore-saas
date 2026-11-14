@@ -35,6 +35,7 @@ import {
 } from '@/lib/sales/order-labels';
 import { getDashboardOverview } from '@/features/dashboard/overview';
 import { SetupGuideSection } from '@/components/dashboard/setup-guide-section';
+import { SalesTrendChart } from '@/components/dashboard/sales-trend-chart';
 import { domainAttention } from '@/lib/domains/attention';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -227,6 +228,9 @@ export default async function DashboardPage() {
             )}
           </StatGrid>
         )}
+
+        {/* The last 30 days against the 30 before — counted as Reports → Sales counts them. */}
+        {overview.trend && <SalesTrendChart trend={overview.trend} currency={currency} />}
 
         {overview.canViewSales && (
           <section className="rounded-lg border bg-card">

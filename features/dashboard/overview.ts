@@ -16,6 +16,8 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { startOfTodayInLagos } from '@/lib/day';
 import { getOnlinePaymentReadiness } from '@/lib/payments/online-readiness';
 import type { OnlinePaymentBlocker } from '@/lib/payments/payment-setup';
+import { Prisma } from '@/lib/generated/prisma/client';
+import { bucketKeys, lagosDay, previousPeriod, resolvePeriod } from '@/lib/reports/period';
 
 /** Orders the merchant still has something to do about. */
 const OPEN_ORDER_STATUSES = ['PENDING', 'CONFIRMED', 'PROCESSING'] as const;
@@ -29,6 +31,29 @@ export interface RecentOrder {
   itemCount: number;
   totalAmount: number;
   placedAt: string;
+}
+
+/** One day of the home page's sales chart, and the same weekday-position 30 days earlier. */
+export interface TrendDay {
+  /** YYYY-MM-DD, Lagos */
+  day: string;
+  sales: number;
+  orders: number;
+  /** the matching day of the 30 before */
+  previousDay: string;
+  previousSales: number;
+}
+
+/**
+ * The last 30 days of sales against the 30 before (the home page's chart).
+ * Counted exactly as Reports → Sales counts them, so the two never disagree:
+ * every order placed on the day, at its total, cancelled ones left out.
+ */
+export interface SalesTrend {
+  days: TrendDay[];
+  total: number;
+  orders: number;
+  previousTotal: number;
 }
 
 export interface DashboardOverview {
@@ -60,6 +85,8 @@ export interface DashboardOverview {
     lowStockCount: number;
   } | null;
   recentOrders: RecentOrder[];
+  /** null when the member may not see sales */
+  trend: SalesTrend | null;
   /**
    * What stands between this shop and taking online payments (ROADMAP 10.8),
    * for members who can change settings — null when nothing does, or when the
@@ -78,11 +105,12 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
 
   const since = startOfTodayInLagos();
 
-  const [sales, inventory, recentOrders, readiness] = await Promise.all([
+  const [sales, inventory, recentOrders, readiness, trend] = await Promise.all([
     canViewSales ? salesSnapshot(organizationId, since) : Promise.resolve(null),
     canViewInventory ? inventorySnapshot(organizationId) : Promise.resolve(null),
     canViewSales ? recentOrdersFor(organizationId) : Promise.resolve([]),
     canEditSettings ? getOnlinePaymentReadiness(organizationId) : Promise.resolve(null),
+    canViewSales ? salesTrend(organizationId) : Promise.resolve(null),
   ]);
 
   return {
@@ -94,6 +122,44 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
     sales,
     inventory,
     recentOrders,
+    trend,
+  };
+}
+
+/** Exported for the test; the page reads it through getDashboardOverview. */
+export async function salesTrend(organizationId: string, now: Date = new Date()): Promise<SalesTrend> {
+  const period = resolvePeriod({ range: '30d' }, now);
+  const before = previousPeriod(period);
+  const rows = await prisma.$queryRaw<{ day: string; orders: bigint; sales: Prisma.Decimal | null }[]>`
+    SELECT to_char((o."placedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Africa/Lagos', 'YYYY-MM-DD') AS day,
+           COUNT(*) AS orders,
+           SUM(o."totalAmount") AS sales
+      FROM "orders" o
+     WHERE o."organizationId" = ${organizationId}
+       AND o."status" <> 'CANCELLED'
+       AND o."placedAt" >= ${before.from}
+       AND o."placedAt" < ${period.to}
+     GROUP BY 1
+  `;
+  const byDay = new Map(rows.map((row) => [row.day, { sales: Number(row.sales ?? 0), orders: Number(row.orders) }]));
+  const span = period.to.getTime() - period.from.getTime();
+
+  const days: TrendDay[] = bucketKeys(period).map((day) => {
+    // The same position in the 30 days before: exactly 30 days earlier.
+    const previousDay = lagosDay(new Date(new Date(`${day}T12:00:00Z`).getTime() - span));
+    return {
+      day,
+      sales: byDay.get(day)?.sales ?? 0,
+      orders: byDay.get(day)?.orders ?? 0,
+      previousDay,
+      previousSales: byDay.get(previousDay)?.sales ?? 0,
+    };
+  });
+  return {
+    days,
+    total: days.reduce((sum, d) => sum + d.sales, 0),
+    orders: days.reduce((sum, d) => sum + d.orders, 0),
+    previousTotal: days.reduce((sum, d) => sum + d.previousSales, 0),
   };
 }
 
