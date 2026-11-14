@@ -9,7 +9,6 @@ address under `/api/cron/` that only answers a caller who sends
 | Release unpaid orders | `/api/cron/expire-unpaid-orders` | every 15 minutes | cron-job.org (for now) |
 | Index photos for search by image | `/api/cron/index-product-images` | every 15 minutes | cron-job.org (for now) |
 | Retry notifications | `/api/cron/notification-retries` | every 5 minutes | cron-job.org (for now) |
-| Finish wallets, top-ups, wallet refunds and withdrawals | `/api/cron/wallet-setup` | every 15 minutes | cron-job.org (for now) |
 | Domain renewals | `/api/cron/domain-lifecycle` | daily, 07:00 UTC | Vercel Cron (`vercel.json`) |
 | Setup and trial reminders | `/api/cron/onboarding-reminders` | daily, 08:00 UTC | Vercel Cron (`vercel.json`) |
 | Store app renewals | `/api/cron/mobile-app-renewals` | daily, 07:30 UTC | Vercel Cron (`vercel.json`) |
@@ -47,8 +46,7 @@ moves to Vercel Pro.
    `/api/cron/index-product-images`, and for **Retry notifications** at
    `/api/cron/notification-retries` — that one **every 5 minutes**
    (ROADMAP 18.1). Without it, an email or push that failed for a passing
-   reason is never sent. And for **Finish wallets, top-ups, wallet refunds and
-   withdrawals** at `/api/cron/wallet-setup`, every 15 minutes (ROADMAP 20.2, 20.3, 20.6, 20.7).
+   reason is never sent.
 5. Check it worked: use the job's "test run" on cron-job.org and expect
    **200**, or open `/platform/jobs`, where a run appears within 15 minutes.
    A **401** means the header's secret doesn't match `CRON_SECRET`.
@@ -65,8 +63,7 @@ Add the frequent jobs to `vercel.json`:
 ```json
 { "path": "/api/cron/expire-unpaid-orders", "schedule": "*/15 * * * *" },
 { "path": "/api/cron/index-product-images", "schedule": "*/15 * * * *" },
-{ "path": "/api/cron/notification-retries", "schedule": "*/5 * * * *" },
-{ "path": "/api/cron/wallet-setup", "schedule": "*/15 * * * *" }
+{ "path": "/api/cron/notification-retries", "schedule": "*/5 * * * *" }
 ```
 
 Deploy, check that runs marked "Schedule" appear on `/platform/jobs`, then

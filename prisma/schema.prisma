@@ -424,9 +424,6 @@ model Organization {
   stockTransfers         StockTransfer[]
   inventoryRequisitions  InventoryRequisition[]
   customers              Customer[]
-  shopperWallets         ShopperWallet[]
-  shopWallet             ShopWallet?
-  walletTopUps           WalletTopUp[]
   customerOAuthAccounts  CustomerOAuthAccount[]
   orders                 Order[]
   orderPayments          OrderPayment[]
@@ -434,8 +431,6 @@ model Organization {
   orderShipments         OrderShipment[]
   orderReturns           OrderReturn[]
   orderRefunds           OrderRefund[]
-  walletRefunds          WalletRefund[]
-  walletWithdrawals      WalletWithdrawal[]
   bankAccounts           MerchantBankAccount[]
   paymentAccount         MerchantPaymentAccount?
   verificationDocuments  MerchantVerificationDocument[]
@@ -1490,8 +1485,6 @@ model Customer {
   addresses              CustomerAddress[]
   passwordResetTokens    CustomerPasswordResetToken[]
   emailVerifications     CustomerEmailVerification[]
-  wallet                 ShopperWallet?
-  walletTopUps           WalletTopUp[]
   emailChanges           CustomerEmailChange[]
   wishlist               CustomerWishlistItem[]
   orders                 Order[]
@@ -1618,213 +1611,6 @@ model CustomerEmailChange {
   @@index([customerId])
   @@index([expiresAt])
   @@map("customer_email_changes")
-}
-
-enum WalletStatus {
-  /**
-   * Being set up with EduPay, or waiting to try again after a passing failure.
-   */
-  PENDING
-  ACTIVE
-  /**
-   * EduPay matched the phone, not the email: maybe someone else's wallet. The shopper changes their number.
-   */
-  PHONE_IN_USE
-  /**
-   * Stopped trying: needs someone to look (`lastError` says why).
-   */
-  FAILED
-}
-
-enum WalletOrigin {
-  /**
-   * We made a new EduPay wallet for this account.
-   */
-  CREATED
-  /**
-   * EduPay already had a wallet for this proved email, and we connected it.
-   */
-  CONNECTED
-}
-
-/**
- * A shopper account's EduPay wallet (ROADMAP 20.2). One per shopper account;
- * the same person's accounts at two stores point at the SAME EduPay wallet
- * (EduPay matches the proved email), so `edupayUuid` is not unique.
- * Holds identifiers only. The balance and transactions live at EduPay and
- * are read from there every time; nothing about money is copied here.
- */
-model ShopperWallet {
-  id             String        @id @default(cuid())
-  organizationId String
-  customerId     String        @unique
-  status         WalletStatus  @default(PENDING)
-  origin         WalletOrigin?
-  /**
-   * What we sent EduPay as `user_ref` — unique there, so built from our ids.
-   */
-  userRef        String        @unique
-  edupayUuid     String?
-  edupayUniqId   String?
-  attempts       Int           @default(0)
-  nextAttemptAt  DateTime?
-  /**
-   * Set while a request to EduPay is in flight, so two can't run at once.
-   */
-  claimedAt      DateTime?
-  /**
-   * For staff: why the last attempt didn't finish. Never shown to the shopper.
-   */
-  lastError      String?
-  activatedAt    DateTime?
-  /**
-   * The EDUPAY_MODE ("test" or "live") this record was set up in. EduPay's
-   * test and live worlds are separate, like Paystack's modes: a wallet made
-   * in one doesn't exist in the other, so a record from the other mode is
-   * set up again (lib/wallet/edupay.ts walletEnvironment).
-   */
-  environment    String?
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([organizationId])
-  @@index([status, nextAttemptAt])
-  @@index([edupayUuid])
-  @@map("shopper_wallets")
-}
-
-/**
- * A shop's EduPay wallet (ROADMAP 20.4): an EduPay `business` wallet, made
- * when platform staff approve the shop for online payments, from the contact
- * email and phone on that application. Wallet payments land here (20.5),
- * refunds leave from here (20.6), payouts go from here to the shop's bank
- * (20.7). Same statuses and rules as ShopperWallet, except that a business
- * wallet is never matched to an existing one (`PHONE_IN_USE` doesn't occur).
- */
-model ShopWallet {
-  id             String        @id @default(cuid())
-  organizationId String        @unique
-  status         WalletStatus  @default(PENDING)
-  /**
-   * CONNECTED: EduPay already had a wallet for the shop's contact email (an
-   * Owner's proved email), and the shop uses that same wallet — EduPay keeps
-   * one wallet per person, whichever type it was made as.
-   */
-  origin         WalletOrigin?
-  /**
-   * `shop-{organizationId}` — unique at EduPay.
-   */
-  userRef        String        @unique
-  edupayUuid     String?
-  edupayUniqId   String?
-  attempts       Int           @default(0)
-  nextAttemptAt  DateTime?
-  claimedAt      DateTime?
-  /**
-   * For platform staff: why the last attempt didn't finish.
-   */
-  lastError      String?
-  activatedAt    DateTime?
-  /**
-   * See ShopperWallet.environment.
-   */
-  environment    String?
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([status, nextAttemptAt])
-  @@map("shop_wallets")
-}
-
-enum WalletKind {
-  SHOPPER
-  SHOP
-}
-
-enum WalletTopUpStatus {
-  /**
-   * Started; waiting for EduPay to confirm Paystack took the money.
-   */
-  PENDING
-  COMPLETED
-  FAILED
-  /**
-   * Never paid before EduPay's payment expired.
-   */
-  EXPIRED
-}
-
-/**
- * Money added to a wallet with Paystack, through EduPay (ROADMAP 20.3).
- * Our record of a top-up someone started, so the page can say "adding
- * ₦1,500…" and a job can settle the ones nobody waited for. The credit
- * itself is EduPay's: its Paystack webhook credits the wallet, and a
- * top-up is COMPLETED only when EduPay says so — never on the browser's word.
- */
-model WalletTopUp {
-  id             String            @id @default(cuid())
-  organizationId String
-  kind           WalletKind
-  /**
-   * Whose wallet: the shopper account (SHOPPER), or none for the shop's own.
-   */
-  customerId     String?
-  /**
-   * The staff member who started a SHOP top-up.
-   */
-  startedById    String?
-  /**
-   * EduPay's payment_reference — also Paystack's.
-   */
-  reference      String            @unique
-  /**
-   * What the wallet receives, in naira (major units, like every money column).
-   */
-  amount         Decimal           @db.Decimal(12, 2)
-  /**
-   * EduPay's and Paystack's charges, paid on top by whoever tops up.
-   */
-  fee            Decimal           @db.Decimal(12, 2)
-  /**
-   * amount + fee: what Paystack charges the payer.
-   */
-  total          Decimal           @db.Decimal(12, 2)
-  status         WalletTopUpStatus @default(PENDING)
-  /**
-   * EDUPAY_MODE when started (see ShopperWallet.environment).
-   */
-  environment    String
-  expiresAt      DateTime?
-  /**
-   * When Paystack's window told the browser it was paid. A hint, never
-   * proof — it only decides whether the page says "adding…" (a window
-   * closed without paying shouldn't) and how often the job asks EduPay.
-   */
-  reportedPaidAt DateTime?
-  completedAt    DateTime?
-  checkedAt      DateTime?
-  /**
-   * For staff: why it failed, or what EduPay last said. Never shown as is.
-   */
-  lastError      String?
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-  customer     Customer?    @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([organizationId, kind, status])
-  @@index([customerId])
-  @@index([status, createdAt])
-  @@map("wallet_top_ups")
 }
 
 /**
@@ -2113,7 +1899,6 @@ model Order {
   reviews         ProductReview[]
   returns         OrderReturn[]
   refunds         OrderRefund[]
-  walletRefunds   WalletRefund[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3006,165 +2791,6 @@ model OrderRefund {
   @@index([orderId])
   @@index([organizationId])
   @@map("order_refunds")
-}
-
-/**
- * Money sent back to a shopper's EduPay wallet from the shop's (ROADMAP
- * 20.6), for an order they paid from their wallet. Written BEFORE EduPay is
- * asked, under the order's lock, so it holds the amount while the transfer
- * is in flight (two refunds can't both take the last naira) and carries
- * everything needed to finish the refund once EduPay confirms it — even if
- * that is later, from the shop wallet's transactions. SENT only on EduPay's
- * word, and only then is the OrderRefund recorded (`orderRefundId`).
- * A business record, like the refund it becomes: kept when a shop closes.
- */
-model WalletRefund {
-  id             String             @id @default(cuid())
-  organizationId String
-  orderId        String
-  /**
-   * the return it settles; null for a cancelled order
-   */
-  returnId       String?
-  /**
-   * Ours, written into the transfer's description — how an unanswered
-   * transfer is found among the shop wallet's transactions.
-   */
-  reference      String             @unique
-  status         WalletRefundStatus @default(PENDING)
-  /**
-   * major units
-   */
-  amount         Decimal            @db.Decimal(12, 2)
-  /**
-   * the merchant's own note, carried to the OrderRefund
-   */
-  note           String?
-  /**
-   * put the returned items back in stock once it's sent
-   */
-  restock        Boolean            @default(false)
-  performedById  String?
-  /**
-   * EduPay's own reference for the transfer (TXN…)
-   */
-  gatewayRef     String?
-  /**
-   * For staff: why it didn't finish, or what still needs a look.
-   */
-  lastError      String?
-  /**
-   * the refund recorded once it was sent
-   */
-  orderRefundId  String?            @unique
-  settledAt      DateTime?
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-  order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([orderId, status])
-  @@index([status, createdAt])
-  @@map("wallet_refunds")
-}
-
-enum WalletRefundStatus {
-  /**
-   * asked EduPay, no clear answer yet — the money may have moved
-   */
-  PENDING
-  /**
-   * EduPay moved it; the refund is recorded
-   */
-  SENT
-  /**
-   * EduPay refused (wrong PIN, not enough in the shop wallet…) — nothing moved
-   */
-  FAILED
-  /**
-   * no clear answer, and no trace of it long after — it never happened
-   */
-  ABANDONED
-}
-
-/**
- * Money leaving the shop's EduPay wallet for its bank (ROADMAP 20.7): one
- * `request_withdraw` (EduPay emails a code to the wallet's address) and one
- * `confirm_withdraw` with that code. Written before EduPay is asked, and only
- * one may be open per shop, so a withdrawal is confirmed at most once. The
- * money and the bank transfer are EduPay's; this is our record of asking, and
- * what it became. A business record: kept when a shop closes.
- */
-model WalletWithdrawal {
-  id             String                 @id @default(cuid())
-  organizationId String
-  /**
-   * Ours, written into the withdrawal's description — how an unanswered
-   * confirmation, or a transfer that came back, is found among the wallet's
-   * transactions.
-   */
-  reference      String                 @unique
-  status         WalletWithdrawalStatus @default(AWAITING_CODE)
-  /**
-   * major units
-   */
-  amount         Decimal                @db.Decimal(12, 2)
-  /**
-   * The bank account it was sent to, as it stood then: always the shop's
-   * verified settlement account.
-   */
-  bankName       String
-  accountNumber  String
-  accountName    String?
-  requestedById  String?
-  confirmedById  String?
-  /**
-   * EduPay's own reference for it (TXN…)
-   */
-  gatewayRef     String?
-  /**
-   * For staff: why it didn't finish.
-   */
-  lastError      String?
-  settledAt      DateTime?
-
-  organization Organization @relation(fields: [organizationId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([organizationId, createdAt])
-  @@index([status, createdAt])
-  @@map("wallet_withdrawals")
-}
-
-enum WalletWithdrawalStatus {
-  /**
-   * EduPay emailed the code; nothing has moved
-   */
-  AWAITING_CODE
-  /**
-   * the code was sent to EduPay and there's no clear answer yet — it may have gone
-   */
-  CONFIRMING
-  /**
-   * EduPay debited the wallet and started the bank transfer
-   */
-  SENT
-  /**
-   * the bank transfer failed afterwards, and EduPay put the money back
-   */
-  RETURNED
-  /**
-   * EduPay refused, or has no record of it — nothing moved
-   */
-  FAILED
-  /**
-   * the code was never used
-   */
-  EXPIRED
 }
 
 /**
