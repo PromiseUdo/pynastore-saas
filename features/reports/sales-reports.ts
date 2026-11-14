@@ -53,7 +53,7 @@ const TOP_ROWS = 50;
 const n = (value: Prisma.Decimal | bigint | number | null | undefined): number =>
   value === null || value === undefined ? 0 : Number(value);
 
-const UNPAID = ['AWAITING_PAYMENT', 'AWAITING_TRANSFER', 'DUE_ON_DELIVERY', 'AWAITING_DELIVERY_PRICE', 'FAILED'] as const;
+const UNPAID = ['AWAITING_PAYMENT', 'AWAITING_TRANSFER', 'DUE_ON_DELIVERY', 'AWAITING_DELIVERY_PRICE', 'ON_ACCOUNT', 'FAILED'] as const;
 
 /** The Lagos day or month an order was placed in, for GROUP BY. */
 function bucketSql(unit: BucketUnit): Prisma.Sql {

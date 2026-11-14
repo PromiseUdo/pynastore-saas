@@ -18,6 +18,8 @@ import { prisma } from '@/lib/prisma';
 import { getWholesaleSettings } from '@/lib/trade/accounts';
 import { CustomerDetailClient } from './_components/CustomerDetailClient';
 import { TradeAccountCard } from '../_components/TradeAccount';
+import { AccountTermsCard } from '../_components/AccountTermsCard';
+import { accountBalance } from '@/lib/trade/credit';
 
 export const metadata: Metadata = { title: 'Customer' };
 
@@ -53,11 +55,22 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         requestedAt: true,
         decidedAt: true,
         decidedBy: { select: { name: true, email: true } },
+        onAccount: true,
+        accountDays: true,
+        creditLimit: true,
       },
     }),
   ]);
+  /* Pay on account (ROADMAP 21.5): what they owe, orders and invoices together. */
+  const [balance, shop] = trade
+    ? await Promise.all([
+        accountBalance(ctx.organization.id, customerId),
+        prisma.organization.findUnique({ where: { id: ctx.organization.id }, select: { tradeAccountDays: true } }),
+      ])
+    : [null, null];
   const customer = result.data;
   const tradeCard = customer.accountDeletedAt ? null : (
+    <>
     <TradeAccountCard
       customerId={customer.id}
       customerName={customer.name}
@@ -79,6 +92,23 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         }
       }
     />
+    {trade && balance && (
+      <AccountTermsCard
+        customerId={customer.id}
+        approved={trade.status === 'APPROVED'}
+        canManage={hasPermission(perms, PERMISSIONS.CUSTOMER_TRADE_MANAGE)}
+        data={{
+          onAccount: trade.onAccount,
+          days: trade.accountDays,
+          defaultDays: shop?.tradeAccountDays ?? 14,
+          creditLimit: trade.creditLimit === null ? null : Number(trade.creditLimit),
+          owed: balance.owed,
+          overdue: balance.overdue,
+          openItems: balance.items.length,
+        }}
+      />
+    )}
+    </>
   );
 
   return (

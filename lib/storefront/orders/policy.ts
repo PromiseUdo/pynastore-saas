@@ -184,3 +184,14 @@ export function suggestedReturnRefund(input: {
   const discountShare = subtotal > 0 ? Math.round((toMinor(input.discount) * goods) / subtotal) : 0;
   return Math.max(0, goods - discountShare) / 100;
 }
+
+/**
+ * The payment states an order can be sent in: paid, to be paid on delivery,
+ * or on a trade buyer's account (ROADMAP 21.5) — the merchant chose to trust
+ * them. Every send checks this one list.
+ */
+export const SENDABLE_PAYMENT_STATUSES = ['PAID', 'DUE_ON_DELIVERY', 'ON_ACCOUNT'] as const;
+
+export function paymentAllowsSending(paymentStatus: string): boolean {
+  return (SENDABLE_PAYMENT_STATUSES as readonly string[]).includes(paymentStatus);
+}

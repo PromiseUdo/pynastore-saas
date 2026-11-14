@@ -55,6 +55,8 @@ import { expireUnpaidOrders } from './lifecycle';
 import type { AppliedCoupon, CartItem } from '../types';
 import type { CheckoutAddress, CheckoutBusiness, CheckoutConfig, CheckoutContact } from '../checkout/types';
 import { orderBusinessFor } from '@/lib/trade/business';
+import { ON_ACCOUNT_METHOD_ID, accountAvailability } from '@/lib/trade/credit-rules';
+import { requestGatheringTransfers } from './gather';
 import { storefrontIsOpen } from '@/lib/billing/workspace-access';
 
 /** What the browser may say about one line. */
@@ -407,6 +409,17 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
    * and the figure we store come from one implementation, not two. */
   const totals = calculateCheckoutTotals({ items, deliveryMethod, discount: coupon, config: input.config });
 
+  /* Pay on account (21.5): only for a buyer with credit here (the config
+   * carries their standing, read for this request), nothing overdue, and
+   * this order within what's left of their limit. Delivery to be arranged
+   * is judged again when the buyer accepts the price. */
+  const onAccount = paymentMethod.id === ON_ACCOUNT_METHOD_ID;
+  if (onAccount) {
+    if (!input.config.tradeAccount || customer.isGuest) return fail('invalid-payment-method');
+    const allowed = accountAvailability(input.config.tradeAccount, totals.total, totals.currency);
+    if (!allowed.ok) return fail('invalid-payment-method', allowed.reason);
+  }
+
   /* Retry on the reference's unique constraint: two shoppers checking out in
    * the same second can compute the same sequence number, and the database
    * is the only thing that can settle it. */
@@ -426,7 +439,20 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           confirmationToken,
           status: 'PENDING',
           // Delivery to be arranged (21.4B): nothing can be paid until it's priced and accepted.
-          paymentStatus: deliveryMethod.arranged ? 'AWAITING_DELIVERY_PRICE' : initialPaymentStatus(paymentMethod.id),
+          paymentStatus: deliveryMethod.arranged
+            ? 'AWAITING_DELIVERY_PRICE'
+            : onAccount
+              ? 'ON_ACCOUNT'
+              : initialPaymentStatus(paymentMethod.id),
+          /* On account (21.5): the store trusted this buyer, so the order is
+           * confirmed at once, like a paid one, and is due by their terms. */
+          ...(onAccount && !deliveryMethod.arranged
+            ? {
+                status: 'CONFIRMED' as const,
+                confirmedAt: now,
+                accountDueAt: new Date(input.config.tradeAccount!.dueDate),
+              }
+            : {}),
           ...(deliveryMethod.arranged
             ? {
                 deliveryArranged: true,
@@ -548,6 +574,13 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
        * to a database that may be a region away: Prisma's 5s default is too
        * tight for a bag of a few lines on a slow day. */
       { timeout: 20_000, maxWait: 10_000 });
+
+      // Confirmed on account (21.5): ask other stores for anything being brought together, as confirming does.
+      if (onAccount && !deliveryMethod.arranged) {
+        await requestGatheringTransfers(prisma, created.id).catch((error) =>
+          console.error('[orders] Could not request gathering transfers:', error),
+        );
+      }
 
       // A tax ID given for the first time is kept for next time. Never fails the order.
       if (trade?.rememberTaxId && trade.business.taxId) {

@@ -69,6 +69,8 @@ export interface TradeInvoice {
   /** VAT already inside the prices (14.1) */
   vatIncluded: number;
   total: number;
+  /** pay on account (21.5): due by, paid so far, still to pay (major units); null otherwise */
+  account: { dueAt: string | null; paid: number; outstanding: number; overdue: boolean } | null;
   /** where a transfer goes, while one is still awaited — the accounts the order was placed with */
   transferAccounts: { bankName: string; accountName: string; accountNumber: string }[];
 }
@@ -78,10 +80,12 @@ const METHOD_LABEL: Record<string, string> = {
   paystack: 'Online payment',
   pod: 'Pay on delivery',
   transfer: 'Bank transfer',
+  account: 'On account',
 };
 
 const SELECT = {
   reference: true,
+  organizationId: true,
   currency: true,
   placedAt: true,
   createdAt: true,
@@ -114,6 +118,8 @@ const SELECT = {
   buyerBusinessName: true,
   buyerTaxId: true,
   buyerCacNumber: true,
+  accountDueAt: true,
+  accountPaidAmount: true,
   organization: {
     select: { name: true, logoUrl: true, supportEmail: true, supportPhone: true, businessAddress: true },
   },
@@ -134,6 +140,14 @@ async function read(where: Prisma.OrderWhereInput): Promise<TradeInvoice | null>
   const tax = Number(order.taxAmount);
   const added = Number(order.vatAddedAmount);
   const awaitingTransfer = paymentStatus === 'AWAITING_TRANSFER' && order.status !== 'CANCELLED';
+  // On account (21.5) and still owing: where to send it — the shop's published accounts, as an invoice shows.
+  const owingOnAccount = paymentStatus === 'ON_ACCOUNT' && order.status !== 'CANCELLED';
+  const shopAccounts = owingOnAccount
+    ? await prisma.merchantBankAccount.findMany({
+        where: { organizationId: order.organizationId, isActive: true },
+        select: { bankName: true, accountName: true, accountNumber: true },
+      })
+    : [];
 
   return {
     number: order.reference,
@@ -184,7 +198,16 @@ async function read(where: Prisma.OrderWhereInput): Promise<TradeInvoice | null>
     vatAdded: added,
     vatIncluded: Math.max(0, tax - added),
     total: Number(order.totalAmount),
-    transferAccounts: awaitingTransfer ? (readTransferDetails(order.transferDetails) ?? []) : [],
+    transferAccounts: awaitingTransfer ? (readTransferDetails(order.transferDetails) ?? []) : shopAccounts,
+    account:
+      order.paymentMethod === 'account'
+        ? {
+            dueAt: order.accountDueAt?.toISOString() ?? null,
+            paid: Number(order.accountPaidAmount),
+            outstanding: Math.max(0, Math.round((Number(order.totalAmount) - Number(order.accountPaidAmount)) * 100) / 100),
+            overdue: paymentStatus === 'ON_ACCOUNT' && Boolean(order.accountDueAt && order.accountDueAt < new Date()),
+          }
+        : null,
   };
 }
 

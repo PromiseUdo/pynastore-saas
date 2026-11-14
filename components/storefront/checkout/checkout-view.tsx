@@ -62,6 +62,7 @@ import { CHECKOUT_STEPS, type CheckoutConfig, type CheckoutStepId } from '@/lib/
 import { checkoutSchema, STEP_FIELDS, type CheckoutFormValues } from '@/lib/storefront/checkout/schema';
 import { calculateCheckoutTotals, checkoutItemCount } from '@/lib/storefront/checkout/totals';
 import { isPaymentMethodAllowed } from '@/lib/storefront/checkout/payment-terms';
+import { ON_ACCOUNT_METHOD_ID, accountAvailability } from '@/lib/trade/credit-rules';
 import type { ShippingMethod } from '@/lib/storefront/types';
 import { emptyAddress, fromStoredAddress, toStoredAddress } from '@/lib/storefront/checkout/address';
 import { saveCheckoutAddressAction } from '@/features/shop-account/address-actions';
@@ -298,11 +299,16 @@ export function CheckoutView({
   React.useEffect(() => {
     if (!paymentMethodId) return;
     const method = config.paymentMethods.find((m) => m.id === paymentMethodId);
-    if (method && !isPaymentMethodAllowed(method, items)) {
+    // Pay on account (21.5) can stop fitting the buyer's credit as the bag or delivery changes.
+    const overCredit =
+      method?.id === ON_ACCOUNT_METHOD_ID && config.tradeAccount
+        ? !accountAvailability(config.tradeAccount, totals.total, config.currency).ok
+        : false;
+    if (method && (!isPaymentMethodAllowed(method, items) || overCredit)) {
       form.setValue('paymentMethodId', '', { shouldValidate: false });
       useCheckoutStore.getState().setPaymentMethod('');
     }
-  }, [paymentMethodId, config.paymentMethods, items, form]);
+  }, [paymentMethodId, config.paymentMethods, config.tradeAccount, config.currency, totals.total, items, form]);
 
   React.useEffect(() => {
     const store = useCheckoutStore.getState();
@@ -633,6 +639,7 @@ export function CheckoutView({
                 form={form}
                 config={config}
                 items={items}
+                orderTotal={totals.total}
                 onSelect={(id) => useCheckoutStore.getState().setPaymentMethod(id)}
               />
             </StepShell>

@@ -58,10 +58,13 @@ export function WholesaleSettingsClient({
   const [pending, setPending] = React.useState(false);
   // The minimum order as typed; saved as naira, blank = none.
   const [minOrder, setMinOrder] = React.useState(initial.minOrderValue ? String(initial.minOrderValue) : '');
+  // Pay on account's default days (21.5), as typed.
+  const [accountDays, setAccountDays] = React.useState(String(initial.accountDays));
   const [error, setError] = React.useState<string | null>(null);
   const dirty =
-    JSON.stringify({ ...values, minOrderValue: null }) !== JSON.stringify({ ...initial, minOrderValue: null }) ||
-    minOrder.replace(/,/g, '').trim() !== (initial.minOrderValue ? String(initial.minOrderValue) : '');
+    JSON.stringify({ ...values, minOrderValue: null, accountDays: 0 }) !== JSON.stringify({ ...initial, minOrderValue: null, accountDays: 0 }) ||
+    minOrder.replace(/,/g, '').trim() !== (initial.minOrderValue ? String(initial.minOrderValue) : '') ||
+    accountDays.trim() !== String(initial.accountDays);
   const on = values.mode !== 'OFF';
 
   async function save() {
@@ -71,9 +74,14 @@ export function WholesaleSettingsClient({
       setError('Enter the minimum trade order as an amount, like 50000 — or leave it empty.');
       return;
     }
+    const days = Number(accountDays.trim());
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      setError('Enter the days to pay as a whole number from 1 to 365.');
+      return;
+    }
     setPending(true);
     setError(null);
-    const result = await saveWholesaleSettings({ ...values, minOrderValue });
+    const result = await saveWholesaleSettings({ ...values, minOrderValue, accountDays: days });
     setPending(false);
     if (!result.success) {
       setError(result.error);
@@ -201,6 +209,27 @@ export function WholesaleSettingsClient({
                 <FieldDescription className="mt-1.5">
                   What a trade buyer’s goods must come to before they can check out — before any discount and delivery. Each
                   product’s own minimum and pack size are set on the product.
+                </FieldDescription>
+              </div>
+            </section>
+
+            <section aria-labelledby="wholesale-account" className="space-y-3">
+              <h2 id="wholesale-account" className="text-sm font-semibold">
+                Pay on account
+              </h2>
+              <div className="rounded-lg border bg-card p-3.5">
+                <Label htmlFor="wholesale-account-days">Days to pay, to start with</Label>
+                <Input
+                  id="wholesale-account-days"
+                  className="mt-1.5 max-w-32"
+                  inputMode="numeric"
+                  value={accountDays}
+                  onChange={(e) => setAccountDays(e.target.value)}
+                  disabled={!canEdit}
+                />
+                <FieldDescription className="mt-1.5">
+                  Pay on account is off for every buyer until you give it to one, on their customer page — with their own days
+                  to pay if you like, and an optional credit limit. This is the number they start with.
                 </FieldDescription>
               </div>
             </section>

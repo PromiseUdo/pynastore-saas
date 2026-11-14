@@ -17,6 +17,7 @@
  * Each source is capped at what the requested page can need, so a page costs
  * two bounded queries whatever the totals.
  */
+import { SENDABLE_PAYMENT_STATUSES } from '@/lib/storefront/orders/policy';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
@@ -72,7 +73,8 @@ const FULFILLMENT_STATUS: Record<string, { label: string; variant: ToSendRow['st
 /** A parcel the order page lets you send now: the same rule sendShipment enforces. */
 const READY_ORDER = {
   status: { in: ['CONFIRMED', 'PROCESSING'] as ('CONFIRMED' | 'PROCESSING')[] },
-  paymentStatus: { in: ['PAID', 'DUE_ON_DELIVERY'] as ('PAID' | 'DUE_ON_DELIVERY')[] },
+  // The same rule sendShipment enforces (lib/storefront/orders/policy.ts), on account included (21.5).
+  paymentStatus: { in: [...SENDABLE_PAYMENT_STATUSES] },
 };
 
 function shipmentWhere(organizationId: string, filter: ToSendFilter, q: string) {

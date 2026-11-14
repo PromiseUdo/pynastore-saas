@@ -118,7 +118,7 @@ export async function placeOrderAction(
   const shopper = await getShopper();
   // The same trade rule the checkout page showed, applied again here (ROADMAP 21.1).
   const tradeBuyer = shopper ? await isTradeBuyer(shopper.organizationId, shopper.id) : false;
-  const config = await getStoreCheckoutConfig({ organizationSlug: slug }, { tradeBuyer });
+  const config = await getStoreCheckoutConfig({ organizationSlug: slug }, { tradeBuyer, customerId: shopper?.id ?? null });
 
   const result = await placeOrder({
     organizationSlug: slug,
@@ -146,6 +146,10 @@ export async function placeOrderAction(
     // Delivery to be arranged (21.4B): nothing to pay yet. The store prices it; the buyer accepts, then pays.
     await notifyShopper(result.orderId, 'placed-delivery-to-arrange');
     await notifyMerchant(result.orderId, 'delivery-to-price');
+  } else if (method?.id === 'account') {
+    // Pay on account (21.5): confirmed now, paid to the store by the due date.
+    await notifyShopper(result.orderId, 'placed-on-account');
+    await notifyStoreOfOrder(result.orderId, 'on-account');
   } else if (method?.provider === 'paystack') {
     /* The order exists whatever happens next. If Paystack can't be reached,
      * the shopper still lands on their confirmation, which offers "Pay now". */

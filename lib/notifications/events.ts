@@ -101,7 +101,7 @@ export interface EventFacts {
   'platform.domain-order': { shopName: string; domain: string; type: 'EXISTING' | 'REGISTER' | 'RENEW' };
   'platform.mobile-app-paid': { appOrderId: string; shopName: string; appName: string };
   /** an online order that needs the store: paid online, or to be paid on delivery */
-  'order.new': { orderId: string; reference: string; customerName: string; total: string; payment: 'paid' | 'on-delivery' };
+  'order.new': { orderId: string; reference: string; customerName: string; total: string; payment: 'paid' | 'on-delivery' | 'on-account' };
   /** an order to be paid by bank transfer, waiting for the store to confirm the money */
   'order.transfer': { orderId: string; reference: string; customerName: string; total: string };
   'question.new': { productName: string; shopperName: string };
@@ -169,6 +169,10 @@ const ORDER_LIST_LINES: Record<OrderEmailKind, (reference: string) => string> = 
   'delivery-priced': (ref) => `The delivery price for order ${ref} is ready. Accept it to go ahead.`,
   'delivery-not-priced': (ref) => `Order ${ref} was cancelled — the store couldn’t price delivery in time.`,
   'delivery-price-lapsed': (ref) => `Order ${ref} was cancelled — the delivery price wasn’t accepted in time.`,
+  'placed-on-account': (ref) => `Order ${ref} was placed on your trade account.`,
+  'account-due-soon': (ref) => `Payment for order ${ref} is due soon.`,
+  'account-overdue': (ref) => `Payment for order ${ref} is overdue.`,
+  'account-payment-recorded': (ref) => `The store recorded a payment towards order ${ref}.`,
 };
 
 const orderThread = (facts: { orderId: string }) => `order:${facts.orderId}`;
@@ -293,7 +297,7 @@ export const EVENTS: Catalogue = {
     channels: { WEB_PUSH: 'on', NATIVE_PUSH: 'on' },
     words: (f) => ({
       title: `New order ${f.reference}`,
-      body: `${f.customerName} · ${f.total} · ${f.payment === 'paid' ? 'paid online' : 'pay on delivery'}`,
+      body: `${f.customerName} · ${f.total} · ${f.payment === 'paid' ? 'paid online' : f.payment === 'on-account' ? 'on account' : 'pay on delivery'}`,
     }),
     target: (f) => ({ type: 'order', orderId: f.orderId, reference: f.reference }),
     thread: orderThread,

@@ -40,7 +40,12 @@ export type OrderEmailKind =
   | 'placed-delivery-to-arrange'
   | 'delivery-priced'
   | 'delivery-not-priced'
-  | 'delivery-price-lapsed';
+  | 'delivery-price-lapsed'
+  /* Pay on account (ROADMAP 21.5) */
+  | 'placed-on-account'
+  | 'account-due-soon'
+  | 'account-overdue'
+  | 'account-payment-recorded';
 
 export type StorefrontOrderUpdateEmailProps = {
   kind: OrderEmailKind;
@@ -75,6 +80,10 @@ export type StorefrontOrderUpdateEmailProps = {
   deliveryNote?: string;
   /** …and when the buyer must accept it by */
   acceptBy?: string;
+  /** pay on account (21.5): the due date, what's still to pay, what was just recorded — formatted */
+  accountDueDate?: string;
+  accountOutstanding?: string;
+  accountPaid?: string;
 };
 
 /** The emails a business invoice belongs with: buying it, not cancelling or returning it. */
@@ -86,6 +95,10 @@ const WITH_INVOICE: OrderEmailKind[] = [
   'delivered',
   'placed-delivery-to-arrange',
   'delivery-priced',
+  'placed-on-account',
+  'account-due-soon',
+  'account-overdue',
+  'account-payment-recorded',
 ];
 
 const COPY: Record<OrderEmailKind, { subject: string; heading: string }> = {
@@ -105,6 +118,10 @@ const COPY: Record<OrderEmailKind, { subject: string; heading: string }> = {
   'delivery-priced': { subject: 'Your delivery price is ready', heading: 'Your delivery price is ready' },
   'delivery-not-priced': { subject: 'Your order was cancelled', heading: 'Your order was cancelled' },
   'delivery-price-lapsed': { subject: 'Your order was cancelled', heading: 'Your order was cancelled' },
+  'placed-on-account': { subject: 'We’ve got your order — on account', heading: 'Thanks — we’ve got your order' },
+  'account-due-soon': { subject: 'Payment due soon', heading: 'Your payment is due soon' },
+  'account-overdue': { subject: 'Payment overdue', heading: 'A reminder about your payment' },
+  'account-payment-recorded': { subject: 'Payment received — thank you', heading: 'We’ve recorded your payment' },
 };
 
 export function orderEmailSubject(kind: OrderEmailKind, storeName: string, reference: string): string {
@@ -184,6 +201,26 @@ function body(props: StorefrontOrderUpdateEmailProps): string[] {
         'The delivery price for your order wasn’t accepted in time, so it has been cancelled and the items have gone back on sale. You haven’t been charged.',
         'If you still want them, you’re welcome to order again.',
       ];
+    case 'placed-on-account':
+      return [
+        `${props.storeName} has your order and is getting it ready. It’s on your trade account: nothing to pay now.`,
+        `Pay ${props.total} to the store by ${props.accountDueDate ?? 'the due date'}. Your invoice shows how to pay.`,
+      ];
+    case 'account-due-soon':
+      return [
+        `Your payment for this order is due on ${props.accountDueDate ?? 'its due date'}. There’s ${props.accountOutstanding ?? props.total} left to pay.`,
+        'If you’ve already sent it, thank you — the store will record it when it arrives.',
+      ];
+    case 'account-overdue':
+      return [
+        `Your payment for this order was due on ${props.accountDueDate ?? 'its due date'}, and ${props.accountOutstanding ?? props.total} is still to pay.`,
+        'Until it’s paid, new orders need paying for at checkout. If you’ve already sent it, thank you — the store will record it when it arrives.',
+      ];
+    case 'account-payment-recorded':
+      return [
+        `${props.storeName} has recorded ${props.accountPaid ?? 'your payment'} towards this order.`,
+        props.accountOutstanding ? `There’s ${props.accountOutstanding} left to pay${props.accountDueDate ? `, by ${props.accountDueDate}` : ''}.` : 'Thank you.',
+      ];
     case 'payment-timeout':
       return [
         'Your payment didn’t come through in time, so we’ve cancelled the order and put the items back on sale. You haven’t been charged.',
@@ -203,6 +240,7 @@ export function StorefrontOrderUpdateEmail(props: StorefrontOrderUpdateEmailProp
     'delivered',
     'placed-delivery-to-arrange',
     'delivery-priced',
+    'placed-on-account',
   ].includes(props.kind);
 
   return (

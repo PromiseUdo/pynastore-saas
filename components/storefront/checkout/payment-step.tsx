@@ -32,7 +32,8 @@
  * same one to the order it actually writes.
  */
 import { useWatch, type UseFormReturn } from 'react-hook-form';
-import { Banknote, CreditCard, Landmark, Lock, ShieldCheck } from 'lucide-react';
+import { Banknote, CreditCard, Landmark, Lock, ShieldCheck, Wallet } from 'lucide-react';
+import { ON_ACCOUNT_METHOD_ID, accountAvailability } from '@/lib/trade/credit-rules';
 import type { CheckoutConfig } from '@/lib/storefront/checkout/types';
 import type { CheckoutFormValues } from '@/lib/storefront/checkout/schema';
 import type { CartItem } from '@/lib/storefront/types';
@@ -51,18 +52,22 @@ const ICONS: Record<string, typeof CreditCard> = {
   card: CreditCard,
   transfer: Landmark,
   pod: Banknote,
+  account: Wallet,
 };
 
 export function PaymentStep({
   form,
   config,
   items,
+  orderTotal = 0,
   onSelect,
 }: {
   form: UseFormReturn<CheckoutFormValues>;
   config: CheckoutConfig;
   /** the bag, because a line's payment terms decide what may be offered */
   items: CartItem[];
+  /** minor units: pay on account must fit the buyer's credit (ROADMAP 21.5) */
+  orderTotal?: number;
   onSelect: (id: string) => void;
 }) {
   const { control, setValue, formState } = form;
@@ -89,7 +94,13 @@ export function PaymentStep({
       >
         {config.paymentMethods.map((method) => {
           const Icon = ICONS[method.id];
-          const allowed = isPaymentMethodAllowed(method, items);
+          const termsAllow = isPaymentMethodAllowed(method, items);
+          // Pay on account (21.5): nothing overdue, and within the credit left — the server's own rule.
+          const credit =
+            method.id === ON_ACCOUNT_METHOD_ID && config.tradeAccount
+              ? accountAvailability(config.tradeAccount, orderTotal, config.currency)
+              : ({ ok: true } as const);
+          const allowed = termsAllow && credit.ok;
           return (
             <RadioGroupCard
               key={method.id}
@@ -107,10 +118,16 @@ export function PaymentStep({
                   {!allowed && (
                     <span className="mt-2 flex items-start gap-2 text-sm text-foreground">
                       <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                      <span>
-                        {PREPAYMENT_REQUIRED_MESSAGE}
-                        {reason && <span className="mt-1 block text-muted-foreground">{reason}</span>}
-                      </span>
+                      {!credit.ok ? (
+                        <span>{credit.reason}</span>
+                      ) : (
+                        <span>
+                          {method.id === ON_ACCOUNT_METHOD_ID
+                            ? 'Pay on account isn’t available because one or more items in your order must be paid for before delivery.'
+                            : PREPAYMENT_REQUIRED_MESSAGE}
+                          {reason && <span className="mt-1 block text-muted-foreground">{reason}</span>}
+                        </span>
+                      )}
                     </span>
                   )}
                 </span>
@@ -127,7 +144,9 @@ export function PaymentStep({
       )}
 
       {/* The honest sentence, in place of a fake card form. */}
-      {selected && isPaymentMethodAllowed(selected, items) && (
+      {selected &&
+        isPaymentMethodAllowed(selected, items) &&
+        !(selected.id === ON_ACCOUNT_METHOD_ID && config.tradeAccount && !accountAvailability(config.tradeAccount, orderTotal, config.currency).ok) && (
         <p
           role="status"
           className="mt-5 flex items-start gap-2.5 rounded-xl border bg-secondary/40 p-4 text-sm leading-relaxed text-muted-foreground"

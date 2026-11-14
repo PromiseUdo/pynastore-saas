@@ -61,3 +61,23 @@ export const BANK_TRANSFER_METHOD: PaymentMethodOption = {
   settlesOnDelivery: false,
   enabled: true,
 };
+
+/**
+ * Pay on account (ROADMAP 21.5): offered only to a trade buyer the merchant
+ * has given credit, with their due date in the words (./store-config.ts).
+ * Nothing is paid now; the buyer pays the store directly by the due date and
+ * the store records it. `settlesOnDelivery`: like pay on delivery, the money
+ * comes after the goods — so an item the merchant wants paid up front rules
+ * it out too.
+ */
+export function onAccountPaymentMethod(dueDateLabel: string): PaymentMethodOption {
+  return {
+    id: 'account',
+    label: 'Pay on account',
+    description: `Pay by ${dueDateLabel}, on your trade account`,
+    handoffNote: `Nothing is paid now. The store sends your order as usual, and you pay them by ${dueDateLabel} — your invoice for this order shows the amount and how to pay.`,
+    provider: 'manual',
+    settlesOnDelivery: true,
+    enabled: true,
+  };
+}

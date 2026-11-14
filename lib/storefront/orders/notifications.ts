@@ -41,6 +41,8 @@ export interface NotificationDetail {
   returnId?: string;
   /** major units */
   refundAmount?: number;
+  /** pay on account (21.5): what was just recorded, major units */
+  accountPaid?: number;
 }
 
 async function returnSummary(returnId: string, money: (value: { toString(): string }) => string) {
@@ -95,6 +97,8 @@ export async function notifyShopper(
         deliveryPriceDueAt: true,
         deliveryArrangedNote: true,
         deliveryAcceptBy: true,
+        accountDueAt: true,
+        accountPaidAmount: true,
         deliveryMethodLabel: true,
         shipFullName: true,
         shipLine1: true,
@@ -175,6 +179,13 @@ export async function notifyShopper(
           deliveryFee: order.deliveryFee !== null ? money(order.deliveryFee) : undefined,
           deliveryNote: order.deliveryArrangedNote ?? undefined,
           acceptBy: order.deliveryAcceptBy ? when(order.deliveryAcceptBy) : undefined,
+          // Pay on account (21.5): when it's due and what's left.
+          accountDueDate: order.accountDueAt ? formatDate(order.accountDueAt) : undefined,
+          accountOutstanding:
+            order.accountDueAt && Number(order.totalAmount) - Number(order.accountPaidAmount) > 0
+              ? money(Number(order.totalAmount) - Number(order.accountPaidAmount))
+              : undefined,
+          accountPaid: detail.accountPaid !== undefined ? money(detail.accountPaid) : undefined,
         },
       },
     });
@@ -255,7 +266,7 @@ export async function notifyMerchant(
  * a bank transfer when it's placed, asking them to confirm the money. To
  * whoever handles orders, and the Owner ('order.new', 'order.transfer').
  */
-export async function notifyStoreOfOrder(orderId: string, kind: 'paid' | 'on-delivery' | 'transfer'): Promise<void> {
+export async function notifyStoreOfOrder(orderId: string, kind: 'paid' | 'on-delivery' | 'transfer' | 'on-account'): Promise<void> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },

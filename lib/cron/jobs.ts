@@ -12,6 +12,7 @@
  * vercel.json and switch cron-job.org off — nothing here changes.
  * docs/SCHEDULED-JOBS.md has the setup.
  */
+import { remindAccountOrders } from '@/lib/storefront/orders/account';
 import { expireUnpaidOrders } from '@/lib/storefront/orders/lifecycle';
 import { indexPendingImages, queueUnindexedImages } from '@/lib/storefront/visual-search/indexing';
 import { purgeExpiredQueries } from '@/lib/storefront/visual-search/vector-store';
@@ -48,11 +49,18 @@ export const CRON_JOBS = {
       'Cancels online orders nobody paid for within the hold time and puts their stock back on sale. Without it, a quiet store can show items as sold out that nobody bought.',
     schedule: 'Every 15 minutes',
     everyMinutes: 15,
-    run: () => expireUnpaidOrders({ limit: 200 }),
+    /* Also reminds trade buyers about on-account orders (ROADMAP 21.5) — each
+     * reminder is claimed once, so running every 15 minutes sends it once. */
+    run: async () => ({ ...(await expireUnpaidOrders({ limit: 200 })), reminded: await remindAccountOrders({ limit: 200 }) }),
     describe: (r) =>
-      n(r, 'checked') === 0
-        ? 'No unpaid orders past their hold'
-        : `Released ${plural(n(r, 'expired'), 'unpaid order', 'unpaid orders')} of ${n(r, 'checked')} past their hold`,
+      [
+        n(r, 'checked') === 0
+          ? 'No unpaid orders past their hold'
+          : `Released ${plural(n(r, 'expired'), 'unpaid order', 'unpaid orders')} of ${n(r, 'checked')} past their hold`,
+        n(r, 'reminded') > 0 ? `${plural(n(r, 'reminded'), 'payment reminder', 'payment reminders')} sent` : null,
+      ]
+        .filter(Boolean)
+        .join('; '),
   },
   'index-product-images': {
     title: 'Index photos for search by image',

@@ -29,6 +29,10 @@ const LINES: Partial<Record<OrderEmailKind, (reference: string) => string>> = {
   'delivery-priced': (ref) => `The delivery price for order ${ref} is ready. Accept it to go ahead.`,
   'delivery-not-priced': (ref) => `Order ${ref} was cancelled — the store couldn’t price delivery in time.`,
   'delivery-price-lapsed': (ref) => `Order ${ref} was cancelled — the delivery price wasn’t accepted in time.`,
+  // Pay on account (ROADMAP 21.5): money they owe, about their own order.
+  'account-due-soon': (ref) => `Payment for order ${ref} is due soon.`,
+  'account-overdue': (ref) => `Payment for order ${ref} is overdue.`,
+  'account-payment-recorded': (ref) => `The store recorded a payment towards order ${ref}.`,
 };
 
 export function orderPushMessage(

@@ -66,6 +66,7 @@ export const ORDER_PAYMENT_LABEL: Record<string, string> = {
   AWAITING_TRANSFER: 'Awaiting transfer',
   DUE_ON_DELIVERY: 'Pay on delivery',
   AWAITING_DELIVERY_PRICE: 'Delivery to price',
+  ON_ACCOUNT: 'On account',
   PAID: 'Paid',
   PARTIALLY_REFUNDED: 'Partly refunded',
   REFUNDED: 'Refunded',
@@ -77,6 +78,7 @@ export const ORDER_PAYMENT_VARIANT: Record<string, BadgeVariant> = {
   AWAITING_TRANSFER: 'warning',
   DUE_ON_DELIVERY: 'info',
   AWAITING_DELIVERY_PRICE: 'pending',
+  ON_ACCOUNT: 'info',
   PAID: 'success',
   PARTIALLY_REFUNDED: 'info',
   REFUNDED: 'draft',
@@ -122,6 +124,8 @@ export const PAYMENT_METHOD_LABEL: Record<string, string> = {
   edupay: 'Wallet (EduPay)',
   pod: 'Pay on delivery',
   transfer: 'Bank transfer to you',
+  // A trade buyer with credit (ROADMAP 21.5): pays you by the due date.
+  account: 'On account',
   card: 'Card',
   // At the counter (features/sales/counter-sale.ts).
   cash: 'Cash',
@@ -208,6 +212,7 @@ export function nextStepHint(input: {
         : 'On its way. Mark it as delivered once it arrives.';
     case 'DELIVERED':
       if (paymentStatus === 'DUE_ON_DELIVERY') return 'Delivered, but the payment hasn’t been recorded yet.';
+      if (paymentStatus === 'ON_ACCOUNT') return 'Delivered, on the customer’s trade account. Record what they pay below as it arrives.';
       if (paymentStatus === 'PARTIALLY_REFUNDED') return 'Delivered. Part of the payment has been refunded.';
       if (paymentStatus === 'REFUNDED') return 'Delivered, and the payment has been refunded in full.';
       return 'Delivered and paid — nothing left to do.';

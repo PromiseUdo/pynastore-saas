@@ -48,7 +48,7 @@ export default async function CheckoutPage({
   const shopper = await getShopper();
   // A trade buyer sees only the ways the merchant lets trade orders be paid (ROADMAP 21.1).
   const tradeBuyer = shopper ? await isTradeBuyer(shopper.organizationId, shopper.id) : false;
-  const config = await getStoreCheckoutConfig({ organizationSlug }, { tradeBuyer });
+  const config = await getStoreCheckoutConfig({ organizationSlug }, { tradeBuyer, customerId: shopper?.id ?? null });
 
   let account: CheckoutAccount | null = null;
   if (shopper) {

@@ -23,6 +23,7 @@
  * Money is minor units (kobo) throughout.
  */
 import type { Address, CartItem, Money, OrderTotals, ShippingMethod } from '../types';
+import type { AccountStanding } from '@/lib/trade/credit-rules';
 
 /* ---------------- what the shopper gives us ---------------- */
 
@@ -153,6 +154,12 @@ export interface CheckoutConfig {
    * everyone else.
    */
   tradeBuyer?: boolean;
+  /**
+   * Pay on account (ROADMAP 21.5): a trade buyer with credit here — their
+   * days, due date, limit and what they owe (minor units). Absent for anyone
+   * else; checkout and placeOrder both judge it with accountAvailability.
+   */
+  tradeAccount?: AccountStanding;
   vat: {
     ratePct: number;
     vatNumber: string | null;

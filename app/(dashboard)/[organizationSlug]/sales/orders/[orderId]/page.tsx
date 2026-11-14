@@ -41,7 +41,9 @@ import {
 import { UNPAID_ORDER_HOLD_MINUTES } from '@/lib/storefront/orders/lifecycle';
 import { TRANSFER_HOLD_HOURS } from '@/lib/storefront/orders/holds';
 import { OrderActions } from './_components/OrderActions';
+import { paymentAllowsSending } from '@/lib/storefront/orders/policy';
 import { ArrangedDeliveryPanel } from './_components/ArrangedDeliveryPanel';
+import { AccountPaymentsPanel } from './_components/AccountPaymentsPanel';
 import { OrderReturnsPanel } from './_components/OrderReturnsPanel';
 import { DISPUTE_STATUS_VARIANT, disputeLabel, disputeOutcome } from '@/lib/sales/dispute-labels';
 import { ParcelsPanel } from './_components/ParcelsPanel';
@@ -108,7 +110,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
     : null;
   const canSendParcels =
     ['CONFIRMED', 'PROCESSING'].includes(order.status) &&
-    (order.paymentStatus === 'PAID' || order.paymentStatus === 'DUE_ON_DELIVERY');
+    paymentAllowsSending(order.paymentStatus);
 
   const hint = partialHint ?? nextStepHint({
     status: order.status,
@@ -216,6 +218,8 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
 
         {/* Delivery to be arranged (ROADMAP 21.4B): the price this order is waiting for. */}
         <ArrangedDeliveryPanel order={order} canManage={canManage} />
+        {/* Pay on account (ROADMAP 21.5): what's due, what's been paid. */}
+        <AccountPaymentsPanel order={order} canManage={canManage} />
 
         {order.disputes.map((dispute) => {
           const open = dispute.status !== 'resolved';

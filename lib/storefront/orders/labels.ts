@@ -34,6 +34,7 @@ export const PAYMENT_STATUS_LABEL: Record<OrderPaymentStatus, string> = {
   AWAITING_TRANSFER: 'Awaiting your transfer',
   DUE_ON_DELIVERY: 'Pay on delivery',
   AWAITING_DELIVERY_PRICE: 'Waiting for delivery price',
+  ON_ACCOUNT: 'On account',
   PAID: 'Paid',
   PARTIALLY_REFUNDED: 'Partly refunded',
   REFUNDED: 'Refunded',
@@ -49,6 +50,8 @@ export function paymentHint(status: OrderPaymentStatus): string {
       return `Transfer the total to the account shown, using your order number as the reference, within ${TRANSFER_HOLD_HOURS} hours of ordering. The store confirms your order once the money arrives.`;
     case 'DUE_ON_DELIVERY':
       return 'Have the exact amount ready for the courier.';
+    case 'ON_ACCOUNT':
+      return 'On your trade account: pay the store by the due date on your invoice. They record it when it arrives.';
     case 'AWAITING_DELIVERY_PRICE':
       return 'The store is working out delivery for an order this size. Nothing is charged until you’ve seen the price and accepted it.';
     case 'PAID':

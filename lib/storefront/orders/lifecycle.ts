@@ -42,7 +42,7 @@ import { markShipmentsCancelled, markShipmentsDelivered, markShipmentsDispatched
 import { cancelRequestedTransfers, requestGatheringTransfers, waitingOn } from './gather';
 import { releaseDiscountUse } from '../discounts/usage';
 import { notifyMerchant, notifyShopper } from './notifications';
-import { CUSTOMER_CANCELLABLE_STATUSES } from './policy';
+import { CUSTOMER_CANCELLABLE_STATUSES, paymentAllowsSending } from './policy';
 
 export { UNPAID_ORDER_HOLD_MINUTES } from './holds';
 
@@ -215,7 +215,7 @@ export async function markOrderShipped(
   if (order.status !== 'CONFIRMED' && order.status !== 'PROCESSING') {
     return { ok: false, error: 'Confirm the order before marking it as shipped.' };
   }
-  if (order.paymentStatus !== 'PAID' && order.paymentStatus !== 'DUE_ON_DELIVERY') {
+  if (!paymentAllowsSending(order.paymentStatus)) {
     return { ok: false, error: 'This order hasn’t been paid for yet.' };
   }
   const waiting = await waitingOn(prisma, { orderId: order.id });
@@ -307,7 +307,7 @@ export async function sendShipment(
       error: order.status === 'PENDING' ? 'Confirm the order before sending any of it.' : 'This order can’t be sent now.',
     };
   }
-  if (order.paymentStatus !== 'PAID' && order.paymentStatus !== 'DUE_ON_DELIVERY') {
+  if (!paymentAllowsSending(order.paymentStatus)) {
     return { ok: false, error: 'This order hasn’t been paid for yet.' };
   }
   if (shipment.status !== 'PENDING') return { ok: false, error: 'This parcel has already been sent.' };

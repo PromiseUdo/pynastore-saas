@@ -29,9 +29,11 @@ const WholesaleSchema = z.object({
   vatAdded: z.boolean(),
   /** the least a trade order's goods may come to, naira (21.3); null = no minimum */
   minOrderValue: z.number().nonnegative().max(9_999_999_999).nullable(),
+  /** pay on account (21.5): the days to pay a buyer starts with, unless their own are set */
+  accountDays: z.number().int('Use a whole number of days').min(1, 'At least 1 day').max(365, 'At most 365 days').optional(),
 });
 
-export type WholesaleSettingsInput = z.infer<typeof WholesaleSchema>;
+export type WholesaleSettingsInput = z.input<typeof WholesaleSchema>;
 
 export async function saveWholesaleSettings(input: WholesaleSettingsInput): Promise<ActionResult> {
   try {
@@ -40,7 +42,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
     const organizationId = ctx.organization.id;
 
     const parsed = WholesaleSchema.safeParse(input);
-    if (!parsed.success) return { success: false, error: 'We couldn’t save your wholesale settings' };
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.path[0] === 'accountDays' ? `Days to pay: ${parsed.error.issues[0].message}` : 'We couldn’t save your wholesale settings' };
     const next = parsed.data;
     if (!next.tradePayOnline && !next.tradePayTransfer && !next.tradePayOnDelivery) {
       return { success: false, error: 'Leave at least one way for trade buyers to pay.' };
@@ -56,6 +58,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
         tradePayOnDelivery: true,
         wholesaleVatAdded: true,
         tradeMinOrderValue: true,
+        tradeAccountDays: true,
       },
     });
     await prisma.organization.update({
@@ -68,6 +71,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
         tradePayOnDelivery: next.tradePayOnDelivery,
         wholesaleVatAdded: next.vatAdded,
         tradeMinOrderValue: next.minOrderValue && next.minOrderValue > 0 ? next.minOrderValue : null,
+        ...(next.accountDays !== undefined ? { tradeAccountDays: next.accountDays } : {}),
       },
     });
 
@@ -86,6 +90,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
           tradePayOnDelivery: before.tradePayOnDelivery,
           vatAdded: before.wholesaleVatAdded,
           minOrderValue: before.tradeMinOrderValue === null ? null : Number(before.tradeMinOrderValue),
+          accountDays: before.tradeAccountDays,
         },
         after: next,
       },

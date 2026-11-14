@@ -26,7 +26,9 @@
  */
 import { prisma } from '@/lib/prisma';
 import type { StoreScope } from '../types';
-import { BANK_TRANSFER_METHOD, ONLINE_PAYMENT_METHOD, PAY_ON_DELIVERY_METHOD } from './payment-methods';
+import { accountStanding } from '@/lib/trade/credit';
+import { formatDate } from '@/lib/format';
+import { BANK_TRANSFER_METHOD, ONLINE_PAYMENT_METHOD, PAY_ON_DELIVERY_METHOD, onAccountPaymentMethod } from './payment-methods';
 import { onlinePaymentReadiness } from '@/lib/payments/payment-setup';
 import { getCheckoutConfig } from './config';
 import { getWholesaleSettingsBySlug } from '@/lib/trade/accounts';
@@ -76,8 +78,8 @@ export async function storeCheckoutRules(organizationSlug: string): Promise<Chec
 
 export async function getStoreCheckoutConfig(
   scope: StoreScope,
-  /** the signed-in shopper is an approved trade buyer here (lib/trade/accounts.ts isTradeBuyer) */
-  { tradeBuyer = false }: { tradeBuyer?: boolean } = {},
+  /** the signed-in shopper is an approved trade buyer here (lib/trade/accounts.ts isTradeBuyer) — and who they are, for their credit (21.5) */
+  { tradeBuyer = false, customerId = null }: { tradeBuyer?: boolean; customerId?: string | null } = {},
 ): Promise<CheckoutConfig> {
   const [base, transferAccounts, hasDelivery, onlineReady, rules, vat, wholesale] = await Promise.all([
     getCheckoutConfig(scope),
@@ -88,6 +90,9 @@ export async function getStoreCheckoutConfig(
     shopVatBySlug(scope.organizationSlug),
     tradeBuyer ? getWholesaleSettingsBySlug(scope.organizationSlug) : null,
   ]);
+  // Pay on account (21.5): only a trade buyer the merchant has given credit.
+  const account =
+    wholesale?.organizationId && customerId ? await accountStanding(wholesale.organizationId, customerId) : null;
 
   /* Under the demo fixtures the store keeps the fixed demo delivery list, so a
    * catalogue demo checks out without zones. Everything else is the store's. */
@@ -108,7 +113,9 @@ export async function getStoreCheckoutConfig(
       ...(onlineReady ? [ONLINE_PAYMENT_METHOD] : []),
       ...base.paymentMethods.filter((method) => rules.payOnDelivery || method.id !== PAY_ON_DELIVERY_METHOD.id),
       ...(transferAccounts.length ? [BANK_TRANSFER_METHOD] : []),
-    ].filter((method) => !wholesale || tradeMayPayWith(method.id, wholesale)),
+    ]
+      .filter((method) => !wholesale || tradeMayPayWith(method.id, wholesale))
+      .concat(account ? [onAccountPaymentMethod(formatDate(account.dueDate))] : []),
     transferAccounts,
     // A trade buyer at a shop that quotes wholesale before VAT has it added to those lines (21.2).
     vat: vat && wholesale?.vatAdded ? { ...vat, addedToWholesale: true } : vat,
@@ -116,6 +123,7 @@ export async function getStoreCheckoutConfig(
     ...(wholesale?.minOrderValue ? { tradeMinOrderValue: Math.round(wholesale.minOrderValue * 100) } : {}),
     // Checkout asks for the business an invoice is made out to (21.6).
     ...(wholesale ? { tradeBuyer: true } : {}),
+    ...(account ? { tradeAccount: account } : {}),
     guestCheckoutEnabled: base.guestCheckoutEnabled && rules.guestAllowed,
     orderNotesEnabled: base.orderNotesEnabled && rules.orderNotes,
   };

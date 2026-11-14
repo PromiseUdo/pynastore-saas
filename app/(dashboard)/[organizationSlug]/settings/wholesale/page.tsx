@@ -26,7 +26,7 @@ export default async function WholesaleSettingsPage() {
     getWholesaleSettings(organizationId),
     getOnlinePaymentReadiness(organizationId),
     prisma.merchantBankAccount.count({ where: { organizationId, isActive: true } }),
-    prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { checkoutPayOnDelivery: true, wholesaleRequestsOpen: true, vatRegistered: true } }),
+    prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { checkoutPayOnDelivery: true, wholesaleRequestsOpen: true, vatRegistered: true, tradeAccountDays: true } }),
     prisma.tradeAccount.groupBy({ by: ['status'], where: { organizationId }, _count: { _all: true } }),
   ]);
   const count = (status: string) => counts.find((c) => c.status === status)?._count._all ?? 0;
@@ -42,6 +42,7 @@ export default async function WholesaleSettingsPage() {
         tradePayOnDelivery: settings.tradePayOnDelivery,
         vatAdded: settings.vatAddedChosen,
         minOrderValue: settings.minOrderValue,
+        accountDays: org.tradeAccountDays,
       }}
       vatRegistered={org.vatRegistered}
       offered={{ online: online.ready, transfer: bankAccounts > 0, onDelivery: org.checkoutPayOnDelivery }}

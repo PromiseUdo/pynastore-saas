@@ -6,7 +6,9 @@
 import type { Metadata } from 'next';
 import { getShopper } from '@/lib/storefront/account/session';
 import { prisma } from '@/lib/prisma';
-import { formatDate } from '@/lib/storefront/format';
+import Link from 'next/link';
+import { formatDate, formatMoney } from '@/lib/storefront/format';
+import { accountBalance, accountTerms } from '@/lib/trade/credit';
 import { getWholesaleSettings, tradeStanding } from '@/lib/trade/accounts';
 import { AccountCard } from '../../_components/account-card';
 import { AccountHeading } from '../../_components/account-heading';
@@ -23,6 +25,14 @@ export default async function TradeAccountPage() {
   ]);
   const taxId = customer?.taxId ?? null;
   const on = settings.mode !== 'OFF';
+  /* Pay on account (ROADMAP 21.5): their terms, and what they owe this shop —
+   * orders on account and invoices together. Shown while they owe anything,
+   * even if the store has since taken the credit away. */
+  const [terms, balance] =
+    standing?.status === 'APPROVED' || standing?.status === 'SUSPENDED'
+      ? await Promise.all([accountTerms(shopper.organizationId, shopper.id), accountBalance(shopper.organizationId, shopper.id)])
+      : [null, null];
+  const money = (major: number) => formatMoney(Math.round(major * 100));
 
   const details = standing && (
     <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-[10rem_1fr]">
@@ -51,6 +61,59 @@ export default async function TradeAccountPage() {
           {details}
           <p className="mt-4 text-sm text-muted-foreground">
             To change these details, please contact the store.
+          </p>
+        </AccountCard>
+      )}
+
+      {(terms || (balance && balance.owed > 0)) && (
+        <AccountCard
+          title="Pay on account"
+          description={
+            terms
+              ? `You can order now and pay the store within ${terms.days} days${
+                  terms.creditLimit !== null ? `, owing up to ${money(terms.creditLimit)} at once` : ''
+                }. New orders on account need nothing overdue.`
+              : 'What you still owe the store.'
+          }
+        >
+          <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-[10rem_1fr]">
+            <dt className="text-muted-foreground">You owe</dt>
+            <dd className="font-semibold tabular-nums">{money(balance?.owed ?? 0)}</dd>
+            {balance && balance.overdue > 0 && (
+              <>
+                <dt className="text-muted-foreground">Overdue</dt>
+                <dd className="font-semibold text-destructive tabular-nums">{money(balance.overdue)}</dd>
+              </>
+            )}
+          </dl>
+          {balance && balance.items.length > 0 && (
+            <ul className="mt-4 divide-y rounded-2xl border text-sm">
+              {balance.items.map((item) => {
+                const href =
+                  item.kind === 'order' ? `/account/orders/${encodeURIComponent(item.number)}` : item.token ? `/invoice/${item.token}` : null;
+                const label = `${item.kind === 'order' ? 'Order' : 'Invoice'} ${item.number}`;
+                return (
+                  <li key={`${item.kind}-${item.id}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                    <span>
+                      {href ? (
+                        <Link href={href} className="font-medium underline underline-offset-4">
+                          {label}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{label}</span>
+                      )}
+                      <span className="block text-xs text-muted-foreground">
+                        {item.dueAt ? `${item.overdue ? 'Overdue since' : 'Due'} ${formatDate(item.dueAt)}` : 'No due date'}
+                      </span>
+                    </span>
+                    <span className={`tabular-nums ${item.overdue ? 'font-semibold text-destructive' : ''}`}>{money(item.owed)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="mt-4 text-sm text-muted-foreground">
+            Pay the store directly — each order’s invoice shows how. They record payments as they arrive.
           </p>
         </AccountCard>
       )}

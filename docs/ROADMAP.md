@@ -1343,7 +1343,7 @@ Launch (C) needs both.
 |---|---|---|
 | D3 | 14.4 SMS/WhatsApp order updates | needs a provider decision first (cost per message) |
 | D4 | 13.5 Custom domains bought through Namecheap's API | staff handle them by hand until then |
-| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | 21.1, 21.2 DONE 2026-11-14, 21.3 + 21.6 + 21.4 DONE 2026-11-15; next 21.5 pay on account; can move before launch if a launch vendor needs it |
+| D5 | Phase 21 Wholesale — 21.1–21.3 (+21.6) first, then 21.4 trade delivery, then 21.5 pay on account | 21.1, 21.2 DONE 2026-11-14, 21.3 + 21.6 + 21.4 + 21.5 DONE 2026-11-15; next 21.7 quick ordering / 21.8 reports as vendors ask; can move before launch if a launch vendor needs it |
 
 ### Deliberately not planned yet
 
@@ -8108,7 +8108,7 @@ As built:
     split across stores (one open fee is agreeable, several aren't); a
     setting for the buyer's 48 hours (fixed, like the transfer hold).
 
-### 21.5 Pay on account (optional, per buyer) — TODO
+### 21.5 Pay on account (optional, per buyer) — DONE (2026-11-15)
 
 Most vendors want paying before or on delivery, which 21.1's trade payment
 setting already covers with today's methods. This step is for the vendor who
@@ -8134,6 +8134,39 @@ the vendor gives it**.
   account.
 - **Platform:** no money moves through us; terms and the vendor's record of
   payment are the whole of it.
+
+As built:
+- **Terms** on `TradeAccount` (`onAccount`, `accountDays` — null = the
+  shop's `Organization.tradeAccountDays`, default 14 — and `creditLimit`),
+  set from the trade buyer's customer page ("Pay on account" card →
+  `saveAccountTerms`, `customer.trade.manage`, audited). The shop default is
+  in Settings → Wholesale.
+- **One rule**, `accountAvailability` (`lib/trade/credit-rules.ts`, pure):
+  nothing overdue, and the order within the limit counting what's owed.
+  Checkout greys "Pay on account — Pay by 14 Dec 2026" out with its reason;
+  `placeOrder` refuses with the same one (`invalid-payment-method`); an
+  arranged delivery (21.4B) is judged again when the buyer accepts the price.
+- **The balance** (`lib/trade/credit.ts accountBalance`): unpaid on-account
+  orders plus SENT / PARTIALLY_PAID / OVERDUE invoices, oldest first.
+- **The order:** `ON_ACCOUNT`, confirmed at once (gathering transfers asked
+  for, as confirming does), due at the end of the Lagos day `days` from now
+  (`accountDueAt`). It ships like a paid one — one list for that,
+  `SENDABLE_PAYMENT_STATUSES` in `lib/storefront/orders/policy.ts`. The
+  merchant records payments on the order page (`OrderAccountPayment`: amount,
+  method, date, reference; part payments; never more than is left); the one
+  that covers the total makes it PAID. The buyer is emailed each time.
+- **Reminders** (`remindAccountOrders`): 3 days before, the day after, and a
+  week after the due date, each once, latest first so a late one isn't told
+  "due soon". They run inside the existing 15-minute unpaid-orders job (no
+  new cron to set up) and use the order email template, not the invoice one
+  (the business invoice from 21.6 is linked from it).
+- **Documents:** the business invoice shows "Due 14 Dec" / "Overdue", paid
+  so far, still to pay, and the shop's bank accounts; a printable statement
+  at Customers → (buyer) → Statement; the buyer sees their terms, balance and
+  open items on /account/trade.
+- **Not in this step:** refunding money already paid towards a cancelled
+  on-account order goes by hand (the refund recorder works on paid orders);
+  the business app's balances (21.8).
 
 ### 21.6 Business details and documents — DONE (2026-11-15)
 

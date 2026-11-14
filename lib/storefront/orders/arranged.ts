@@ -28,6 +28,9 @@ import { prisma } from '@/lib/prisma';
 import { createAuditLog } from '@/lib/audit';
 import { ARRANGED_ACCEPT_HOURS } from './holds';
 import { notifyMerchant, notifyShopper, notifyStoreOfOrder } from './notifications';
+import { requestGatheringTransfers } from './gather';
+import { ON_ACCOUNT_METHOD_ID, accountAvailability } from '@/lib/trade/credit-rules';
+import { accountStanding, accountTerms, dueDateFrom } from '@/lib/trade/credit';
 
 export type ArrangedResult = { ok: true } | { ok: false; error: string };
 
@@ -120,6 +123,7 @@ export async function acceptArrangedDelivery(input: { organizationId: string; co
       status: true,
       paymentStatus: true,
       paymentMethod: true,
+      customerId: true,
       deliveryArranged: true,
       deliveryPricedAt: true,
       deliveryAcceptedAt: true,
@@ -138,8 +142,29 @@ export async function acceptArrangedDelivery(input: { organizationId: string; co
     return { ok: false, error: 'The time to accept this delivery price has passed, so the order is being cancelled.' };
   }
 
-  const next =
-    order.paymentMethod === 'transfer' ? 'AWAITING_TRANSFER' : order.paymentMethod === 'pod' ? 'DUE_ON_DELIVERY' : 'AWAITING_PAYMENT';
+  /* On account (21.5): the new total — goods plus the delivery price — must
+   * still fit their credit, and nothing may be overdue, judged now. */
+  const onAccount = order.paymentMethod === ON_ACCOUNT_METHOD_ID;
+  let accountDueAt: Date | null = null;
+  if (onAccount) {
+    const [standing, terms, current] = await Promise.all([
+      accountStanding(input.organizationId, order.customerId ?? ''),
+      accountTerms(input.organizationId, order.customerId ?? ''),
+      prisma.order.findUniqueOrThrow({ where: { id: order.id }, select: { totalAmount: true, currency: true } }),
+    ]);
+    if (!standing || !terms) return { ok: false, error: 'Your trade account can’t pay on account just now. Cancel this order and order again with another way to pay.' };
+    const allowed = accountAvailability(standing, Math.round(Number(current.totalAmount) * 100), current.currency);
+    if (!allowed.ok) return { ok: false, error: allowed.reason };
+    accountDueAt = dueDateFrom(now, terms.days);
+  }
+
+  const next = onAccount
+    ? 'ON_ACCOUNT'
+    : order.paymentMethod === 'transfer'
+      ? 'AWAITING_TRANSFER'
+      : order.paymentMethod === 'pod'
+        ? 'DUE_ON_DELIVERY'
+        : 'AWAITING_PAYMENT';
   const claimed = await prisma.order.updateMany({
     where: {
       id: order.id,
@@ -147,7 +172,12 @@ export async function acceptArrangedDelivery(input: { organizationId: string; co
       deliveryPricedAt: order.deliveryPricedAt,
       ...(order.deliveryAcceptBy ? { deliveryAcceptBy: { gte: now } } : {}),
     },
-    data: { paymentStatus: next, deliveryAcceptedAt: now },
+    data: {
+      paymentStatus: next,
+      deliveryAcceptedAt: now,
+      // On account: confirmed now, like at checkout, and due by their terms.
+      ...(onAccount ? { status: 'CONFIRMED' as const, confirmedAt: now, accountDueAt } : {}),
+    },
   });
   if (!claimed.count) return { ok: false, error: 'This order changed — the store may have just updated the price. Refresh the page to see it.' };
 
@@ -160,6 +190,10 @@ export async function acceptArrangedDelivery(input: { organizationId: string; co
     await notifyStoreOfOrder(order.id, 'transfer');
   } else if (next === 'DUE_ON_DELIVERY') {
     await notifyStoreOfOrder(order.id, 'on-delivery');
+  } else if (next === 'ON_ACCOUNT') {
+    await requestGatheringTransfers(prisma, order.id);
+    await notifyShopper(order.id, 'placed-on-account');
+    await notifyStoreOfOrder(order.id, 'on-account');
   }
   return { ok: true, orderId: order.id, organizationId: input.organizationId, paymentMethod: order.paymentMethod };
 }

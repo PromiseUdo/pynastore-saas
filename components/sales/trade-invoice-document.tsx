@@ -30,6 +30,12 @@ function stampFor(invoice: TradeInvoice): { label: string; tone: InvoiceStampTon
     return { label: `Paid${invoice.paidAt ? ` · ${formatDate(invoice.paidAt)}` : ''}`, tone: 'paid' };
   }
   if (invoice.paymentStatus === 'FAILED') return { label: invoice.paymentStatusLabel, tone: 'overdue' };
+  // On account (21.5): due by a date, or past it.
+  if (invoice.account && invoice.paymentStatus === 'ON_ACCOUNT') {
+    return invoice.account.overdue
+      ? { label: 'Overdue', tone: 'overdue' }
+      : { label: invoice.account.dueAt ? `Due ${formatDate(invoice.account.dueAt)}` : 'On account', tone: 'neutral' };
+  }
   return { label: invoice.paymentStatusLabel, tone: 'neutral' };
 }
 
@@ -53,13 +59,20 @@ export function TradeInvoiceDocument({ invoice }: { invoice: TradeInvoice }) {
   if (invoice.vatAdded > 0) totals.push({ label: 'VAT', value: money(invoice.vatAdded) });
   totals.push({ label: unpricedDelivery ? 'Total before delivery' : 'Total', value: money(invoice.total), kind: 'total' });
   if (invoice.vatIncluded > 0) totals.push({ label: 'Includes VAT', value: money(invoice.vatIncluded), kind: 'note' });
+  // On account (21.5): what the store has recorded receiving, and what's left.
+  if (invoice.account && invoice.account.paid > 0) {
+    totals.push({ label: 'Paid', value: `−${money(invoice.account.paid)}` });
+    totals.push({ label: 'Still to pay', value: money(invoice.account.outstanding), kind: 'subtotal' });
+  }
 
   const paymentLine =
     invoice.paymentStatus === 'PAID' || invoice.cancelled
       ? invoice.paymentMethodLabel
       : invoice.paymentStatus === 'DUE_ON_DELIVERY'
         ? 'Due on delivery'
-        : invoice.paymentStatusLabel;
+        : invoice.paymentStatus === 'ON_ACCOUNT' && invoice.account?.dueAt
+          ? `Due by ${formatDate(invoice.account.dueAt)}`
+          : invoice.paymentStatusLabel;
 
   return (
     <InvoicePaper
@@ -109,7 +122,8 @@ export function TradeInvoiceDocument({ invoice }: { invoice: TradeInvoice }) {
           accounts={invoice.transferAccounts}
           intro={
             <>
-              Transfer {money(invoice.total)} to the account below, quoting{' '}
+              Transfer {money(invoice.account ? invoice.account.outstanding : invoice.total)} to the account below
+              {invoice.account?.dueAt && invoice.paymentStatus === 'ON_ACCOUNT' ? ` by ${formatDate(invoice.account.dueAt)}` : ''}, quoting{' '}
               <span className="font-medium text-neutral-900">{invoice.number}</span> as the reference.
             </>
           }

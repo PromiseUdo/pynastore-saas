@@ -26,6 +26,8 @@ export type OrderPaymentStatus =
   | 'DUE_ON_DELIVERY'
   /** delivery to be arranged: the store prices it, then the buyer accepts (ROADMAP 21.4B) */
   | 'AWAITING_DELIVERY_PRICE'
+  /** pay on account: due to the store by a date (ROADMAP 21.5) */
+  | 'ON_ACCOUNT'
   | 'PAID'
   | 'PARTIALLY_REFUNDED'
   | 'REFUNDED'

@@ -21,6 +21,7 @@ import { runAfter } from '@/lib/run-after';
 import { normalizeNigerianPhone } from '@/lib/phone';
 import { normalizeEmail } from '@/lib/storefront/account/shopper';
 import { BusinessDetailsSchema, type BusinessDetails } from '@/lib/trade/rules';
+import { MAX_ACCOUNT_DAYS } from '@/lib/trade/credit-rules';
 import {
   approveTrade,
   declineTrade,
@@ -290,5 +291,53 @@ export async function saveTradeDetails(customerId: string, input: BusinessDetail
     return { success: true, data: undefined };
   } catch (error) {
     return toActionError(error, 'We couldn’t save the business details');
+  }
+}
+
+/* ---------------- pay on account (ROADMAP 21.5) ---------------- */
+
+const TermsSchema = z.object({
+  onAccount: z.boolean(),
+  /** null = the shop's default */
+  days: z.number().int('Use a whole number of days').min(1, 'At least 1 day').max(MAX_ACCOUNT_DAYS, `At most ${MAX_ACCOUNT_DAYS} days`).nullable(),
+  /** naira; null = no limit */
+  creditLimit: z.number().positive('Enter an amount, or leave it blank for no limit').max(9_999_999_999).nullable(),
+});
+
+export type AccountTermsInput = z.infer<typeof TermsSchema>;
+
+/**
+ * Give an approved trade buyer credit, change it, or take it away. Taking it
+ * away stops NEW orders on account; anything they already owe stays owed.
+ */
+export async function saveAccountTerms(customerId: string, input: AccountTermsInput): Promise<ActionResult> {
+  try {
+    const ctx = await manager();
+    const parsed = TermsSchema.safeParse(input);
+    if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? 'Check the terms' };
+    const terms = parsed.data;
+    const before = await prisma.tradeAccount.findFirst({
+      where: { organizationId: ctx.organization.id, customerId },
+      select: { id: true, status: true, onAccount: true, accountDays: true, creditLimit: true },
+    });
+    if (!before) return { success: false, error: REASONS['not-found'] };
+    if (terms.onAccount && before.status !== 'APPROVED') {
+      return { success: false, error: 'Only an approved trade buyer can pay on account.' };
+    }
+    await prisma.tradeAccount.update({
+      where: { id: before.id },
+      data: { onAccount: terms.onAccount, accountDays: terms.days, creditLimit: terms.creditLimit },
+    });
+    await audit(ctx, 'sales.trade.account_terms', customerId, {
+      onAccount: terms.onAccount,
+      days: terms.days,
+      creditLimit: terms.creditLimit,
+      wasOnAccount: before.onAccount,
+      previousDays: before.accountDays,
+      previousCreditLimit: before.creditLimit === null ? null : Number(before.creditLimit),
+    });
+    return { success: true, data: undefined };
+  } catch (error) {
+    return toActionError(error, 'We couldn’t save the account terms');
   }
 }

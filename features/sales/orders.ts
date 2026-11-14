@@ -22,6 +22,7 @@
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { priceArrangedDelivery } from '@/lib/storefront/orders/arranged';
+import { recordAccountPayment } from '@/lib/storefront/orders/account';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import {
@@ -162,6 +163,17 @@ export interface StoreOrderDetail extends StoreOrderRow {
    * it, the price and note once set, and the customer's deadline to accept.
    * Null for every other order.
    */
+  /**
+   * Pay on account (ROADMAP 21.5): when it's due, what's been recorded and
+   * what's left. Null unless it was placed on account.
+   */
+  account: {
+    dueAt: string | null;
+    paid: number;
+    outstanding: number;
+    overdue: boolean;
+    payments: { id: string; amount: number; method: string; reference: string | null; receivedAt: string; recordedBy: string | null }[];
+  } | null;
   arranged: {
     priceDueAt: string | null;
     pricedAt: string | null;
@@ -692,6 +704,29 @@ export async function getStoreOrder(orderId: string): Promise<ActionResult<Store
         buyer: order.buyerBusinessName
           ? { businessName: order.buyerBusinessName, taxId: order.buyerTaxId, cacNumber: order.buyerCacNumber }
           : null,
+        account:
+          order.paymentMethod === 'account'
+            ? {
+                dueAt: order.accountDueAt?.toISOString() ?? null,
+                paid: Number(order.accountPaidAmount),
+                outstanding: Math.max(0, Math.round((Number(order.totalAmount) - Number(order.accountPaidAmount)) * 100) / 100),
+                overdue: order.paymentStatus === 'ON_ACCOUNT' && Boolean(order.accountDueAt && order.accountDueAt < new Date()),
+                payments: (
+                  await prisma.orderAccountPayment.findMany({
+                    where: { orderId: order.id, organizationId: ctx.organization.id },
+                    orderBy: { receivedAt: 'asc' },
+                    select: { id: true, amount: true, method: true, reference: true, receivedAt: true, recordedById: true },
+                  })
+                ).map((p) => ({
+                  id: p.id,
+                  amount: Number(p.amount),
+                  method: p.method,
+                  reference: p.reference,
+                  receivedAt: p.receivedAt.toISOString(),
+                  recordedBy: p.recordedById,
+                })),
+              }
+            : null,
         arranged: order.deliveryArranged
           ? {
               priceDueAt: order.deliveryPriceDueAt?.toISOString() ?? null,
@@ -891,6 +926,37 @@ export async function setArrangedDeliveryPrice(
     }
     console.error(`[orders] Could not price delivery for order ${orderId}:`, error);
     return { success: false, error: 'We couldn’t save the delivery price. Please try again.' };
+  }
+}
+
+/**
+ * Record money a trade buyer paid towards an order on account (ROADMAP
+ * 21.5) — `amount` in naira, part payments allowed. The payment that covers
+ * the total makes the order paid. The buyer is told either way.
+ */
+export async function recordOrderAccountPayment(
+  orderId: string,
+  input: { amount: number; method: string; reference?: string | null; receivedAt?: string | null },
+): Promise<ActionResult<{ paid: boolean }>> {
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_FULFILLMENT_MANAGE);
+    const result = await recordAccountPayment({
+      organizationId: ctx.organization.id,
+      orderId: String(orderId ?? ''),
+      amount: Number(input?.amount),
+      method: String(input?.method ?? ''),
+      reference: typeof input?.reference === 'string' ? input.reference : null,
+      receivedAt: input?.receivedAt ? new Date(input.receivedAt) : null,
+      userId: ctx.userId,
+    });
+    return result.ok ? { success: true, data: { paid: result.paid } } : { success: false, error: result.error };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'PermissionDeniedError') {
+      return { success: false, error: 'You don’t have permission to update orders' };
+    }
+    console.error(`[orders] Could not record a payment on order ${orderId}:`, error);
+    return { success: false, error: 'We couldn’t record that payment. Please try again.' };
   }
 }
 
