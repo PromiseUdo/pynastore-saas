@@ -1,5 +1,5 @@
 /*
- * capacitor.config.ts — native shell configuration for the Notely
+ * capacitor.config.ts — native shell configuration for the Pynastore
  * storefront mobile app (iOS + Android).
  *
  * The app has no bundled web build: it is a thin native wrapper around the
@@ -34,7 +34,7 @@ const serverUrl = liveReloadUrl || productionUrl || undefined;
 // stores, so it keeps the original name. Its display name follows
 // lib/brand.ts (12.2). A store's app brings its own (16.3).
 const appId = process.env.MOBILE_APP_ID?.trim() || 'com.mansaas.app';
-const appName = process.env.MOBILE_APP_NAME?.trim() || 'Notely';
+const appName = process.env.MOBILE_APP_NAME?.trim() || 'Pynastore';
 
 // Must match APP_USER_AGENT_TOKEN / PUSH_USER_AGENT_TOKEN in lib/mobile/app-config.ts.
 // A build says it can receive push only when the store-app build kit made it

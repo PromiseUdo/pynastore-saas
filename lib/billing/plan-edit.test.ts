@@ -19,6 +19,7 @@ const draft = (over: Partial<PlanDraft> = {}): PlanDraft => ({
   features: ['inventory.module', 'sales.module'],
   maxSeats: 10,
   maxWarehouses: 2,
+  maxAiCaptions: 30,
   highlighted: false,
   ...over,
 });
@@ -58,7 +59,16 @@ describe('validatePlanDraft', () => {
   });
 
   it('allows unlimited limits', () => {
-    expect(validatePlanDraft(draft({ maxSeats: null, maxWarehouses: null })).ok).toBe(true);
+    expect(validatePlanDraft(draft({ maxSeats: null, maxWarehouses: null, maxAiCaptions: null })).ok).toBe(true);
+  });
+
+  it('allows no AI writing at all, but not a negative or fractional allowance (22.1)', () => {
+    expect(validatePlanDraft(draft({ maxAiCaptions: 0 })).ok).toBe(true);
+    for (const bad of [-1, 2.5]) {
+      const r = validatePlanDraft(draft({ maxAiCaptions: bad }));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(Object.keys(r.errors)).toEqual(['maxAiCaptions']);
+    }
   });
 });
 

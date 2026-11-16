@@ -55,15 +55,15 @@ current data, reset the branch from its parent in the console.
 
 When Neon is out of reach (its free plan's monthly allowance used up, say),
 develop against a local Postgres instead — the same pgvector image the tests
-use, kept between runs in the Docker volume `notely-dev-data`:
+use, kept between runs in the Docker volume `pynastore-dev-data`:
 
 1. Start Docker (`colima start` on this Mac), then `npm run db:local`. The
-   first time it creates the container `notely-dev-db` on port 55432, applies
+   first time it creates the container `pynastore-dev-db` on port 55432, applies
    every migration and seeds the permissions; after that it starts it and
    applies any new migrations.
 2. In `.env`, point all three addresses at it (keep the Neon ones commented
    to switch back):
-   - `DATABASE_URL` and `DIRECT_URL` = `postgresql://postgres:dev@localhost:55432/notely`
+   - `DATABASE_URL` and `DIRECT_URL` = `postgresql://postgres:dev@localhost:55432/pynastore`
    - `SHADOW_DATABASE_URL` = `postgresql://postgres:dev@localhost:55432/shadow`
 3. Restart `npm run dev`.
 
@@ -178,12 +178,12 @@ the passphrase.
 ### Restoring a nightly backup by hand
 
 1. Download the artifact from the workflow run and unzip it. It contains
-   `notely-<date>.tar.gpg`.
+   `pynastore-<date>.tar.gpg`.
 2. Create an **empty** target, such as a new Neon branch with its data
    removed, or a local `pgvector/pgvector:pg17` container. It needs the
    `vector` extension available.
 3. Run it with Postgres 17 tools:
-   `BACKUP_PASSPHRASE=… scripts/db/restore.sh notely-<date>.tar.gpg <target url>`.
+   `BACKUP_PASSPHRASE=… scripts/db/restore.sh pynastore-<date>.tar.gpg <target url>`.
    It prints `Restore verified: N tables, M rows` or fails loudly.
 4. Check it, then point `DATABASE_URL` / `DIRECT_URL` at it.
 

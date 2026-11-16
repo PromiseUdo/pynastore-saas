@@ -14,7 +14,7 @@
  * verbatim. Nothing about that host is assumed or invented.
  *
  * The fallback is the platform origin (NEXT_PUBLIC_PLATFORM_HOST, e.g.
- * app.getnotely.io), NOT a tenant subdomain and not the apex: Meta allows no
+ * app.pynastore.com), NOT a tenant subdomain and not the apex: Meta allows no
  * wildcard in a redirect URI, so one registered URL has to serve every
  * merchant. The store travels in the signed state instead — see
  * lib/social/state.ts.

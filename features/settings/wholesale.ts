@@ -17,6 +17,8 @@ import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
+import { workspaceHasFeature } from '@/lib/billing/workspace-access';
+import { FEATURES, notOnPlanMessage } from '@/lib/billing/plans';
 import type { ActionResult } from './bank-accounts';
 
 const WholesaleSchema = z.object({
@@ -44,6 +46,10 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
     const parsed = WholesaleSchema.safeParse(input);
     if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.path[0] === 'accountDays' ? `Days to pay: ${parsed.error.issues[0].message}` : 'We couldn’t save your wholesale settings' };
     const next = parsed.data;
+    // Turning wholesale on (or changing how it runs) needs it on the plan (22.1); turning it off never does.
+    if (next.mode !== 'OFF' && !(await workspaceHasFeature(organizationId, FEATURES.WHOLESALE))) {
+      return { success: false, error: notOnPlanMessage(FEATURES.WHOLESALE) };
+    }
     if (!next.tradePayOnline && !next.tradePayTransfer && !next.tradePayOnDelivery) {
       return { success: false, error: 'Leave at least one way for trade buyers to pay.' };
     }

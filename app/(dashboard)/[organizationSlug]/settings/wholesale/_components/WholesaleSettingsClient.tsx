@@ -19,6 +19,7 @@ import { FieldDescription } from '@/components/ui/form-field';
 import { SwitchRoot } from '@/components/ui/switch';
 import { CheckboxRoot } from '@/components/ui/checkbox';
 import { PageHeader, PageBody } from '@/components/layout/page-header';
+import { PlanLockedNote } from '@/components/layout/plan-locked';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { WHOLESALE_MODES, type WholesaleMode } from '@/lib/trade/rules';
@@ -41,8 +42,9 @@ export function WholesaleSettingsClient({
   offered,
   buyers,
   waiting,
-  canEdit,
+  canEdit: canEditSettings,
   vatRegistered,
+  onPlan = true,
 }: {
   initial: WholesaleSettingsInput;
   /** what the shop offers everyone today; trade choices can only narrow it */
@@ -52,8 +54,11 @@ export function WholesaleSettingsClient({
   canEdit: boolean;
   /** VAT only exists for a registered shop (14.1); otherwise the choice is shown as not applying */
   vatRegistered: boolean;
+  /** the plan includes Wholesale (22.1); without it wholesale is off and these settings wait */
+  onPlan?: boolean;
 }) {
   const router = useRouter();
+  const canEdit = canEditSettings && onPlan;
   const [values, setValues] = React.useState<WholesaleSettingsInput>(initial);
   const [pending, setPending] = React.useState(false);
   // The minimum order as typed; saved as naira, blank = none.
@@ -104,6 +109,12 @@ export function WholesaleSettingsClient({
         }
       />
       <PageBody className="max-w-3xl space-y-8">
+        {!onPlan && (
+          <PlanLockedNote feature="sales.wholesale">
+            Wholesale isn’t on your plan, so it’s off: trade buyers see your usual prices and can’t ask for a trade account.
+            Your settings and trade buyers are kept for when it’s back.
+          </PlanLockedNote>
+        )}
         {error && (
           <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             {error}

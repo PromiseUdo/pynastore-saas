@@ -13,6 +13,7 @@
  *   • the store is the host's (x-org-slug), never a field the client posts.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { givePlan, dropBilling } from './helpers/plans';
 
 const request = vi.hoisted(() => ({ slug: '', ip: '203.0.113.1' }));
 vi.mock('next/headers', () => ({
@@ -120,6 +121,9 @@ const ids = { a1: '', a2: '', aHidden: '', b1: '', bTwin: '' };
 beforeAll(async () => {
   storeA.id = (await prisma.organization.create({ data: { name: 'Store A', slug: storeA.slug } })).id;
   storeB.id = (await prisma.organization.create({ data: { name: 'Store B', slug: storeB.slug } })).id;
+  // Search by photo is a plan feature (22.1).
+  await givePlan(storeA.id);
+  await givePlan(storeB.id);
 
   ids.a1 = await sellableProduct(storeA.id, 'RedDress');
   ids.a2 = await sellableProduct(storeA.id, 'BlueBag');
@@ -162,6 +166,7 @@ afterAll(async () => {
     await prisma.$executeRaw`DELETE FROM visual_search_queries WHERE "organizationId" = ${org.id}`;
     await prisma.productImageEmbedding.deleteMany({ where: { organizationId: org.id } });
     await prisma.productImage.deleteMany({ where: { organizationId: org.id } });
+    await dropBilling(org.id);
     await prisma.inventoryLevel.deleteMany({ where: { warehouse: { organizationId: org.id } } });
     await prisma.inventoryItem.deleteMany({ where: { organizationId: org.id } });
     await prisma.warehouse.deleteMany({ where: { organizationId: org.id } });

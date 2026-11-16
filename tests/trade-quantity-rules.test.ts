@@ -5,6 +5,7 @@
  * while a shopper who isn't a trade buyer is never touched by them.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { givePlan, dropBilling } from './helpers/plans';
 import type { CheckoutAddress, CheckoutContact } from '@/lib/storefront/checkout/types';
 
 // Placing an order finds the buyer from their session, as in the shop.
@@ -48,6 +49,7 @@ const TRADE = { trade: true, vatAdded: false, minOrderValue: null };
 
 beforeAll(async () => {
   store.id = (await prisma.organization.create({ data: { name: 'Trade Rules Shop', slug: store.slug, wholesaleMode: 'RETAIL_AND_TRADE' } })).id;
+  await givePlan(store.id); // Wholesale is a plan feature (22.1)
   const warehouse = await prisma.warehouse.create({ data: { organizationId: store.id, name: 'Main', sellsOnline: true, status: 'ACTIVE' } });
   riceId = (
     await prisma.inventoryItem.create({
@@ -91,6 +93,7 @@ afterAll(async () => {
   await prisma.deliveryRate.deleteMany({ where: { organizationId: store.id } });
   await prisma.deliveryZone.deleteMany({ where: { organizationId: store.id } });
   await prisma.warehouse.deleteMany({ where: { organizationId: store.id } });
+  await dropBilling(store.id);
   await prisma.organization.delete({ where: { id: store.id } });
 });
 

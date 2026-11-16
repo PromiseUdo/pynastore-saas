@@ -10,7 +10,7 @@ import { getAdminUrl, getMarketingUrl, getMobileStorefrontUrl, getMobileUrl, get
 import { storeUrl } from '@/lib/storefront/account/return-url';
 import { metaRedirectUri } from '@/lib/social/config';
 
-describe('production URL generation (getnotely.io)', () => {
+describe('production URL generation (pynastore.com)', () => {
   let previous: Record<string, string | undefined>;
 
   beforeEach(() => {
@@ -20,9 +20,9 @@ describe('production URL generation (getnotely.io)', () => {
       mobile: process.env.NEXT_PUBLIC_MOBILE_DOMAIN,
       meta: process.env.META_REDIRECT_URI,
     };
-    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'getnotely.io';
-    process.env.NEXT_PUBLIC_PLATFORM_HOST = 'app.getnotely.io';
-    process.env.NEXT_PUBLIC_MOBILE_DOMAIN = 'm.getnotely.io';
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'pynastore.com';
+    process.env.NEXT_PUBLIC_PLATFORM_HOST = 'app.pynastore.com';
+    process.env.NEXT_PUBLIC_MOBILE_DOMAIN = 'm.pynastore.com';
     delete process.env.META_REDIRECT_URI;
   });
 
@@ -35,34 +35,34 @@ describe('production URL generation (getnotely.io)', () => {
   });
 
   it('sends sign-in, invitations and callbacks to the platform host', () => {
-    expect(getMarketingUrl('/login')).toBe('https://app.getnotely.io/login');
-    expect(getMarketingUrl('/invite/abc123')).toBe('https://app.getnotely.io/invite/abc123');
-    expect(getMarketingUrl('/')).toBe('https://app.getnotely.io/');
-    expect(metaRedirectUri()).toBe('https://app.getnotely.io/api/social/meta/callback');
+    expect(getMarketingUrl('/login')).toBe('https://app.pynastore.com/login');
+    expect(getMarketingUrl('/invite/abc123')).toBe('https://app.pynastore.com/invite/abc123');
+    expect(getMarketingUrl('/')).toBe('https://app.pynastore.com/');
+    expect(metaRedirectUri()).toBe('https://app.pynastore.com/api/social/meta/callback');
   });
 
-  it('sends a tenant admin link to {slug}.getnotely.io', () => {
-    expect(getAdminUrl('demo', '/dashboard')).toBe('https://demo.getnotely.io/dashboard');
-    expect(getAdminUrl('demo', '/sales/orders/1')).toBe('https://demo.getnotely.io/sales/orders/1');
+  it('sends a tenant admin link to {slug}.pynastore.com', () => {
+    expect(getAdminUrl('demo', '/dashboard')).toBe('https://demo.pynastore.com/dashboard');
+    expect(getAdminUrl('demo', '/sales/orders/1')).toBe('https://demo.pynastore.com/sales/orders/1');
   });
 
-  it('sends a storefront link to shop-{slug}.getnotely.io', () => {
+  it('sends a storefront link to shop-{slug}.pynastore.com', () => {
     expect(getStorefrontUrl('demo', '/products/example')).toBe(
-      'https://shop-demo.getnotely.io/products/example',
+      'https://shop-demo.pynastore.com/products/example',
     );
-    expect(getStorefrontUrl('demo')).toBe('https://shop-demo.getnotely.io/');
+    expect(getStorefrontUrl('demo')).toBe('https://shop-demo.pynastore.com/');
   });
 
   it('keeps the mobile origin and its /s/{slug} paths', () => {
-    expect(getMobileUrl('/')).toBe('https://m.getnotely.io/');
-    expect(getMobileStorefrontUrl('demo', '/cart')).toBe('https://m.getnotely.io/s/demo/cart');
+    expect(getMobileUrl('/')).toBe('https://m.pynastore.com/');
+    expect(getMobileStorefrontUrl('demo', '/cart')).toBe('https://m.pynastore.com/s/demo/cart');
   });
 
   it('prefers a merchant custom domain over the platform storefront host', () => {
     expect(storeUrl({ slug: 'demo', customStoreDomain: 'shop.demo.com' }, '/account')).toBe(
       'https://shop.demo.com/account',
     );
-    expect(storeUrl({ slug: 'demo' }, '/account')).toBe('https://shop-demo.getnotely.io/account');
+    expect(storeUrl({ slug: 'demo' }, '/account')).toBe('https://shop-demo.pynastore.com/account');
   });
 
   it('respects an explicit META_REDIRECT_URI', () => {

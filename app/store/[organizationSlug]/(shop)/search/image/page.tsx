@@ -28,6 +28,9 @@
  * ticks "In stock" refines their visual results instead of losing them (§18).
  */
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import { storeHasFeature } from '@/lib/billing/workspace-access';
+import { FEATURES } from '@/lib/billing/plans';
 import { CatalogView } from '@/components/storefront/catalog/catalog-view';
 import { SearchField } from '@/components/storefront/catalog/search-field';
 import { ImagePicker } from '@/components/storefront/visual-search/image-picker';
@@ -57,6 +60,8 @@ export const metadata: Metadata = {
 
 export default async function VisualSearchPage({ params, searchParams }: Props) {
   const [{ organizationSlug }, rawParams] = await Promise.all([params, searchParams]);
+  // A plan feature (ROADMAP 22.1): a store without it has no such page.
+  if (!(await storeHasFeature(organizationSlug, FEATURES.AI_SHOPPING))) notFound();
   const source = parseVisualSource(rawParams);
 
   /* ── nothing chosen yet (also where a junk token lands) ─────────────── */

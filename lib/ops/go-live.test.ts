@@ -5,11 +5,11 @@ const LIVE_ENV = {
   PAYSTACK_SECRET_KEY: 'sk_live_abc',
   PAYSTACK_MODE: 'live',
   RESEND_API_KEY: 're_live',
-  EMAIL_FROM: 'Notely <hello@getnotely.io>',
+  EMAIL_FROM: 'Pynastore <hello@pynastore.com>',
   SOCIAL_TOKEN_KEY: Buffer.alloc(32, 7).toString('base64'),
   META_APP_ID: '123',
   META_APP_SECRET: 'shh',
-  META_REDIRECT_URI: 'https://app.getnotely.io/api/social/meta/callback',
+  META_REDIRECT_URI: 'https://app.pynastore.com/api/social/meta/callback',
   AUTH_SECRET: 'x'.repeat(44),
   DIRECT_URL: 'postgresql://direct',
   CRON_SECRET: 'cron-value-7f3a',
@@ -19,14 +19,14 @@ const LIVE_ENV = {
   CLOUDINARY_API_SECRET: 's',
   NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY: 'B'.repeat(87),
   WEB_PUSH_PRIVATE_KEY: 'private',
-  WEB_PUSH_SUBJECT: 'mailto:ops@getnotely.io',
+  WEB_PUSH_SUBJECT: 'mailto:ops@pynastore.com',
   FIREBASE_SERVICE_ACCOUNT: JSON.stringify({ project_id: 'p', client_email: 'a@p.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n' }),
   ABLY_API_KEY: 'app.key:secret',
 };
 const FACTS: GoLiveFacts = {
   lastWebhook: { at: '2026-10-01T09:00:00Z', mode: 'live' },
   payoutsToMove: 0,
-  expectedMetaRedirect: 'https://app.getnotely.io/api/social/meta/callback',
+  expectedMetaRedirect: 'https://app.pynastore.com/api/social/meta/callback',
   lastRetryRun: '2026-10-01T09:55:00Z',
   failedDeliveries24h: 0,
   now: new Date('2026-10-01T10:00:00Z'),
@@ -62,7 +62,7 @@ describe('the go-live checklist', () => {
 
   it('flags notifications that would never reach anyone (ROADMAP 18.7)', () => {
     expect(statusOf({ ...LIVE_ENV, NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY: undefined, WEB_PUSH_PRIVATE_KEY: undefined })['web-push']).toBe('action');
-    expect(statusOf({ ...LIVE_ENV, WEB_PUSH_SUBJECT: 'ops@getnotely.io' })['web-push']).toBe('action');
+    expect(statusOf({ ...LIVE_ENV, WEB_PUSH_SUBJECT: 'ops@pynastore.com' })['web-push']).toBe('action');
     expect(statusOf({ ...LIVE_ENV, FIREBASE_SERVICE_ACCOUNT: '{"project_id":"p"}' })['firebase']).toBe('action');
     expect(statusOf({ ...LIVE_ENV, FIREBASE_SERVICE_ACCOUNT: Buffer.from(LIVE_ENV.FIREBASE_SERVICE_ACCOUNT).toString('base64') })['firebase']).toBe('ok');
     expect(statusOf(LIVE_ENV, { lastRetryRun: null })['notification-retries']).toBe('action');

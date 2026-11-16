@@ -7,7 +7,7 @@
 #   scripts/check-notification-urls.sh <scheme> <root-domain> <shop-slug> [--app] [--custom-domain <host>]
 #
 #   scheme         https for the live site, http for a local build
-#   root-domain    e.g. getnotely.io, or app.localhost:3100 locally
+#   root-domain    e.g. pynastore.com, or app.localhost:3100 locally
 #   shop-slug      a live shop (its admin host and its shop- host are checked)
 #   --app          the shop has a store app with its links recorded (18.5):
 #                  check both well-known files serve it
@@ -21,7 +21,7 @@
 #   OWN_DOMAIN_REACHABLE=0 (environment) skips requests to the own domain
 #                  itself — for a local build, where it doesn't resolve
 #
-# e.g. scripts/check-notification-urls.sh https getnotely.io pynacode --app
+# e.g. scripts/check-notification-urls.sh https pynastore.com pynacode --app
 set -uo pipefail
 
 SCHEME=${1:?scheme}; ROOT=${2:?root domain}; SLUG=${3:?shop slug}; shift 3

@@ -15,7 +15,7 @@ import { cache } from 'react';
 import { prisma } from '@/lib/prisma';
 import { getBillingSettings } from '@/lib/settings';
 import { loadEffectivePlan } from './catalogue';
-import { NO_PLAN, type EffectivePlan } from './plans';
+import { NO_PLAN, planHasFeature, type EffectivePlan, type FeatureKey } from './plans';
 import { resolveAccess, storefrontOpen, type AccessState, type SubscriptionStatusKey } from './access';
 
 export interface WorkspaceAccess {
@@ -103,4 +103,22 @@ export async function accessFor(organizationId: string): Promise<WorkspaceAccess
  */
 export const storefrontIsOpen = cache(async (organizationId: string): Promise<boolean> => {
   return storefrontOpen((await accessFor(organizationId)).state);
+});
+
+/** Any workspace's plan, once per request — for places that ask about features. */
+const planOf = cache(async (organizationId: string): Promise<EffectivePlan> => (await entitlementsFor(organizationId)).plan);
+
+/**
+ * Whether a workspace's plan includes a feature, by id (ROADMAP 22.1) — for
+ * the storefront and the seams below the dashboard (wholesale settings, the
+ * assistant), which have no organisation context. Once per request.
+ */
+export async function workspaceHasFeature(organizationId: string, feature: FeatureKey): Promise<boolean> {
+  return planHasFeature(await planOf(organizationId), feature);
+}
+
+/** The same, for a storefront that knows its shop only by slug. A shop that doesn't exist has nothing. */
+export const storeHasFeature = cache(async (organizationSlug: string, feature: FeatureKey): Promise<boolean> => {
+  const org = await prisma.organization.findUnique({ where: { slug: organizationSlug }, select: { id: true } });
+  return org ? workspaceHasFeature(org.id, feature) : false;
 });

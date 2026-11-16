@@ -38,6 +38,7 @@ const draft = (over: Partial<PlanDraft> = {}): PlanDraft => ({
   features: ['inventory.module', 'sales.module', 'reports.advanced'],
   maxSeats: 10,
   maxWarehouses: 2,
+  maxAiCaptions: null,
   highlighted: false,
   ...over,
 });

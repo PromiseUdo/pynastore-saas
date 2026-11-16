@@ -66,7 +66,7 @@ export function StorefrontProviders({
           <QuickViewModal />
           {/* Mounted once, opened only from a contextual launcher — the
            * assistant has no floating bubble of its own (§16). */}
-          <AssistantSheet />
+          {org.aiShopping !== false && <AssistantSheet />}
           {/* Messages to the people at the store (ROADMAP 17.3) — a different
            * thing from the assistant. The floating button is desktop-only; on a
            * phone the way in is the Account screen and the product page. */}

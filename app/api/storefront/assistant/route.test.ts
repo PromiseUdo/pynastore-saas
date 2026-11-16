@@ -11,17 +11,28 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { POST } from '@/app/api/storefront/assistant/route';
 import { PRODUCTS } from '@/lib/storefront/mock/products';
 import { createTestStores, pinDomains, storefrontRequest } from '@/tests/helpers/storefront-requests';
+import { givePlan, givePlanWith, dropBilling, dropTestPlan } from '@/tests/helpers/plans';
 
 pinDomains();
 let acme = '';
 let other = '';
 let cleanup = async () => {};
+let storeIds: string[] = [];
 beforeAll(async () => {
   const made = await createTestStores('assistant-route', 2);
   [acme, other] = made.stores.map((s) => s.slug);
+  storeIds = made.stores.map((s) => s.id);
+  // The assistant is a plan feature (ROADMAP 22.1).
+  for (const id of storeIds) await givePlan(id);
   cleanup = made.cleanup;
 }, 60_000);
-afterAll(() => cleanup(), 60_000);
+afterAll(async () => {
+  for (const id of storeIds) {
+    await dropBilling(id);
+    await dropTestPlan(id);
+  }
+  await cleanup();
+}, 60_000);
 
 const PATH = '/api/storefront/assistant';
 const post = (body: unknown) => POST(storefrontRequest(acme, PATH, body));
@@ -97,5 +108,20 @@ describe('POST /api/storefront/assistant', () => {
 
     // Same IP, different store: its own bucket.
     expect((await from(other)).status).toBe(200);
+  });
+});
+
+describe('a store whose plan has no AI shopping assistant (ROADMAP 22.1)', () => {
+  it('is answered 404, and no assistant runs', async () => {
+    await dropBilling(storeIds[1]);
+    await givePlanWith(storeIds[1], []);
+    try {
+      const res = await POST(storefrontRequest(other, '/api/storefront/assistant', { message: 'something red' }));
+      expect(res.status).toBe(404);
+    } finally {
+      await dropBilling(storeIds[1]);
+      await dropTestPlan(storeIds[1]);
+      await givePlan(storeIds[1]);
+    }
   });
 });

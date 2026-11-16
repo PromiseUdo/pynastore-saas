@@ -188,7 +188,7 @@ describe('the small pieces', () => {
     const plist = readFileSync('ios/App/App/Info.plist', 'utf8');
     expect(plist).toContain('<key>NSCameraUsageDescription</key>');
     expect(plist).toContain('<key>NSPhotoLibraryUsageDescription</key>');
-    const business = editIosInfoPlist(plist, { appId: BUSINESS_APP_ID, name: 'Notely Business', photos: BUSINESS_PHOTO_PURPOSE });
+    const business = editIosInfoPlist(plist, { appId: BUSINESS_APP_ID, name: 'Pynastore Business', photos: BUSINESS_PHOTO_PURPOSE });
     expect(business).toContain(`<string>${BUSINESS_PHOTO_PURPOSE.camera}</string>`);
     expect(business).toContain(`<string>${BUSINESS_PHOTO_PURPOSE.library}</string>`);
   });

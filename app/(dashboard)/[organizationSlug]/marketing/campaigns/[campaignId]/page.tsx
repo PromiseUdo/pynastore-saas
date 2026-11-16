@@ -5,7 +5,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { requireFeature } from '@/lib/billing/entitlements';
+import { getOrganizationEntitlements, hasFeature, requireFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { getCampaign } from '@/features/marketing/campaign-reads';
@@ -77,6 +77,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ campa
       storeName={ctx.organization.name}
       storeUrl={(await storefrontUrlFor(ctx.organization.slug))}
       destinations={destinations}
+      locked={!hasFeature((await getOrganizationEntitlements()).plan, FEATURES.CAMPAIGNS)}
     />
   );
 }

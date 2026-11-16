@@ -16,10 +16,22 @@
  */
 import { cache } from 'react';
 import { prisma } from '@/lib/prisma';
+import { workspaceHasFeature } from '@/lib/billing/workspace-access';
+import { FEATURES } from '@/lib/billing/plans';
 import type { TradeStatus, WholesaleMode, TradePaymentRules, BusinessDetails } from './rules';
 
 export interface WholesaleSettings extends TradePaymentRules {
+  /**
+   * What applies: the merchant's choice, or OFF when the shop's plan doesn't
+   * include Wholesale (ROADMAP 22.1). Everything — trade prices, the trade
+   * gate, checkout, the admin — reads this, so a plan without it is a shop
+   * without wholesale, with its buyers and settings kept for when it returns.
+   */
   mode: WholesaleMode;
+  /** what the merchant chose, whatever the plan */
+  chosenMode: WholesaleMode;
+  /** the plan includes Wholesale */
+  onPlan: boolean;
   requestsOpen: boolean;
   /** the merchant's choice: wholesale prices are before VAT (ROADMAP 21.2) */
   vatAddedChosen: boolean;
@@ -55,6 +67,8 @@ type SettingsRow = {
 
 const OFF: WholesaleSettings = {
   mode: 'OFF',
+  chosenMode: 'OFF',
+  onPlan: false,
   requestsOpen: false,
   tradePayOnline: true,
   tradePayTransfer: true,
@@ -64,12 +78,15 @@ const OFF: WholesaleSettings = {
   minOrderValue: null,
 };
 
-function toSettings(row: SettingsRow | null): WholesaleSettings {
+function toSettings(row: SettingsRow | null, onPlan: boolean): WholesaleSettings {
   if (!row) return OFF;
+  const mode: WholesaleMode = onPlan ? row.wholesaleMode : 'OFF';
   return {
-    mode: row.wholesaleMode,
+    mode,
+    chosenMode: row.wholesaleMode,
+    onPlan,
     // Asking makes no sense while wholesale is off.
-    requestsOpen: row.wholesaleMode !== 'OFF' && row.wholesaleRequestsOpen,
+    requestsOpen: mode !== 'OFF' && row.wholesaleRequestsOpen,
     tradePayOnline: row.tradePayOnline,
     tradePayTransfer: row.tradePayTransfer,
     tradePayOnDelivery: row.tradePayOnDelivery,
@@ -80,13 +97,19 @@ function toSettings(row: SettingsRow | null): WholesaleSettings {
   };
 }
 
-export const getWholesaleSettings = cache(async (organizationId: string): Promise<WholesaleSettings> =>
-  toSettings(await prisma.organization.findUnique({ where: { id: organizationId }, select: SETTINGS_SELECT })),
-);
+export const getWholesaleSettings = cache(async (organizationId: string): Promise<WholesaleSettings> => {
+  const [row, onPlan] = await Promise.all([
+    prisma.organization.findUnique({ where: { id: organizationId }, select: SETTINGS_SELECT }),
+    workspaceHasFeature(organizationId, FEATURES.WHOLESALE),
+  ]);
+  return toSettings(row, onPlan);
+});
 
 export const getWholesaleSettingsBySlug = cache(async (slug: string): Promise<WholesaleSettings & { organizationId: string | null }> => {
   const row = await prisma.organization.findUnique({ where: { slug }, select: { id: true, ...SETTINGS_SELECT } });
-  return { ...toSettings(row), organizationId: row?.id ?? null };
+  // Only a shop that has wholesale on pays for the plan lookup.
+  const onPlan = row && row.wholesaleMode !== 'OFF' ? await workspaceHasFeature(row.id, FEATURES.WHOLESALE) : false;
+  return { ...toSettings(row, onPlan), organizationId: row?.id ?? null };
 });
 
 export interface TradeStanding {

@@ -5,6 +5,7 @@
  * by how late it is. Nothing from another workspace appears.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { givePlan, dropBilling } from './helpers/plans';
 import { prisma } from '@/lib/prisma';
 import { PERMISSIONS } from '@/lib/permissions';
 import { lagosDay } from '@/lib/reports/period';
@@ -60,6 +61,7 @@ beforeAll(async () => {
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const org = await prisma.organization.create({ data: { name: 'Trade Reports', slug: `__test-trade-reports-${stamp}`, wholesaleMode: 'RETAIL_AND_TRADE' } });
   ctx.organization.id = org.id;
+  await givePlan(org.id); // Wholesale is a plan feature (22.1)
   ctx.organization.slug = org.slug;
   ctx.membership.role.permissions = [PERMISSIONS.SALES_VIEW];
   otherOrgId = (await prisma.organization.create({ data: { name: 'Other', slug: `__test-trade-reports-other-${stamp}` } })).id;
@@ -90,6 +92,7 @@ afterAll(async () => {
   await prisma.invoice.deleteMany({ where: { organizationId: { in: ids } } });
   await prisma.tradeAccount.deleteMany({ where: { organizationId: { in: ids } } });
   await prisma.customer.deleteMany({ where: { organizationId: { in: ids } } });
+  await dropBilling(ctx.organization.id);
   await prisma.organization.deleteMany({ where: { id: { in: ids } } });
 });
 

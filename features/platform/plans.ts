@@ -49,6 +49,7 @@ export interface ConsolePlanRow {
   featureCount: number;
   maxSeats: number | null;
   maxWarehouses: number | null;
+  maxAiCaptions: number | null;
   /** workspaces on this plan, in any state */
   workspaces: number;
 }
@@ -101,6 +102,7 @@ type PlanRow = {
   isOnSale: boolean;
   maxSeats: number | null;
   maxWarehouses: number | null;
+  maxAiCaptions: number | null;
   prices: { billingCycle: string; discountPct: number; amount: { toString(): string } }[];
   features: { feature: string }[];
 };
@@ -115,6 +117,7 @@ function toDraft(row: PlanRow): PlanDraft {
     features: row.features.map((f) => f.feature).filter(isFeatureKey) as FeatureKey[],
     maxSeats: row.maxSeats,
     maxWarehouses: row.maxWarehouses,
+    maxAiCaptions: row.maxAiCaptions,
     highlighted: row.highlighted,
   };
 }
@@ -148,6 +151,7 @@ export async function listConsolePlans(): Promise<ActionResult<ConsolePlanRow[]>
         featureCount: row.features.filter((f) => isFeatureKey(f.feature)).length,
         maxSeats: row.maxSeats,
         maxWarehouses: row.maxWarehouses,
+        maxAiCaptions: row.maxAiCaptions,
         workspaces: counts.find((c) => c.planId === row.id)?._count._all ?? 0,
       })),
     };
@@ -276,6 +280,7 @@ export async function createPlan(input: PlanDraft): Promise<ActionResult<{ planI
           isOnSale: false,
           maxSeats: draft.maxSeats,
           maxWarehouses: draft.maxWarehouses,
+          maxAiCaptions: draft.maxAiCaptions,
         },
       });
       await claimHighlight(tx, plan.id, draft);
@@ -339,6 +344,7 @@ export async function updatePlan(
           highlighted: draft.highlighted,
           maxSeats: draft.maxSeats,
           maxWarehouses: draft.maxWarehouses,
+          maxAiCaptions: draft.maxAiCaptions,
         },
       });
       await claimHighlight(tx, planId, draft);

@@ -1,6 +1,8 @@
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { AccessDenied } from '@/components/layout/access-denied';
+import { getOrganizationEntitlements, hasFeature } from '@/lib/billing/entitlements';
+import { FEATURES } from '@/lib/billing/plans';
 import { getRoles } from '@/features/roles/actions';
 import { RolesPageClient } from './_components/RolesPageClient';
 
@@ -27,6 +29,7 @@ export default async function RolesPage() {
       roles={rolesResult.data}
       callerPermissions={ctx.membership.role.permissions}
       organizationSlug={ctx.organization.slug}
+      customRolesEnabled={hasFeature((await getOrganizationEntitlements()).plan, FEATURES.CUSTOM_ROLES)}
     />
   );
 }

@@ -23,6 +23,8 @@ type EditRoleSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  /** the plan doesn't include custom roles (22.1): show what it can do, change nothing */
+  locked?: boolean;
 };
 
 export function EditRoleSheet({
@@ -31,6 +33,7 @@ export function EditRoleSheet({
   open,
   onOpenChange,
   onSuccess,
+  locked = false,
 }: EditRoleSheetProps) {
   const router = useRouter();
   const [selected, setSelected] = React.useState<Set<string>>(
@@ -82,13 +85,13 @@ export function EditRoleSheet({
             )}
           </div>
           <SheetDescription>
-            {role.description ?? 'Edit the permissions for this role.'}
+            {role.description ?? (locked ? 'What this role can do.' : 'Edit the permissions for this role.')}
           </SheetDescription>
         </SheetHeader>
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {role.isSystem && (
+          {role.isSystem && !locked && (
             <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-400">
               Changes to system roles affect all members currently assigned to{' '}
               <strong>{role.name}</strong>.
@@ -99,7 +102,7 @@ export function EditRoleSheet({
             selected={selected}
             onChange={setSelected}
             callerPermissions={callerPermissions}
-            disabled={isPending}
+            disabled={isPending || locked}
           />
         </div>
 
@@ -109,20 +112,25 @@ export function EditRoleSheet({
             {error && (
               <p className="text-xs text-destructive">{error}</p>
             )}
+            {locked && (
+              <p className="text-xs text-muted-foreground">
+                Changing what a role can do is part of Custom roles, which isn’t on your plan.
+              </p>
+            )}
             <div className="flex items-center justify-end gap-2">
               <SheetClose asChild>
                 <Button variant="outline" size="sm" disabled={isPending}>
-                  Cancel
+                  {locked ? 'Close' : 'Cancel'}
                 </Button>
               </SheetClose>
-              <Button
+              {!locked && <Button
                 size="sm"
                 disabled={isPending || !isDirty}
                 onClick={handleSave}
               >
                 {isPending && <Loader2 className="size-3.5 animate-spin" />}
                 Save changes
-              </Button>
+              </Button>}
             </div>
           </div>
         </SheetFooter>

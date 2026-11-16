@@ -1314,6 +1314,8 @@ Launch (C) needs both.
 | A3 | 14.7 Returns for counter sales (unpaused: the wallet decision is made) | DONE 2026-11-12 |
 | A4 | Remove EduPay wallets everywhere (Phase 20) | DONE 2026-11-14 |
 | A5 | Admin menu regrouped and renamed for shop owners (Sell / Products and stock / Grow / Settings; account menu in the header; stock reports reached from Reports) — labels only, no address changed; see AGENTS §7a | DONE 2026-11-14 |
+| A6 | Phase 22 Plans and pricing: plan keys that lock what they say, three plans set in the console, a free .com.ng with yearly plans | 22.1 DONE 2026-11-14; 22.2 (prices, spread) waits on the owner; 22.3 next |
+| A7 | Phase 23 New landing page, with website chat (Freshchat) for visitors | Chat DONE 2026-11-15 (needs FRESHCHAT_* on Vercel); redesigned site built 2026-11-15, waiting on the owner's review |
 
 **B. Owner (docs/GO-LIVE.md)**
 
@@ -1324,7 +1326,7 @@ Launch (C) needs both.
 | B3 | Paystack: business activated, live keys and webhook, payout accounts moved to live, one real payment | TODO |
 | B4 | Terms and privacy reviewed by counsel (10.10) | TODO |
 | B5 | Paystack's written answers, above all who pays a lost chargeback (10.13) | TODO |
-| B6 | Confirm the name (working name Notely, `lib/brand.ts`) | TODO |
+| B6 | Confirm the name | DONE 2026-11-16: **Pynastore**, pynastore.com (`lib/brand.ts`) |
 | B7 | Notifications set up: push keys, Firebase, Ably, the 5-minute retry job | TODO |
 | B8 | Real-phone acceptance: Messages (17.6), notifications (docs/NOTIFICATIONS-ACCEPTANCE.md), business app (19.6) | TODO |
 | B9 | App Store and Google Play listings and privacy forms | TODO |
@@ -1379,7 +1381,7 @@ at `/platform/plans` and `/platform/settings`.
 
 **11.6, payment problems in the console, is done (2026-09-30).**
 
-**12.2 is done with the working name Notely (2026-09-30).**
+**12.2 is done; the name is Pynastore at pynastore.com (agreed 2026-11-16).** The earlier working name and its domain were dropped completely — nothing was ever live under them.
 
 **12.3, the public site and pricing, is done (2026-09-30).**
 
@@ -3524,18 +3526,18 @@ The gap: things a new merchant would hit in their first hour.
     - changing the grace setting not moving an existing `graceEndsAt`;
     - buying a plan reopening the storefront at once;
     - no code path that yields `'FREE'`.
-- **12.2 One name — DONE (2026-09-30), with a working name.** **Notely** at
-  `getnotely.io`, chosen by the owner "for now" while the final name is still
+- **12.2 One name — DONE (2026-09-30), with a working name.** **Pynastore** at
+  `pynastore.com`, chosen by the owner "for now" while the final name is still
   being decided — so the point of the work is that renaming again is one edit.
   As shipped:
-  - `lib/brand.ts`: `PLATFORM_NAME = 'Notely'`, `PLATFORM_DOMAIN`,
+  - `lib/brand.ts`: `PLATFORM_NAME = 'Pynastore'`, `PLATFORM_DOMAIN`,
     `PLATFORM_OPERATOR` ("Pynacode") and its CAC registration line. Every
     surface people read takes the name from there: page titles, auth and
     onboarding screens, the console, platform emails, the social-commerce
     and payments wording that used to say "MansaaS" in the text, and the
     Terms and Privacy Policy (≈80 hard-coded mentions, now the constants;
     their canonical URLs too). AGENTS.md now says never to type the name.
-  - The mobile app's **display name** is Notely (Capacitor config, Android
+  - The mobile app's **display name** is Pynastore (Capacitor config, Android
     strings, iOS `CFBundleDisplayName`, the offline page); its **id stays
     `com.mansaas.app`**.
   - **Deliberately not renamed** — identifiers nobody reads, where a change
@@ -3545,7 +3547,7 @@ The gap: things a new merchant would hit in their first hour.
     folder (`mansaas/{org}/…`, existing images and ownership checks),
     billing references (`mansaas_…`), the subaccount metadata, the npm
     package name and the app id. Listed in `lib/brand.ts`.
-  - New Paystack plan objects are named "Notely …"; existing ones keep their
+  - New Paystack plan objects are named "Pynastore …"; existing ones keep their
     old name in Paystack's dashboard (they're keyed by price and reused).
   - **When the final name is chosen:** change `lib/brand.ts`, the four native
     display-name spots (see MOBILE.md), the legal pages' "Last updated"
@@ -7573,12 +7575,12 @@ user agent on the server).
   - `init` and `check` with production's root (`check` printed the upload
     key's fingerprint);
   - a signed release **Android** build: `.apk` and `.aab`, package
-    `com.mansaas.business`, labelled "Notely Business", loading
-    `https://b.getnotely.io` with the `MansaasApp/com.mansaas.business`
-    marker, an App Links filter for `b.getnotely.io` `/`, the Filesystem
+    `com.mansaas.business`, labelled "Pynastore Business", loading
+    `https://b.pynastore.com` with the `MansaasApp/com.mansaas.business`
+    marker, an App Links filter for `b.pynastore.com` `/`, the Filesystem
     plugin bundled, signed by the upload key;
   - **iOS** synced and compiled for the simulator, with the business photo
-    wording and `applinks:b.getnotely.io`;
+    wording and `applinks:b.pynastore.com`;
   - a debug **iPhone simulator** run against the laptop over nip.io and
     `next dev`, which **opened the real sign-in page of `b.` inside the
     app**.
@@ -8271,6 +8273,215 @@ price; days to pay set freely (most want paying before or on delivery); VAT
 on wholesale prices optional; normal trade orders share retail delivery
 unless the vendor sets otherwise, very large ones can be "delivery to be
 arranged" (21.4).
+
+## Phase 22 — Plans and pricing review — IN PROGRESS (agreed 2026-11-14; 22.1 done 2026-11-14)
+
+A review of the plan catalogue (12.1) against what is now built, and against
+the market (Bumpa, 2026-11-14: Starter about ₦5k/month, Pro about ₦9–10k,
+Growth about ₦21–25k, Scale about ₦62.5k; staff and locations capped and
+charged extra; a free .com.ng on yearly plans).
+
+**The gap.** Only 10 feature keys exist (`FEATURES`, `lib/billing/plans.ts`).
+The online store, payments, delivery, campaigns, Messages, social posting,
+the AI features and wholesale are on every plan because nothing can gate them.
+Two sold keys gate nothing: `roles.custom` is checked nowhere, and
+`inventory.multi_warehouse` is unused (the `maxWarehouses` limit does that
+job). Pro and Enterprise unlock the same features; ₦5k → ₦45k is a 9× step.
+
+**Decided 2026-11-14:**
+- Three plans. Everyday selling (online store, payments, delivery, counter
+  sales, Messages) stays on every plan; plans charge for growth (staff, stores),
+  automation and features that cost us per use (AI).
+- The trial runs on the middle plan.
+- **Free domain:** `.com.ng` only (cheap, priced in naira), bought by hand
+  from a NiRA-accredited registrar (Namecheap doesn't sell .ng). A setting on
+  each plan in the console, on for the second and third plans. **First year
+  free on the middle plan, renewals free too on the top plan. Yearly billing
+  only. One free domain per shop. On downgrade or lapse the domain stays the
+  shop's and renews at their cost. Registered in the merchant's name.**
+  `.com` stays the paid option at its dollar-based price.
+
+**Proposed, waiting on the owner:** names, prices and limits (Starter ₦5k,
+1–2 staff, 1 store; Growth ₦12–15k, 3–5 staff, 2 stores; Business ₦35–45k,
+10 staff, 5 stores), and the spread (campaigns, purchasing, kits, custom
+roles, advanced reports and the AI features from Growth; wholesale and
+activity-log download on Business only).
+
+### 22.1 Plan keys that lock what they say — DONE (2026-11-14)
+As shipped (migration `20261116090000_plan_keys`):
+- **Names:** Pro → **Growth**, Enterprise → **Business** (keys stay `pro`,
+  `enterprise`). Prices untouched — still the owner's call (22.2).
+- **New keys, put on every existing plan** so nothing changed on deploy:
+  `marketing.campaigns`, `sales.wholesale`, `storefront.ai_shopping`.
+  `inventory.multi_warehouse` removed (the store limit is the rule).
+- **New limit** `BillingPlan.maxAiCaptions`: AI-written social copy per Lagos
+  calendar month (caption, hashtags or rewrite = one); null unlimited, 0
+  none. In the console editor; counted in `takeCopyAllowance`
+  (`lib/ai/social/quota.ts`), taken before the model call.
+- **What "not on the plan" does** (shared `PlanLocked` / `PlanLockedNote`,
+  `components/layout/plan-locked.tsx`; server message `notOnPlanMessage`):
+  - Custom roles: no new or duplicated roles, no permission changes; roles
+    still assigned, renamed, deleted; "View permissions" read-only.
+  - Campaigns: none created, scheduled or changed; running ones run out;
+    end and delete still work.
+  - Wholesale: treated as OFF in `getWholesaleSettings*` (the one seam), so
+    trade prices, the trade gate, checkout and the admin all follow; the
+    merchant's choice (`chosenMode`) and buyers are kept; can't be turned on.
+  - AI shopping: assistant and photo-search buttons hidden
+    (`useAiShopping`), `/api/storefront/assistant` 404s, the photo search
+    action refuses, `/search/image` is not found, and photos aren't embedded
+    (queued, then picked up once the plan includes it).
+- Shop-by-id checks: `workspaceHasFeature` / `storeHasFeature`
+  (`lib/billing/workspace-access.ts`). Tests: `tests/plan-gates.test.ts`;
+  `givePlanWith` / `dropTestPlan` in `tests/helpers/plans.ts` for a plan of
+  one's own without touching the shared catalogue.
+
+### 22.2 The catalogue in the console — TODO (owner, no code)
+Names, prices, limits, features and the trial plan, once 22.1 ships.
+
+### 22.3 A free .com.ng with yearly plans — TODO
+- Buying allows `.com.ng` (naira price set in the console) beside `.com`.
+- A per-plan "includes a free .com.ng" setting: off, first year, or first
+  year and renewals.
+- The domain page shows it as free when the shop's plan and cycle qualify;
+  one free domain per shop, ever. Renewal reminders charge the shop when its
+  plan no longer covers renewals.
+- The staff queue shows a free order like any other, with the merchant's
+  registrant details.
+
+### Later
+- Paying for extra staff and stores without changing plan.
+- Messaging credits, once 14.4 (SMS/WhatsApp) has a provider.
+
+## Phase 23 — New landing page, with website chat — IN PROGRESS (agreed 2026-11-15; chat done 2026-11-15)
+
+The public site (`app/(marketing)/`) is rebuilt, and a visitor with a
+question can chat with the team.
+
+### Website chat — decided 2026-11-15
+- **Freshchat, Free plan** (up to 10 agents), the owner's account. Embed:
+  `//fw-cdn.com/17588591/7682534.js` with `chat='true'` — not a secret; kept
+  as a setting, not typed into a component. No setting = no chat button.
+- **Public pages only**: the landing page, pricing, terms, privacy. Never
+  the admin, storefronts, console, sign-in or the business app.
+- **Our own "Chat with us" button; Freshchat loads only when it's pressed**
+  (fast pages, no Freshchat cookies until someone chooses to chat).
+  Freshchat's own bubble hidden, so ours is the only one.
+- **Everything after the press happens inside Freshchat's window**
+  (changed 2026-11-15, the owner's call: our own name/contact form was
+  removed — it looked worse than Bumpa's all-in-the-widget flow). Collecting
+  an email is Freshchat's job: its offline form (email + message, as on
+  Bumpa) and its away message. Hours (Monday to Saturday, 9 AM to 5 PM,
+  Lagos) are set there too.
+- **Fallback**: if the widget can't load (an ad blocker, a network
+  failure), the visitor gets business@pynacode.com, never a dead button.
+- **CSP**: Freshchat's origins allowed on the public pages only
+  (`lib/security/csp.ts`), confirmed in a browser, and its script carries
+  the page nonce.
+- **Privacy**: the privacy page says website chats go through Freshworks,
+  what's collected, and that they keep it — with counsel's review (B4).
+- **Not now**: help articles in the chat (needs Freshdesk and written
+  articles); support chat inside the merchant admin.
+
+### Website chat — DONE (2026-11-15), on the current site
+As built (moves onto the new landing page unchanged):
+- **Loaded directly**, `{FRESHCHAT_HOST}/js/widget.js` + `fcWidget.init({ token,
+  host, config: { headerProperty: { hideChatButton: true } } })` — NOT the
+  `fw-cdn.com` snippet, which is Freshworks' whole marketing tracker (visitor
+  tracking, conversion tools) with the chat inside. Settings: `FRESHCHAT_HOST`,
+  `FRESHCHAT_TOKEN` (optional `FRESHCHAT_WIDGET_UUID`); only an
+  `https://*.freshchat.com` account host is accepted (`lib/support/config.ts`).
+- `components/marketing/support-chat.tsx` (the button — loads the widget on
+  the first press and opens it; becomes "Email us" if it can't load;
+  `SupportChatLink` for the pricing page and footer), mounted by the
+  marketing and legal layouts.
+- CSP: the account host and `assetscdn-wchat.freshchat.com` for script
+  (fallback), frame, connect (+ wss), img, style and font — on `/`,
+  `/pricing`, `/privacy`, `/terms` of the platform host only
+  (`SUPPORT_CHAT_PATHS`). Checked in headless Chrome: nothing from Freshchat
+  before the click, opens in ~3 s, no violations, the closed frame is 0×0.
+- Privacy policy: Freshworks under third parties (`#website-chat`) and under
+  cookies; updated 15 November 2026. Support email `PLATFORM_SUPPORT_EMAIL`.
+- **Production**: set `FRESHCHAT_HOST` and `FRESHCHAT_TOKEN` on Vercel.
+
+### The redesigned public site — built 2026-11-15, owner reviewing
+- **Its own look, scoped.** `.site` (app/globals.css) re-themes the shared
+  tokens on the public pages only — warm paper `#faf7f0`, ink, deep green
+  `--primary` `#0e6b47`, saffron `mk-sun` as a sparing highlight, plus
+  `mk-deep`/`mk-leaf`/`mk-sun-soft`/`mk-clay`. Headlines in Familjen Grotesk
+  (`font-mk-display`, loaded only by `components/marketing/site-shell.tsx`),
+  body stays Geist. Light only. The admin and storefront never carry `.site`.
+- **One shell** for the landing page, pricing, terms and privacy
+  (`SiteShell`: header, footer, chat button, skip link).
+- **The page reads:** what it is ("One stock. Every way you sell.") → how it
+  fits together (`flow-diagram.tsx`: counter / website / Instagram → one
+  stock count → sent from the right store + paid into your bank) → four facts
+  read from the catalogue (₦0 commission, trial days, 36 + FCT delivery,
+  cheapest plan) → four numbered chapters (stock, online shop, getting paid,
+  Instagram and Facebook) → six "day-to-day" cards with small pictures + an
+  "Also included" list → four steps → the real plans and prices on a deep
+  green band → questions → closing call to action.
+- **Pictures are drawn, not photographed** (`product-visuals.tsx`): a
+  sample fabric shop with CSS fabric swatches; every figure has a caption
+  saying it's an illustration. Still no testimonials, counts or logos.
+
+### Faster chat opening — 2026-11-16 (owner's call)
+- **Warm-up on intent:** the widget starts loading when a visitor points at,
+  touches or tabs to "Chat with us" (or a `SupportChatLink`), not on page
+  load. Measured: ~2.9 s from a cold press; 0.3 s if the pointer rested on the
+  button for a few seconds first. Readers who never go near it still load
+  nothing.
+- While it's still loading after the press, the button shows a spinner (an
+  "Opening chat…" note was tried and dropped, the owner's call). Load
+  timeout raised to 20 s for slow connections; past that, "Email us".
+- Privacy policy updated (16 November 2026): Freshworks loads when you reach
+  for the button, not only when you start a chat. Part of counsel's review (B4).
+
+### The shopper app on the public site — 2026-11-16
+A store's own Android and iPhone app (Phase 16) is now on the landing page as
+chapter 05 ("Put your shop on your customers' phones", an add-on), in the
+questions, and on pricing. The price is read from Billing settings → Store
+apps (`getPublicOffer().appSetupFee/appYearlyFee`, on sale only when both
+are set, the same rule as Settings → Mobile app); until then the site says
+"ask us about the price". Says it's published under the merchant's own
+Apple and Google developer accounts.
+
+### Shopping assistant + search with an image on the public site — 2026-11-16
+Chapter 05 on the landing page ("Shoppers ask. Your shop answers with
+products."), using the storefront's own names for them ("Shopping
+assistant", "Search with an image"). The line under it says which plans
+include `storefront.ai_shopping`, read from the catalogue; the chapter hides
+if no plan does. The shop's own app moved to 06.
+
+### Review fixes — 2026-11-16 (owner's call)
+- **"What makes it different"** strip after the four figures: shopping
+  assistant, search with an image, the shop's own app, your own domain —
+  each linking down to its chapter (`#assistant`, `#app`, `#online-shop`).
+  The first two hide when no plan includes `storefront.ai_shopping`.
+- **"Made for shops that sell"** row at the foot of the hero, so non-fashion
+  shops see themselves.
+- **Live demo shop link** in the hero, from `DEMO_SHOP_URL`
+  (`lib/marketing/demo.ts`, https only); unset = no link. Owner to create a
+  demo shop with sample products and set it.
+- **Plain words**: no "variants", "chargebacks", "kits", "trade buyers",
+  "scheduled sales"; the plan features' descriptions (`FEATURE_INFO`) reworded
+  too, names kept because the admin uses them. Two questions and the repeated
+  "no commission" in chapter 03 cut.
+
+### Chat loads with the page — 2026-11-16 (owner's call, replaces the warm-up)
+The owner didn't want any wait after pressing "Chat with us", and accepted
+Freshchat loading for every visitor of the public pages. It now loads in the
+background after the page's `load` event, when the browser is idle; the
+hover/touch warm-up is gone. A press before it's ready still shows the
+spinner; a blocked script turns the button into "Email us" straight away.
+Privacy policy reworded: Freshworks' chat loads (and sets its cookies) on the
+landing page, pricing and the legal pages — part of counsel's review (B4).
+
+### Owner, in Freshchat
+Done 2026-11-15: account, branding, hours, away message, agents, phone app,
+Free plan. Seen in the live widget the same day and still to fix: the welcome
+text says "Pynastore" (not Pynastore), and the "Order status and tracking" topic
+and FAQ are still there.
 
 ## Sequencing
 

@@ -12,6 +12,8 @@ export interface StorefrontOrg {
   slug: string;
   name: string;
   logoUrl: string | null;
+  /** the plan includes the AI shopping assistant and search by photo (ROADMAP 22.1) */
+  aiShopping?: boolean;
 }
 
 /*
@@ -66,6 +68,17 @@ export function useStorefront(): StorefrontContextValue {
   const ctx = React.useContext(StorefrontContext);
   if (!ctx) throw new Error('useStorefront must be used within <StorefrontProvider>');
   return ctx;
+}
+
+/**
+ * Whether this shop's plan includes the AI shopping assistant and search by
+ * photo (ROADMAP 22.1), for hiding their buttons. Set by the storefront
+ * layout; the server refuses the requests themselves either way, so outside
+ * a provider (a component test) it reads as on.
+ */
+export function useAiShopping(): boolean {
+  const ctx = React.useContext(StorefrontContext);
+  return ctx ? ctx.org.aiShopping !== false : true;
 }
 
 /** The signed-in shopper, or null. */

@@ -32,19 +32,19 @@ Without this, password resets, order updates and staff alerts come from a
 domain mail providers don't trust, so they land in spam or don't arrive.
 
 1. In **Resend → Domains → Add domain**, enter the domain the emails should
-   come from, e.g. `getnotely.io`.
+   come from, e.g. `pynastore.com`.
 2. Resend shows a few DNS records (SPF and DKIM, usually TXT and MX). Add each
    one exactly as shown where the domain's DNS is managed, e.g. **Namecheap →
    Domain List → Manage → Advanced DNS**.
 3. Also add a DMARC record, which helps delivery: TXT, host `_dmarc`, value
-   `v=DMARC1; p=none; rua=mailto:you@getnotely.io`.
+   `v=DMARC1; p=none; rua=mailto:you@pynastore.com`.
 4. Back in Resend, press **Verify**. Wait until the domain shows
    **Verified**; DNS can take up to a few hours.
 5. In **Resend → API keys**, create a key with **Sending access** for that
    domain.
 6. In Vercel (Production), set:
    - `RESEND_API_KEY` = the new key
-   - `EMAIL_FROM` = `Notely <hello@getnotely.io>` (any address on the
+   - `EMAIL_FROM` = `Pynastore <hello@pynastore.com>` (any address on the
      verified domain)
 7. Redeploy. To test, use "Forgot password" on the live site with your own
    email. The message should arrive in your inbox, not spam.
@@ -80,22 +80,22 @@ connect a Page. Start this early; Meta's review is the slowest step.
 **Before you submit**, in **developers.facebook.com → your app**:
 
 1. **App settings → Basic:**
-   - **Privacy policy URL** `https://getnotely.io/privacy`
-   - **Terms of Service URL** `https://getnotely.io/terms`
+   - **Privacy policy URL** `https://pynastore.com/privacy`
+   - **Terms of Service URL** `https://pynastore.com/terms`
    - **User data deletion:** choose "Data deletion instructions URL" and
-     enter `https://getnotely.io/privacy#your-rights`
+     enter `https://pynastore.com/privacy#your-rights`
    - **App icon** (1024×1024)
    - **Category** (Business)
    - **Contact email**
 2. **Facebook Login for Business → Settings → Valid OAuth Redirect URIs:**
    add exactly the address the checklist shows under **Meta app settings**,
-   `https://app.getnotely.io/api/social/meta/callback`.
+   `https://app.pynastore.com/api/social/meta/callback`.
 3. **Business verification.** Meta requires it for these permissions. In
    **Meta Business Suite → Business settings → Security centre**, verify the
    business behind the app. That's Pynacode, CAC BN 9663547, with a matching
    document, address and phone. This alone can take a few days.
 4. **A reviewer login.** On the live site, create a workspace a reviewer can
-   use, e.g. `meta-review@getnotely.io`, with a strong password and a few
+   use, e.g. `meta-review@pynastore.com`, with a strong password and a few
    products with photos. Meta tests with its own Facebook test Page.
 
 **Request Advanced Access** under **App Review → Permissions and features**
@@ -105,18 +105,18 @@ for each of:
 
 For each one Meta asks how it's used, and wants a **screen recording**. One
 recording (2–4 minutes) can cover all six:
-1. Sign in to Notely with the reviewer login and open **Social → Connected
+1. Sign in to Pynastore with the reviewer login and open **Social → Connected
    accounts**.
 2. Press **Connect**, sign in to Facebook, and choose a Page and its linked
    Instagram account. That shows `pages_show_list`, `business_management`
    and `instagram_basic`.
-3. Back in Notely, the Page and Instagram account show as connected (also
+3. Back in Pynastore, the Page and Instagram account show as connected (also
    `pages_read_engagement`).
 4. **Create post:** choose a product, write the caption, choose the Page,
    **Publish**, then show the post live on the Page (`pages_manage_posts`).
 5. Do the same for Instagram (`instagram_content_publish`).
 
-Wording that works for every permission: *"Merchants on Notely connect their
+Wording that works for every permission: *"Merchants on Pynastore connect their
 own Facebook Page and Instagram business account and publish posts about
 their own products from their dashboard. We read the list of Pages they
 manage so they can choose one, and publish only when they press Publish. We
@@ -131,13 +131,13 @@ connect.
 1. **Activate the business** in the Paystack dashboard
    ("Activate your business"): business type and details, CAC registration,
    the director's ID and BVN, and the settlement bank account. Paystack also
-   checks the website, so make sure `https://getnotely.io` shows the terms,
+   checks the website, so make sure `https://pynastore.com` shows the terms,
    privacy policy and a way to contact you.
 2. Once activated, open **Settings → API Keys & Webhooks** and switch to the
    **Live** tab:
    - copy the **Live Secret Key** (`sk_live_…`);
    - set **Live Webhook URL** to the address the checklist shows,
-     `https://app.getnotely.io/api/payments/paystack/webhook`.
+     `https://app.pynastore.com/api/payments/paystack/webhook`.
 3. In Vercel (Production), set:
    - `PAYSTACK_SECRET_KEY` = the `sk_live_…` key
    - `PAYSTACK_MODE` = `live`. With a mismatch between the two, the site
@@ -175,8 +175,8 @@ connect.
 ## 6. App Store and Google Play
 
 The app is the storefront in a native wrapper (`MOBILE.md`). Its id is
-`com.mansaas.app` and its display name **Notely**. Shoppers browse shops on
-`m.getnotely.io`.
+`com.mansaas.app` and its display name **Pynastore**. Shoppers browse shops on
+`m.pynastore.com`.
 
 **You'll need:**
 - **Apple:** an Apple Developer account ($99 a year).
@@ -185,7 +185,7 @@ The app is the storefront in a native wrapper (`MOBILE.md`). Its id is
   so an organisation account (with a D-U-N-S number) is quicker.
 - **Graphics:** app icon, screenshots of the storefront on a phone, a
   one-line description and a full description.
-- **Links:** privacy policy `https://getnotely.io/privacy`; support URL or
+- **Links:** privacy policy `https://pynastore.com/privacy`; support URL or
   email.
 
 **Privacy answers.** Apple's **App Privacy** and Google's **Data safety**

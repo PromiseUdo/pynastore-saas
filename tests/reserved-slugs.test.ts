@@ -33,7 +33,7 @@ describe('isReservedSlug', () => {
 });
 
 describe('the reserved list covers every hostname the parser claims', () => {
-  const ROOT = 'getnotely.io';
+  const ROOT = 'pynastore.com';
 
   it('no reserved-free slug can take a non-admin hostname', () => {
     const previousRoot = process.env.NEXT_PUBLIC_ROOT_DOMAIN;

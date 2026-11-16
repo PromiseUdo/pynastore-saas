@@ -8,7 +8,9 @@
 import type { Metadata } from 'next';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { requireFeature } from '@/lib/billing/entitlements';
+import { getOrganizationEntitlements, hasFeature, requireFeature } from '@/lib/billing/entitlements';
+import { PageHeader, PageBody } from '@/components/layout/page-header';
+import { PlanLocked } from '@/components/layout/plan-locked';
 import { FEATURES } from '@/lib/billing/plans';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { prisma } from '@/lib/prisma';
@@ -22,6 +24,17 @@ export default async function NewCampaignPage() {
 
   if (!hasPermission(ctx.membership.role.permissions, PERMISSIONS.SALES_DISCOUNT_MANAGE)) {
     return <AccessDenied what="campaigns" />;
+  }
+
+  if (!hasFeature((await getOrganizationEntitlements()).plan, FEATURES.CAMPAIGNS)) {
+    return (
+      <>
+        <PageHeader title="New campaign" description="Put chosen products on sale between two dates." />
+        <PageBody>
+          <PlanLocked feature="marketing.campaigns" />
+        </PageBody>
+      </>
+    );
   }
 
   /* Collections and categories are small lists a business has a handful of —

@@ -338,3 +338,71 @@
 :root.keyboard-open {
   --keyboard-inset: env(keyboard-inset-height, 0px);
 }
+
+/* ── The public site (ROADMAP 23) ───────────────────────────────────────
+ * The landing page, pricing and the legal pages (components/marketing/
+ * site-shell.tsx puts `.site` on their wrapper). It re-themes the shared
+ * tokens inside that wrapper only: warm paper, ink, and a deep green for
+ * actions and money, with saffron as a sparing highlight. The admin and the
+ * storefront never carry `.site`, so nothing here reaches them. Light only:
+ * the public site has no dark switch. */
+.site {
+  --background: #faf7f0;
+  --foreground: #11211a;
+  --card: #ffffff;
+  --card-foreground: #11211a;
+  --popover: #ffffff;
+  --popover-foreground: #11211a;
+  --muted: #f2ede2;
+  --muted-foreground: #58645d;
+  --accent: #f2ede2;
+  --accent-foreground: #11211a;
+  --secondary: #f2ede2;
+  --secondary-foreground: #11211a;
+  --border: #e4ddcd;
+  --input: #d9d0bc;
+  --primary: #0e6b47;
+  --primary-foreground: #ffffff;
+  --ring: #0e6b47;
+  --mk-deep: #0b2f23;
+  --mk-leaf: #e3efe6;
+  --mk-sun: #f2a93b;
+  --mk-sun-soft: #fbecd0;
+  --mk-clay: #b4472a;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-mk-deep: var(--mk-deep, #0b2f23);
+  --color-mk-leaf: var(--mk-leaf, #e3efe6);
+  --color-mk-sun: var(--mk-sun, #f2a93b);
+  --color-mk-sun-soft: var(--mk-sun-soft, #fbecd0);
+  --color-mk-clay: var(--mk-clay, #b4472a);
+  --font-mk-display: var(--font-mk-display-face), var(--font-geist-sans), ui-sans-serif, sans-serif;
+}
+
+/* The flow diagram's connectors: dashes that drift towards where the money
+   and stock go. Still for anyone who asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .site .mk-flow {
+    animation: mk-flow 1.4s linear infinite;
+  }
+}
+@keyframes mk-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+/* A saffron highlighter stroke under a few words of a headline. */
+.site .mk-mark {
+  background-image: linear-gradient(
+    transparent 64%,
+    color-mix(in srgb, var(--mk-sun) 55%, transparent) 64%,
+    color-mix(in srgb, var(--mk-sun) 55%, transparent) 90%,
+    transparent 90%
+  );
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  padding-inline: 0.04em;
+}

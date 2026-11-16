@@ -20,6 +20,8 @@ import { cookies, headers } from 'next/headers';
 import { currentStoreSlug, sessionCookieName } from '@/lib/storefront/account/session';
 import { storePathPrefix } from '@/lib/storefront/store-path';
 import { startImageSearch } from '@/lib/storefront/visual-search/service';
+import { storeHasFeature } from '@/lib/billing/workspace-access';
+import { FEATURES } from '@/lib/billing/plans';
 import { imageSearchHref } from '@/lib/storefront/visual-search/query';
 
 export type ImageSearchActionResult =
@@ -29,6 +31,10 @@ export type ImageSearchActionResult =
 export async function searchByImageAction(formData: FormData): Promise<ImageSearchActionResult> {
   const slug = await currentStoreSlug();
   if (!slug) return { ok: false, message: 'We couldn’t reach the store. Please refresh and try again.' };
+  // Search by photo is a plan feature (ROADMAP 22.1); the storefront hides it too.
+  if (!(await storeHasFeature(slug, FEATURES.AI_SHOPPING))) {
+    return { ok: false, message: 'Search by image isn’t available in this store.' };
+  }
 
   const result = await startImageSearch({
     store: { organizationSlug: slug },

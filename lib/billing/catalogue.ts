@@ -32,6 +32,7 @@ type PlanRow = {
   isOnSale: boolean;
   maxSeats: number | null;
   maxWarehouses: number | null;
+  maxAiCaptions: number | null;
   features: { feature: string }[];
   prices: { billingCycle: string; discountPct: number; amount: { toString(): string } }[];
 };
@@ -62,7 +63,7 @@ export function toEffectivePlan(row: PlanRow): EffectivePlan {
     key: row.key,
     name: row.name,
     features: featuresOf(row),
-    limits: { maxSeats: row.maxSeats, maxWarehouses: row.maxWarehouses },
+    limits: { maxSeats: row.maxSeats, maxWarehouses: row.maxWarehouses, maxAiCaptions: row.maxAiCaptions },
     sortOrder: row.sortOrder,
   };
 }
@@ -80,7 +81,7 @@ export function toOffer(row: PlanRow): PlanOffer {
     highlighted: row.highlighted,
     isOnSale: row.isOnSale,
     features: featuresOf(row),
-    limits: { maxSeats: row.maxSeats, maxWarehouses: row.maxWarehouses },
+    limits: { maxSeats: row.maxSeats, maxWarehouses: row.maxWarehouses, maxAiCaptions: row.maxAiCaptions },
     monthlyPrice: Number(row.monthlyPrice),
     prices,
   };

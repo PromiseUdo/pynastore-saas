@@ -1,6 +1,6 @@
-# Notely Mobile App (Capacitor)
+# Pynastore Mobile App (Capacitor)
 
-> The platform's working name is **Notely** (`lib/brand.ts`, ROADMAP 12.2). The app's
+> The platform's working name is **Pynastore** (`lib/brand.ts`, ROADMAP 12.2). The app's
 > display name follows it; its id stays `com.mansaas.app`, because changing an app id makes a
 > different app in the stores.
 
@@ -30,7 +30,7 @@ WebView, and cross-subdomain navigation would kill the bridge.
 ### The solution — a dedicated single-origin "mobile" host
 
 A new site type, **`mobile`**, served on `NEXT_PUBLIC_MOBILE_DOMAIN`
-(dev: `m.app.localhost:3000`, prod: `m.getnotely.io`). On that host:
+(dev: `m.app.localhost:3000`, prod: `m.pynastore.com`). On that host:
 
 - The org slug travels **in the path**: `/s/{slug}/...`
 - `proxy.ts` rewrites `/s/{slug}/...` → the existing `app/store/[organizationSlug]`
@@ -245,8 +245,8 @@ If your LAN IP changes, re-run the sync + build.
 ### Production build
 
 1. Deploy the app with a real mobile origin and set `NEXT_PUBLIC_MOBILE_URL`
-   (`https://m.getnotely.io`) plus `NEXT_PUBLIC_MOBILE_DOMAIN`
-   (`m.getnotely.io`). Both are build-time: changing them needs a native
+   (`https://m.pynastore.com`) plus `NEXT_PUBLIC_MOBILE_DOMAIN`
+   (`m.pynastore.com`). Both are build-time: changing them needs a native
    rebuild and a store release before installed apps follow, so keep the old
    mobile origin serving until that release has been adopted.
 2. `npm run cap:sync`

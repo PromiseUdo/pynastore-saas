@@ -9,16 +9,16 @@
 #
 # Needs Docker (on this Mac: `colima start`).
 set -euo pipefail
-NAME=notely-test-db
+NAME=pynastore-test-db
 PORT=55433
-URL="postgresql://postgres:ci@localhost:$PORT/notely"
+URL="postgresql://postgres:ci@localhost:$PORT/pynastore"
 
 if ! docker ps --format '{{.Names}}' | grep -qx "$NAME"; then
   docker rm -f "$NAME" >/dev/null 2>&1 || true
   docker run -d --name "$NAME" -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=postgres -p "$PORT:5432" pgvector/pgvector:pg17 >/dev/null
 fi
 until docker exec "$NAME" pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
-docker exec "$NAME" psql -U postgres -qc "DROP DATABASE IF EXISTS notely WITH (FORCE)" -c "CREATE DATABASE notely"
+docker exec "$NAME" psql -U postgres -qc "DROP DATABASE IF EXISTS pynastore WITH (FORCE)" -c "CREATE DATABASE pynastore"
 
 export DOTENV_CONFIG_PATH=.env.ci DATABASE_URL="$URL" DIRECT_URL="$URL"
 npx prisma migrate deploy >/dev/null

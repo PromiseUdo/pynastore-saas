@@ -27,7 +27,7 @@ export function LegalDocument({
   return (
     <article className="mx-auto max-w-3xl px-4 py-10 sm:py-14">
       <header className="border-b pb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">{title}</h1>
+        <h1 className="font-mk-display text-3xl font-bold tracking-[-0.03em] text-foreground sm:text-4xl">{title}</h1>
         <p className="mt-2 text-xs text-muted-foreground">Last updated: {updated}</p>
         {intro ? <div className="mt-4 space-y-4 text-sm leading-relaxed text-muted-foreground">{intro}</div> : null}
       </header>

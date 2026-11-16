@@ -54,6 +54,8 @@ interface FormState {
   seatsUnlimited: boolean;
   maxWarehouses: string;
   storesUnlimited: boolean;
+  maxAiCaptions: string;
+  aiUnlimited: boolean;
   highlighted: boolean;
 }
 
@@ -71,6 +73,8 @@ function fromDraft(d: PlanDraft): FormState {
     seatsUnlimited: d.maxSeats === null,
     maxWarehouses: d.maxWarehouses === null ? '' : String(d.maxWarehouses),
     storesUnlimited: d.maxWarehouses === null,
+    maxAiCaptions: d.maxAiCaptions === null ? '' : String(d.maxAiCaptions),
+    aiUnlimited: d.maxAiCaptions === null,
     highlighted: d.highlighted,
   };
 }
@@ -84,6 +88,7 @@ function toDraft(s: FormState): PlanDraft {
     features: s.features,
     maxSeats: s.seatsUnlimited ? null : toNumber(s.maxSeats),
     maxWarehouses: s.storesUnlimited ? null : toNumber(s.maxWarehouses),
+    maxAiCaptions: s.aiUnlimited ? null : toNumber(s.maxAiCaptions),
     highlighted: s.highlighted,
   };
 }
@@ -99,6 +104,8 @@ const NEW_PLAN: FormState = {
   seatsUnlimited: false,
   maxWarehouses: '1',
   storesUnlimited: false,
+  maxAiCaptions: '30',
+  aiUnlimited: false,
   highlighted: false,
 };
 
@@ -367,6 +374,16 @@ export function PlanEditor({ plan }: { plan: ConsolePlan | null }) {
             onUnlimited={(v) => set('storesUnlimited', v)}
             error={errors.maxWarehouses}
           />
+          <LimitField
+            id="maxAiCaptions"
+            label="AI-written social posts a month"
+            hint="Each caption, set of hashtags or rewrite counts one. 0 turns AI writing off."
+            value={state.maxAiCaptions}
+            unlimited={state.aiUnlimited}
+            onValue={(v) => set('maxAiCaptions', v)}
+            onUnlimited={(v) => set('aiUnlimited', v)}
+            error={errors.maxAiCaptions}
+          />
         </div>
       </Card>
 
@@ -457,9 +474,11 @@ function LimitField({
   onValue,
   onUnlimited,
   error,
+  hint,
 }: {
   id: string;
   label: string;
+  hint?: string;
   value: string;
   unlimited: boolean;
   onValue: (v: string) => void;
@@ -479,6 +498,7 @@ function LimitField({
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
       />
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <CheckboxRoot checked={unlimited} onCheckedChange={(v) => onUnlimited(v === true)} />
         Unlimited

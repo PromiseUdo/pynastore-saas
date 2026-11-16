@@ -24,6 +24,7 @@ export {
   entitlementsFor,
   accessFor,
   storefrontIsOpen,
+  workspaceHasFeature,
   type OrganizationEntitlements,
   type WorkspaceAccess,
 } from './workspace-access';

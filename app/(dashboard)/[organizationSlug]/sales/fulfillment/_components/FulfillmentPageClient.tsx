@@ -7,16 +7,42 @@ import { PackageCheck, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PageBody, PageHeader, PageToolbar } from '@/components/layout/page-header';
+import {
+  PageBody,
+  PageHeader,
+  PageToolbar,
+} from '@/components/layout/page-header';
 import { PageTabs } from '@/components/layout/page-tabs';
 import { EmptyState } from '@/components/layout/empty-state';
 import { TablePagination } from '@/components/ui/table-pagination';
-import { SelectContent, SelectItem, SelectRoot, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableColumnHeader, TableHead, TableRow, TableWrapper } from '@/components/ui/table';
+import {
+  SelectContent,
+  SelectItem,
+  SelectRoot,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableColumnHeader,
+  TableHead,
+  TableRow,
+  TableWrapper,
+} from '@/components/ui/table';
 import { formatDate, formatNumber, formatRelativeTime } from '@/lib/format';
-import type { SourceFilter, ToSendFilter, ToSendPage } from '@/features/sales/work-lists';
+import type {
+  SourceFilter,
+  ToSendFilter,
+  ToSendPage,
+} from '@/features/sales/work-lists';
 
-const SOURCE_LABEL: Record<SourceFilter, string> = { all: 'Orders and invoices', order: 'Orders only', invoice: 'Invoices only' };
+const SOURCE_LABEL: Record<SourceFilter, string> = {
+  all: 'Orders and invoices',
+  order: 'Orders only',
+  invoice: 'Invoices only',
+};
 
 export function FulfillmentPageClient({
   data,
@@ -59,7 +85,7 @@ export function FulfillmentPageClient({
     <>
       <PageHeader
         title="Packing and delivery"
-        description="Everything waiting to go out — online order parcels and invoices — oldest first. Each opens where you send it."
+        description="Everything waiting to go out"
       />
       <PageToolbar className="gap-y-2">
         <PageTabs tabs={tabs} current={filter} param="status" />
@@ -75,7 +101,10 @@ export function FulfillmentPageClient({
             className="pl-8"
           />
         </div>
-        <SelectRoot value={source} onValueChange={(v) => setParams({ source: v === 'all' ? null : v })}>
+        <SelectRoot
+          value={source}
+          onValueChange={(v) => setParams({ source: v === 'all' ? null : v })}
+        >
           <SelectTrigger aria-label="Show" className="w-48">
             <SelectValue />
           </SelectTrigger>
@@ -89,8 +118,10 @@ export function FulfillmentPageClient({
         </SelectRoot>
         {filter === 'open' && data.counts.open > 0 && (
           <p className="text-xs text-muted-foreground sm:ml-auto">
-            {formatNumber(data.counts.openOrders)} online {data.counts.openOrders === 1 ? 'parcel' : 'parcels'} ·{' '}
-            {formatNumber(data.counts.openInvoices)} {data.counts.openInvoices === 1 ? 'invoice' : 'invoices'}
+            {formatNumber(data.counts.openOrders)} online{' '}
+            {data.counts.openOrders === 1 ? 'parcel' : 'parcels'} ·{' '}
+            {formatNumber(data.counts.openInvoices)}{' '}
+            {data.counts.openInvoices === 1 ? 'invoice' : 'invoices'}
           </p>
         )}
       </PageToolbar>
@@ -102,7 +133,11 @@ export function FulfillmentPageClient({
               icon={Search}
               title="Nothing matches"
               action={
-                <Button variant="outline" size="sm" onClick={() => setParams({ q: null, source: null })}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setParams({ q: null, source: null })}
+                >
                   Clear filters
                 </Button>
               }
@@ -128,7 +163,9 @@ export function FulfillmentPageClient({
                     <TableColumnHeader>From</TableColumnHeader>
                     <TableColumnHeader align="right">Items</TableColumnHeader>
                     <TableColumnHeader>Status</TableColumnHeader>
-                    <TableColumnHeader>{filter === 'open' ? 'Waiting' : 'When'}</TableColumnHeader>
+                    <TableColumnHeader>
+                      {filter === 'open' ? 'Waiting' : 'When'}
+                    </TableColumnHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -143,10 +180,17 @@ export function FulfillmentPageClient({
                     >
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <Link href={r.href} className="font-medium text-foreground hover:underline">
+                          <Link
+                            href={r.href}
+                            className="font-medium text-foreground hover:underline"
+                          >
                             {r.reference}
                           </Link>
-                          <Badge variant={r.source === 'order' ? 'info' : 'muted'}>{r.source === 'order' ? 'Online order' : 'Invoice'}</Badge>
+                          <Badge
+                            variant={r.source === 'order' ? 'info' : 'muted'}
+                          >
+                            {r.source === 'order' ? 'Online order' : 'Invoice'}
+                          </Badge>
                         </div>
                         <span className="block text-xs text-muted-foreground">
                           {r.customerName}
@@ -155,7 +199,9 @@ export function FulfillmentPageClient({
                       </TableCell>
                       <TableCell>
                         {r.storeName ?? '—'}
-                        <span className="block text-xs text-muted-foreground">{r.kindLabel}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {r.kindLabel}
+                        </span>
                       </TableCell>
                       <TableCell align="right" className="tabular-nums">
                         {formatNumber(r.itemCount)}
@@ -163,7 +209,10 @@ export function FulfillmentPageClient({
                       <TableCell>
                         <Badge variant={r.statusVariant}>{r.statusLabel}</Badge>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground" title={formatDate(r.since)}>
+                      <TableCell
+                        className="whitespace-nowrap text-muted-foreground"
+                        title={formatDate(r.since)}
+                      >
                         {formatRelativeTime(r.since, now)}
                       </TableCell>
                     </TableRow>
@@ -177,7 +226,9 @@ export function FulfillmentPageClient({
                 totalPages={Math.ceil(data.total / data.pageSize)}
                 totalItems={data.total}
                 pageSize={data.pageSize}
-                onPageChange={(p) => setParams({ page: p > 1 ? String(p) : null })}
+                onPageChange={(p) =>
+                  setParams({ page: p > 1 ? String(p) : null })
+                }
               />
             )}
           </>

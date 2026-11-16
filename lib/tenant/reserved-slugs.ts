@@ -43,6 +43,10 @@ export const RESERVED_SLUGS: ReadonlySet<string> = new Set([
   // app/business — the business host's own pages, e.g. opening a shop from a
   // link (ROADMAP 19.1).
   'business',
+  // The platform's own name (lib/brand.ts): pynastore.pynastore.com would
+  // look like ours. Also the operator's.
+  'pynastore',
+  'pynacode',
 ]);
 
 /** Slug prefixes that would collide with a storefront hostname. */

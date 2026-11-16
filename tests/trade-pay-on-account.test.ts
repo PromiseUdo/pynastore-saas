@@ -6,6 +6,7 @@
  * each; and their balance counts unpaid invoices too.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { givePlan, dropBilling } from './helpers/plans';
 import type { CheckoutAddress } from '@/lib/storefront/checkout/types';
 
 const session = vi.hoisted(() => ({ shopper: null as null | { id: string; organizationId: string } }));
@@ -46,6 +47,7 @@ const ADDRESS: CheckoutAddress = {
 
 beforeAll(async () => {
   store.id = (await prisma.organization.create({ data: { name: 'Credit Shop', slug: store.slug, wholesaleMode: 'RETAIL_AND_TRADE', tradeAccountDays: 14 } })).id;
+  await givePlan(store.id); // Wholesale is a plan feature (22.1)
   const warehouse = await prisma.warehouse.create({ data: { organizationId: store.id, name: 'Main', sellsOnline: true, status: 'ACTIVE' } });
   riceId = (
     await prisma.inventoryItem.create({
@@ -94,6 +96,7 @@ afterAll(async () => {
   await prisma.deliveryZone.deleteMany({ where: { organizationId: store.id } });
   await prisma.warehouse.deleteMany({ where: { organizationId: store.id } });
   await prisma.auditLog.deleteMany({ where: { organizationId: store.id } });
+  await dropBilling(store.id);
   await prisma.organization.delete({ where: { id: store.id } });
 });
 

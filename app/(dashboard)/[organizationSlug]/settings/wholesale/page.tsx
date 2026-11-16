@@ -34,7 +34,8 @@ export default async function WholesaleSettingsPage() {
   return (
     <WholesaleSettingsClient
       initial={{
-        mode: settings.mode,
+        // What they chose, even if the plan has wholesale off (22.1).
+        mode: settings.chosenMode,
         // The stored choice, even while wholesale is off, so turning it back on restores it.
         requestsOpen: org.wholesaleRequestsOpen,
         tradePayOnline: settings.tradePayOnline,
@@ -49,6 +50,7 @@ export default async function WholesaleSettingsPage() {
       buyers={count('APPROVED')}
       waiting={count('REQUESTED')}
       canEdit={hasPermission(perms, PERMISSIONS.SETTINGS_EDIT)}
+      onPlan={settings.onPlan}
     />
   );
 }

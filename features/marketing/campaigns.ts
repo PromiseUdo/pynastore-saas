@@ -27,10 +27,21 @@ import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
+import { getOrganizationEntitlements, hasFeature } from '@/lib/billing/entitlements';
+import { FEATURES, notOnPlanMessage } from '@/lib/billing/plans';
 import { campaignPriceFor } from '@/lib/marketing/campaign-rules';
 import { slugify, uniqueSlug } from '@/features/inventory/category-tree';
 import { destroyAsset, isOrgAsset } from '@/lib/cloudinary/sign';
 import type { ActionResult } from '@/features/sales/shared';
+
+/**
+ * Campaigns are a plan feature (ROADMAP 22.1). Without it a shop can't start,
+ * schedule or change one; what's already scheduled runs to its end, and it
+ * can still end or delete its campaigns.
+ */
+async function campaignsOnPlan(): Promise<boolean> {
+  return hasFeature((await getOrganizationEntitlements()).plan, FEATURES.CAMPAIGNS);
+}
 
 const MECHANICS = ['PERCENT_OFF', 'FIXED_OFF'] as const;
 const TARGET_KINDS = ['PRODUCT', 'COLLECTION', 'CATEGORY', 'STORE'] as const;
@@ -207,6 +218,7 @@ export async function previewCampaignPrices(
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_DISCOUNT_MANAGE);
+    if (!(await campaignsOnPlan())) return { success: false, error: notOnPlanMessage(FEATURES.CAMPAIGNS) };
 
     const parsed = CampaignSchema.safeParse(input);
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
@@ -243,6 +255,7 @@ export async function createCampaign(input: CampaignInput): Promise<ActionResult
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_DISCOUNT_MANAGE);
+    if (!(await campaignsOnPlan())) return { success: false, error: notOnPlanMessage(FEATURES.CAMPAIGNS) };
 
     const parsed = CampaignSchema.safeParse(input);
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
@@ -290,6 +303,7 @@ export async function scheduleCampaign(campaignId: string): Promise<ActionResult
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_DISCOUNT_MANAGE);
+    if (!(await campaignsOnPlan())) return { success: false, error: notOnPlanMessage(FEATURES.CAMPAIGNS) };
     const organizationId = ctx.organization.id;
 
     const campaign = await prisma.campaign.findFirst({
@@ -552,6 +566,7 @@ export async function updateCampaignAnnouncement(
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_DISCOUNT_MANAGE);
+    if (!(await campaignsOnPlan())) return { success: false, error: notOnPlanMessage(FEATURES.CAMPAIGNS) };
 
     const parsed = AnnouncementSchema.safeParse(input);
     if (!parsed.success) return { success: false, error: parsed.error.issues[0].message };
@@ -658,6 +673,7 @@ export async function createCampaignCollection(
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SALES_DISCOUNT_MANAGE);
+    if (!(await campaignsOnPlan())) return { success: false, error: notOnPlanMessage(FEATURES.CAMPAIGNS) };
     const organizationId = ctx.organization.id;
 
     const campaign = await prisma.campaign.findFirst({

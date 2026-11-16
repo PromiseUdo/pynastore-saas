@@ -6,7 +6,7 @@
 #   OUT_DIR              where to write (default ./backup)
 #
 # Needs pg_dump/psql of the SERVER's major version (17) and gpg.
-# Writes notely-<UTC stamp>.tar.gpg: the custom-format dump plus counts.txt.
+# Writes pynastore-<UTC stamp>.tar.gpg: the custom-format dump plus counts.txt.
 set -euo pipefail
 : "${BACKUP_DATABASE_URL:?set BACKUP_DATABASE_URL}"
 : "${BACKUP_PASSPHRASE:?set BACKUP_PASSPHRASE}"
@@ -23,7 +23,7 @@ trap 'rm -rf "$WORK"' EXIT
 coproc PSQL { psql "$BACKUP_DATABASE_URL" -qAt -v ON_ERROR_STOP=1; }
 echo "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SELECT pg_export_snapshot();" >&"${PSQL[1]}"
 read -r SNAPSHOT <&"${PSQL[0]}"
-pg_dump "$BACKUP_DATABASE_URL" --snapshot="$SNAPSHOT" --format=custom --no-owner --no-privileges --file="$WORK/notely.dump"
+pg_dump "$BACKUP_DATABASE_URL" --snapshot="$SNAPSHOT" --format=custom --no-owner --no-privileges --file="$WORK/pynastore.dump"
 {
   echo "\\o $WORK/counts.txt"
   cat "$HERE/row-counts.sql"
@@ -38,7 +38,7 @@ wait "$PSQL_PID" 2>/dev/null || true
 date -u +%Y-%m-%dT%H:%M:%SZ > "$WORK/taken-at.txt"
 
 mkdir -p "$OUT_DIR"
-tar -C "$WORK" -cf - notely.dump counts.txt taken-at.txt \
+tar -C "$WORK" -cf - pynastore.dump counts.txt taken-at.txt \
   | gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" \
-        --symmetric --cipher-algo AES256 -o "$OUT_DIR/notely-$STAMP.tar.gpg"
-echo "Backed up $(wc -l < "$WORK/counts.txt") tables, $(awk '{s+=$2} END {print s}' "$WORK/counts.txt") rows → $OUT_DIR/notely-$STAMP.tar.gpg"
+        --symmetric --cipher-algo AES256 -o "$OUT_DIR/pynastore-$STAMP.tar.gpg"
+echo "Backed up $(wc -l < "$WORK/counts.txt") tables, $(awk '{s+=$2} END {print s}' "$WORK/counts.txt") rows → $OUT_DIR/pynastore-$STAMP.tar.gpg"

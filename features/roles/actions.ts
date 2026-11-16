@@ -11,6 +11,8 @@ import {
   type PermissionKey,
 } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
+import { getOrganizationEntitlements, hasFeature } from '@/lib/billing/entitlements';
+import { FEATURES, notOnPlanMessage } from '@/lib/billing/plans';
 
 type ActionResult<T = void> =
   | { success: true; data: T }
@@ -81,6 +83,18 @@ const ROLE_SELECT = {
   },
 } as const;
 
+/**
+ * Custom roles (ROADMAP 22.1): deciding exactly what a role can do. Without
+ * it a shop uses the roles it has as they are — it can still assign, rename
+ * or delete them, and roles it made before keep working.
+ */
+async function customRolesOnPlan(): Promise<boolean> {
+  const { plan } = await getOrganizationEntitlements();
+  return hasFeature(plan, FEATURES.CUSTOM_ROLES);
+}
+
+const ROLES_LOCKED = notOnPlanMessage(FEATURES.CUSTOM_ROLES);
+
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
 export async function getRoles(): Promise<ActionResult<RoleWithDetails[]>> {
@@ -133,6 +147,7 @@ export async function createRole(
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.ROLE_MANAGE);
+    if (!(await customRolesOnPlan())) return { success: false, error: ROLES_LOCKED };
 
     const parsed = CreateRoleSchema.safeParse(input);
     if (!parsed.success) {
@@ -221,9 +236,16 @@ export async function updateRole(
     // Verify role belongs to this org
     const role = await prisma.role.findFirst({
       where: { id: roleId, organizationId: ctx.organization.id },
-      select: { id: true, name: true, isSystem: true },
+      select: { id: true, name: true, isSystem: true, rolePermissions: { select: { permission: { select: { key: true } } } } },
     });
     if (!role) return { success: false, error: 'Role not found.' };
+
+    // Changing what a role can do is the plan feature; a rename isn't.
+    if (permissionKeys !== undefined) {
+      const current = new Set(role.rolePermissions.map((rp) => rp.permission.key));
+      const changed = permissionKeys.length !== current.size || permissionKeys.some((k) => !current.has(k));
+      if (changed && !(await customRolesOnPlan())) return { success: false, error: ROLES_LOCKED };
+    }
 
     // Invariant 3: caller cannot grant permissions they don't hold
     if (permissionKeys) {
@@ -358,6 +380,7 @@ export async function duplicateRole(
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.ROLE_MANAGE);
+    if (!(await customRolesOnPlan())) return { success: false, error: ROLES_LOCKED };
 
     if (!newName || newName.trim().length < 2) {
       return { success: false, error: 'Role name must be at least 2 characters.' };

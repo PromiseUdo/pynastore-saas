@@ -8,7 +8,13 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { AlertCircle, FileText, HelpCircle, Receipt, Users } from 'lucide-react';
+import {
+  AlertCircle,
+  FileText,
+  HelpCircle,
+  Receipt,
+  Users,
+} from 'lucide-react';
 import { requireFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { getOrganizationContext } from '@/lib/organization';
@@ -35,11 +41,14 @@ export default async function SalesDashboardPage() {
 
   return (
     <>
-      <PageHeader title="Sales" description="Customers, quotes and invoices — and what needs answering today." />
+      <PageHeader
+        title="Sales"
+        description="Customers, quotes and invoices and what needs answering today."
+      />
 
       <PageBody className="space-y-6">
         {/* A shopper asking about a product is a sale waiting on an answer,
-          * and their question isn't on the store until someone gives one. */}
+         * and their question isn't on the store until someone gives one. */}
         {overview.unansweredQuestions > 0 && (
           <Link
             href="/sales/questions"
@@ -56,7 +65,10 @@ export default async function SalesDashboardPage() {
         )}
 
         <StatGrid>
-          <Link href="/sales/quotes" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Link
+            href="/sales/quotes"
+            className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <StatCard
               title="Open quotes"
               value={formatNumber(overview.openQuotes)}
@@ -64,15 +76,24 @@ export default async function SalesDashboardPage() {
               icon={FileText}
             />
           </Link>
-          <Link href="/sales/invoices" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Link
+            href="/sales/invoices"
+            className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <StatCard
               title="Unpaid total"
-              value={formatMoney(overview.unpaidTotal, ctx.organization.currency)}
+              value={formatMoney(
+                overview.unpaidTotal,
+                ctx.organization.currency,
+              )}
               description="invoiced and still owed"
               icon={Receipt}
             />
           </Link>
-          <Link href="/sales/invoices?view=overdue" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Link
+            href="/sales/invoices?view=overdue"
+            className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <StatCard
               title="Overdue invoices"
               value={formatNumber(overview.overdueInvoices)}
@@ -80,8 +101,16 @@ export default async function SalesDashboardPage() {
               icon={AlertCircle}
             />
           </Link>
-          <Link href="/sales/customers" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <StatCard title="Customers" value={formatNumber(overview.customers)} description="people who have bought" icon={Users} />
+          <Link
+            href="/sales/customers"
+            className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <StatCard
+              title="Customers"
+              value={formatNumber(overview.customers)}
+              description="people who have bought"
+              icon={Users}
+            />
           </Link>
         </StatGrid>
       </PageBody>

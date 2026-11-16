@@ -9,7 +9,7 @@
 import type { Metadata } from 'next';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
-import { requireFeature } from '@/lib/billing/entitlements';
+import { getOrganizationEntitlements, hasFeature, requireFeature } from '@/lib/billing/entitlements';
 import { FEATURES } from '@/lib/billing/plans';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { listCampaigns } from '@/features/marketing/campaign-reads';
@@ -32,6 +32,7 @@ export default async function CampaignsPage() {
       campaigns={result.data}
       currency={ctx.organization.currency}
       canManage={hasPermission(perms, PERMISSIONS.SALES_DISCOUNT_MANAGE)}
+      locked={!hasFeature((await getOrganizationEntitlements()).plan, FEATURES.CAMPAIGNS)}
     />
   );
 }

@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { PLATFORM_CONTACT_EMAIL, PLATFORM_NAME, PLATFORM_OPERATOR } from '@/lib/brand';
+import { PLATFORM_NAME, PLATFORM_OPERATOR, PLATFORM_SUPPORT_EMAIL } from '@/lib/brand';
+import { SupportChatLink } from './support-chat';
+import { supportChatOn } from './support-chat-mount';
 import { Wordmark } from './wordmark';
 
 const COLUMNS = [
@@ -7,8 +9,8 @@ const COLUMNS = [
     title: 'Product',
     links: [
       { href: '/#features', label: 'Features' },
-      { href: '/pricing', label: 'Pricing' },
       { href: '/#how-it-works', label: 'How it works' },
+      { href: '/pricing', label: 'Pricing' },
       { href: '/#faq', label: 'Questions' },
     ],
   },
@@ -30,22 +32,37 @@ const COLUMNS = [
 ];
 
 export function SiteFooter() {
+  const chat = supportChatOn();
   return (
-    <footer className="border-t bg-muted/30">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)]">
-        <div className="space-y-3">
+    <footer className="border-t bg-background">
+      <div className="mx-auto grid max-w-6xl gap-12 px-4 pb-12 pt-16 sm:px-6 md:grid-cols-[1.5fr_repeat(3,1fr)]">
+        <div className="space-y-4">
           <Wordmark />
-          <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-            Stock, sales, delivery and payments for businesses that sell at a counter, online, or both.
+          <p className="max-w-xs text-[14.5px] leading-relaxed text-muted-foreground">
+            Stock, sales, delivery and payments for shops that sell at a counter, online, or both.
           </p>
+          <div className="text-[14.5px]">
+            <p className="font-medium text-foreground">Got a question?</p>
+            <p className="mt-1 text-muted-foreground">
+              {chat && (
+                <>
+                  <SupportChatLink className="font-medium text-primary underline-offset-4 hover:underline">Chat with us</SupportChatLink>
+                  {' or email '}
+                </>
+              )}
+              <a href={`mailto:${PLATFORM_SUPPORT_EMAIL}`} className="font-medium text-primary underline-offset-4 hover:underline">
+                {PLATFORM_SUPPORT_EMAIL}
+              </a>
+            </p>
+          </div>
         </div>
         {COLUMNS.map((col) => (
           <div key={col.title}>
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{col.title}</h2>
-            <ul className="mt-4 space-y-2.5 text-sm">
+            <h2 className="text-[13px] font-semibold text-foreground">{col.title}</h2>
+            <ul className="mt-4 space-y-3 text-[14.5px]">
               {col.links.map((l) => (
                 <li key={l.href}>
-                  <Link href={l.href} className="text-foreground/80 transition-colors hover:text-foreground">
+                  <Link href={l.href} className="text-muted-foreground transition-colors hover:text-foreground">
                     {l.label}
                   </Link>
                 </li>
@@ -55,17 +72,9 @@ export function SiteFooter() {
         ))}
       </div>
       <div className="border-t">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p>
-            © {new Date().getFullYear()} {PLATFORM_NAME}. Operated by {PLATFORM_OPERATOR}, Nigeria.
-          </p>
-          <p>
-            Questions?{' '}
-            <a href={`mailto:${PLATFORM_CONTACT_EMAIL}`} className="underline-offset-4 hover:text-foreground hover:underline">
-              {PLATFORM_CONTACT_EMAIL}
-            </a>
-          </p>
-        </div>
+        <p className="mx-auto max-w-6xl px-4 py-6 text-[13px] text-muted-foreground sm:px-6">
+          © {new Date().getFullYear()} {PLATFORM_NAME}. Operated by {PLATFORM_OPERATOR}, Nigeria.
+        </p>
       </div>
     </footer>
   );

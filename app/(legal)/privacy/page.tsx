@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   alternates: { canonical: `https://${PLATFORM_DOMAIN}/privacy` },
 };
 
-const UPDATED = '8 October 2026';
+const UPDATED = '16 November 2026';
 
 export default function PrivacyPolicyPage() {
   return (
@@ -39,7 +39,7 @@ export default function PrivacyPolicyPage() {
       updated={UPDATED}
       intro={
         <p>
-          This policy explains what information {PLATFORM_NAME} handles, why, and who else sees it. It applies to the
+          This policy explains what information {PLATFORM_NAME} handles, why, and who else sees it. It applies to the{' '}
           {PLATFORM_NAME} platform at {PLATFORM_DOMAIN}, the merchant dashboards and online stores we host on our
           subdomains and on merchants’ own connected domains, and the {PLATFORM_NAME} mobile app.
         </p>
@@ -321,6 +321,16 @@ export default function PrivacyPolicyPage() {
             phone app: deliver those notifications to the phone. They receive the phone’s notification token and
             the notification’s text — the store’s name and the order’s reference and status.
           </li>
+          <li id="website-chat" className="scroll-mt-20">
+            {/* ROADMAP 23 — part of counsel's review (10.10). */}
+            <strong className="font-medium text-foreground">Freshworks (Freshchat).</strong> Carries the “Chat with
+            us” conversations on {PLATFORM_NAME}’s own website (not on merchants’ stores or dashboards). Its chat
+            window loads in the background on our landing page, pricing page and these legal pages, so it’s ready
+            when you press “Chat with us”. When it loads, Freshworks receives the technical details its widget needs
+            to run (such as your browser and the page you were on); if you start a chat, it also receives your
+            messages and any name, email or phone number you give. Our team reads and answers these conversations in Freshworks, and Freshworks
+            keeps them on our behalf.
+          </li>
           <li>
             <strong className="font-medium text-foreground">Namecheap.</strong> Used when a merchant orders a
             custom domain through {PLATFORM_NAME}. Receives the domain details needed to check availability and
@@ -329,7 +339,8 @@ export default function PrivacyPolicyPage() {
         </LegalList>
         <p>
           {PLATFORM_NAME} does not use third-party advertising networks, and does not run analytics or tracking
-          scripts from other companies on its pages.
+          scripts from other companies on its pages. The one script from another company on our own website is
+          Freshworks’ chat, which loads on our landing page, pricing page and legal pages only.
         </p>
       </LegalSection>
 
@@ -355,6 +366,12 @@ export default function PrivacyPolicyPage() {
             store a message without being signed in, so their browser can find that conversation again. It is
             scoped to that store’s hostname, holds a random key (we keep only a scrambled form of it), and lasts
             up to 180 days. Opening the chat without sending anything sets nothing.
+          </li>
+          <li>
+            <strong className="font-medium text-foreground">Website chat.</strong> On {PLATFORM_NAME}’s own
+            website (the landing page, pricing and these legal pages), Freshworks’ chat window loads in the
+            background and sets its own cookies and browser storage, so a conversation is still there when you come
+            back. They are not set on merchants’ stores or dashboards.
           </li>
           <li>
             <strong className="font-medium text-foreground">Preference cookies.</strong> Small cookies such

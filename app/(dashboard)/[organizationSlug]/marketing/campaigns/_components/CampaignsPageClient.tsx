@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader, PageBody } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/layout/empty-state';
+import { PlanLocked, PlanLockedNote } from '@/components/layout/plan-locked';
 import { formatDate, formatMoney, formatNumber } from '@/lib/format';
 import { campaignMechanicLabel, type CampaignPhase } from '@/lib/marketing/campaign-rules';
 import {
@@ -35,15 +36,18 @@ export function CampaignsPageClient({
   campaigns,
   currency,
   canManage,
+  locked = false,
 }: {
   campaigns: CampaignRow[];
   currency: string;
   canManage: boolean;
+  /** the plan doesn't include campaigns (22.1) */
+  locked?: boolean;
 }) {
   const router = useRouter();
   const money = (value: number) => formatMoney(value, currency);
 
-  const newButton = canManage ? (
+  const newButton = canManage && !locked ? (
     <Button asChild size="sm">
       <Link href="/marketing/campaigns/new">
         <Plus className="size-3.5" />
@@ -65,12 +69,16 @@ export function CampaignsPageClient({
       <>
         {header}
         <PageBody>
+          {locked ? (
+            <PlanLocked feature="marketing.campaigns" description="A campaign puts chosen products on sale between two dates, with an announcement bar or pop-up to tell shoppers. Choose a plan that includes Campaigns to run one." />
+          ) : (
           <EmptyState
             icon={Megaphone}
             title="No campaigns yet"
             description="A campaign puts chosen products on sale between two dates — a Christmas sale, a weekend on one collection. Your usual prices are never overwritten, so they come back on their own."
             action={newButton}
           />
+          )}
         </PageBody>
       </>
     );
@@ -80,6 +88,7 @@ export function CampaignsPageClient({
     <>
       {header}
       <PageBody className="space-y-8">
+        {locked && <PlanLockedNote feature="marketing.campaigns">Campaigns aren’t on your plan. Your scheduled and running sales carry on until they end, and you can still end or delete them, but new ones can’t be started.</PlanLockedNote>}
         {GROUPS.map((group) => {
           const rows = campaigns.filter((c) => group.phases.includes(c.phase));
           if (rows.length === 0) return null;

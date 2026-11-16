@@ -32,8 +32,8 @@ describe('totp', () => {
   });
 
   it('gives authenticator apps what they scan', () => {
-    expect(otpauthUri({ issuer: 'Notely', account: 'ada@example.com', secret: SECRET })).toBe(
-      'otpauth://totp/Notely%3Aada%40example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Notely&algorithm=SHA1&digits=6&period=30',
+    expect(otpauthUri({ issuer: 'Pynastore', account: 'ada@example.com', secret: SECRET })).toBe(
+      'otpauth://totp/Pynastore%3Aada%40example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Pynastore&algorithm=SHA1&digits=6&period=30',
     );
   });
 });

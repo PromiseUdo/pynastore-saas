@@ -24,6 +24,7 @@
  * The public URL never shows the org slug — see lib/tenant/resolveHostname.ts
  * and lib/tenant/resolveTenant.ts for the resolution logic.
  */
+import { getSupportChatConfig, SUPPORT_CHAT_PATHS } from '@/lib/support/config';
 import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 import type { NextFetchEvent, NextRequest } from 'next/server';
@@ -62,7 +63,7 @@ const { auth } = NextAuth(authConfig);
  *
  * /privacy and /terms are the platform's public legal pages
  * (app/(legal)/...). They must load for anyone, signed in or not — a Meta
- * App Review reviewer opens https://getnotely.io/privacy in a private
+ * App Review reviewer opens https://pynastore.com/privacy in a private
  * window — so they belong here and nowhere else: as marketing-host paths
  * they never become tenant routes. */
 const PUBLIC_PATHS = new Set([
@@ -544,6 +545,11 @@ export default async function proxy(req: NextRequest, event: NextFetchEvent) {
     frameAncestors: slug && isDesignPreview(req, hostInfo) ? [new URL(getAdminUrl(slug)).origin, new URL(getBusinessUrl()).origin] : undefined,
     // The chat's real-time hints (lib/chat/ably.ts) — only when configured.
     realtime: Boolean(process.env.ABLY_API_KEY),
+    // The website chat (ROADMAP 23): the platform's public pages only.
+    supportChat:
+      hostInfo.siteType === 'marketing' && SUPPORT_CHAT_PATHS.has(req.nextUrl.pathname)
+        ? getSupportChatConfig()?.host
+        : undefined,
   });
   req.headers.set('x-nonce', nonce);
   req.headers.set('content-security-policy', policy);

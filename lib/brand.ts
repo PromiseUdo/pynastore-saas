@@ -7,8 +7,9 @@
  * Privacy Policy — reads it from here, so renaming the platform is a change
  * to this file (and the native app's display name, see MOBILE.md).
  *
- * "Notely" at getnotely.io is the working name, chosen 2026-09-30 while the
- * final name is still being decided.
+ * "Pynastore" at pynastore.com is the platform's name, agreed by the owner on
+ * 2026-11-16. It replaced the working name used until then, which is gone
+ * from the code entirely — nothing was ever live under it.
  *
  * It is deliberately NOT used on the storefront: a shopper is a customer of
  * the merchant's store, not of the platform, and those pages and emails carry
@@ -22,10 +23,10 @@
  * them would sign people out, empty saved bags, orphan stored images or
  * payments, or make the app a different app in the stores.
  */
-export const PLATFORM_NAME = 'Notely';
+export const PLATFORM_NAME = 'Pynastore';
 
 /** The platform's public domain — the marketing site and the legal pages. */
-export const PLATFORM_DOMAIN = 'getnotely.io';
+export const PLATFORM_DOMAIN = 'pynastore.com';
 
 /** Who operates the platform, as the legal pages name it. */
 export const PLATFORM_OPERATOR = 'Pynacode';
@@ -35,6 +36,9 @@ export const PLATFORM_OPERATOR_REGISTRATION = 'CAC business name registration nu
 
 /** Where people write to us — the site footer and the legal pages. */
 export const PLATFORM_CONTACT_EMAIL = 'pynacode@gmail.com';
+
+/** Where visitors and merchants get help (ROADMAP 23): the website chat's fallback and the footer's contact. */
+export const PLATFORM_SUPPORT_EMAIL = 'business@pynacode.com';
 
 /** The business app's name in the stores and on the phone (ROADMAP 19): one app for every merchant. */
 export const BUSINESS_APP_NAME = `${PLATFORM_NAME} Business`;

@@ -113,3 +113,40 @@ export async function noteCopyRateLimited(retryAfterMs: number | undefined): Pro
 export async function resetCopyCoolDown(): Promise<void> {
   await clearRateLimit(COOL_DOWN_KEY);
 }
+
+/* ───────────────────────────── plan allowance ───────────────────────── */
+
+/** Lagos is UTC+1 all year, like the receipts and reports. */
+const LAGOS_OFFSET_MS = 60 * MINUTE;
+
+/** "2026-11" — the Lagos calendar month an allowance belongs to. */
+export function allowanceMonth(now = new Date()): string {
+  return new Date(now.getTime() + LAGOS_OFFSET_MS).toISOString().slice(0, 7);
+}
+
+/** The first moment of the next Lagos month, for "it starts again on …". */
+export function nextAllowanceStart(now = new Date()): Date {
+  const lagos = new Date(now.getTime() + LAGOS_OFFSET_MS);
+  return new Date(Date.UTC(lagos.getUTCFullYear(), lagos.getUTCMonth() + 1, 1) - LAGOS_OFFSET_MS);
+}
+
+export type AllowanceCheck = { ok: true } | { ok: false; reason: 'not-on-plan' | 'used-up'; limit: number };
+
+/**
+ * The plan's monthly allowance of AI-written social copy (ROADMAP 22.1):
+ * each caption, set of hashtags or rewrite takes one. null = unlimited
+ * (the model budget above still applies); 0 = none.
+ *
+ * Counted per store, per Lagos calendar month — the month is in the key, so
+ * a new month is a new bucket. Taken before the model is called, so an
+ * attempt that then fails still counts; the allowance is sized for that.
+ */
+export async function takeCopyAllowance(organizationId: string, limit: number | null, now = new Date()): Promise<AllowanceCheck> {
+  if (limit === null) return { ok: true };
+  if (limit <= 0) return { ok: false, reason: 'not-on-plan', limit: 0 };
+  const taken = await takeRateLimits(
+    [{ key: `social-copy:allowance:${organizationId}:${allowanceMonth(now)}`, limit, windowMs: 32 * DAY }],
+    { onError: 'allow' },
+  );
+  return taken.ok ? { ok: true } : { ok: false, reason: 'used-up', limit };
+}

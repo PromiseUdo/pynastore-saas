@@ -12,6 +12,7 @@
  *                 the call came from, and /s/A → /s/B browsing still works
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { givePlan, dropBilling } from './helpers/plans';
 import { prisma } from '@/lib/prisma';
 import { POST as discover } from '@/app/api/storefront/discover/route';
 import { POST as assistant } from '@/app/api/storefront/assistant/route';
@@ -61,6 +62,9 @@ beforeAll(async () => {
   const suffix = Math.random().toString(36).slice(2, 8);
   Object.assign(A, made.stores[0]);
   Object.assign(B, made.stores[1]);
+  // The assistant is a plan feature (22.1).
+  await givePlan(A.id);
+  await givePlan(B.id);
   A.productId = await sellable(A.id, 'Alpha Lantern', suffix);
   B.productId = await sellable(B.id, 'Bravo Lantern', suffix);
 }, 120_000);
@@ -72,6 +76,7 @@ afterAll(async () => {
     await prisma.inventoryLevel.deleteMany({ where: { warehouse: { organizationId: store.id } } });
     await prisma.inventoryItem.deleteMany({ where: { organizationId: store.id } });
     await prisma.warehouse.deleteMany({ where: { organizationId: store.id } });
+    await dropBilling(store.id);
   }
   await cleanupStores();
 }, 120_000);

@@ -25,6 +25,8 @@ export interface PlanDraft {
   /** null = unlimited */
   maxSeats: number | null;
   maxWarehouses: number | null;
+  /** AI-written social copy a month; null = unlimited, 0 = none */
+  maxAiCaptions: number | null;
   highlighted: boolean;
 }
 
@@ -36,7 +38,8 @@ export type PlanDraftField =
   | 'discounts.YEARLY'
   | 'features'
   | 'maxSeats'
-  | 'maxWarehouses';
+  | 'maxWarehouses'
+  | 'maxAiCaptions';
 
 export type PlanDraftErrors = Partial<Record<PlanDraftField, string>>;
 
@@ -92,6 +95,11 @@ export function validatePlanDraft(
       errors[key] = 'Enter a whole number of at least 1, or choose unlimited.';
     }
   }
+  // 0 is allowed here: a plan can come with no AI writing at all.
+  const ai = raw.maxAiCaptions;
+  if (ai !== null && (!isWhole(ai) || ai < 0 || ai > PLAN_LIMITS.maxLimit)) {
+    errors.maxAiCaptions = 'Enter a whole number (0 for none), or choose unlimited.';
+  }
 
   if (Object.keys(errors).length) return { ok: false, errors };
 
@@ -105,6 +113,7 @@ export function validatePlanDraft(
       features: SELLABLE_FEATURES.filter((f) => features.includes(f)),
       maxSeats: raw.maxSeats,
       maxWarehouses: raw.maxWarehouses,
+      maxAiCaptions: raw.maxAiCaptions,
       highlighted: Boolean(raw.highlighted),
     },
   };

@@ -95,9 +95,9 @@ describe('resolveHostname', () => {
  * .env this machine has: apex + www + app. are all marketing, one label per
  * tenant surface, custom domains still fall through to the DB.
  */
-describe('resolveHostname — production hostname model (getnotely.io)', () => {
-  const PROD_ROOT = 'getnotely.io';
-  const PROD_PLATFORM = 'app.getnotely.io';
+describe('resolveHostname — production hostname model (pynastore.com)', () => {
+  const PROD_ROOT = 'pynastore.com';
+  const PROD_PLATFORM = 'app.pynastore.com';
   let previous: Record<string, string | undefined>;
 
   beforeEach(() => {
@@ -108,7 +108,7 @@ describe('resolveHostname — production hostname model (getnotely.io)', () => {
     };
     process.env.NEXT_PUBLIC_ROOT_DOMAIN = PROD_ROOT;
     process.env.NEXT_PUBLIC_PLATFORM_HOST = PROD_PLATFORM;
-    process.env.NEXT_PUBLIC_MOBILE_DOMAIN = 'm.getnotely.io';
+    process.env.NEXT_PUBLIC_MOBILE_DOMAIN = 'm.pynastore.com';
   });
 
   afterEach(() => {
@@ -117,48 +117,48 @@ describe('resolveHostname — production hostname model (getnotely.io)', () => {
     process.env.NEXT_PUBLIC_MOBILE_DOMAIN = previous.mobile;
   });
 
-  it('getnotely.io is marketing', () => {
-    expect(resolveHostname('getnotely.io')).toMatchObject({ siteType: 'marketing', subdomain: null });
+  it('pynastore.com is marketing', () => {
+    expect(resolveHostname('pynastore.com')).toMatchObject({ siteType: 'marketing', subdomain: null });
   });
 
-  it('www.getnotely.io is marketing', () => {
-    expect(resolveHostname('www.getnotely.io')).toMatchObject({ siteType: 'marketing', subdomain: null });
+  it('www.pynastore.com is marketing', () => {
+    expect(resolveHostname('www.pynastore.com')).toMatchObject({ siteType: 'marketing', subdomain: null });
   });
 
-  it('app.getnotely.io is the platform host, not a tenant called "app"', () => {
-    expect(resolveHostname('app.getnotely.io')).toEqual({
-      hostname: 'app.getnotely.io',
+  it('app.pynastore.com is the platform host, not a tenant called "app"', () => {
+    expect(resolveHostname('app.pynastore.com')).toEqual({
+      hostname: 'app.pynastore.com',
       siteType: 'marketing',
       subdomain: null,
       isCustomDomain: false,
     });
   });
 
-  it('demo.getnotely.io is tenant admin for demo', () => {
-    expect(resolveHostname('demo.getnotely.io')).toEqual({
-      hostname: 'demo.getnotely.io',
+  it('demo.pynastore.com is tenant admin for demo', () => {
+    expect(resolveHostname('demo.pynastore.com')).toEqual({
+      hostname: 'demo.pynastore.com',
       siteType: 'admin',
       subdomain: 'demo',
       isCustomDomain: false,
     });
   });
 
-  it('shop-demo.getnotely.io is the storefront for demo', () => {
-    expect(resolveHostname('shop-demo.getnotely.io')).toEqual({
-      hostname: 'shop-demo.getnotely.io',
+  it('shop-demo.pynastore.com is the storefront for demo', () => {
+    expect(resolveHostname('shop-demo.pynastore.com')).toEqual({
+      hostname: 'shop-demo.pynastore.com',
       siteType: 'storefront',
       subdomain: 'demo',
       isCustomDomain: false,
     });
   });
 
-  it('m.getnotely.io is the mobile origin', () => {
-    expect(resolveHostname('m.getnotely.io')).toMatchObject({ siteType: 'mobile', subdomain: null });
+  it('m.pynastore.com is the mobile origin', () => {
+    expect(resolveHostname('m.pynastore.com')).toMatchObject({ siteType: 'mobile', subdomain: null });
   });
 
-  it('m.getnotely.io is still mobile with NEXT_PUBLIC_MOBILE_DOMAIN unset', () => {
+  it('m.pynastore.com is still mobile with NEXT_PUBLIC_MOBILE_DOMAIN unset', () => {
     delete process.env.NEXT_PUBLIC_MOBILE_DOMAIN;
-    expect(resolveHostname('m.getnotely.io')).toMatchObject({ siteType: 'mobile' });
+    expect(resolveHostname('m.pynastore.com')).toMatchObject({ siteType: 'mobile' });
   });
 
   it('customdomain.com falls through to custom-domain resolution', () => {
@@ -170,8 +170,8 @@ describe('resolveHostname — production hostname model (getnotely.io)', () => {
     });
   });
 
-  it('shop.getnotely.io is admin/"shop", never the storefront of an org', () => {
-    expect(resolveHostname('shop.getnotely.io')).toMatchObject({
+  it('shop.pynastore.com is admin/"shop", never the storefront of an org', () => {
+    expect(resolveHostname('shop.pynastore.com')).toMatchObject({
       siteType: 'admin',
       subdomain: 'shop',
     });
@@ -181,21 +181,21 @@ describe('resolveHostname — production hostname model (getnotely.io)', () => {
    * The whole point of a one-label storefront prefix: the slug after `shop-`
    * is taken verbatim, so one store's host can never be read as another's.
    */
-  it('shop-demo.getnotely.io cannot resolve to any organization but demo', () => {
-    expect(resolveHostname('shop-demo.getnotely.io').subdomain).toBe('demo');
-    expect(resolveHostname('shop-demo-staging.getnotely.io').subdomain).toBe('demo-staging');
-    expect(resolveHostname('shop-democracy.getnotely.io').subdomain).toBe('democracy');
+  it('shop-demo.pynastore.com cannot resolve to any organization but demo', () => {
+    expect(resolveHostname('shop-demo.pynastore.com').subdomain).toBe('demo');
+    expect(resolveHostname('shop-demo-staging.pynastore.com').subdomain).toBe('demo-staging');
+    expect(resolveHostname('shop-democracy.pynastore.com').subdomain).toBe('democracy');
     // An org whose own admin host looks like a storefront host is why
     // reserved-slugs.ts forbids the `shop-` prefix.
-    expect(resolveHostname('shop-rite.getnotely.io')).toMatchObject({
+    expect(resolveHostname('shop-rite.pynastore.com')).toMatchObject({
       siteType: 'storefront',
       subdomain: 'rite',
     });
   });
 
   it('a tenant subdomain is not confused with the platform host', () => {
-    expect(resolveHostname('apps.getnotely.io')).toMatchObject({ siteType: 'admin', subdomain: 'apps' });
-    expect(resolveHostname('application.getnotely.io')).toMatchObject({
+    expect(resolveHostname('apps.pynastore.com')).toMatchObject({ siteType: 'admin', subdomain: 'apps' });
+    expect(resolveHostname('application.pynastore.com')).toMatchObject({
       siteType: 'admin',
       subdomain: 'application',
     });

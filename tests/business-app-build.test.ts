@@ -30,23 +30,23 @@ describe('the business app’s build settings', () => {
     const parsed = parseStoreAppConfig({
       slug: 'business',
       appId: BUSINESS_APP_ID,
-      name: 'Notely Business',
+      name: 'Pynastore Business',
       version: '1.0.0',
       buildNumber: 0,
-      serverUrl: 'https://b.getnotely.io',
+      serverUrl: 'https://b.pynastore.com',
     });
     expect('config' in parsed).toBe(true);
   });
 
   it('Android: links to the business host open the app — the whole host', () => {
-    const out = editAndroidManifestForAppLinks(read('android/app/src/main/AndroidManifest.xml'), ['b.getnotely.io'], 'whole-host');
-    expect(out).toContain('<data android:host="b.getnotely.io" />');
+    const out = editAndroidManifestForAppLinks(read('android/app/src/main/AndroidManifest.xml'), ['b.pynastore.com'], 'whole-host');
+    expect(out).toContain('<data android:host="b.pynastore.com" />');
     expect(out).toContain('<data android:pathPrefix="/" />');
     expect(out).not.toContain('android:pathPrefix="/products"');
   });
 
   it('iPhone: the business host is its associated domain', () => {
-    expect(iosEntitlements({ linkHosts: ['b.getnotely.io'] })).toContain('<string>applinks:b.getnotely.io</string>');
+    expect(iosEntitlements({ linkHosts: ['b.pynastore.com'] })).toContain('<string>applinks:b.pynastore.com</string>');
   });
 
   it('a debug build may load a laptop over http; the shared project never does by itself', () => {

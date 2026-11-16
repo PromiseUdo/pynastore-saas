@@ -272,7 +272,7 @@ async function init(slug: string, flags: Record<string, string | true>) {
     };
     fs.writeFileSync(configPath(slug), `${JSON.stringify(config, null, 2)}\n`);
     ok(`Wrote app.json for ${config.appId} ("${name}").`);
-    if (!serverUrl) warn('serverUrl is empty — set it in app.json to the live mobile origin, e.g. https://m.getnotely.io');
+    if (!serverUrl) warn('serverUrl is empty — set it in app.json to the live mobile origin, e.g. https://m.pynastore.com');
   }
 
   // The merchant's icon, from their order (16.2) — a 1024 PNG made by Cloudinary.

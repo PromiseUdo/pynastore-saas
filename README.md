@@ -37,7 +37,7 @@ Because a slug is a hostname, some names can't be handed out — see `lib/tenant
 
 `NEXT_PUBLIC_ROOT_DOMAIN` in `.env` controls the root domain for both local dev and prod. Locally it's set to `app.localhost:3000` rather than bare `localhost:3000` — see the comment above it in `.env` for why (a `next dev`-specific redirect quirk outside of Vercel).
 
-`NEXT_PUBLIC_PLATFORM_HOST` splits the platform host from the root domain, and is only needed in production (`app.getnotely.io`): without it, `app.{ROOT_DOMAIN}` would parse as a tenant called "app". **Leave it unset locally** — it then falls back to `NEXT_PUBLIC_ROOT_DOMAIN`, which locally already *is* the platform host.
+`NEXT_PUBLIC_PLATFORM_HOST` splits the platform host from the root domain, and is only needed in production (`app.pynastore.com`): without it, `app.{ROOT_DOMAIN}` would parse as a tenant called "app". **Leave it unset locally** — it then falls back to `NEXT_PUBLIC_ROOT_DOMAIN`, which locally already *is* the platform host.
 
 **Testing tenant subdomains locally**: Chrome and Firefox resolve any `*.localhost` hostname to `127.0.0.1` automatically — no `/etc/hosts` edit needed. With `npm run dev` running:
 

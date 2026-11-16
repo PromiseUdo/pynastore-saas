@@ -139,10 +139,10 @@ describe('no buying in the app', () => {
   });
 
   it('/upgrade in the app is "Your plan": what it has, what is locked, no prices or buttons', async () => {
-    const page = renderToStaticMarkup(await UpgradePage({ searchParams: Promise.resolve({ feature: 'inventory.multi_warehouse' }) }));
+    const page = renderToStaticMarkup(await UpgradePage({ searchParams: Promise.resolve({ feature: 'inventory.kits' }) }));
     expect(page).toContain('Your plan');
     expect(page).toContain('Pro plan');
-    expect(page).toContain('More than one store');
+    expect(page).toContain('Kits and bundles');
     expect(page).toContain('Renews on 14 May 2027');
     expect(page).not.toMatch(/₦|<button|checkout/i);
   });
@@ -171,7 +171,7 @@ describe('no buying in the app', () => {
 
   it('Settings → Domain in the app: connect one you own, never buy one', () => {
     const data = {
-      platformUrl: 'https://shop-x.getnotely.io',
+      platformUrl: 'https://shop-x.pynastore.com',
       domain: null,
       order: null,
       renewalPaid: false,

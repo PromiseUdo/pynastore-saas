@@ -29,9 +29,11 @@ type RoleCardProps = {
   role: RoleWithDetails;
   callerPermissions: string[];
   organizationSlug: string;
+  /** the plan includes custom roles (22.1) */
+  customRolesEnabled: boolean;
 };
 
-export function RoleCard({ role, callerPermissions, organizationSlug }: RoleCardProps) {
+export function RoleCard({ role, callerPermissions, organizationSlug, customRolesEnabled }: RoleCardProps) {
   const router = useRouter();
 
   const [editOpen, setEditOpen] = React.useState(false);
@@ -151,11 +153,13 @@ export function RoleCard({ role, callerPermissions, organizationSlug }: RoleCard
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
                   <DropdownMenuItem onSelect={() => setTimeout(() => setEditOpen(true), 0)}>
-                    Edit permissions
+                    {customRolesEnabled ? 'Edit permissions' : 'View permissions'}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setTimeout(() => setDuplicateOpen(true), 0)}>
-                    Duplicate
-                  </DropdownMenuItem>
+                  {customRolesEnabled && (
+                    <DropdownMenuItem onSelect={() => setTimeout(() => setDuplicateOpen(true), 0)}>
+                      Duplicate
+                    </DropdownMenuItem>
+                  )}
                   {!role.isSystem && (
                     <DropdownMenuItem
                       onSelect={() => {
@@ -192,6 +196,7 @@ export function RoleCard({ role, callerPermissions, organizationSlug }: RoleCard
 
       <EditRoleSheet
         role={role}
+        locked={!customRolesEnabled}
         callerPermissions={callerPermissions}
         open={editOpen}
         onOpenChange={setEditOpen}

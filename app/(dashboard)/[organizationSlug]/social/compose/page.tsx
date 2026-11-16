@@ -14,6 +14,8 @@ import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
 import { AccessDenied } from '@/components/layout/access-denied';
 import { getPostDestinations, newComposerKey } from '@/features/social/posts';
+import { getOrganizationEntitlements } from '@/lib/billing/entitlements';
+import { getPlanLimit } from '@/lib/billing/plans';
 import { ComposerClient } from './_components/ComposerClient';
 
 export const metadata: Metadata = { title: 'Create post' };
@@ -34,6 +36,7 @@ export default async function ComposePage() {
       destinations={destinations.data}
       composerKey={await newComposerKey()}
       canBrowseCatalogue={hasPermission(perms, PERMISSIONS.INVENTORY_VIEW)}
+      aiAllowance={getPlanLimit((await getOrganizationEntitlements()).plan, 'maxAiCaptions')}
     />
   );
 }

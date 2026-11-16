@@ -45,7 +45,10 @@ import {
   rewriteCaption,
   type GeneratedCaption,
 } from '@/lib/ai/social/copywriter';
-import { checkCopyRequest } from '@/lib/ai/social/quota';
+import { checkCopyRequest, nextAllowanceStart, takeCopyAllowance } from '@/lib/ai/social/quota';
+import { getOrganizationEntitlements } from '@/lib/billing/entitlements';
+import { getPlanLimit } from '@/lib/billing/plans';
+import { formatDate } from '@/lib/format';
 import type {
   PublishRules,
   SocialAccountRow,
@@ -235,6 +238,19 @@ async function copyContext(productId: string, platform: string): Promise<CopyCon
 
   const facts = await getProductFacts(ctx.organization.id, productId);
   if (!facts) return { ok: false, error: 'That product isn’t in this store’s catalogue' };
+
+  // The plan's monthly allowance (22.1), taken last so a refusal above costs none of it.
+  const { plan } = await getOrganizationEntitlements();
+  const allowance = await takeCopyAllowance(ctx.organization.id, getPlanLimit(plan, 'maxAiCaptions'));
+  if (!allowance.ok) {
+    return {
+      ok: false,
+      error:
+        allowance.reason === 'not-on-plan'
+          ? 'AI-written posts aren’t on your plan. You can still write your own, or see Plans to upgrade.'
+          : `You’ve used this month’s ${allowance.limit} AI-written posts. They start again on ${formatDate(nextAllowanceStart())}, or see Plans for more.`,
+    };
+  }
 
   return {
     ok: true,

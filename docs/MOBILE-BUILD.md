@@ -34,7 +34,7 @@ You need a Mac. iOS builds need macOS, and Android builds work there too.
 Android order notifications go through **one Firebase project that belongs to
 the platform**. Every store's Android app is added to it.
 
-1. Go to <https://console.firebase.google.com>. Create a project (e.g. "Notely
+1. Go to <https://console.firebase.google.com>. Create a project (e.g. "Pynastore
    apps"). Analytics is not needed; turn it off.
 2. **Project settings → Service accounts → Generate new private key.** Put the
    JSON in Vercel as `FIREBASE_SERVICE_ACCOUNT` (Production), as-is or base64,
@@ -173,7 +173,7 @@ The **build number** rises by one with every release build and is stored in
 | `appId`, `name` | as registered (step 2) |
 | `version` | what shoppers see, `1.0.0`; change it with `--version` |
 | `buildNumber` | the last one used; the kit raises it |
-| `serverUrl` | the live mobile origin, `https://m.getnotely.io`; release builds must be https |
+| `serverUrl` | the live mobile origin, `https://m.pynastore.com`; release builds must be https |
 | `iconBackgroundColor`, `splashBackgroundColor`, `splashBackgroundColorDark` | behind the logo |
 | `appleTeamId` | the merchant's team, or `null` to choose it in Xcode |
 
@@ -222,7 +222,7 @@ to refresh the screenshots.
 the phone and open it. **iOS:** use TestFlight.
 
 - [ ] The icon and name under it are the store's.
-- [ ] It opens straight into the store: no store picker, no Notely screens.
+- [ ] It opens straight into the store: no store picker, no Pynastore screens.
 - [ ] Browsing, search, product pages and the cart work.
 - [ ] **Payment:** start checkout and the payment page opens in a sheet. Closing
       it returns to the order. A completed payment comes back to *this* app,

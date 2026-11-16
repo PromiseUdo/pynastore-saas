@@ -99,8 +99,8 @@ beforeAll(async () => {
 
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify({
-    project_id: 'notely-test',
-    client_email: 'push@notely-test.iam.gserviceaccount.com',
+    project_id: 'pynastore-test',
+    client_email: 'push@pynastore-test.iam.gserviceaccount.com',
     private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }),
   });
   process.env.AUTH_SECRET ||= 'test-secret-for-storefront-sessions';

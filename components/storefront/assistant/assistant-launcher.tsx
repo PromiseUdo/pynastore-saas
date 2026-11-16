@@ -24,7 +24,7 @@ import * as React from 'react';
 import { Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePageScrolled } from '@/lib/storefront/use-page-scrolled';
-import { useStorefront } from '@/lib/storefront/context';
+import { useAiShopping, useStorefront } from '@/lib/storefront/context';
 import { useChatConfig } from '@/components/storefront/chat/chat-config';
 import {
   useAssistantStore,
@@ -50,6 +50,8 @@ export function AssistantLauncher({
    * "Not sure where to start?" row in <DiscoveryStrip> instead — a chip on
    * a line of its own under that row read as misplaced. */
   const chatOn = useChatConfig() !== null;
+  const aiShopping = useAiShopping();
+  if (!aiShopping) return null; // not on the shop's plan (ROADMAP 22.1)
   if (variant === 'floating' && chatOn) return null;
 
   const floating = variant === 'floating';

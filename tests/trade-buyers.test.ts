@@ -13,6 +13,7 @@
  *   - the shopper's own data download includes it.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { givePlan, dropBilling } from './helpers/plans';
 
 const email = vi.hoisted(() => ({
   sendStorefrontNoticeEmail: vi.fn(async (_payload: { to: string[]; subject: string; button?: { url: string } }) => true),
@@ -61,6 +62,7 @@ const details = { businessName: 'Ada Provisions', taxId: '12345678-0001', cacNum
 beforeAll(async () => {
   store.id = (await prisma.organization.create({ data: { name: 'Trade Shop', slug: store.slug } })).id;
   other.id = (await prisma.organization.create({ data: { name: 'Other Shop', slug: other.slug } })).id;
+  await givePlan(store.id); // Wholesale is a plan feature (22.1)
   ctx.organization.id = store.id;
   ctx.organization.slug = store.slug;
   ctx.userId = (await prisma.user.create({ data: { email: `trade-owner-${suffix}@example.com`, name: 'Owner' } })).id;
@@ -86,6 +88,7 @@ afterAll(async () => {
     await prisma.tradeAccount.deleteMany({ where: { organizationId: org.id } });
     await prisma.customerPasswordResetToken.deleteMany({ where: { customer: { organizationId: org.id } } });
     await prisma.customer.deleteMany({ where: { organizationId: org.id } });
+    await dropBilling(org.id);
     await prisma.organization.delete({ where: { id: org.id } });
   }
   await prisma.user.deleteMany({ where: { id: ctx.userId } });

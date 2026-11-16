@@ -130,7 +130,8 @@ export function PlansTable({ plans }: { plans: ConsolePlanRow[] }) {
                   <TableCell className="text-xs text-muted-foreground">
                     {plan.featureCount} feature{plan.featureCount === 1 ? '' : 's'}
                     <span className="block">
-                      {LIMIT_INFO.maxSeats.label(plan.maxSeats)} · {LIMIT_INFO.maxWarehouses.label(plan.maxWarehouses)}
+                      {LIMIT_INFO.maxSeats.label(plan.maxSeats)} · {LIMIT_INFO.maxWarehouses.label(plan.maxWarehouses)} ·{' '}
+                      {LIMIT_INFO.maxAiCaptions.label(plan.maxAiCaptions)}
                     </span>
                   </TableCell>
                   <TableCell align="right" className="tabular-nums">

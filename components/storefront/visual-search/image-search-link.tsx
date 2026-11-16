@@ -8,9 +8,13 @@
  * discovery methods, not a floating assistant bolted onto the corner of the
  * screen.
  *
- * Server-safe; no state of its own.
+ * No state of its own. A client component only to read whether the shop's
+ * plan includes search by photo (ROADMAP 22.1): without it, no link.
  */
+'use client';
+
 import Link from 'next/link';
+import { useAiShopping } from '@/lib/storefront/context';
 import { ImageUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VISUAL_SEARCH_PATH } from '@/lib/storefront/visual-search/query';
@@ -31,6 +35,7 @@ export function ImageSearchLink({
   /** for surfaces that must close themselves on navigation (the search sheet) */
   onNavigate?: () => void;
 }) {
+  const aiShopping = useAiShopping();
   const styles = {
     pill: 'inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border px-5 text-sm font-semibold transition-colors hover:border-brand',
     row: 'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent',
@@ -38,6 +43,8 @@ export function ImageSearchLink({
       'inline-flex items-center gap-1.5 text-sm font-semibold text-brand underline-offset-4 hover:underline',
     icon: 'flex size-9 shrink-0 items-center justify-center rounded-(--sf-radius-button) text-muted-foreground transition-colors hover:bg-accent hover:text-brand',
   }[variant];
+
+  if (!aiShopping) return null;
 
   return (
     <Link

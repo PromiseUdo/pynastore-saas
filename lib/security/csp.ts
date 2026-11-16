@@ -20,6 +20,12 @@
  * shop's admin (`frameAncestors`). Both are a single origin, decided in
  * proxy.ts from the host — never a wildcard, never another shop.
  *
+ * WEBSITE CHAT (ROADMAP 23). The platform's public pages (landing, pricing,
+ * terms, privacy) may load the Freshchat widget: its account's own host
+ * (script, the iframe the chat lives in, its API) and Freshchat's asset CDN.
+ * Exact origins from lib/support/config.ts, never a wildcard over other
+ * customers' accounts — and nothing on sign-in, the console, admins or shops.
+ *
  * CSP_MODE: "enforce" (default) blocks and reports; "report" only reports —
  * the switch to flip if a live page breaks; "off" sends no policy.
  * Violations are reported to /api/csp-report, into the error log.
@@ -57,6 +63,9 @@ export const ABLY_CONNECT = [
 ];
 const CLOUDINARY_UPLOADS = 'https://api.cloudinary.com';
 
+/* The Freshchat widget's own assets (fonts, icons, its frame's scripts). */
+const FRESHCHAT_ASSETS = 'https://assetscdn-wchat.freshchat.com';
+
 /* What the merchant-enabled measurement tags need (storefront only). */
 const ANALYTICS = {
   img: ['https://www.googletagmanager.com', 'https://*.google-analytics.com', 'https://www.facebook.com'],
@@ -89,9 +98,13 @@ export function buildCsp(options: {
   frameAncestors?: string[];
   /** the chat's real-time connection (Ably) is configured */
   realtime?: boolean;
+  /** the Freshchat account host, on the public pages that show the website chat */
+  supportChat?: string;
 }): string {
   const { nonce, storefront, dev, https } = options;
-  const frameSrc = options.frameSrc?.length ? options.frameSrc : ["'none'"];
+  const chat = options.supportChat ? [options.supportChat, FRESHCHAT_ASSETS] : [];
+  const frames = [...(options.frameSrc ?? []), ...chat];
+  const frameSrc = frames.length ? frames : ["'none'"];
   const frameAncestors = options.frameAncestors?.length ? options.frameAncestors : ["'none'"];
   const directives: Record<string, string[]> = {
     'default-src': ["'self'"],
@@ -102,17 +115,21 @@ export function buildCsp(options: {
       // React's development build uses eval for its debugging stacks; production never does.
       ...(dev ? ["'unsafe-eval'"] : []),
       ...(storefront ? ANALYTICS.script : []),
+      // Ignored where 'strict-dynamic' is honoured, like the analytics fallback.
+      ...chat,
     ],
     // Components set style="" attributes all over (Radix positions popovers that way);
     // inline styles can't run code, so they stay allowed.
-    'style-src': ["'self'", "'unsafe-inline'"],
-    'img-src': ["'self'", 'data:', 'blob:', CLOUDINARY_IMAGES, ...(storefront ? ANALYTICS.img : [])],
-    'font-src': ["'self'", 'data:'],
+    'style-src': ["'self'", "'unsafe-inline'", ...chat],
+    'img-src': ["'self'", 'data:', 'blob:', CLOUDINARY_IMAGES, ...(storefront ? ANALYTICS.img : []), ...chat],
+    'font-src': ["'self'", 'data:', ...chat],
     'connect-src': [
       "'self'",
       CLOUDINARY_UPLOADS,
       ...(storefront ? ANALYTICS.connect : []),
       ...(options.realtime ? ABLY_CONNECT : []),
+      ...chat,
+      ...(options.supportChat ? [options.supportChat.replace(/^https:/, 'wss:')] : []),
       ...(dev ? ['ws:', 'wss:'] : []),
     ],
     'media-src': ["'self'", 'blob:', CLOUDINARY_IMAGES],

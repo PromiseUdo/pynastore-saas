@@ -20,6 +20,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { UpgradeLink } from '@/components/business-app/no-buying';
 import { Check, ExternalLink, Hash, Loader2, Search, Sparkles, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -62,11 +63,15 @@ export function ComposerClient({
   destinations,
   composerKey,
   canBrowseCatalogue,
+  aiAllowance = null,
 }: {
   destinations: PostDestination[];
   composerKey: string;
   canBrowseCatalogue: boolean;
+  /** AI-written posts a month on the plan (22.1): null = unlimited, 0 = none */
+  aiAllowance?: number | null;
 }) {
+  const aiOn = aiAllowance !== 0;
   const router = useRouter();
 
   const usable = destinations.filter((destination) => !destination.problem);
@@ -413,7 +418,7 @@ export function ComposerClient({
             <section className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Label htmlFor="caption">Caption</Label>
-                <div className="flex flex-wrap items-center gap-1.5">
+                {aiOn && <div className="flex flex-wrap items-center gap-1.5">
                   <Button
                     type="button"
                     variant="outline"
@@ -444,7 +449,7 @@ export function ComposerClient({
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenuRoot>
-                </div>
+                </div>}
               </div>
 
               <Textarea
@@ -456,9 +461,18 @@ export function ComposerClient({
               />
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">
-                  {product?.thin
+                  {!aiOn ? (
+                    <>
+                      AI-written posts aren’t on your plan.{' '}
+                      <UpgradeLink href="/upgrade" className="font-medium text-primary underline-offset-4 hover:underline">
+                        See plans
+                      </UpgradeLink>
+                    </>
+                  ) : product?.thin
                     ? 'This product has little description, so AI copy will be brief. Adding a description helps.'
-                    : 'AI copy is written only from what your product record says. Always read it before posting.'}
+                    : `AI copy is written only from what your product record says. Always read it before posting.${
+                        aiAllowance !== null ? ` Your plan includes ${aiAllowance} AI-written posts a month.` : ''
+                      }`}
                 </span>
                 {rules && (
                   <span className={overLimit ? 'font-medium text-destructive tabular-nums' : 'text-muted-foreground tabular-nums'}>
@@ -472,7 +486,7 @@ export function ComposerClient({
             <section className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <Label>Hashtags</Label>
-                <Button
+                {aiOn && <Button
                   type="button"
                   variant="outline"
                   size="sm"
@@ -481,7 +495,7 @@ export function ComposerClient({
                 >
                   {busy === 'hashtags' ? <Loader2 className="size-4 animate-spin" /> : <Hash className="size-4" />}
                   Generate hashtags
-                </Button>
+                </Button>}
               </div>
 
               {hashtags.length === 0 ? (

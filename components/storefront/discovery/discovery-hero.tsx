@@ -29,7 +29,7 @@
 import * as React from 'react';
 import { Loader2, MessagesSquare, Search, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useStorefront } from '@/lib/storefront/context';
+import { useAiShopping, useStorefront } from '@/lib/storefront/context';
 import { useDiscoveryStore } from '@/lib/storefront/stores/discovery-store';
 import { DiscoveryResults } from './discovery-results';
 import { useDiscoveryRun } from './use-discovery-run';
@@ -50,6 +50,7 @@ export function DiscoveryHero({
   examples: string[];
 }) {
   const { org } = useStorefront();
+  const aiShopping = useAiShopping();
   const [mode, setMode] = React.useState<Mode>('search');
   const [q, setQ] = React.useState('');
   /* The fetch, the supersede guard, the scroll and the focus move all live
@@ -180,13 +181,16 @@ export function DiscoveryHero({
 
         {/* ── the other two ways in ────────────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-center gap-2.5 lg:mt-4">
-          <SecondaryAction
-            active={false}
-            onClick={askAssistant}
-            icon={<MessagesSquare className="size-4" />}
-          >
-            Ask the assistant
-          </SecondaryAction>
+          {/* Not on every plan (ROADMAP 22.1). */}
+          {aiShopping && (
+            <SecondaryAction
+              active={false}
+              onClick={askAssistant}
+              icon={<MessagesSquare className="size-4" />}
+            >
+              Ask the assistant
+            </SecondaryAction>
+          )}
           <SecondaryAction
             active={mode === 'guided'}
             onClick={() => setMode(mode === 'guided' ? 'search' : 'guided')}

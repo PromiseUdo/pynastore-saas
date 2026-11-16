@@ -22,6 +22,8 @@ import { Recommendations } from '@/components/storefront/recommendations/recomme
 import { ShoppingEventBeacon } from '@/components/storefront/recommendations/shopping-event-beacon';
 import { recommendProducts } from '@/lib/storefront/recommendations/service';
 import { SHOPPING_EVENTS } from '@/lib/storefront/shopping-events';
+import { storeHasFeature } from '@/lib/billing/workspace-access';
+import { FEATURES } from '@/lib/billing/plans';
 
 type Props = {
   params: Promise<{ organizationSlug: string }>;
@@ -41,6 +43,8 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 
 export default async function SearchPage({ params, searchParams }: Props) {
   const [{ organizationSlug }, rawParams] = await Promise.all([params, searchParams]);
+  // Search by photo is a plan feature (ROADMAP 22.1): no sentence offering it when it's off.
+  const imageSearch = await storeHasFeature(organizationSlug, FEATURES.AI_SHOPPING);
   const query = typeof rawParams.q === 'string' ? rawParams.q.trim() : undefined;
 
   /*
@@ -65,9 +69,11 @@ export default async function SearchPage({ params, searchParams }: Props) {
         <SearchField criteria={criteria} optionIndex={optionIndex} pathname="/search" />
         {/* The other way to start a search, offered beside the box rather
          * than hidden in a menu — see components/storefront/visual-search. */}
-        <p className="mt-3 text-sm text-muted-foreground">
-          Don’t know what it’s called? <ImageSearchLink variant="quiet" label="Search by image" />
-        </p>
+        {imageSearch && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Don’t know what it’s called? <ImageSearchLink variant="quiet" label="Search by image" />
+          </p>
+        )}
         <SearchLanding {...content} />
       </div>
     );
@@ -124,9 +130,11 @@ export default async function SearchPage({ params, searchParams }: Props) {
       <div>
         <ShoppingEventBeacon event={{ name: SHOPPING_EVENTS.productSearched, query }} />
         <SearchField criteria={view.criteria} optionIndex={view.optionIndex} pathname="/search" />
-        <p className="mt-3 text-sm text-muted-foreground">
-          Not finding it in words? <ImageSearchLink variant="quiet" label="Search by image" />
-        </p>
+        {imageSearch && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Not finding it in words? <ImageSearchLink variant="quiet" label="Search by image" />
+          </p>
+        )}
       </div>
     </CatalogView>
   );

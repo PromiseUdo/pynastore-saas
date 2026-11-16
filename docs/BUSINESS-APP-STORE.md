@@ -63,7 +63,7 @@ Both stores reject an app they can't get into. Before submitting:
 
 1. **Create the demo shop** by signing up in the app itself, with a real
    inbox the team reads. Suggested: `review@{PLATFORM_DOMAIN}`, shop
-   "Notely Demo Shop".
+   "Pynastore Demo Shop".
 2. **Fill it so every main screen has something:**
    - a few products with photos, one with variants;
    - one store with delivery set;

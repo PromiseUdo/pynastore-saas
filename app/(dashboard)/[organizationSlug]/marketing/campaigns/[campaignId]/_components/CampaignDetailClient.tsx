@@ -51,6 +51,7 @@ import {
 } from '@/features/marketing/campaigns';
 import type { CampaignDetail } from '@/features/marketing/campaign-reads';
 import { AnnouncementCard } from './AnnouncementCard';
+import { PlanLockedNote } from '@/components/layout/plan-locked';
 
 export function CampaignDetailClient({
   campaign,
@@ -59,6 +60,7 @@ export function CampaignDetailClient({
   storeName,
   storeUrl,
   destinations,
+  locked = false,
 }: {
   campaign: CampaignDetail;
   currency: string;
@@ -66,6 +68,8 @@ export function CampaignDetailClient({
   storeName: string;
   storeUrl: string;
   destinations: { label: string; href: string }[];
+  /** the plan doesn't include campaigns (22.1): what's running runs out, nothing new starts */
+  locked?: boolean;
 }) {
   const router = useRouter();
   const money = (value: number) => formatMoney(value, currency);
@@ -105,7 +109,7 @@ export function CampaignDetailClient({
               <ChevronLeft className="size-3.5" />
               All campaigns
             </Link>
-            {canManage && phase === 'DRAFT' && (
+            {canManage && !locked && phase === 'DRAFT' && (
               <Button
                 size="sm"
                 disabled={pending !== null}
@@ -130,6 +134,7 @@ export function CampaignDetailClient({
       />
 
       <PageBody className="space-y-6">
+        {locked && <PlanLockedNote feature="marketing.campaigns">Campaigns aren’t on your plan. Your scheduled and running sales carry on until they end, and you can still end or delete them, but new ones can’t be started.</PlanLockedNote>}
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={CAMPAIGN_PHASE_VARIANT[phase]}>{CAMPAIGN_PHASE_LABEL[phase]}</Badge>
           <span className="text-sm text-muted-foreground tabular-nums">
@@ -207,7 +212,7 @@ export function CampaignDetailClient({
               )}
             </div>
 
-            {canManage && (
+            {canManage && !locked && (
               <div className="flex flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:justify-end">
                 {campaign.collection && (
                   <Button variant="outline" size="sm" className="w-full sm:w-auto" asChild>
@@ -246,7 +251,7 @@ export function CampaignDetailClient({
         {/* ── What customers are told ─────────────────────────────── */}
         <AnnouncementCard
           campaign={campaign}
-          canManage={canManage}
+          canManage={canManage && !locked}
           storeName={storeName}
           storeUrl={storeUrl}
           destinations={destinations}

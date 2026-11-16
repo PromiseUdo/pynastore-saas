@@ -41,8 +41,8 @@ npm run typecheck
 npm run db:drift           # your database vs schema.prisma
 ```
 
-`test:local` leaves a container called `notely-test-db` running for the next
-run. Remove it with `docker rm -f notely-test-db`.
+`test:local` leaves a container called `pynastore-test-db` running for the next
+run. Remove it with `docker rm -f pynastore-test-db`.
 
 ## What CI doesn't do
 

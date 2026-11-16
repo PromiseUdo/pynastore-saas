@@ -37,7 +37,7 @@ const VALID = {
   name: 'Pynastore',
   version: '1.0.0',
   buildNumber: 0,
-  serverUrl: 'https://m.getnotely.io',
+  serverUrl: 'https://m.pynastore.com',
 };
 
 describe('app.json', () => {
@@ -68,8 +68,8 @@ describe('app.json', () => {
   });
 
   it('keeps release builds on the live https site', () => {
-    expect(releaseServerProblem('https://m.getnotely.io')).toBeNull();
-    expect(releaseServerProblem('http://m.getnotely.io')).toMatch(/https/);
+    expect(releaseServerProblem('https://m.pynastore.com')).toBeNull();
+    expect(releaseServerProblem('http://m.pynastore.com')).toMatch(/https/);
     expect(releaseServerProblem('https://192.168.1.20:3000')).toMatch(/development/);
     expect(releaseServerProblem('https://m.app.localhost:3000')).toMatch(/development/);
   });
@@ -165,12 +165,12 @@ describe('push in the native projects (16.4)', () => {
 
 describe('links to the store open the app (18.5)', () => {
   const MANIFEST = read('android/app/src/main/AndroidManifest.xml');
-  const HOSTS = ['shop-acme.getnotely.io', 'www.acme.ng'];
+  const HOSTS = ['shop-acme.pynastore.com', 'www.acme.ng'];
 
   it('claims the store’s hosts in the iOS entitlements, beside push', () => {
     const out = iosEntitlements({ linkHosts: HOSTS });
     expect(out).toContain('<key>aps-environment</key>');
-    expect(out).toContain('<string>applinks:shop-acme.getnotely.io</string>');
+    expect(out).toContain('<string>applinks:shop-acme.pynastore.com</string>');
     expect(out).toContain('<string>applinks:www.acme.ng</string>');
     expect(iosEntitlements({ linkHosts: [] })).not.toContain('associated-domains');
   });
@@ -189,22 +189,22 @@ describe('links to the store open the app (18.5)', () => {
 describe('the listing pack (16.4)', () => {
   const config = {
     slug: 'pynacode', appId: 'com.pynacode.shop', name: 'Pynastore', version: '1.0.0', buildNumber: 3,
-    serverUrl: 'https://m.getnotely.io', iconBackgroundColor: '#ffffff', splashBackgroundColor: '#ffffff',
+    serverUrl: 'https://m.pynastore.com', iconBackgroundColor: '#ffffff', splashBackgroundColor: '#ffffff',
     splashBackgroundColorDark: '#0b0b0c', appleTeamId: null,
   };
   const facts = {
-    name: 'Pynacode', slug: 'pynacode', website: 'https://shop-pynacode.getnotely.io', supportEmail: null,
-    pages: [{ kind: 'PRIVACY', url: 'https://shop-pynacode.getnotely.io/pages/privacy' }], reviewer: null,
+    name: 'Pynacode', slug: 'pynacode', website: 'https://shop-pynacode.pynastore.com', supportEmail: null,
+    pages: [{ kind: 'PRIVACY', url: 'https://shop-pynacode.pynastore.com/pages/privacy' }], reviewer: null,
   };
 
   it("uses the store's own web address", () => {
-    expect(storeWebsite(config, null)).toBe('https://shop-pynacode.getnotely.io');
+    expect(storeWebsite(config, null)).toBe('https://shop-pynacode.pynastore.com');
     expect(storeWebsite(config, 'www.pynastore.com')).toBe('https://www.pynastore.com');
   });
 
   it('links what exists, flags what does not, and mentions push only when the app has it', () => {
     const without = listingMarkdown(config, facts, { android: false, ios: false });
-    expect(without).toContain('https://shop-pynacode.getnotely.io/pages/privacy');
+    expect(without).toContain('https://shop-pynacode.pynastore.com/pages/privacy');
     expect(without).toMatch(/Terms URL \| — not published yet/);
     expect(without).not.toMatch(/notification/i);
     const withPush = listingMarkdown(config, facts, { android: true, ios: true });
@@ -215,9 +215,9 @@ describe('the listing pack (16.4)', () => {
 
 describe('the offline screen', () => {
   it("is stamped with the store's name and the address to retry", () => {
-    const out = editOfflinePage(read('mobile/www/offline.html'), { name: 'Ada & Co', serverUrl: 'https://m.getnotely.io' });
+    const out = editOfflinePage(read('mobile/www/offline.html'), { name: 'Ada & Co', serverUrl: 'https://m.pynastore.com' });
     expect(out).toContain('<meta name="app-name" content="Ada &amp; Co" />');
-    expect(out).toContain('<meta name="app-server-url" content="https://m.getnotely.io" />');
+    expect(out).toContain('<meta name="app-server-url" content="https://m.pynastore.com" />');
     expect(out).not.toContain('__APP_');
   });
 });

@@ -10,6 +10,7 @@ type Props = {
   targetRole: RoleWithDetails;
   callerPermissions: string[];
   organizationSlug: string;
+  customRolesEnabled: boolean;
 };
 
 export function RoleDeepLinkClient({
@@ -17,6 +18,7 @@ export function RoleDeepLinkClient({
   targetRole,
   callerPermissions,
   organizationSlug,
+  customRolesEnabled,
 }: Props) {
   const [sheetOpen, setSheetOpen] = React.useState(true);
 
@@ -26,12 +28,14 @@ export function RoleDeepLinkClient({
         roles={roles}
         callerPermissions={callerPermissions}
         organizationSlug={organizationSlug}
+        customRolesEnabled={customRolesEnabled}
       />
       <EditRoleSheet
         role={targetRole}
         callerPermissions={callerPermissions}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+        locked={!customRolesEnabled}
       />
     </>
   );

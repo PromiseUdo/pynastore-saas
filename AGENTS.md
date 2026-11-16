@@ -6,7 +6,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # The platform's name
 
-The platform's working name is **Notely** (getnotely.io), set in `lib/brand.ts` (`PLATFORM_NAME`, `PLATFORM_DOMAIN`, `PLATFORM_OPERATOR`). Never type the name into UI, emails or legal text — read it from there, so a rename is one change. Internal identifiers that say "mansaas" (storage keys, token issuers, the Cloudinary folder, billing references, `com.mansaas.app`) are NOT renamed: changing them breaks live data.
+The platform's name is **Pynastore** (pynastore.com, agreed 2026-11-16), set in `lib/brand.ts` (`PLATFORM_NAME`, `PLATFORM_DOMAIN`, `PLATFORM_OPERATOR`). Never type the name into UI, emails or legal text — read it from there, so a rename is one change. Internal identifiers that say "mansaas" (storage keys, token issuers, the Cloudinary folder, billing references, `com.mansaas.app`) are NOT renamed: changing them breaks live data.
 
 # Checks
 

@@ -25,7 +25,7 @@ export function PricingTable({ plans, trialPlanName }: { plans: PlanOffer[]; tri
     <div className="space-y-16">
       {cycles.length > 1 && (
         <div className="flex justify-center">
-          <div role="radiogroup" aria-label="How often you pay" className="inline-flex rounded-full border bg-muted/50 p-1">
+          <div role="radiogroup" aria-label="How often you pay" className="inline-flex rounded-full border bg-card p-1 shadow-sm">
             {cycles.map((c) => {
               const s = saving(c);
               return (
@@ -36,13 +36,13 @@ export function PricingTable({ plans, trialPlanName }: { plans: PlanOffer[]; tri
                   aria-checked={cycle === c}
                   onClick={() => setCycle(c)}
                   className={cn(
-                    'flex h-9 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    cycle === c ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                    'flex h-10 items-center gap-2 rounded-full px-4 text-[14px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    cycle === c ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   {CYCLES[c].label}
                   {s > 0 && (
-                    <span className={cn('text-xs', cycle === c ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>−{s}%</span>
+                    <span className={cn('text-xs', cycle === c ? 'text-mk-sun' : 'text-primary')}>−{s}%</span>
                   )}
                 </button>
               );
@@ -59,20 +59,20 @@ export function PricingTable({ plans, trialPlanName }: { plans: PlanOffer[]; tri
             <div
               key={plan.id}
               className={cn(
-                'relative flex flex-col rounded-2xl border bg-card p-7',
-                plan.highlighted && 'border-primary shadow-[0_12px_40px_-12px_rgba(79,70,229,0.35)] ring-1 ring-primary',
+                'relative flex flex-col rounded-3xl border bg-card p-7 sm:p-8',
+                plan.highlighted && 'border-primary shadow-[0_24px_50px_-24px_rgba(14,107,71,0.5)] ring-1 ring-primary',
               )}
             >
               {plan.highlighted && (
-                <span className="absolute -top-3 left-7 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">Recommended</span>
+                <span className="absolute -top-3 left-7 rounded-full bg-mk-sun px-3 py-1 text-xs font-semibold text-[#11211a]">Recommended</span>
               )}
-              <h2 className="text-balance text-lg font-semibold">{plan.name}</h2>
+              <h2 className="text-balance font-mk-display text-[22px] font-semibold tracking-[-0.01em]">{plan.name}</h2>
               {plan.tagline && <p className="mt-1 min-h-10 text-sm text-muted-foreground">{plan.tagline}</p>}
               <div className="mt-6">
                 {price ? (
                   <>
                     <p className="flex items-baseline gap-1.5">
-                      <span className="text-4xl font-semibold tracking-tight tabular-nums">{formatMoney(price.amount)}</span>
+                      <span className="font-mk-display text-[2.6rem] font-bold leading-none tracking-[-0.03em] tabular-nums">{formatMoney(price.amount)}</span>
                       <span className="text-sm text-muted-foreground">/ {CYCLES[cycle].per}</span>
                     </p>
                     <p className="mt-1.5 min-h-5 text-sm text-muted-foreground tabular-nums">
@@ -88,8 +88,8 @@ export function PricingTable({ plans, trialPlanName }: { plans: PlanOffer[]; tri
               <Link
                 href="/register"
                 className={cn(
-                  'mt-6 inline-flex h-11 items-center justify-center rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                  plan.highlighted ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'border bg-background hover:bg-muted',
+                  'mt-6 inline-flex h-12 items-center justify-center rounded-full text-[15px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                  plan.highlighted ? 'bg-primary text-primary-foreground hover:bg-[#0b5a3b]' : 'border border-foreground/15 bg-card hover:border-foreground/30',
                 )}
               >
                 {trialPlanName === plan.name ? 'Start free trial' : `Start with ${plan.name}`}
@@ -97,7 +97,7 @@ export function PricingTable({ plans, trialPlanName }: { plans: PlanOffer[]; tri
               <ul className="mt-7 space-y-3 border-t pt-6 text-sm">
                 {(Object.keys(LIMIT_INFO) as (keyof typeof LIMIT_INFO)[]).map((k) => (
                   <li key={k} className="flex gap-3">
-                    <Check className="mt-0.5 size-4 shrink-0 text-foreground" aria-hidden />
+                    <Check className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={2.5} aria-hidden />
                     {LIMIT_INFO[k].label(plan.limits[k])}
                   </li>
                 ))}
@@ -105,7 +105,7 @@ export function PricingTable({ plans, trialPlanName }: { plans: PlanOffer[]; tri
                   .filter((f) => FEATURE_INFO[f].built)
                   .map((f) => (
                     <li key={f} className="flex gap-3">
-                      <Check className="mt-0.5 size-4 shrink-0 text-foreground" aria-hidden />
+                      <Check className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={2.5} aria-hidden />
                       {FEATURE_INFO[f].label}
                     </li>
                   ))}
@@ -116,17 +116,18 @@ export function PricingTable({ plans, trialPlanName }: { plans: PlanOffer[]; tri
       </div>
 
       <p className="text-center text-sm text-muted-foreground">
-        Every plan includes your own online shop, and none takes a commission on your sales. Paystack’s standard fee applies to
-        online payments.
+        Every plan includes your own online shop, and you can connect a domain you already own — like yourshop.com.ng — for free.
+        No plan takes a commission on your sales; Paystack’s standard fee applies to online payments. On a paid plan you can also add
+        your shop’s own Android and iPhone app.
       </p>
 
       {plans.length > 1 && (
         <div>
-          <h2 className="text-balance text-center text-2xl font-semibold tracking-[-0.02em]">Compare plans</h2>
-          <div className="mt-8 overflow-x-auto rounded-xl border">
+          <h2 className="text-balance text-center font-mk-display text-[2rem] font-semibold tracking-[-0.03em]">Compare plans</h2>
+          <div className="mt-8 overflow-x-auto rounded-3xl border bg-card">
             <table className="w-full min-w-[40rem] text-sm">
               <thead>
-                <tr className="border-b bg-muted/40">
+                <tr className="border-b bg-muted/60">
                   <th scope="col" className="px-5 py-4 text-left font-medium text-muted-foreground">
                     <span className="sr-only">Feature</span>
                   </th>
@@ -159,7 +160,7 @@ export function PricingTable({ plans, trialPlanName }: { plans: PlanOffer[]; tri
                     {plans.map((p) => (
                       <td key={p.id} className="px-5 py-3.5">
                         {p.features.includes(f) ? (
-                          <Check className="size-4 text-foreground" aria-label="Included" />
+                          <Check className="size-4 text-primary" strokeWidth={2.5} aria-label="Included" />
                         ) : (
                           <Minus className="size-4 text-muted-foreground/50" aria-label="Not included" />
                         )}

@@ -24,6 +24,8 @@ import { askShoppingAssistant } from '@/lib/ai/assistant/service';
 import { getProductBySlug } from '@/lib/storefront/catalog';
 import { requestIdentity } from '@/lib/storefront/request-identity';
 import { resolveRequestStore } from '@/lib/storefront/request-store';
+import { storeHasFeature } from '@/lib/billing/workspace-access';
+import { FEATURES } from '@/lib/billing/plans';
 import {
   MAX_HISTORY_TURNS,
   MAX_PRODUCTS_PER_ANSWER,
@@ -83,6 +85,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   }
   const store = { organizationSlug: resolved.slug };
+
+  // The assistant is a plan feature (ROADMAP 22.1); the storefront hides it too.
+  if (!(await storeHasFeature(resolved.slug, FEATURES.AI_SHOPPING))) {
+    return NextResponse.json({ error: 'The shopping assistant isn’t available in this store.' }, { status: 404 });
+  }
 
   const allowed = await checkAssistantRequest(resolved.slug, requestIdentity(request, resolved.slug));
   if (!allowed.ok) {

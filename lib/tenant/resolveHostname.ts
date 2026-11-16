@@ -10,7 +10,7 @@
  *   www.{ROOT_DOMAIN}             -> marketing
  *   {PLATFORM_HOST}               -> marketing (the authenticated platform
  *                                    origin: NEXT_PUBLIC_PLATFORM_HOST, e.g.
- *                                    app.getnotely.io. Defaults to
+ *                                    app.pynastore.com. Defaults to
  *                                    ROOT_DOMAIN, which is what local dev
  *                                    uses — there the two are the same host.)
  *   shop-{slug}.{ROOT_DOMAIN}     -> storefront, subdomain = slug

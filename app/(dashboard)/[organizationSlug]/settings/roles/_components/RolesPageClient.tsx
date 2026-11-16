@@ -7,17 +7,21 @@ import { Separator } from '@/components/ui/separator';
 import { RoleCard } from './RoleCard';
 import { CreateRoleDialog } from './CreateRoleDialog';
 import type { RoleWithDetails } from '@/features/roles/actions';
+import { PlanLocked, PlanLockedNote } from '@/components/layout/plan-locked';
 
 type RolesPageClientProps = {
   roles: RoleWithDetails[];
   callerPermissions: string[];
   organizationSlug: string;
+  /** the plan includes custom roles (22.1) */
+  customRolesEnabled: boolean;
 };
 
 export function RolesPageClient({
   roles,
   callerPermissions,
   organizationSlug,
+  customRolesEnabled,
 }: RolesPageClientProps) {
   const [createOpen, setCreateOpen] = React.useState(false);
 
@@ -36,13 +40,21 @@ export function RolesPageClient({
             Define what each role can do in your organization.
           </p>
         </div>
-        <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Plus className="size-3.5" />
-          New role
-        </Button>
+        {customRolesEnabled && (
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="size-3.5" />
+            New role
+          </Button>
+        )}
       </div>
 
       <div className="space-y-8 px-6 py-6">
+        {!customRolesEnabled && (
+          <PlanLockedNote feature="roles.custom">
+            Your team uses the roles below as they are. Creating roles and changing what a role can do is part of
+            Custom roles, which isn’t on your plan.
+          </PlanLockedNote>
+        )}
         {/* System roles section */}
         <section>
           <h2 className="mb-3 text-sm font-semibold text-foreground">
@@ -59,6 +71,7 @@ export function RolesPageClient({
                 role={role}
                 callerPermissions={callerPermissions}
                 organizationSlug={organizationSlug}
+                customRolesEnabled={customRolesEnabled}
               />
             ))}
           </div>
@@ -72,7 +85,9 @@ export function RolesPageClient({
             Custom roles
           </h2>
 
-          {customRoles.length === 0 ? (
+          {customRoles.length === 0 && !customRolesEnabled ? (
+            <PlanLocked feature="roles.custom" />
+          ) : customRoles.length === 0 ? (
             <EmptyCustomRoles onCreateClick={() => setCreateOpen(true)} />
           ) : (
             <div className="space-y-3">
@@ -82,6 +97,7 @@ export function RolesPageClient({
                   role={role}
                   callerPermissions={callerPermissions}
                   organizationSlug={organizationSlug}
+                  customRolesEnabled={customRolesEnabled}
                 />
               ))}
             </div>

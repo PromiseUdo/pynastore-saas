@@ -27,7 +27,7 @@ export interface StoreAppConfig {
   version: string;
   /** the last build number used; every upload to a store needs a higher one */
   buildNumber: number;
-  /** the live mobile origin the app loads, e.g. https://m.getnotely.io */
+  /** the live mobile origin the app loads, e.g. https://m.pynastore.com */
   serverUrl: string;
   /** behind the icon's logo and the splash screen */
   iconBackgroundColor: string;

@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
+import { FEATURES, notOnPlanMessage } from '@/lib/billing/plans';
 import { createAuditLog } from '@/lib/audit';
 import { runAfter } from '@/lib/run-after';
 import { normalizeNigerianPhone } from '@/lib/phone';
@@ -35,6 +36,13 @@ import { sendTradeInvite, tellShopperTradeDecision, type InviteResult } from '@/
 import { type ActionResult, toActionError } from './shared';
 
 const WHOLESALE_OFF = 'Turn on wholesale first, in Settings → Wholesale.';
+
+/** Why trade buyers can't be added now, or null when they can (wholesale on, and on the plan — 22.1). */
+async function wholesaleBlocked(organizationId: string): Promise<string | null> {
+  const settings = await getWholesaleSettings(organizationId);
+  if (!settings.onPlan) return notOnPlanMessage(FEATURES.WHOLESALE);
+  return settings.mode === 'OFF' ? WHOLESALE_OFF : null;
+}
 
 const REASONS: Record<string, string> = {
   'not-found': 'We couldn’t find that customer.',
@@ -102,7 +110,10 @@ export async function approveTradeBuyer(
   try {
     const ctx = await manager();
     const organizationId = ctx.organization.id;
-    if ((await getWholesaleSettings(organizationId)).mode === 'OFF') return { success: false, error: WHOLESALE_OFF };
+    {
+      const blocked = await wholesaleBlocked(organizationId);
+      if (blocked) return { success: false, error: blocked };
+    }
 
     let details: BusinessDetails | undefined;
     if (input.details) {
@@ -155,7 +166,10 @@ export async function inviteTradeBuyer(input: InviteTradeBuyerInput): Promise<Ac
   try {
     const ctx = await manager();
     const organizationId = ctx.organization.id;
-    if ((await getWholesaleSettings(organizationId)).mode === 'OFF') return { success: false, error: WHOLESALE_OFF };
+    {
+      const blocked = await wholesaleBlocked(organizationId);
+      if (blocked) return { success: false, error: blocked };
+    }
 
     const person = InviteSchema.safeParse(input);
     if (!person.success) return { success: false, error: person.error.issues[0]?.message ?? 'Check their details' };
@@ -265,7 +279,10 @@ export async function suspendTradeBuyer(customerId: string, input: { reason?: st
 export async function reinstateTradeBuyer(customerId: string): Promise<ActionResult> {
   try {
     const ctx = await manager();
-    if ((await getWholesaleSettings(ctx.organization.id)).mode === 'OFF') return { success: false, error: WHOLESALE_OFF };
+    {
+      const blocked = await wholesaleBlocked(ctx.organization.id);
+      if (blocked) return { success: false, error: blocked };
+    }
     const change = await reinstateTrade({ organizationId: ctx.organization.id, customerId, decidedById: ctx.userId });
     if (!change.ok) return refused(change);
     await audit(ctx, 'sales.trade.reinstated', customerId, { businessName: change.businessName });

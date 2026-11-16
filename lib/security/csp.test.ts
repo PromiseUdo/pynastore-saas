@@ -22,12 +22,12 @@ describe('the policy', () => {
     expect(plain['frame-src']).toEqual(["'none'"]);
     expect(plain['frame-ancestors']).toEqual(["'none'"]);
 
-    const admin = parse(buildCsp({ ...base, frameSrc: ['https://shop-ada.getnotely.io'] }));
-    expect(admin['frame-src']).toEqual(['https://shop-ada.getnotely.io']);
+    const admin = parse(buildCsp({ ...base, frameSrc: ['https://shop-ada.pynastore.com'] }));
+    expect(admin['frame-src']).toEqual(['https://shop-ada.pynastore.com']);
     expect(admin['frame-ancestors']).toEqual(["'none'"]);
 
-    const preview = parse(buildCsp({ ...base, storefront: true, frameAncestors: ['https://ada.getnotely.io'] }));
-    expect(preview['frame-ancestors']).toEqual(['https://ada.getnotely.io']);
+    const preview = parse(buildCsp({ ...base, storefront: true, frameAncestors: ['https://ada.pynastore.com'] }));
+    expect(preview['frame-ancestors']).toEqual(['https://ada.pynastore.com']);
     expect(preview['frame-src']).toEqual(["'none'"]);
   });
 
@@ -98,4 +98,25 @@ describe('nonces and the switch', () => {
     expect(ably.some((src: string) => src.includes('*'))).toBe(false);
     expect(on['connect-src']).not.toContain('wss:');
   });
+
+  it('allows exactly one Freshchat account, its asset host and nothing more, only for the website chat (ROADMAP 23)', () => {
+    const base = { nonce: 'abc123', storefront: false, dev: false, https: true };
+    const off = parse(buildCsp(base));
+    expect(JSON.stringify(off)).not.toContain('freshchat');
+    expect(off['frame-src']).toEqual(["'none'"]);
+
+    const host = 'https://acme-123.freshchat.com';
+    const on = parse(buildCsp({ ...base, supportChat: host }));
+    const assets = 'https://assetscdn-wchat.freshchat.com';
+    expect(on['frame-src']).toEqual([host, assets]);
+    expect(on['connect-src']).toEqual(expect.arrayContaining([host, assets, 'wss://acme-123.freshchat.com']));
+    expect(on['img-src']).toEqual(expect.arrayContaining([host, assets]));
+    // Its window is laid out by its own stylesheet and fonts.
+    expect(on['style-src']).toEqual(expect.arrayContaining([host, assets]));
+    expect(on['font-src']).toEqual(expect.arrayContaining([host, assets]));
+    expect(JSON.stringify(on)).not.toContain('*.freshchat');
+    // The designer's own frame still works alongside it.
+    expect(parse(buildCsp({ ...base, supportChat: host, frameSrc: ['https://shop.example'] }))['frame-src']).toEqual(['https://shop.example', host, assets]);
+  });
 });
+

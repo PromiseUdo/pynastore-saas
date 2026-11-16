@@ -12,7 +12,7 @@ import vm from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 
 const SOURCE = fs.readFileSync(path.join(__dirname, '..', 'public', 'sw.js'), 'utf8');
-const ORIGIN = 'https://shop-acme.getnotely.io';
+const ORIGIN = 'https://shop-acme.pynastore.com';
 
 type Handler = (event: Record<string, unknown>) => void;
 

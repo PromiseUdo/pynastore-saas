@@ -6,6 +6,7 @@
  * order gets a business, whatever the browser sends.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { givePlan, dropBilling } from './helpers/plans';
 import type { CheckoutAddress, CheckoutBusiness } from '@/lib/storefront/checkout/types';
 
 const session = vi.hoisted(() => ({ shopper: null as null | { id: string; organizationId: string } }));
@@ -61,6 +62,7 @@ beforeAll(async () => {
     })
   ).id;
   other.id = (await prisma.organization.create({ data: { name: 'Another Shop', slug: other.slug } })).id;
+  await givePlan(store.id); // Wholesale is a plan feature (22.1)
   const warehouse = await prisma.warehouse.create({ data: { organizationId: store.id, name: 'Main', sellsOnline: true, status: 'ACTIVE' } });
   riceId = (
     await prisma.inventoryItem.create({
@@ -104,6 +106,7 @@ afterAll(async () => {
   await prisma.deliveryRate.deleteMany({ where: { organizationId: store.id } });
   await prisma.deliveryZone.deleteMany({ where: { organizationId: store.id } });
   await prisma.warehouse.deleteMany({ where: { organizationId: store.id } });
+  await dropBilling(store.id);
   await prisma.organization.deleteMany({ where: { id: { in: [store.id, other.id] } } });
 });
 

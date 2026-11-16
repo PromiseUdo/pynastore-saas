@@ -12,6 +12,7 @@
  *   - a campaign only ever reaches its own store's products.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { givePlan, dropBilling } from './helpers/plans';
 
 const ctx = vi.hoisted(() => ({
   organization: {
@@ -97,6 +98,7 @@ beforeAll(async () => {
     data: { name: 'Campaign Test', slug: `__test-campaign-${suffix}` },
   });
   ctx.organization.id = org.id;
+  await givePlan(org.id); // Campaigns are a plan feature (22.1)
   ctx.organization.slug = org.slug;
 
   otherOrgId = (
@@ -123,6 +125,7 @@ afterAll(async () => {
     await prisma.campaign.deleteMany({ where: { organizationId } });
     await prisma.inventoryItem.deleteMany({ where: { organizationId } });
     await prisma.category.deleteMany({ where: { organizationId } });
+    await dropBilling(organizationId);
     await prisma.organization.delete({ where: { id: organizationId } });
   }
   if (fixturesWere === undefined) delete process.env.STOREFRONT_FIXTURES;

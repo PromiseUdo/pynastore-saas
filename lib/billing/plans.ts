@@ -18,7 +18,6 @@
 export const FEATURES = {
   PROCUREMENT_MODULE: 'procurement.module',
   INVENTORY_MODULE: 'inventory.module',
-  INVENTORY_MULTI_WAREHOUSE: 'inventory.multi_warehouse',
   INVENTORY_KITS: 'inventory.kits',
   PROCUREMENT_AUTO_REORDER: 'procurement.auto_reorder',
   SALES_MODULE: 'sales.module',
@@ -26,6 +25,12 @@ export const FEATURES = {
   REPORTS_ADVANCED: 'reports.advanced',
   AUDIT_LOG_EXPORT: 'audit_log.export',
   API_ACCESS: 'api.access',
+  /** scheduled sales and their announcement bar or pop-up (ROADMAP 22.1) */
+  CAMPAIGNS: 'marketing.campaigns',
+  /** trade buyers at wholesale prices (Phase 21, gated by 22.1) */
+  WHOLESALE: 'sales.wholesale',
+  /** the storefront's AI shopping assistant and search by photo (22.1) */
+  AI_SHOPPING: 'storefront.ai_shopping',
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
@@ -41,27 +46,46 @@ export const FEATURE_INFO: Record<FeatureKey, { label: string; description: stri
   'sales.module': { label: 'Sales', description: 'Orders, customers, invoices and quotes', built: true },
   'procurement.module': { label: 'Purchasing', description: 'Suppliers and purchase orders', built: true },
   'roles.custom': { label: 'Custom roles', description: 'Decide exactly what each member can do', built: true },
-  'inventory.multi_warehouse': { label: 'More than one store', description: 'Stock and sell from several stores', built: true },
-  'inventory.kits': { label: 'Kits and bundles', description: 'Sell products made of other products', built: true },
-  'procurement.auto_reorder': { label: 'Restocking suggestions', description: 'Purchase orders drafted from low stock', built: true },
-  'reports.advanced': { label: 'Advanced reports', description: 'Sales, margins and store comparisons', built: true },
-  'audit_log.export': { label: 'Activity log download', description: 'Export who did what, when', built: true },
+  'inventory.kits': { label: 'Kits and bundles', description: 'Sell several products together as one item', built: true },
+  'procurement.auto_reorder': { label: 'Restocking suggestions', description: 'An order to your supplier, drafted when stock runs low', built: true },
+  'reports.advanced': { label: 'Advanced reports', description: 'Sales, profit, and how each store is doing', built: true },
+  'audit_log.export': { label: 'Activity log download', description: 'Download a record of who did what, and when', built: true },
   'api.access': { label: 'API access', description: 'Connect your own systems', built: false },
+  'marketing.campaigns': { label: 'Campaigns', description: 'Sales that start and end on their own, with a banner or pop-up', built: true },
+  'sales.wholesale': { label: 'Wholesale', description: 'Sell at wholesale prices to businesses you approve', built: true },
+  'storefront.ai_shopping': { label: 'AI shopping assistant', description: 'Shoppers ask questions or search with a photo', built: true },
 };
+
+/** What a server action answers when the plan doesn't include a feature (22.1). */
+export function notOnPlanMessage(feature: FeatureKey): string {
+  return `${FEATURE_INFO[feature].label} isn’t on your plan. See Plans to upgrade.`;
+}
 
 export function isFeatureKey(value: string): value is FeatureKey {
   return (FEATURE_KEYS as string[]).includes(value);
 }
 
-/** null = unlimited. */
+/**
+ * null = unlimited. More than one store is the store limit, not a feature
+ * (22.1): a plan with `maxWarehouses: 1` is a one-store plan.
+ */
 export type PlanLimits = {
   maxSeats: number | null;
   maxWarehouses: number | null;
+  /**
+   * Times a month the AI may write social post copy (a caption, hashtags or
+   * a rewrite each count one), per calendar month in Lagos (22.1). 0 = none.
+   */
+  maxAiCaptions: number | null;
 };
 
 export const LIMIT_INFO: Record<keyof PlanLimits, { label: (n: number | null) => string }> = {
   maxSeats: { label: (n) => (n === null ? 'Unlimited team members' : `${n} team member${n === 1 ? '' : 's'}`) },
   maxWarehouses: { label: (n) => (n === null ? 'Unlimited stores' : `${n} store${n === 1 ? '' : 's'}`) },
+  maxAiCaptions: {
+    label: (n) =>
+      n === null ? 'AI-written social posts' : n === 0 ? 'No AI-written social posts' : `${n} AI-written social posts a month`,
+  },
 };
 
 /* ---------------- billing cycles ---------------- */
@@ -133,7 +157,7 @@ export const NO_PLAN: EffectivePlan = {
   key: null,
   name: 'No plan',
   features: [],
-  limits: { maxSeats: 3, maxWarehouses: 1 },
+  limits: { maxSeats: 3, maxWarehouses: 1, maxAiCaptions: 0 },
   sortOrder: -1,
 };
 
@@ -163,10 +187,14 @@ const starter: FeatureKey[] = [
   FEATURES.SALES_MODULE,
   FEATURES.PROCUREMENT_MODULE,
   FEATURES.CUSTOM_ROLES,
+  // 22.1 added these to every seeded plan, so nothing changed for anyone
+  // until staff choose otherwise in the console.
+  FEATURES.CAMPAIGNS,
+  FEATURES.WHOLESALE,
+  FEATURES.AI_SHOPPING,
 ];
 const pro: FeatureKey[] = [
   ...starter,
-  FEATURES.INVENTORY_MULTI_WAREHOUSE,
   FEATURES.INVENTORY_KITS,
   FEATURES.PROCUREMENT_AUTO_REORDER,
   FEATURES.REPORTS_ADVANCED,
@@ -175,8 +203,10 @@ const pro: FeatureKey[] = [
 
 /**
  * Seeded by migration 20260930090000_plan_catalogue. Starter is ₦5,000 a
- * month (ROADMAP 12.1); API access is left off Enterprise because it isn't
- * built. Everything here is editable in the console (11.7).
+ * month (ROADMAP 12.1); API access is left off because it isn't built.
+ * Pro and Enterprise were renamed Growth and Business by 22.1 (their keys
+ * stay 'pro' and 'enterprise': keys are never shown and never change).
+ * Everything here is editable in the console (11.7).
  */
 export const DEFAULT_CATALOGUE: CatalogueSeedPlan[] = [
   {
@@ -187,27 +217,27 @@ export const DEFAULT_CATALOGUE: CatalogueSeedPlan[] = [
     highlighted: false,
     sortOrder: 1,
     features: starter,
-    limits: { maxSeats: 10, maxWarehouses: 1 },
+    limits: { maxSeats: 10, maxWarehouses: 1, maxAiCaptions: null },
   },
   {
     key: 'pro',
-    name: 'Pro',
+    name: 'Growth',
     tagline: 'Sell from several stores, with the full toolkit',
     monthlyPrice: 45000,
     highlighted: true,
     sortOrder: 2,
     features: pro,
-    limits: { maxSeats: 50, maxWarehouses: null },
+    limits: { maxSeats: 50, maxWarehouses: null, maxAiCaptions: null },
   },
   {
     key: 'enterprise',
-    name: 'Enterprise',
+    name: 'Business',
     tagline: 'Unlimited team and stores',
     monthlyPrice: 150000,
     highlighted: false,
     sortOrder: 3,
     features: pro,
-    limits: { maxSeats: null, maxWarehouses: null },
+    limits: { maxSeats: null, maxWarehouses: null, maxAiCaptions: null },
   },
 ];
 

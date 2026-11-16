@@ -15,10 +15,20 @@ import { Plus, Search, ShoppingBag } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PageHeader, PageToolbar, PageBody } from '@/components/layout/page-header';
+import {
+  PageHeader,
+  PageToolbar,
+  PageBody,
+} from '@/components/layout/page-header';
 import { EmptyState } from '@/components/layout/empty-state';
 import { TablePagination } from '@/components/ui/table-pagination';
-import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import {
+  SelectRoot,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import {
   Table,
   TableWrapper,
@@ -40,7 +50,14 @@ import {
 import type { StoreOrderList } from '@/features/sales/orders';
 
 const CHANNELS = ['ONLINE', 'WALK_IN', 'PHONE'] as const;
-const STATUSES = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const;
+const STATUSES = [
+  'PENDING',
+  'CONFIRMED',
+  'PROCESSING',
+  'SHIPPED',
+  'DELIVERED',
+  'CANCELLED',
+] as const;
 
 export function OrdersPageClient({
   list,
@@ -82,8 +99,14 @@ export function OrdersPageClient({
     return () => clearTimeout(timer);
   }, [query, urlQuery, setParams]);
 
-  const filtered = channel !== 'all' || status !== 'all' || store !== 'all' || buyer !== 'all' || urlQuery !== '';
-  const countFor = (key: string) => list.channelCounts.find((c) => c.channel === key)?.count ?? 0;
+  const filtered =
+    channel !== 'all' ||
+    status !== 'all' ||
+    store !== 'all' ||
+    buyer !== 'all' ||
+    urlQuery !== '';
+  const countFor = (key: string) =>
+    list.channelCounts.find((c) => c.channel === key)?.count ?? 0;
 
   const newSaleButton = canSell ? (
     <Button asChild size="sm">
@@ -97,7 +120,7 @@ export function OrdersPageClient({
   const header = (
     <PageHeader
       title="Orders"
-      description="Everything you've sold — online and over the counter."
+      description="Everything you've sold online and over the counter."
       actions={newSaleButton}
     />
   );
@@ -135,8 +158,14 @@ export function OrdersPageClient({
           />
         </div>
 
-        <SelectRoot value={channel} onValueChange={(value) => setParams({ channel: value })}>
-          <SelectTrigger className="w-40" aria-label="Filter by where the sale came from">
+        <SelectRoot
+          value={channel}
+          onValueChange={(value) => setParams({ channel: value })}
+        >
+          <SelectTrigger
+            className="w-40"
+            aria-label="Filter by where the sale came from"
+          >
             <SelectValue placeholder="All channels" />
           </SelectTrigger>
           <SelectContent>
@@ -149,7 +178,10 @@ export function OrdersPageClient({
           </SelectContent>
         </SelectRoot>
 
-        <SelectRoot value={status} onValueChange={(value) => setParams({ status: value })}>
+        <SelectRoot
+          value={status}
+          onValueChange={(value) => setParams({ status: value })}
+        >
           <SelectTrigger className="w-40" aria-label="Filter by status">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
@@ -165,21 +197,35 @@ export function OrdersPageClient({
 
         {/* Trade buyers' orders (ROADMAP 21.8), once there are any — or while filtering by them. */}
         {(list.tradeCount > 0 || buyer !== 'all') && (
-          <SelectRoot value={buyer} onValueChange={(value) => setParams({ buyer: value })}>
-            <SelectTrigger className="w-40" aria-label="Filter by trade or retail">
+          <SelectRoot
+            value={buyer}
+            onValueChange={(value) => setParams({ buyer: value })}
+          >
+            <SelectTrigger
+              className="w-40"
+              aria-label="Filter by trade or retail"
+            >
               <SelectValue placeholder="All customers" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All customers</SelectItem>
-              <SelectItem value="trade">Trade buyers ({formatNumber(list.tradeCount)})</SelectItem>
+              <SelectItem value="trade">
+                Trade buyers ({formatNumber(list.tradeCount)})
+              </SelectItem>
               <SelectItem value="retail">Retail customers</SelectItem>
             </SelectContent>
           </SelectRoot>
         )}
 
         {stores.length > 1 && (
-          <SelectRoot value={store} onValueChange={(value) => setParams({ store: value })}>
-            <SelectTrigger className="w-44" aria-label="Filter by which store served it">
+          <SelectRoot
+            value={store}
+            onValueChange={(value) => setParams({ store: value })}
+          >
+            <SelectTrigger
+              className="w-44"
+              aria-label="Filter by which store served it"
+            >
               <SelectValue placeholder="All stores" />
             </SelectTrigger>
             <SelectContent>
@@ -199,7 +245,13 @@ export function OrdersPageClient({
             size="sm"
             onClick={() => {
               setQuery('');
-              setParams({ q: null, channel: null, status: null, store: null, buyer: null });
+              setParams({
+                q: null,
+                channel: null,
+                status: null,
+                store: null,
+                buyer: null,
+              });
             }}
           >
             Clear filters
@@ -219,7 +271,13 @@ export function OrdersPageClient({
                 variant="outline"
                 onClick={() => {
                   setQuery('');
-                  setParams({ q: null, channel: null, status: null, store: null, buyer: null });
+                  setParams({
+                    q: null,
+                    channel: null,
+                    status: null,
+                    store: null,
+                    buyer: null,
+                  });
                 }}
               >
                 Clear filters
@@ -257,45 +315,78 @@ export function OrdersPageClient({
                           >
                             {order.reference}
                           </Link>
-                          <Badge variant={ORDER_CHANNEL_VARIANT[order.channel] ?? 'draft'}>
-                            {ORDER_CHANNEL_LABEL[order.channel] ?? order.channel}
+                          <Badge
+                            variant={
+                              ORDER_CHANNEL_VARIANT[order.channel] ?? 'draft'
+                            }
+                          >
+                            {ORDER_CHANNEL_LABEL[order.channel] ??
+                              order.channel}
                           </Badge>
-                          {order.tradeBusiness && <Badge variant="approved">Trade</Badge>}
+                          {order.tradeBusiness && (
+                            <Badge variant="approved">Trade</Badge>
+                          )}
                         </span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">
-                          {order.city ? `${order.city}${order.state ? `, ${order.state}` : ''}` : '—'}
+                          {order.city
+                            ? `${order.city}${order.state ? `, ${order.state}` : ''}`
+                            : '—'}
                           {order.fulfilledFrom.length > 0 && (
                             <>
                               {' · '}
-                              {order.fulfilledFrom.map((s) => s.name).join(' + ')}
+                              {order.fulfilledFrom
+                                .map((s) => s.name)
+                                .join(' + ')}
                             </>
                           )}
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className="block text-foreground">{order.customerName ?? '—'}</span>
-                        <span className="text-xs text-muted-foreground">{order.customerEmail ?? '—'}</span>
+                        <span className="block text-foreground">
+                          {order.customerName ?? '—'}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {order.customerEmail ?? '—'}
+                        </span>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{formatDate(order.placedAt)}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatDate(order.placedAt)}
+                      </TableCell>
                       <TableCell>
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <Badge variant={STATUS_VARIANT[order.status] ?? 'draft'}>
+                          <Badge
+                            variant={STATUS_VARIANT[order.status] ?? 'draft'}
+                          >
                             {STATUS_LABEL[order.status] ?? '—'}
                           </Badge>
-                          {order.returnsAwaiting > 0 && <Badge variant="warning">Return requested</Badge>}
-                        {order.partiallySent && <Badge variant="processing">Partially sent</Badge>}
-                          {order.refundOwed && <Badge variant="warning">Refund owed</Badge>}
+                          {order.returnsAwaiting > 0 && (
+                            <Badge variant="warning">Return requested</Badge>
+                          )}
+                          {order.partiallySent && (
+                            <Badge variant="processing">Partially sent</Badge>
+                          )}
+                          {order.refundOwed && (
+                            <Badge variant="warning">Refund owed</Badge>
+                          )}
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={PAYMENT_VARIANT[order.paymentStatus] ?? 'draft'}>
-                          {PAYMENT_LABEL[order.paymentStatus] ?? order.paymentStatus}
+                        <Badge
+                          variant={
+                            PAYMENT_VARIANT[order.paymentStatus] ?? 'draft'
+                          }
+                        >
+                          {PAYMENT_LABEL[order.paymentStatus] ??
+                            order.paymentStatus}
                         </Badge>
                       </TableCell>
                       <TableCell align="right" className="tabular-nums">
                         {formatNumber(order.itemCount)}
                       </TableCell>
-                      <TableCell align="right" className="font-medium tabular-nums">
+                      <TableCell
+                        align="right"
+                        className="font-medium tabular-nums"
+                      >
                         {formatMoney(order.totalAmount, order.currency)}
                       </TableCell>
                     </TableRow>

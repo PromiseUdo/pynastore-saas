@@ -32,6 +32,8 @@ import { getTradeGate } from '@/lib/storefront/trade-gate';
 import { openInTradeOnly } from '@/lib/trade/rules';
 import './storefront.css';
 import { storefrontUrlFor } from '@/lib/domains/storefront-url';
+import { workspaceHasFeature } from '@/lib/billing/workspace-access';
+import { FEATURES } from '@/lib/billing/plans';
 import { cloudinaryImage } from '@/lib/cloudinary/url';
 
 /*
@@ -215,6 +217,8 @@ export default async function StorefrontRootLayout({
    * merchant's own pages stay open (lib/trade/rules.ts). The catalogue is
    * empty for them regardless (lib/storefront/trade-gate.ts). */
   const tradeGate = await getTradeGate(organization.slug);
+  // The AI shopping assistant and search by photo (ROADMAP 22.1).
+  const aiShopping = await workspaceHasFeature(organization.id, FEATURES.AI_SHOPPING);
   if (tradeGate.tradeOnly && !tradeGate.allowed && !openInTradeOnly(requestHeaders.get('x-store-path'))) {
     const button =
       'inline-flex h-12 items-center justify-center rounded-[var(--sf-radius-button,999px)] px-6 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
@@ -338,7 +342,7 @@ export default async function StorefrontRootLayout({
         <StorefrontAnalytics gaId={look.analytics.gaId} metaPixelId={look.analytics.metaPixelId} nonce={nonce} />
       )}
       <StorefrontProviders
-        org={{ slug: organization.slug, name: organization.name, logoUrl: organization.logoUrl }}
+        org={{ slug: organization.slug, name: organization.name, logoUrl: organization.logoUrl, aiShopping }}
         isMobileRuntime={isMobileRuntime}
         privacyHref={privacyPage?.href ?? null}
         chat={chat}

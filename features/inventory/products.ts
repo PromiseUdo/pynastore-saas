@@ -5,6 +5,8 @@
 // variants. One catalogue: this is also what the storefront sells.
 // Rules live in ./product-rules.ts; this file enforces them and persists.
 
+import { workspaceHasFeature } from '@/lib/billing/workspace-access';
+import { FEATURES } from '@/lib/billing/plans';
 import { after } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
@@ -941,6 +943,8 @@ async function queueImageSearchIndexing(organizationId: string, productId: strin
   try {
     const queued = await syncProductImageEmbeddings(organizationId, productId);
     if (!queued) return;
+    // Queued either way, embedded only on a plan with search by photo (22.1).
+    if (!(await workspaceHasFeature(organizationId, FEATURES.AI_SHOPPING))) return;
     after(async () => {
       try {
         await indexPendingImages({ organizationId, productId, limit: 12 });

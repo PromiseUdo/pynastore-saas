@@ -340,7 +340,7 @@ describe('links the app opens', () => {
   const here = `http://${BUSINESS}/inventory`;
 
   it('leaving the host opens the sheet; a new tab of our own opens in the app', () => {
-    expect(externalLinkTarget('https://shop-acme.getnotely.io/', '', here)).toEqual({ open: 'sheet', url: 'https://shop-acme.getnotely.io/' });
+    expect(externalLinkTarget('https://shop-acme.pynastore.com/', '', here)).toEqual({ open: 'sheet', url: 'https://shop-acme.pynastore.com/' });
     expect(externalLinkTarget('/sales/receipt/1', '_blank', here)).toEqual({ open: 'here', url: `http://${BUSINESS}/sales/receipt/1` });
     expect(externalLinkTarget('/orders', '', here)).toBeNull();
     expect(externalLinkTarget('mailto:a@b.c', '', here)).toBeNull();

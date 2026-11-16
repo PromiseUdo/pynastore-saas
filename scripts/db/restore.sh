@@ -3,7 +3,7 @@
 # (ROADMAP 13.6): every table's row count must equal what was counted when
 # the backup was taken. Exits non-zero if anything differs.
 #
-#   scripts/db/restore.sh notely-20261001-0130.tar.gpg postgresql://…/empty_db
+#   scripts/db/restore.sh pynastore-20261001-0130.tar.gpg postgresql://…/empty_db
 #
 #   BACKUP_PASSPHRASE  the passphrase the backup was made with
 #
@@ -20,7 +20,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" -d "$BACKUP" | tar -C "$WORK" -xf -
-pg_restore --no-owner --no-privileges --exit-on-error --dbname="$TARGET" "$WORK/notely.dump"
+pg_restore --no-owner --no-privileges --exit-on-error --dbname="$TARGET" "$WORK/pynastore.dump"
 psql "$TARGET" -At -v ON_ERROR_STOP=1 -f "$HERE/row-counts.sql" > "$WORK/restored-counts.txt"
 
 if diff -u "$WORK/counts.txt" "$WORK/restored-counts.txt"; then

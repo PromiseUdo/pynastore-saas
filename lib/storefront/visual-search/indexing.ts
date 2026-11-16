@@ -27,6 +27,7 @@
  *     budget, no key or a 429 the rows simply stay PENDING for next time.
  */
 import { createHash } from 'node:crypto';
+import { FEATURES } from '@/lib/billing/plans';
 import { prisma } from '@/lib/prisma';
 import { visualSearchConfig } from './config';
 import { getImageEmbedder, isNotConfigured, isRateLimited, type EmbeddableImage } from './embedding';
@@ -125,9 +126,24 @@ export async function indexPendingImages(
   const result: IndexRunResult = { indexed: 0, reused: 0, failed: 0, deferred: 0 };
   const now = new Date();
 
+  /* Only shops whose plan includes search by photo are embedded (ROADMAP
+   * 22.1): each one is a model call. The rest stay PENDING, and are picked
+   * up by this same worker the day their plan includes it. Filtered in the
+   * query, so a shop without it can't hold the queue's head. */
+  const eligible = (
+    await prisma.subscription.findMany({
+      where: {
+        ...(opts.organizationId && { organizationId: opts.organizationId }),
+        plan: { features: { some: { feature: FEATURES.AI_SHOPPING } } },
+      },
+      select: { organizationId: true },
+    })
+  ).map((s) => s.organizationId);
+  if (!eligible.length) return result;
+
   const rows = await prisma.productImageEmbedding.findMany({
     where: {
-      ...(opts.organizationId && { organizationId: opts.organizationId }),
+      organizationId: { in: eligible },
       ...(opts.productId && { inventoryItemId: opts.productId }),
       OR: [
         { status: 'PENDING', OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] },

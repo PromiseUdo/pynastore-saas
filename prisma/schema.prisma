@@ -3570,6 +3570,11 @@ model BillingPlan {
    */
   maxSeats      Int?
   maxWarehouses Int?
+  /**
+   * AI-written social copy per Lagos calendar month (ROADMAP 22.1); null =
+   * unlimited (the per-store model budget still applies), 0 = none
+   */
+  maxAiCaptions Int?
 
   prices        BillingPlanPrice[]
   features      BillingPlanFeature[]
