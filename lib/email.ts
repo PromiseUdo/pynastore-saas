@@ -5,6 +5,7 @@
  * so that a broken email provider never kills an otherwise-valid operation.
  */
 import { Resend } from 'resend';
+import { isStaging } from '@/lib/deploy-stage';
 import { InvitationEmail } from '@/emails/invitation';
 import { ResetPasswordEmail } from '@/emails/reset-password';
 import { StorefrontResetPasswordEmail } from '@/emails/storefront-reset-password';
@@ -44,7 +45,17 @@ import {
 import { AccountSecurityEmail, type AccountSecurityEmailProps } from '@/emails/account-security';
 import { PLATFORM_NAME } from '@/lib/brand';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const client = new Resend(process.env.RESEND_API_KEY);
+type EmailMessage = Parameters<Resend['emails']['send']>[0];
+
+/* Every email goes through here. On the staging site (docs/STAGING.md) its
+ * subject starts "[Staging]", so nobody mistakes a test email for a real one. */
+const resend = {
+  emails: {
+    send: (message: EmailMessage, options?: Parameters<Resend['emails']['send']>[1]) =>
+      client.emails.send(isStaging() ? ({ ...message, subject: `[Staging] ${message.subject}` } as EmailMessage) : message, options),
+  },
+};
 
 /*
  * Every message leaves from the platform's own verified sender. There is no

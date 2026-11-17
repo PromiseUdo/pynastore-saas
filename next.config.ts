@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { networkInterfaces } from "node:os";
+import { isStaging } from "./lib/deploy-stage";
 
 // This machine's LAN IPv4 addresses — lets a phone on the same network load
 // the dev server (Capacitor debug builds / live reload) with a working dev runtime.
@@ -72,6 +73,8 @@ const nextConfig: NextConfig = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), usb=(), payment=(), browsing-topics=()' },
           // Our pages don't share a window with pages from other sites; sign-in and payment are redirects, not popups.
           { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+          // The staging site (docs/STAGING.md) is kept out of search results entirely.
+          ...(isStaging() ? [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }] : []),
         ],
       },
       {

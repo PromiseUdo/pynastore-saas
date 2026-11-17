@@ -13,6 +13,7 @@
  * index, or both.
  */
 import { prisma } from '@/lib/prisma';
+import { isStaging } from '@/lib/deploy-stage';
 import { storefrontUrlFor } from '@/lib/domains/storefront-url';
 
 const PRIVATE = ['/account', '/cart', '/checkout', '/wishlist', '/track-order', '/invoice/'];
@@ -32,7 +33,8 @@ export async function GET(
     select: { id: true },
   });
 
-  const body = store
+  // The staging site (docs/STAGING.md) is closed to search engines whatever the shop.
+  const body = store && !isStaging()
     ? [
         'User-agent: *',
         'Allow: /',

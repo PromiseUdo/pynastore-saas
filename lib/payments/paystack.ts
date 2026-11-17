@@ -13,6 +13,7 @@
  * recorded in ROADMAP 10.13.
  */
 
+import { isStaging } from '@/lib/deploy-stage';
 import { createHmac, timingSafeEqual } from 'crypto';
 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
@@ -39,12 +40,19 @@ export class PaystackError extends Error {
 export function paystackConfigProblem(): string | null {
   const key = process.env.PAYSTACK_SECRET_KEY;
   if (!key) return 'PAYSTACK_SECRET_KEY is not configured.';
+  const staging = stagingProblem(key);
+  if (staging) return staging;
   const expected = process.env.PAYSTACK_MODE?.trim();
   if (!expected) return null;
   if (expected !== 'live' && expected !== 'test') return `PAYSTACK_MODE must be "live" or "test", not "${expected}".`;
   const actual = key.startsWith('sk_live_') ? 'live' : key.startsWith('sk_test_') ? 'test' : 'unrecognised';
   if (actual !== expected) return `PAYSTACK_MODE is "${expected}" but PAYSTACK_SECRET_KEY is a ${actual} key.`;
   return null;
+}
+
+/* Staging (docs/STAGING.md) never moves real money, whatever its settings say. */
+function stagingProblem(key: string): string | null {
+  return isStaging() && key.startsWith('sk_live_') ? 'This is the staging site: use Paystack test keys (sk_test_…) here, never live ones.' : null;
 }
 
 /** The mode the configured secret key belongs to, or null when there's no usable key. */

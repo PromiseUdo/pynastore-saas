@@ -16,6 +16,14 @@ typechecks, applies every migration to an empty database, fails if
 `schema.prisma` changed without a migration, runs the whole suite and builds.
 A new setting the code needs at load time gets a placeholder in `.env.ci`.
 
+# Branches and staging
+
+`master` is the live site and holds only what the public may use. `dev` is
+staging (its own domain, Neon branch and Paystack test keys), and each feature
+is built on `feature/…` from `dev`. Release = merge `dev` into `master`. Setup
+and rules: `docs/STAGING.md`. `lib/deploy-stage.ts` says which copy is running.
+Keep migrations additive: a release applies them while old code still serves.
+
 # Roadmap
 
 `docs/ROADMAP.md` holds the agreed build plan: the phases, what gap each one closes,

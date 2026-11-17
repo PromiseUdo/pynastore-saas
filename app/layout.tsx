@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { NativeShell } from '@/components/native/native-shell';
+import { StagingBadge } from '@/components/staging-badge';
 import { PLATFORM_NAME } from '@/lib/brand';
 
 const geistSans = Geist({
@@ -59,6 +60,7 @@ export default async function RootLayout({
     >
       <body className="h-full bg-background text-foreground">
         <NativeShell />
+        <StagingBadge />
         {children}
       </body>
     </html>

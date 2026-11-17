@@ -54,3 +54,24 @@ describe('Paystack configuration (ROADMAP 10.11)', () => {
     expect(isPaystackConfigured()).toBe(false);
   });
 });
+
+describe('paystackConfigProblem on staging', () => {
+  const saved = { key: process.env.PAYSTACK_SECRET_KEY, mode: process.env.PAYSTACK_MODE, stage: process.env.DEPLOY_STAGE };
+  afterEach(() => {
+    const restore = (name: string, value: string | undefined) => (value === undefined ? delete process.env[name] : (process.env[name] = value));
+    restore('PAYSTACK_SECRET_KEY', saved.key);
+    restore('PAYSTACK_MODE', saved.mode);
+    restore('DEPLOY_STAGE', saved.stage);
+  });
+
+  it('refuses a live key on staging, even when PAYSTACK_MODE says live', async () => {
+    const { paystackConfigProblem } = await import('./paystack');
+    process.env.DEPLOY_STAGE = 'staging';
+    process.env.PAYSTACK_SECRET_KEY = 'sk_live_abc';
+    process.env.PAYSTACK_MODE = 'live';
+    expect(paystackConfigProblem()).toMatch(/staging site/);
+    process.env.PAYSTACK_SECRET_KEY = 'sk_test_abc';
+    process.env.PAYSTACK_MODE = 'test';
+    expect(paystackConfigProblem()).toBeNull();
+  });
+});
