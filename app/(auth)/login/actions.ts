@@ -1,6 +1,6 @@
 'use server';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { compare } from 'bcryptjs';
 import { signIn } from '@/lib/auth';
 import { AuthError } from 'next-auth';
@@ -40,6 +40,15 @@ export async function loginAction(
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
   }
+
+  /* Password guessing: at most 10 tries per account and 30 per connection
+   * in 15 minutes. Counted before the password is looked at, right or wrong. */
+  const jarHeaders = await headers();
+  const ip = jarHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() || jarHeaders.get('x-real-ip') || 'unknown';
+  const allowed =
+    (await checkRateLimit(`sign-in:ip:${ip}`, 30, 15 * 60 * 1000)) &&
+    (await checkRateLimit(`sign-in:email:${parsed.data.email.toLowerCase()}`, 10, 15 * 60 * 1000));
+  if (!allowed) return { error: 'Too many sign-in attempts. Wait 15 minutes, or reset your password.' };
 
   // Support callbackUrl for invite flow (e.g. /login?callbackUrl=/invite/TOKEN)
   const callbackUrl = formData.get('callbackUrl') as string | null;

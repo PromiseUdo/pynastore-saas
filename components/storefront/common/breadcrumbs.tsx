@@ -1,3 +1,4 @@
+import { jsonLdHtml } from '@/lib/json-ld';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -43,5 +44,5 @@ export function BreadcrumbJsonLd({ items, baseUrl }: { items: Crumb[]; baseUrl: 
       ...(item.href ? { item: `${baseUrl}${item.href}` } : {}),
     })),
   };
-  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(json) }} />;
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml(json) }} />;
 }

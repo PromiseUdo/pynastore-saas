@@ -10,6 +10,7 @@
 import { compare } from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 const credentialsSchema = z.object({
   email: z.email(),
@@ -20,6 +21,10 @@ export async function userForPassword(raw: unknown) {
   const parsed = credentialsSchema.safeParse(raw);
   if (!parsed.success) return null;
   const { email, password } = parsed.data;
+  /* Someone posting straight to the credentials endpoint skips the login
+   * action's limit, so the provider keeps its own: 10 tries per account
+   * in 15 minutes. */
+  if (!(await checkRateLimit(`sign-in:provider:${email.toLowerCase()}`, 10, 15 * 60 * 1000))) return null;
 
   const user = await prisma.user.findUnique({
     where: { email },

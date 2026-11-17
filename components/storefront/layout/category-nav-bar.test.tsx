@@ -60,7 +60,7 @@ const ITEMS: NavItem[] = [
   navItem('fashion', 'Fashion'),
   // A synthetic entry with no subtree — belongs in the primary links, never
   // in the category rail.
-  { id: 'sale', name: 'Sale', href: '/sale', columns: [], quickLinks: [] },
+  { id: 'sale', name: 'Sale', href: '/sale', columns: [], quickLinks: [], highlight: 'sale', shortcut: true },
 ];
 
 const panel = () => screen.queryByRole('heading', { level: 3 });
@@ -112,13 +112,23 @@ describe('<CategoryNavBar>', () => {
     expect(panel()?.textContent).toBe('Fashion');
   });
 
-  it('excludes nav entries that have no subtree from the category rail', async () => {
+  it('excludes the New in / Sale shortcuts from the category rail', async () => {
     const user = userEvent.setup();
     render(<CategoryNavBar navItems={ITEMS} />);
     await user.click(screen.getByRole('button', { name: /^categories$/i }));
 
     const rail = screen.getByRole('list', { name: 'Categories' });
     expect(within(rail).queryByRole('link', { name: 'Sale' })).toBeNull();
+  });
+
+  it('lists a department that has products but no subcategories', async () => {
+    const user = userEvent.setup();
+    const skincare: NavItem = { id: 'skincare', name: 'Skincare', href: '/c/skincare', productCount: 1, columns: [], quickLinks: [] };
+    render(<CategoryNavBar navItems={[...ITEMS, skincare]} />);
+    await user.click(screen.getByRole('button', { name: /^categories$/i }));
+
+    const rail = screen.getByRole('list', { name: 'Categories' });
+    expect(within(rail).getByRole('link', { name: /^Skincare/ })).toBeTruthy();
   });
 
   it('closes on Escape', async () => {

@@ -12,6 +12,7 @@
  * URLs are built from the tenant's own storefront origin, so this stays
  * correct per merchant rather than hardcoding one domain.
  */
+import { jsonLdHtml } from '@/lib/json-ld';
 import type { Product, Review } from '@/lib/storefront/types';
 
 export function ProductJsonLd({
@@ -85,7 +86,7 @@ export function ProductJsonLd({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(json) }}
+      dangerouslySetInnerHTML={{ __html: jsonLdHtml(json) }}
     />
   );
 }

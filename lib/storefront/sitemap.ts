@@ -1,5 +1,6 @@
 /*
- * sitemap.xml, per store.
+ * lib/storefront/sitemap.ts — what goes in each store's sitemap.xml
+ * (served by app/store/[organizationSlug]/sitemap.xml/route.ts).
  *
  * Built from the merchant's own catalogue through the usual seam, so it can
  * only ever list what a shopper is allowed to see: published products, visible
@@ -18,7 +19,7 @@ import {
 import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { getOrgRouting } from '@/lib/tenant/org-status';
 import { prisma } from '@/lib/prisma';
-import type { CategoryNode } from '@/lib/storefront/types';
+import type { CategoryNode } from './types';
 
 /** Search engines stop reading a sitemap long before this. */
 const MAX_PRODUCTS = 5000;
@@ -30,12 +31,7 @@ function flatten(nodes: CategoryNode[], trail: string[] = []): string[][] {
   });
 }
 
-export default async function sitemap({
-  params,
-}: {
-  params: Promise<{ organizationSlug: string }>;
-}): Promise<MetadataRoute.Sitemap> {
-  const { organizationSlug } = await params;
+export async function storeSitemapEntries(organizationSlug: string): Promise<MetadataRoute.Sitemap> {
   const scope = { organizationSlug };
 
   // Not open yet (12.5), or not a live shop: nothing to list.
@@ -76,4 +72,19 @@ export default async function sitemap({
       priority: 0.4,
     })),
   ];
+}
+
+const escapeXml = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+/** The entries as sitemap XML (sitemaps.org 0.9). */
+export function sitemapXml(entries: MetadataRoute.Sitemap): string {
+  const urls = entries.map((entry) => {
+    const parts = [`<loc>${escapeXml(entry.url)}</loc>`];
+    if (entry.lastModified) parts.push(`<lastmod>${new Date(entry.lastModified).toISOString()}</lastmod>`);
+    if (entry.changeFrequency) parts.push(`<changefreq>${entry.changeFrequency}</changefreq>`);
+    if (entry.priority !== undefined) parts.push(`<priority>${entry.priority}</priority>`);
+    return `<url>${parts.join('')}</url>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
 }

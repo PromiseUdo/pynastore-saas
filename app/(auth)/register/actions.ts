@@ -6,6 +6,8 @@ import { signIn } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { AuthError } from 'next-auth';
 import { z } from 'zod';
+import { headers } from 'next/headers';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { sendVerificationEmail } from '@/lib/email-verification';
 
 const RegisterSchema = z.object({
@@ -28,6 +30,14 @@ export async function registerAction(
 
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
+  }
+
+  /* Bulk sign-ups (and the confirmation emails each one sends): 5 accounts
+   * per connection an hour is plenty for a real person or a shared office. */
+  const h = await headers();
+  const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() || h.get('x-real-ip') || 'unknown';
+  if (!(await checkRateLimit(`register:ip:${ip}`, 5, 60 * 60 * 1000))) {
+    return { error: 'Too many new accounts from this connection. Please try again in an hour.' };
   }
 
   const { name, email, password } = parsed.data;

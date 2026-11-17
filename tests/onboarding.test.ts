@@ -44,7 +44,7 @@ const { getCatalogue } = await import('@/lib/storefront/data/current');
 const { placeOrder } = await import('@/lib/storefront/orders/create');
 const { runOnboardingReminders } = await import('@/lib/onboarding/reminders');
 const { SetupGuideSection } = await import('@/components/dashboard/setup-guide-section');
-const sitemap = (await import('@/app/store/[organizationSlug]/sitemap')).default;
+const { storeSitemapEntries } = await import('@/lib/storefront/sitemap');
 
 const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const DAY = 24 * 60 * 60 * 1000;
@@ -204,7 +204,7 @@ describe('the setup guide and opening', () => {
   it('keeps a not-open shop empty to shoppers — but not to its own team — and takes no order', async () => {
     session.user = null; // a shopper
     expect((await getCatalogue({ organizationSlug: shop.slug })).products).toHaveLength(0);
-    expect(await sitemap({ params: Promise.resolve({ organizationSlug: shop.slug }) })).toEqual([]);
+    expect(await storeSitemapEntries(shop.slug)).toEqual([]);
 
     session.user = { id: userId, email: `obt-${suffix}@example.com` }; // the owner, previewing
     expect((await getCatalogue({ organizationSlug: shop.slug })).products.map((p) => p.id)).toContain(productId);
@@ -231,7 +231,7 @@ describe('the setup guide and opening', () => {
     expect(await prisma.auditLog.count({ where: { organizationId: shop.id, action: 'settings.storefront.opened' } })).toBe(1);
 
     session.user = null;
-    expect((await sitemap({ params: Promise.resolve({ organizationSlug: shop.slug }) })).length).toBeGreaterThan(0);
+    expect((await storeSitemapEntries(shop.slug)).length).toBeGreaterThan(0);
 
     expect(await closeStorefront()).toMatchObject({ success: true });
     expect((await prisma.organization.findUniqueOrThrow({ where: { id: shop.id } })).storefrontOpen).toBe(false);
