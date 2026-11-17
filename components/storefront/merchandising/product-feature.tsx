@@ -3,6 +3,10 @@
  * "feature" layout of a product band. The first product is whichever the
  * band's source ranks first; nothing is picked by hand here.
  *
+ * On a computer the large card's picture stretches to the height of the
+ * four beside it (`feature`), so its name and price line up with the bottom
+ * row rather than floating under a square picture with a gap above them.
+ *
  * Server component: <ProductCard> is the only client boundary.
  */
 import type { Product } from '@/lib/storefront/types';
@@ -17,7 +21,7 @@ export function ProductFeature({ title, href, products }: { title: string; href?
     <section className="sf-container sf-section">
       <SectionHeader title={title} href={href} />
       <div className="grid gap-x-5 gap-y-10 lg:grid-cols-2">
-        <ProductCard product={lead} priority />
+        <ProductCard product={lead} priority feature />
         {rest.length > 0 && (
           <div className="grid grid-cols-2 gap-x-5 gap-y-10">
             {rest.map((product) => (

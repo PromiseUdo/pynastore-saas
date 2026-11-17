@@ -31,13 +31,21 @@ export function ProductCard({
   product,
   priority,
   className,
+  feature,
 }: {
   product: Product;
   priority?: boolean;
   className?: string;
+  /**
+   * The large card beside a grid (product-feature.tsx). From lg up its
+   * picture grows to fill the height of the grid next to it, so the name and
+   * price sit right under the picture instead of a gap opening above them.
+   */
+  feature?: boolean;
 }) {
   const hydrated = useHydrated();
   const { addToCart } = useCartActions();
+  const sizes = feature ? '(max-width:1024px) 100vw, 50vw' : '(max-width:640px) 50vw, (max-width:1024px) 33vw, 22vw';
 
   const wishlisted = useWishlistStore((s) => s.items.some((i) => i.productId === product.id));
   const toggleWishlist = useWishlistStore((s) => s.toggle);
@@ -85,16 +93,16 @@ export function ProductCard({
      * framed — ROADMAP 15.1) restyle every card from storefront.css, so
      * there is one card component, not one per look. */
     <article className={cn('sf-card group/card flex h-full flex-col', className)}>
-      <div className="sf-card-media relative overflow-hidden rounded-2xl bg-tile">
-        <Link href={href} aria-label={product.name} className="block">
-          <span className="relative block aspect-square">
+      <div className={cn('sf-card-media relative overflow-hidden rounded-2xl bg-tile', feature && 'lg:flex-1')}>
+        <Link href={href} aria-label={product.name} className={cn('block', feature && 'lg:h-full')}>
+          <span className={cn('relative block aspect-square', feature && 'lg:aspect-auto lg:h-full lg:min-h-[24rem]')}>
             <ProductImage
               src={primary}
               alt={product.name}
               name={product.name}
               fill
               priority={priority}
-              sizes="(max-width:640px) 50vw, (max-width:1024px) 33vw, 22vw"
+              sizes={sizes}
               className={cn(
                 'object-cover transition-[opacity,transform] duration-700 ease-out',
                 'group-hover/card:scale-[1.04]',
@@ -106,7 +114,7 @@ export function ProductCard({
                 src={secondary}
                 alt=""
                 fill
-                sizes="(max-width:640px) 50vw, (max-width:1024px) 33vw, 22vw"
+                sizes={sizes}
                 className="scale-[1.04] object-cover opacity-0 transition-opacity duration-700 ease-out group-hover/card:opacity-100"
               />
             )}
@@ -158,7 +166,7 @@ export function ProductCard({
         </button>
       </div>
 
-      <div className="flex flex-1 flex-col px-0.5 pt-3.5">
+      <div className={cn('flex flex-col px-0.5 pt-3.5', feature ? 'lg:flex-none' : 'flex-1')}>
         <Link
           href={href}
           className="line-clamp-2 text-[0.9375rem] font-semibold leading-snug transition-colors hover:text-teal"
