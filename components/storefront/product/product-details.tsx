@@ -1,10 +1,11 @@
 /*
  * Description and specifications.
  *
- * Server component. The description is stored with light markdown (bold runs
- * and paragraph breaks), so it is rendered as paragraphs with `**bold**`
- * resolved — deliberately not `dangerouslySetInnerHTML`, and deliberately
- * not a markdown dependency for one bold run.
+ * Server component. The description is written in the store's small
+ * formatting language (lib/storefront/pages/format.ts — the admin's
+ * formatting toolbar types it): paragraphs, **bold**, headings, bulleted and
+ * numbered lists, links. It is parsed to data and rendered by the same
+ * PageBlocks as the admin preview — never `dangerouslySetInnerHTML`.
  *
  * The specification table is built from `product.specs`, whatever those turn
  * out to be: a laptop shows Warranty and Connectivity, a serum shows Skin
@@ -13,10 +14,12 @@
  * an attribute.
  */
 import { ReadMore } from './read-more';
+import { PageBlocks } from '@/components/content/page-blocks';
+import { parsePageBody } from '@/lib/storefront/pages/format';
 import type { Product } from '@/lib/storefront/types';
 
 export function ProductDetails({ product }: { product: Product }) {
-  const paragraphs = product.description.split('\n\n').filter(Boolean);
+  const blocks = parsePageBody(product.description);
 
   return (
     <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
@@ -28,11 +31,7 @@ export function ProductDetails({ product }: { product: Product }) {
         {/* Collapsed on small screens only: on a phone three paragraphs push
           * the specifications and reviews an entire screen further down. */}
         <ReadMore className="mt-4">
-          <div className="space-y-4 text-sm leading-relaxed text-muted-foreground">
-            {paragraphs.map((paragraph, i) => (
-              <p key={i}>{renderInline(paragraph)}</p>
-            ))}
-          </div>
+          <PageBlocks blocks={blocks} nested className="sm:text-sm" />
         </ReadMore>
       </section>
 
@@ -60,18 +59,5 @@ function Row({ label, value }: { label: string; value: string }) {
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="min-w-0 break-words font-medium">{value}</dd>
     </div>
-  );
-}
-
-/** Resolves `**bold**` runs; everything else is plain text. */
-function renderInline(text: string): React.ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith('**') && part.endsWith('**') ? (
-      <strong key={i} className="font-semibold text-foreground">
-        {part.slice(2, -2)}
-      </strong>
-    ) : (
-      <span key={i}>{part}</span>
-    ),
   );
 }

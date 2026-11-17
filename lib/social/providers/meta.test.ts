@@ -40,10 +40,14 @@ function stubGraph(replies: Record<string, unknown>, status = 200) {
 beforeEach(() => {
   process.env.META_APP_ID = '1234567890';
   process.env.META_APP_SECRET = 'test-app-secret';
+  // A Login for Business configuration in a local .env changes the dialog;
+  // tests start without one and set it where they mean to.
+  vi.stubEnv('META_CONFIG_ID', '');
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe('configuration', () => {

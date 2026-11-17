@@ -10,11 +10,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { SwitchRoot } from '@/components/ui/switch';
 import { Field, FieldDescription, FieldError, FormGrid } from '@/components/ui/form-field';
 import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { ImageUploader } from '@/components/media/image-uploader';
+import { FormattedTextarea } from '@/components/dashboard/formatted-textarea';
 import type { ProductImageSearchStatus } from '@/lib/storefront/visual-search/indexing';
 import { ImageSearchStatus } from './ImageSearchStatus';
 import { discountPercent, PRODUCT_TAGS, productReadiness, publishBlockers } from '@/features/inventory/product-rules';
@@ -331,8 +331,19 @@ export function ProductForm({ product, categories, brands: initialBrands, suppli
                 {errors.shortDescription ? <FieldError>{errors.shortDescription}</FieldError> : <FieldDescription>{state.shortDescription.length}/200</FieldDescription>}
               </Field>
               <Field>
-                <Label htmlFor="p-desc">Description</Label>
-                <Textarea id="p-desc" className="min-h-32" value={state.description} maxLength={5000} onChange={(e) => set('description', e.target.value)} placeholder="What it is, what it’s made of, how to use or care for it." />
+                <FormattedTextarea
+                  id="p-desc"
+                  label={<Label htmlFor="p-desc">Description</Label>}
+                  className="min-h-40"
+                  value={state.description}
+                  maxLength={5000}
+                  onChange={(value) => set('description', value)}
+                  disabled={readOnly}
+                  placeholder="What it is, what it’s made of, how to use or care for it."
+                />
+                <FieldDescription>
+                  Select words and use the buttons to make them bold, or start a heading or list. Leave a blank line between paragraphs. {state.description.length}/5000
+                </FieldDescription>
               </Field>
             </FormCard>
 

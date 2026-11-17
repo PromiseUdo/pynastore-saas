@@ -25,6 +25,7 @@
 import { prisma } from '@/lib/prisma';
 import { formatMoney, formatMoneyRange } from '@/lib/format';
 import { storeUrl } from '@/lib/storefront/account/return-url';
+import { formattedToPlain } from '@/lib/storefront/pages/format';
 
 /** One image a merchant may attach, as the composer shows it. */
 export interface ProductImageOption {
@@ -192,7 +193,8 @@ export async function getProductFacts(
   return {
     productId: product.id,
     name: product.name,
-    description: product.description,
+    // Plain words: the formatting marks mean nothing in a social post.
+    description: product.description ? formattedToPlain(product.description) : product.description,
     shortDescription: product.shortDescription,
     categoryPath: await categoryPath(organizationId, product.categoryId),
     brandName: product.brand?.name ?? null,

@@ -12,6 +12,10 @@
  *
  * `preview` draws links without making them clickable — inside the admin a
  * store link like "/products" would lead somewhere else entirely.
+ *
+ * `nested` is for text that sits under a heading of its own (a product's
+ * description under "About this product"): its headings drop one level and
+ * carry no anchor ids, so the page's outline and ids stay the page's.
  */
 import * as React from 'react';
 import Link from 'next/link';
@@ -67,10 +71,12 @@ function Inlines({ nodes, preview }: { nodes: Inline[]; preview: boolean }) {
 export function PageBlocks({
   blocks,
   preview = false,
+  nested = false,
   className,
 }: {
   blocks: Block[];
   preview?: boolean;
+  nested?: boolean;
   className?: string;
 }) {
   return (
@@ -78,6 +84,14 @@ export function PageBlocks({
       {blocks.map((block, i) => {
         switch (block.type) {
           case 'heading':
+            if (nested) {
+              const Tag = block.level === 2 ? 'h3' : 'h4';
+              return (
+                <Tag key={i} className={cn('font-semibold text-foreground', block.level === 2 ? 'pt-2 text-base' : 'text-sm')}>
+                  <Inlines nodes={block.content} preview={preview} />
+                </Tag>
+              );
+            }
             return block.level === 2 ? (
               <h2 key={i} id={block.id} className="scroll-mt-24 pt-4 text-lg font-semibold text-foreground sm:text-xl">
                 <Inlines nodes={block.content} preview={preview} />

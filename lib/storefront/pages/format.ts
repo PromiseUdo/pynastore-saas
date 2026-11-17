@@ -223,6 +223,27 @@ export function pageOutline(blocks: Block[]): { id: string; text: string }[] {
     .map((b) => ({ id: b.id, text: inlineText(b.content) }));
 }
 
+/**
+ * The text without its formatting marks, one block per paragraph: for
+ * places that can't show formatting (an AI prompt, a social post).
+ */
+export function formattedToPlain(body: string): string {
+  return parsePageBody(body)
+    .map((block) => {
+      switch (block.type) {
+        case 'heading':
+          return inlineText(block.content);
+        case 'paragraph':
+          return block.lines.map(inlineText).join('\n');
+        case 'list':
+          return block.items.map((item, i) => `${block.ordered ? `${i + 1}.` : '-'} ${inlineText(item)}`).join('\n');
+        case 'table':
+          return [block.head, ...block.rows].map((row) => row.map(inlineText).join(' | ')).join('\n');
+      }
+    })
+    .join('\n\n');
+}
+
 /** The first words of the page as plain text, for a search-engine description. */
 export function pageExcerpt(body: string, max = 160): string {
   const text = parsePageBody(body)

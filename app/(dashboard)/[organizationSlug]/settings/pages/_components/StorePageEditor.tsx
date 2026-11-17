@@ -17,13 +17,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, ExternalLink, Loader2, Trash2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { FormattedTextarea } from '@/components/dashboard/formatted-textarea';
 import { SwitchRoot } from '@/components/ui/switch';
 import { Field, FieldDescription, FieldError } from '@/components/ui/form-field';
 import {
@@ -35,9 +34,8 @@ import {
   AlertDialogDescription,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { PageBlocks } from '@/components/content/page-blocks';
 import { formatDate } from '@/lib/format';
-import { parsePageBody, PAGE_BODY_MAX } from '@/lib/storefront/pages/format';
+import { PAGE_BODY_MAX } from '@/lib/storefront/pages/format';
 import {
   PAGE_SLUG_MAX,
   STORE_PAGE_KIND_INFO,
@@ -129,7 +127,6 @@ export function StorePageEditor({
     body !== initial.body ||
     isPublished !== initial.isPublished;
 
-  const blocks = React.useMemo(() => (tab === 'preview' ? parsePageBody(body) : []), [tab, body]);
   const readOnly = !canManage;
 
   function changeTitle(value: string) {
@@ -286,49 +283,21 @@ export function StorePageEditor({
             </Field>
 
             <Field>
-              <div className="flex items-end justify-between gap-3">
-                <Label htmlFor="page-body">Page text{isPublished ? ' *' : ''}</Label>
-                <div role="tablist" aria-label="Write or preview" className="inline-flex rounded-md border p-0.5">
-                  {(['write', 'preview'] as const).map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      role="tab"
-                      aria-selected={tab === key}
-                      onClick={() => setTab(key)}
-                      className={cn(
-                        'h-7 rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        tab === key ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
-                      )}
-                    >
-                      {key === 'write' ? 'Write' : 'Preview'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {tab === 'write' ? (
-                <Textarea
-                  id="page-body"
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  disabled={readOnly}
-                  rows={22}
-                  maxLength={PAGE_BODY_MAX}
-                  placeholder={`Write your ${noun} here, in your own words.`}
-                  aria-invalid={errors.body ? true : undefined}
-                  className="min-h-[24rem] resize-y font-mono text-[13px] leading-relaxed"
-                />
-              ) : (
-                <div className="min-h-[24rem] rounded-md border bg-card px-5 py-5">
-                  <h2 className="text-xl font-semibold text-foreground">{title.trim() || 'Untitled page'}</h2>
-                  {blocks.length ? (
-                    <PageBlocks blocks={blocks} preview className="mt-4" />
-                  ) : (
-                    <p className="mt-4 text-sm text-muted-foreground">Nothing written yet.</p>
-                  )}
-                </div>
-              )}
+              <FormattedTextarea
+                id="page-body"
+                label={<Label htmlFor="page-body">Page text{isPublished ? ' *' : ''}</Label>}
+                tab={tab}
+                onTabChange={setTab}
+                value={body}
+                onChange={setBody}
+                disabled={readOnly}
+                rows={22}
+                maxLength={PAGE_BODY_MAX}
+                placeholder={`Write your ${noun} here, in your own words.`}
+                invalid={Boolean(errors.body)}
+                className="min-h-[24rem] font-mono text-[13px] leading-relaxed"
+                previewHeading={<h2 className="text-xl font-semibold text-foreground">{title.trim() || 'Untitled page'}</h2>}
+              />
 
               {errors.body ? (
                 <FieldError>{errors.body}</FieldError>
