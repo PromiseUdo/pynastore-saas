@@ -16,6 +16,7 @@
  * preview (a feature branch) never migrates: it shares staging's database,
  * and a migration that isn't merged into `dev` yet must not land there.
  */
+import { execFileSync } from 'node:child_process';
 
 const env = process.env.VERCEL_ENV;
 const branch = process.env.VERCEL_GIT_COMMIT_REF;
