@@ -28,6 +28,7 @@ import { StoreSelectField } from './StoreSelectField';
 import { ETA_UNITS, ETA_UNIT_LABELS, formatReady, fromMinutes, toMinutes, type DeliveryEtaUnit } from '@/lib/storefront/delivery/eta';
 import type { DeliveryAudience } from '@/lib/storefront/delivery/match';
 import { AUDIENCES, AUDIENCE_LABEL } from './audience';
+import { StateSelect } from '@/components/dashboard/state-select';
 
 const UNIT_NOUN: Record<DeliveryEtaUnit, string> = { MINUTES: 'minutes', HOURS: 'hours', DAYS: 'working days' };
 
@@ -173,18 +174,7 @@ export function PickupDialog({
               </Field>
               <Field>
                 <Label htmlFor="pickup-state">State *</Label>
-                <SelectRoot value={state} onValueChange={setState}>
-                  <SelectTrigger id="pickup-state" aria-invalid={errors.state ? true : undefined}>
-                    <SelectValue placeholder="Choose" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {NIGERIAN_STATES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </SelectRoot>
+                <StateSelect id="pickup-state" value={state} onChange={setState} placeholder="Choose" invalid={Boolean(errors.state)} />
                 {errors.state && <FieldError>{errors.state}</FieldError>}
               </Field>
             </div>

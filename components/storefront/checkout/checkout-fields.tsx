@@ -25,6 +25,7 @@ import { Field, FieldDescription, FieldError } from '@/components/ui/form-field'
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/lib/utils';
 
 const CONTROL = 'h-12 rounded-xl px-4 text-base';
@@ -83,6 +84,14 @@ export function TextField({ id, label, error, hint, optional, className, ...prop
  *
  * It wears the same `CONTROL` sizing as every other field, so it is the same
  * design system, not a second one.
+ *
+ * LONG LISTS ON A COMPUTER. A desktop browser draws the native list as one
+ * tall menu that runs off the screen and can't be searched. So when
+ * `searchNoun` is given, a device with a mouse or trackpad (`pointer: fine`)
+ * gets the searchable dropdown instead, while touch screens keep the native
+ * wheel. The native <select> stays the real field either way — the
+ * dropdown writes into it and fires its `change` — so forms posting
+ * FormData and react-hook-form's `register` work unchanged.
  */
 type SelectFieldProps = Omit<React.ComponentProps<'select'>, 'id' | 'children'> & {
   id: string;
@@ -91,6 +100,8 @@ type SelectFieldProps = Omit<React.ComponentProps<'select'>, 'id' | 'children'> 
   placeholder?: string;
   error?: string;
   hint?: string;
+  /** plural name of the options ("states"): makes the list searchable on computers */
+  searchNoun?: string;
 };
 
 export function SelectField({
@@ -101,22 +112,55 @@ export function SelectField({
   error,
   hint,
   className,
+  searchNoun,
+  ref,
   ...props
 }: SelectFieldProps) {
   const { errorId, hintId, describedBy } = useFieldIds(id, error, hint);
+  const selectRef = React.useRef<HTMLSelectElement | null>(null);
+  const setRefs = (node: HTMLSelectElement | null) => {
+    selectRef.current = node;
+    if (typeof ref === 'function') ref(node);
+    else if (ref) ref.current = node;
+  };
+
+  // What the native field holds. Code (a saved address, a country change)
+  // can set it without an event, so it is re-read after every render.
+  const [current, setCurrent] = React.useState(() => String(props.value ?? props.defaultValue ?? ''));
+  React.useEffect(() => {
+    const now = selectRef.current?.value ?? '';
+    if (now !== current) setCurrent(now);
+  });
+
+  const pick = (value: string | null) => {
+    const select = selectRef.current;
+    if (!select) return;
+    select.value = value ?? '';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    setCurrent(select.value);
+  };
+
+  const searching = useFinePointer() && Boolean(searchNoun);
+
+  const searchOptions = React.useMemo(
+    () => [...(placeholder ? [{ value: null, label: placeholder }] : []), ...options],
+    [options, placeholder],
+  );
 
   return (
     <Field>
-      <Label htmlFor={id} className="text-[0.8125rem] font-semibold">
+      <Label htmlFor={searching ? `${id}-search` : id} className="text-[0.8125rem] font-semibold">
         {label}
       </Label>
       <div className="relative">
         <select
           id={id}
+          ref={setRefs}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={cn(
             CONTROL,
+            searchNoun && 'pointer-fine:sr-only',
             'w-full appearance-none border bg-background pr-10 text-foreground',
             'transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             'disabled:cursor-not-allowed disabled:opacity-50',
@@ -124,6 +168,9 @@ export function SelectField({
             className,
           )}
           {...props}
+          // Hidden, not removed, on a computer: it still holds the value, but
+          // Tab and the label go to the searchable dropdown instead.
+          tabIndex={searching ? -1 : props.tabIndex}
         >
           {placeholder && <option value="">{placeholder}</option>}
           {options.map((option) => (
@@ -133,13 +180,51 @@ export function SelectField({
           ))}
         </select>
         <ChevronDown
-          className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          className={cn(
+            'pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground',
+            searchNoun && 'pointer-fine:hidden',
+          )}
           aria-hidden
         />
+        {searchNoun && (
+          <div className="hidden pointer-fine:block">
+            <SearchableSelect
+              id={`${id}-search`}
+              options={searchOptions}
+              value={current || null}
+              onChange={pick}
+              placeholder={placeholder}
+              noun={searchNoun}
+              invalid={Boolean(error)}
+              disabled={props.disabled}
+              className={cn(CONTROL, 'h-12 rounded-xl border bg-background', className)}
+            />
+          </div>
+        )}
       </div>
       {hint && !error && <FieldDescription id={hintId}>{hint}</FieldDescription>}
       {error && <FieldError id={errorId}>{error}</FieldError>}
     </Field>
+  );
+}
+
+/** "State" → "states", "County" → "counties": for "Search states". */
+export function pluralRegion(label: string): string {
+  const word = label.toLowerCase();
+  return /[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`;
+}
+
+/** True on a device with a mouse or trackpad. False on the server and on touch screens. */
+function useFinePointer(): boolean {
+  return React.useSyncExternalStore(
+    (onChange) => {
+      if (typeof window.matchMedia !== 'function') return () => {};
+      const query = window.matchMedia('(pointer: fine)');
+      query.addEventListener('change', onChange);
+      return () => query.removeEventListener('change', onChange);
+    },
+    () => typeof window.matchMedia === 'function' && window.matchMedia('(pointer: fine)').matches,
+    () => false,
   );
 }
 

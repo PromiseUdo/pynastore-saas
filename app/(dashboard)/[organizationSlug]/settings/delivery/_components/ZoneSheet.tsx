@@ -23,11 +23,11 @@ import { SwitchRoot } from '@/components/ui/switch';
 import { CheckboxRoot } from '@/components/ui/checkbox';
 import { Field, FieldDescription, FieldError } from '@/components/ui/form-field';
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group';
-import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { SheetRoot, SheetContent, SheetHeader, SheetFooter, SheetTitle, SheetDescription, SheetClose } from '@/components/ui/sheet';
 import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
 import { saveDeliveryZone, type DeliveryStoreRow, type DeliveryZoneRow } from '@/features/settings/delivery';
 import { StoreSelectField } from './StoreSelectField';
+import { StateSelect } from '@/components/dashboard/state-select';
 
 type Kind = DeliveryZoneRow['kind'];
 
@@ -164,18 +164,7 @@ export function ZoneSheet({
               <>
                 <Field>
                   <Label htmlFor="zone-state">State *</Label>
-                  <SelectRoot value={state} onValueChange={setState}>
-                    <SelectTrigger id="zone-state" aria-invalid={errors.state ? true : undefined}>
-                      <SelectValue placeholder="Choose a state" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {NIGERIAN_STATES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </SelectRoot>
+                  <StateSelect id="zone-state" value={state} onChange={setState} invalid={Boolean(errors.state)} />
                   {errors.state && <FieldError>{errors.state}</FieldError>}
                 </Field>
 

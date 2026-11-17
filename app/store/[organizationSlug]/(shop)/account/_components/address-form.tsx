@@ -18,7 +18,7 @@ import { saveAddressAction, type AddressFormState } from '@/features/shop-accoun
 import type { Address } from '@/lib/storefront/types';
 import type { CheckoutConfig } from '@/lib/storefront/checkout/types';
 import { findCountry } from '@/lib/storefront/checkout/config';
-import { TextField, SelectField, FieldRow } from '@/components/storefront/checkout/checkout-fields';
+import { TextField, SelectField, FieldRow, pluralRegion } from '@/components/storefront/checkout/checkout-fields';
 import { SubmitButton } from './submit-button';
 import { FormNotice } from './form-notice';
 
@@ -118,6 +118,7 @@ export function AddressForm({
             label={country.regionLabel}
             placeholder={`Choose a ${country.regionLabel.toLowerCase()}`}
             options={country.regions.map((r) => ({ value: r, label: r }))}
+            searchNoun={pluralRegion(country.regionLabel)}
             defaultValue={value('state')}
             error={state?.fieldErrors?.state}
           />

@@ -21,7 +21,7 @@ import {
 import { createWarehouse, updateWarehouse, type WarehouseRow } from '@/features/inventory/actions';
 import { hasStorePlace, storePlaceProblem, type StorePlaceProblem } from '@/features/inventory/store-place';
 import type { WarehouseStatus } from '@/lib/generated/prisma/enums';
-import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
+import { StateSelect } from '@/components/dashboard/state-select';
 
 type StoreDialogProps = {
   open: boolean;
@@ -29,9 +29,6 @@ type StoreDialogProps = {
   /** the store being edited; null = create */
   editing: WarehouseRow | null;
 };
-
-/** Radix Select can't hold an empty value as an item, so "no state" is this. */
-const NO_STATE = '__none';
 
 const STATUS_HELP: Record<WarehouseStatus, string> = {
   ACTIVE: 'In use: stock can move in and out.',
@@ -141,19 +138,7 @@ export function StoreDialog({ open, onOpenChange, editing }: StoreDialogProps) {
                 </Field>
                 <Field>
                   <Label htmlFor="store-state">State{placeRequired && ' *'}</Label>
-                  <SelectRoot value={state} onValueChange={(v) => setState(v === NO_STATE ? '' : v)}>
-                    <SelectTrigger id="store-state" aria-invalid={placeError?.field === 'state' ? true : undefined}>
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {!placeRequired && <SelectItem value={NO_STATE}>Not set</SelectItem>}
-                      {NIGERIAN_STATES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </SelectRoot>
+                  <StateSelect id="store-state" value={state} onChange={setState} placeholder="Choose" noneLabel={placeRequired ? undefined : 'Not set'} invalid={placeError?.field === 'state'} />
                   {placeError?.field === 'state' && <FieldError>{placeError.message}</FieldError>}
                 </Field>
               </div>

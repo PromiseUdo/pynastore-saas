@@ -137,12 +137,12 @@ export function CatalogView({
             <h2 className="mb-4 text-xl font-semibold tracking-tight sm:text-2xl">{gridTitle}</h2>
           )}
           {/* Below lg there is no sidebar, so Filters and Sort pin under the
-            * header (4.5rem there) instead — the phone equivalent of the
+            * header (4rem there, plus the app's top inset) instead — the phone equivalent of the
             * sticky sidebar, reachable forty cards down. Only the controls
             * pin; the chips scroll away so the bar stays one row tall. */}
           <div
             className={cn(
-              'sticky top-18 z-30 -mx-5 border-b bg-background/95 px-5 py-2.5 backdrop-blur sm:-mx-8 sm:px-8',
+              'sticky top-[calc(var(--inset-top,0px)+4rem)] z-30 -mx-5 border-b bg-background/95 px-5 py-2.5 backdrop-blur sm:-mx-8 sm:px-8',
               'lg:static lg:mx-0 lg:bg-transparent lg:px-0 lg:pt-0 lg:pb-4 lg:backdrop-blur-none',
               // On desktop the one divider goes under the chips when there are any.
               activeFilters.length > 0 && 'lg:border-b-0 lg:pb-0',

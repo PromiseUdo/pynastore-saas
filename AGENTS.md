@@ -106,6 +106,7 @@ Shared pieces that already exist — use them:
 - `lib/realtime/` — Ably hints (`ably.ts`, server) and the listening hook (`client.ts`). Every channel is listen-only, one exact name per token, decided by the server.
 - `components/media/image-uploader.tsx` — all merchant image uploads (signed direct uploads to Cloudinary, see `lib/cloudinary/`). Never accept pasted image links for new features.
 - `app/(dashboard)/[organizationSlug]/inventory/_components/CategorySelect.tsx` — any category picker.
+- `components/ui/searchable-select.tsx` — choosing one value from a long list the page already has (searchable, scrolls); `components/dashboard/state-select.tsx` for Nigerian states. Use `components/ui/search-picker.tsx` instead when results come from the server. Plain `Select` is for short lists.
 - Reference implementations: `inventory/products` (URL-driven list with views/filters/pagination; full-page editor with checklist and sticky save bar) and `inventory/categories` (tree + sheet form).
 
 ## 10. Reports

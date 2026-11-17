@@ -37,7 +37,7 @@ import type { CheckoutFormValues } from '@/lib/storefront/checkout/schema';
 import type { Address } from '@/lib/storefront/types';
 import { findCountry } from '@/lib/storefront/checkout/config';
 import { FormSection } from '@/components/ui/form-field';
-import { TextField, SelectField, FieldRow } from './checkout-fields';
+import { TextField, SelectField, FieldRow, pluralRegion } from './checkout-fields';
 import { SavedAddressPicker, USE_NEW_ADDRESS } from './saved-address-picker';
 
 export function InformationStep({
@@ -195,6 +195,7 @@ export function InformationStep({
                   label={country.regionLabel}
                   placeholder={`Choose a ${country.regionLabel.toLowerCase()}`}
                   options={country.regions.map((r) => ({ value: r, label: r }))}
+                  searchNoun={pluralRegion(country.regionLabel)}
                   error={errors.address?.state?.message}
                   {...register('address.state')}
                 />

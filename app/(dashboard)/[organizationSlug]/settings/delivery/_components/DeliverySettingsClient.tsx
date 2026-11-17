@@ -32,7 +32,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { formatMoney } from '@/lib/format';
 import { formatEta, formatEtaShort } from '@/lib/storefront/delivery/eta';
-import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
 import { formatStorePlace } from '@/features/inventory/store-place';
 import {
   confirmStoreDelivery,
@@ -55,6 +54,7 @@ import { AUDIENCE_BADGE } from './audience';
 import { ArrangedDeliveryDialog, arrangedSummary } from './ArrangedDeliveryDialog';
 import { ReturnsPolicyCard } from './ReturnsPolicyCard';
 import { ConsolidationCard } from './ConsolidationCard';
+import { StateSelect } from '@/components/dashboard/state-select';
 
 const KIND_ORDER: Record<DeliveryZoneRow['kind'], number> = { CITIES: 0, STATES: 1, NATIONWIDE: 2 };
 
@@ -750,18 +750,7 @@ function AddressCheck({ wholesaleOn }: { wholesaleOn: boolean }) {
       <form onSubmit={check} className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_10rem_auto] sm:items-end">
         <div className="space-y-1.5">
           <Label htmlFor="check-state">State</Label>
-          <SelectRoot value={state} onValueChange={setState}>
-            <SelectTrigger id="check-state">
-              <SelectValue placeholder="Choose a state" />
-            </SelectTrigger>
-            <SelectContent>
-              {NIGERIAN_STATES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </SelectRoot>
+          <StateSelect id="check-state" value={state} onChange={setState} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="check-city">City</Label>

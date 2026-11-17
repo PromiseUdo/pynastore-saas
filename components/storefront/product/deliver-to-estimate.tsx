@@ -15,12 +15,15 @@
 import * as React from 'react';
 import { Loader2, MapPin, Truck } from 'lucide-react';
 import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
+import { SelectField } from '@/components/storefront/checkout/checkout-fields';
 import { formatMoney } from '@/lib/storefront/format';
 import { formatEta } from '@/lib/storefront/delivery/eta';
 import { useShopper } from '@/lib/storefront/context';
 import { useDeliverToStore } from '@/lib/storefront/stores/deliver-to-store';
 import { estimateDeliveryAction, type EstimateDeliveryResult } from '@/features/shop-orders/actions';
 import type { DeliverySummary } from '@/lib/storefront/store-claims';
+
+const STATE_OPTIONS = NIGERIAN_STATES.map((s) => ({ value: s, label: s }));
 
 type Loaded = Extract<EstimateDeliveryResult, { ok: true }>;
 
@@ -202,26 +205,21 @@ function PlaceForm({
       }}
       noValidate
     >
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium">State</span>
-        <select
-          value={state}
-          onChange={(e) => {
-            setState(e.target.value);
-            setError(null);
-          }}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? 'deliver-to-error' : undefined}
-          className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">Choose a state</option>
-          {NIGERIAN_STATES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </label>
+      <SelectField
+        id="deliver-to-state"
+        label="State"
+        placeholder="Choose a state"
+        options={STATE_OPTIONS}
+        searchNoun="states"
+        value={state}
+        onChange={(e) => {
+          setState(e.target.value);
+          setError(null);
+        }}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? 'deliver-to-error' : undefined}
+        className="h-10 rounded-lg px-3 text-sm"
+      />
       <label className="block text-sm">
         <span className="mb-1 block font-medium">City or area</span>
         <input

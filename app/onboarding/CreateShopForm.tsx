@@ -14,11 +14,11 @@ import { Label } from '@/components/ui/label';
 import { CheckboxRoot } from '@/components/ui/checkbox';
 import { SelectContent, SelectItem, SelectRoot, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
 import { getAdminUrl, getStorefrontUrl } from '@/lib/tenant/urls';
 import { BUSINESS_TYPES, SALES_CHANNELS, isBusinessType, type BusinessType } from '@/lib/onboarding/business';
 import { toShopAddress } from '@/lib/onboarding/shop-address';
 import { checkShopAddress, createShop, type AddressCheck, type CreateShopField } from './actions';
+import { StateSelect } from '@/components/dashboard/state-select';
 
 const hostOf = (url: string) => url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
@@ -303,18 +303,7 @@ export function CreateShopForm({
             <Label htmlFor="state">
               State <span className="text-destructive">*</span>
             </Label>
-            <SelectRoot value={state} onValueChange={setState}>
-              <SelectTrigger id="state" {...aria('state')}>
-                <SelectValue placeholder="Choose a state" />
-              </SelectTrigger>
-              <SelectContent>
-                {NIGERIAN_STATES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </SelectRoot>
+            <StateSelect id="state" value={state} onChange={setState} invalid={Boolean(errors.state)} />
             {err('state')}
           </div>
           <div className="space-y-1.5">
