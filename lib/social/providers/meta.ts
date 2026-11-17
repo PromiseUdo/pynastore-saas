@@ -83,6 +83,17 @@ function appId(): string | null {
   return process.env.META_APP_ID?.trim() || null;
 }
 
+/**
+ * The Facebook Login for Business configuration (Meta app → Facebook Login
+ * for Business → Configurations). Login for Business asks for permissions
+ * through a configuration rather than a scope list: when this is set the
+ * dialog gets `config_id` and no `scope`. The configuration must hold the
+ * same permissions as META_SCOPES, with a User access token.
+ */
+function configId(): string | null {
+  return process.env.META_CONFIG_ID?.trim() || null;
+}
+
 function appSecret(): string | null {
   return process.env.META_APP_SECRET?.trim() || null;
 }
@@ -362,7 +373,14 @@ export const metaProvider: SocialProvider = {
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set('state', state);
     url.searchParams.set('response_type', 'code');
-    url.searchParams.set('scope', META_SCOPES.join(','));
+    const config = configId();
+    if (config) {
+      url.searchParams.set('config_id', config);
+      // Login for Business would otherwise answer with a token, not a code.
+      url.searchParams.set('override_default_response_type', 'true');
+    } else {
+      url.searchParams.set('scope', META_SCOPES.join(','));
+    }
     return url.toString();
   },
 

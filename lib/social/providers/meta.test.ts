@@ -74,6 +74,19 @@ describe('buildAuthorizationUrl', () => {
     expect(url.searchParams.get('response_type')).toBe('code');
   });
 
+  it('uses the Login for Business configuration instead of scopes when one is set', () => {
+    process.env.META_CONFIG_ID = '987654321';
+    try {
+      const url = new URL(metaProvider.buildAuthorizationUrl({ state: 's', redirectUri: REDIRECT }));
+      expect(url.searchParams.get('config_id')).toBe('987654321');
+      expect(url.searchParams.get('scope')).toBeNull();
+      expect(url.searchParams.get('response_type')).toBe('code');
+      expect(url.searchParams.get('override_default_response_type')).toBe('true');
+    } finally {
+      delete process.env.META_CONFIG_ID;
+    }
+  });
+
   it('never puts the app secret in the URL the browser follows', () => {
     const url = metaProvider.buildAuthorizationUrl({ state: 's', redirectUri: REDIRECT });
     expect(url).toContain('client_id=1234567890');

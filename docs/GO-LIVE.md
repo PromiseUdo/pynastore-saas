@@ -90,11 +90,17 @@ connect a Page. Start this early; Meta's review is the slowest step.
 2. **Facebook Login for Business → Settings → Valid OAuth Redirect URIs:**
    add exactly the address the checklist shows under **Meta app settings**,
    `https://app.pynastore.com/api/social/meta/callback`.
-3. **Business verification.** Meta requires it for these permissions. In
+3. **Facebook Login for Business → Configurations → Create configuration:**
+   name it e.g. "Connect shop", choose **General** login, **User access
+   token**, and tick the six permissions listed below. (Assets can't be
+   chosen with a user token; each merchant picks their own Pages and
+   Instagram accounts in the Facebook pop-up.) Copy its **Configuration ID** into Vercel as
+   `META_CONFIG_ID` and redeploy. The connect button then uses it.
+4. **Business verification.** Meta requires it for these permissions. In
    **Meta Business Suite → Business settings → Security centre**, verify the
    business behind the app. That's Pynacode, CAC BN 9663547, with a matching
    document, address and phone. This alone can take a few days.
-4. **A reviewer login.** On the live site, create a workspace a reviewer can
+5. **A reviewer login.** On the live site, create a workspace a reviewer can
    use, e.g. `meta-review@pynastore.com`, with a strong password and a few
    products with photos. Meta tests with its own Facebook test Page.
 
