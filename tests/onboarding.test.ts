@@ -144,7 +144,8 @@ describe('create your shop', () => {
     });
     shop = { id: org.id, slug: org.slug };
     expect(org).toMatchObject({ name: 'Onboarding Test', storefrontOpen: false, businessType: 'fashion', salesChannels: 'BOTH' });
-    expect(org.warehouses).toEqual([expect.objectContaining({ name: 'Main shop', state: 'Lagos', city: 'Ikeja', sellsOnline: false })]);
+    // They said they sell online (BOTH), so the first store already sells online.
+    expect(org.warehouses).toEqual([expect.objectContaining({ name: 'Main shop', state: 'Lagos', city: 'Ikeja', sellsOnline: true })]);
     expect(org.categories.map((c) => c.name)).toEqual(['Women', 'Shoes']);
     expect(org.memberships).toEqual([expect.objectContaining({ userId, role: expect.objectContaining({ name: 'Owner' }) })]);
     expect(org.subscription?.status).toBe('TRIALING');
@@ -155,6 +156,19 @@ describe('create your shop', () => {
     const design = await prisma.storefrontDesign.findUnique({ where: { organizationId: org.id } });
     expect(design?.published).toMatchObject({ look: 'editorial', header: { layout: 'centered' }, startingLook: 'fashion' });
     expect(design?.draft).toBeNull();
+  });
+
+  it('leaves selling online off for a shop that only sells in person', async () => {
+    const slug = `obt-inperson-${suffix}`;
+    await bootstrapOrganization({
+      name: 'Counter only',
+      slug,
+      ownerUserId: userId,
+      firstStore: { name: 'Till', state: 'Lagos', city: 'Ikeja' },
+      salesChannels: 'IN_PERSON',
+    });
+    const store = await prisma.warehouse.findFirstOrThrow({ where: { organization: { slug } } });
+    expect(store.sellsOnline).toBe(false);
   });
 
   it('creates nothing at all when a later step fails', async () => {
@@ -170,7 +184,8 @@ describe('the setup guide and opening', () => {
   it('reads each step from the real records, done and undone as they change', async () => {
     const step = async (key: string) => (await getSetupProgress(shop.id))!.steps.find((s) => s.key === key)!.done;
     expect(await step('store_place')).toBe(true);
-    expect(await step('sells_online')).toBe(false);
+    // Done from the start: the shop said it sells online (BOTH).
+    expect(await step('sells_online')).toBe(true);
 
     ctx.organization.id = shop.id;
     ctx.organization.slug = shop.slug;
@@ -180,6 +195,8 @@ describe('the setup guide and opening', () => {
     expect(refused).toMatchObject({ success: false, error: expect.stringMatching(/can’t open yet/) });
 
     const store = await prisma.warehouse.findFirstOrThrow({ where: { organizationId: shop.id } });
+    await prisma.warehouse.update({ where: { id: store.id }, data: { sellsOnline: false } });
+    expect(await step('sells_online')).toBe(false);
     await prisma.warehouse.update({ where: { id: store.id }, data: { sellsOnline: true } });
     expect(await step('sells_online')).toBe(true);
     expect(await step('delivery')).toBe(false);

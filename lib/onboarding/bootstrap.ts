@@ -120,11 +120,22 @@ export async function bootstrapOrganization({
     });
 
     // 5. The first store, with its place, so the merchant never meets
-    //    "create a store first". It doesn't sell online yet — that's a step
-    //    in the setup guide, taken once delivery is set up.
+    //    "create a store first". Selling online starts on for a shop that
+    //    said it sells online: the shop stays closed until its setup is done,
+    //    and checkout still needs delivery, so this only saves a step.
     const store = firstStore
       ? await tx.warehouse.create({
-          data: { organizationId: org.id, name: firstStore.name, state: firstStore.state, city: firstStore.city },
+          data: {
+            organizationId: org.id,
+            name: firstStore.name,
+            state: firstStore.state,
+            city: firstStore.city,
+            /* They told us they sell online, and the store already has its
+             * place (what turning this on requires), so it starts on rather
+             * than being one more switch to find. In person only: off, as
+             * before — they can turn it on from Stores any time. */
+            sellsOnline: salesChannels === 'ONLINE' || salesChannels === 'BOTH',
+          },
           select: { id: true, name: true },
         })
       : null;
