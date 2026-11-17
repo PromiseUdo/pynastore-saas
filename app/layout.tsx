@@ -24,6 +24,11 @@ export const metadata: Metadata = {
     template: `%s · ${PLATFORM_NAME}`,
   },
   description: 'Stock, sales, delivery and payments for businesses that sell at a counter, online, or both.',
+  /* Pynastore's own tab icon, set here rather than as app/favicon.ico: that
+   * file convention is added to EVERY page, shops included, where it sat
+   * beside the shop's own favicon and browsers often picked ours. A shop's
+   * layout sets `icons` itself, which replaces this. */
+  icons: { icon: [{ url: '/favicon.ico', sizes: '48x48', type: 'image/x-icon' }] },
 };
 
 // viewport-fit=cover + no user zoom is required for a native-feeling

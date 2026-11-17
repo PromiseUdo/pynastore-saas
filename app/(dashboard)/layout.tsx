@@ -16,7 +16,7 @@ import { isBusinessAppRequest } from '@/lib/business-app/request';
 export const metadata: Metadata = {
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, title: PLATFORM_NAME, statusBarStyle: 'default' },
-  icons: { apple: '/app-icon/180' },
+  icons: { icon: [{ url: '/favicon.ico', sizes: '48x48', type: 'image/x-icon' }], apple: '/app-icon/180' },
 };
 
 function getInitials(name: string): string {

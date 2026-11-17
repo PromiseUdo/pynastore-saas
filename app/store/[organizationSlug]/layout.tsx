@@ -108,10 +108,12 @@ export async function generateMetadata({
   const image = org.storefrontSocialImageUrl ?? org.logoUrl ?? null;
   /* The browser-tab icon: the merchant's own favicon if they set one, else
    * the logo (15.0), shrunk by Cloudinary rather than downloaded at full
-   * size. With neither, the browser keeps its own. */
+   * size. Setting `icons` here replaces the platform's (app/layout.tsx), so
+   * the shop's is the only one on the page. With neither, the browser falls
+   * back to /favicon.ico. */
   const tabIcon = org.faviconUrl ?? org.logoUrl;
   const icons = tabIcon
-    ? { icon: cloudinaryImage(tabIcon, { width: 64, height: 64, crop: 'fit' }), apple: '/app-icon/180' }
+    ? { icon: [{ url: cloudinaryImage(tabIcon, { width: 64, height: 64, crop: 'fit' }), sizes: '64x64' }], apple: '/app-icon/180' }
     : { apple: '/app-icon/180' };
 
   return {

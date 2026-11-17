@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   // Installable, so staff can get alerts on their phone (ROADMAP 18.3).
   manifest: '/platform/manifest.webmanifest',
   appleWebApp: { capable: true, title: `${PLATFORM_NAME} console`, statusBarStyle: 'default' },
-  icons: { apple: '/platform/app-icon/180' },
+  icons: { icon: [{ url: '/favicon.ico', sizes: '48x48', type: 'image/x-icon' }], apple: '/platform/app-icon/180' },
 };
 
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
