@@ -35,7 +35,7 @@ export const PLATFORM_OPERATOR = 'Pynacode';
 export const PLATFORM_OPERATOR_REGISTRATION = 'CAC business name registration number 9663547';
 
 /** Where people write to us — the site footer and the legal pages. */
-export const PLATFORM_CONTACT_EMAIL = 'pynacode@gmail.com';
+export const PLATFORM_CONTACT_EMAIL = 'business@pynacode.com';
 
 /** Where visitors and merchants get help (ROADMAP 23): the website chat's fallback and the footer's contact. */
 export const PLATFORM_SUPPORT_EMAIL = 'business@pynacode.com';

@@ -51,8 +51,9 @@ const CLOUDINARY_IMAGES = 'https://res.cloudinary.com';
  * Ably, for the chat's real-time hints (lib/chat/ably.ts) — added only when
  * ABLY_API_KEY is set. Exactly the hosts ably-js 2.x contacts by default
  * (its Defaults: primary endpoint "main" → main.realtime.ably.net for both
- * the WebSocket and REST/token exchange; five fallback hosts; and the
- * connectivity check it fetches before falling back). No wildcards: if the
+ * the WebSocket and REST/token exchange; five fallback hosts; and the two
+ * connectivity checks it makes before falling back — an HTTP fetch and a
+ * WebSocket to ws-up). No wildcards: if the
  * SDK's defaults change on an upgrade, this list is updated with it.
  */
 const ABLY_PRIMARY = 'main.realtime.ably.net';
@@ -60,6 +61,7 @@ const ABLY_FALLBACKS = ['a', 'b', 'c', 'd', 'e'].map((x) => `main.${x}.fallback.
 export const ABLY_CONNECT = [
   ...[ABLY_PRIMARY, ...ABLY_FALLBACKS].flatMap((host) => [`https://${host}`, `wss://${host}`]),
   'https://internet-up.ably-realtime.com',
+  'wss://ws-up.ably-realtime.com',
 ];
 const CLOUDINARY_UPLOADS = 'https://api.cloudinary.com';
 

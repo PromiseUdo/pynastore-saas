@@ -90,11 +90,12 @@ describe('nonces and the switch', () => {
         'wss://main.a.fallback.ably-realtime.com',
         'https://main.e.fallback.ably-realtime.com',
         'https://internet-up.ably-realtime.com',
+        'wss://ws-up.ably-realtime.com',
       ]),
     );
     // No wildcards and no bare schemes: nothing beyond those hosts.
     const ably = on['connect-src'].filter((src: string) => src.includes('ably'));
-    expect(ably).toHaveLength(13);
+    expect(ably).toHaveLength(14);
     expect(ably.some((src: string) => src.includes('*'))).toBe(false);
     expect(on['connect-src']).not.toContain('wss:');
   });
