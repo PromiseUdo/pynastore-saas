@@ -7,8 +7,9 @@ import { AuthError } from 'next-auth';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { signInTargetHere } from '@/lib/tenant/here';
-import { answerSignInChallenge, createSignInChallenge } from '@/lib/account-security/two-factor';
+import { isBusinessRequest, signInTargetHere } from '@/lib/tenant/here';
+import { signedInHomeUrl } from '@/lib/tenant/signed-in-home';
+import { answerSignInChallenge, challengeUserId, createSignInChallenge } from '@/lib/account-security/two-factor';
 
 /* Two-step sign-in (ROADMAP 14.5): after a right password, the ticket that
  * waits for the code lives here — httpOnly, so no page script can read it. */
@@ -53,7 +54,6 @@ export async function loginAction(
   // Support callbackUrl for invite flow (e.g. /login?callbackUrl=/invite/TOKEN)
   const callbackUrl = formData.get('callbackUrl') as string | null;
   // On the business host a relative target is made absolute there (ROADMAP 19).
-  const redirectTo = await signInTargetHere(callbackUrl || '/');
 
   /* Two-step sign-in on: check the password here, then ask for the code.
    * (The password provider refuses such an account, so this is the only way in.) */
@@ -74,6 +74,7 @@ export async function loginAction(
     return { step: 'code', callbackUrl };
   }
 
+  const redirectTo = await afterSignIn(callbackUrl, user && !user.deletedAt ? user.id : null);
   try {
     await signIn('credentials', {
       email: parsed.data.email,
@@ -96,6 +97,17 @@ export async function loginAction(
   return null;
 }
 
+/**
+ * Where to go once signed in. A specific page that asked (an invite, a
+ * deep link) is honoured as before; plain "home" becomes the person's own
+ * dashboard address, worked out here — see lib/tenant/signed-in-home.ts.
+ */
+async function afterSignIn(callbackUrl: string | null, userId: string | null | undefined): Promise<string> {
+  const target = callbackUrl || '/';
+  if (target === '/' && userId && !(await isBusinessRequest())) return signedInHomeUrl(userId);
+  return signInTargetHere(target);
+}
+
 /** Step two: the code from the authenticator app, or a backup code. */
 async function verifyTwoFactor(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const jar = await cookies();
@@ -115,8 +127,9 @@ async function verifyTwoFactor(_prev: LoginState, formData: FormData): Promise<L
   if (answer === 'wrong-code') return { step: 'code', callbackUrl, error: 'That code isn’t right. Try the newest one in your app.' };
 
   jar.delete(CHALLENGE_COOKIE);
+  const redirectTo = await afterSignIn(callbackUrl, await challengeUserId(token));
   try {
-    await signIn('two-factor', { ticket: token, redirectTo: await signInTargetHere(callbackUrl || '/') });
+    await signIn('two-factor', { ticket: token, redirectTo });
   } catch (err) {
     if (err instanceof AuthError) return { error: 'Something went wrong. Please sign in again.' };
     throw err;

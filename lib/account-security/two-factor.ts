@@ -168,6 +168,12 @@ export async function answerSignInChallenge(token: string, code: string, now = n
   return 'ok';
 }
 
+/** Whose sign-in a challenge is (to know where to send them afterwards). Spends nothing. */
+export async function challengeUserId(token: string): Promise<string | null> {
+  const ticket = await prisma.authTicket.findUnique({ where: { tokenHash: hash(token) }, select: { userId: true, purpose: true } });
+  return ticket?.purpose === 'TWO_FACTOR' ? ticket.userId : null;
+}
+
 /** For the 'two-factor' sign-in (auth.ts): a verified ticket, spent once, gives its user. */
 export async function spendSignInChallenge(token: unknown, now = new Date()): Promise<string | null> {
   if (typeof token !== 'string' || token.length < 20) return null;
