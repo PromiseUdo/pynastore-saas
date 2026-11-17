@@ -16,9 +16,11 @@ import { prisma } from '@/lib/prisma';
 import { ensurePaystackPlan, initializeTransaction } from '@/lib/billing/paystack';
 import { priceForCheckout } from '@/lib/billing/catalogue';
 import type { BillingCycleKey } from '@/lib/billing/plans';
-import { getTldPriceUsd, searchDomain } from '@/lib/domains/namecheap';
-import { quoteDomainNgn } from '@/lib/domains/pricing';
-import { comDomain, renewalStage } from '@/lib/domains/rules';
+import { searchDomain } from '@/lib/domains/namecheap';
+import { quoteDomain, quoteDomainNgn } from '@/lib/domains/pricing';
+import { buyableDomain, renewalStage, type BuyEnding } from '@/lib/domains/rules';
+import { checkComNg } from '@/lib/domains/comng';
+import { comNgOnSale, getComNgPricing } from '@/lib/settings';
 import { domainHeldElsewhere } from '@/lib/domains/shop-domain';
 import type { DomainOrderType, DomainOrderStatus } from '@/lib/generated/prisma/enums';
 
@@ -31,7 +33,7 @@ export class CheckoutError extends Error {
 }
 
 /**
- * A domain bought through billing (ROADMAP 12.6): a new `.com`, or renewing
+ * A domain bought through billing (ROADMAP 12.6): a new `.com` or `.com.ng` (22.3), or renewing
  * the shop's registered domain. Connecting a domain the merchant already
  * owns is free and isn't a checkout (features/domains/actions.ts).
  */
@@ -66,17 +68,18 @@ async function resolveDomainOrder(
       select: { id: true },
     });
     if (open) throw new CheckoutError('You’ve already renewed this domain — we’re completing it with the registrar.');
-    const tld = current.hostname.split('.').slice(1).join('.');
-    const quote = await quoteDomainNgn(await getTldPriceUsd(tld, 'renew'));
+    const quote = await quoteDomain(current.hostname, 'renew');
     return {
       domainOrder: { type: 'RENEW', domain: current.hostname, status: 'PENDING_FULFILLMENT', usdPrice: quote.usdPrice, ngnPrice: quote.ngnPrice, exchangeRate: quote.exchangeRate },
       domainFeeNgn: quote.ngnPrice,
     };
   }
 
-  // REGISTER — `.com` only, not held by another shop, and re-quoted here
-  // right before charging. Never trust a client-supplied price.
-  const parsed = comDomain(choice.domain);
+  // REGISTER — `.com`, or `.com.ng` while it's on sale; not held by another
+  // shop, and re-quoted here right before charging. Never trust a
+  // client-supplied price.
+  const endings: BuyEnding[] = comNgOnSale(await getComNgPricing()) ? ['com', 'com.ng'] : ['com'];
+  const parsed = buyableDomain(choice.domain, 'com', endings);
   if (!parsed.ok) throw new CheckoutError(parsed.error);
   const current = await prisma.shopDomain.findUnique({ where: { organizationId }, select: { status: true, hostname: true } });
   if (current && ['PENDING', 'LIVE'].includes(current.status)) {
@@ -85,16 +88,25 @@ async function resolveDomainOrder(
   if (await domainHeldElsewhere(parsed.domain, organizationId)) {
     throw new CheckoutError(`${parsed.domain} is already being set up for another shop.`);
   }
-  const result = await searchDomain(parsed.domain);
-  if (!result.available) {
-    throw new CheckoutError(`${result.domain} is no longer available — please search again.`);
+  let quote;
+  if (parsed.domain.endsWith('.com.ng')) {
+    // Checked with the .ng registry; QServers registers it by hand after payment.
+    const check = await checkComNg(parsed.domain);
+    if ('error' in check) throw new CheckoutError('We couldn’t check that name with the .ng registry just now. Try again in a minute.');
+    if (!check.available) throw new CheckoutError(`${parsed.domain} is no longer available — please search again.`);
+    quote = await quoteDomain(parsed.domain, 'register');
+  } else {
+    const result = await searchDomain(parsed.domain);
+    if (!result.available) {
+      throw new CheckoutError(`${result.domain} is no longer available — please search again.`);
+    }
+    quote = await quoteDomainNgn(result.priceUsd);
   }
-  const quote = await quoteDomainNgn(result.priceUsd);
 
   return {
     domainOrder: {
       type: 'REGISTER',
-      domain: result.domain,
+      domain: parsed.domain,
       status: 'PENDING_FULFILLMENT',
       usdPrice: quote.usdPrice,
       ngnPrice: quote.ngnPrice,

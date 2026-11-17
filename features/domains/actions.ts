@@ -3,7 +3,8 @@
 /*
  * features/domains/actions.ts
  *
- * Settings → Domain (ROADMAP 12.6): finding and buying a `.com`, renewing it,
+ * Settings → Domain (ROADMAP 12.6): finding and buying a `.com` or `.com.ng`
+ * (22.3), claiming the plan's free `.com.ng`, renewing it,
  * connecting a domain the merchant already owns, checking its DNS, and
  * removing it. Buying and renewing are billing charges (a paid plan,
  * `billing.manage`); connecting is free and allowed during the trial
@@ -18,7 +19,10 @@ import { requirePermission, PERMISSIONS, PermissionDeniedError } from '@/lib/per
 import { createAuditLog } from '@/lib/audit';
 import { searchDomains } from '@/lib/domains/namecheap';
 import { quoteDomainNgn } from '@/lib/domains/pricing';
-import { comDomain, comSuggestions, ownedDomain } from '@/lib/domains/rules';
+import { buyableDomain, domainSuggestions, ownedDomain, type BuyEnding } from '@/lib/domains/rules';
+import { checkComNgMany } from '@/lib/domains/comng';
+import { claimFreeComNg, freeDomainStatus, FreeDomainError } from '@/lib/domains/free-domain';
+import { comNgOnSale, getComNgPricing } from '@/lib/settings';
 import { checkDns, claimShopDomain, domainHeldElsewhere, takeDomainOffline, type DnsCheck } from '@/lib/domains/shop-domain';
 import { notifyPendingDomainOrder } from '@/lib/domains/notify';
 import { buildAndInitializeCheckout, CheckoutError } from '@/lib/billing/checkout';
@@ -29,6 +33,8 @@ export interface DomainOffer {
   domain: string;
   priceNgn: number;
   renewNgn: number;
+  /** the shop's free .com.ng covers the first year (22.3) */
+  free: boolean;
 }
 
 export type DomainSearchResult =
@@ -37,32 +43,46 @@ export type DomainSearchResult =
 
 function failure(error: unknown, fallback: string): { success: false; error: string } {
   if (error instanceof PermissionDeniedError) return { success: false, error: 'You don’t have permission to do this.' };
-  if (error instanceof CheckoutError) return { success: false, error: error.message };
+  if (error instanceof CheckoutError || error instanceof FreeDomainError) return { success: false, error: error.message };
   console.error(`[domains] ${fallback}:`, error);
   return { success: false, error: fallback };
 }
 
 async function offer(r: { domain: string; priceUsd: number; renewUsd: number }): Promise<DomainOffer> {
   const [first, renew] = await Promise.all([quoteDomainNgn(r.priceUsd), quoteDomainNgn(r.renewUsd)]);
-  return { domain: r.domain, priceNgn: first.ngnPrice, renewNgn: renew.ngnPrice };
+  return { domain: r.domain, priceNgn: first.ngnPrice, renewNgn: renew.ngnPrice, free: false };
 }
 
-/** Is this `.com` free, what does it cost (first year and renewal), and if not, what's close? */
-export async function searchComDomain(query: string): Promise<ActionResult<DomainSearchResult>> {
+/** Is it free, what does it cost (first year and renewal), and if not, what's close? `.com` or `.com.ng`. */
+export async function searchDomain(query: string, ending: BuyEnding = 'com'): Promise<ActionResult<DomainSearchResult>> {
   // Nothing is sold inside the business app (ROADMAP 19.3); the screens don't offer it either.
   if (await isBusinessAppRequest()) return { success: false, error: NOT_IN_THE_APP };
   try {
     const ctx = await getOrganizationContext();
     requirePermission(ctx.membership.role.permissions, PERMISSIONS.SETTINGS_VIEW);
-    const parsed = comDomain(String(query ?? '').slice(0, 100));
+    const organizationId = ctx.organization.id;
+    const comNg = await getComNgPricing();
+    const endings: BuyEnding[] = comNgOnSale(comNg) ? ['com', 'com.ng'] : ['com'];
+    const parsed = buyableDomain(String(query ?? '').slice(0, 100), endings.includes(ending) ? ending : 'com', endings);
     if (!parsed.ok) return { success: false, error: parsed.error };
+    const held = await domainHeldElsewhere(parsed.domain, organizationId);
+
+    if (parsed.domain.endsWith('.com.ng')) {
+      // .com.ng: asked of the .ng registry, priced from the console (22.3).
+      const free = (await freeDomainStatus(organizationId)).kind === 'available';
+      const ngOffer = (domain: string): DomainOffer => ({ domain, priceNgn: comNg.registerPrice!, renewNgn: comNg.renewPrice!, free });
+      const [result] = await checkComNgMany([parsed.domain]);
+      if ('error' in result) return { success: false, error: 'We couldn’t check that name with the .ng registry just now. Try again in a minute.' };
+      if (result.available && !held) return { success: true, data: { domain: parsed.domain, available: true, offer: ngOffer(parsed.domain) } };
+      const alternatives = (await checkComNgMany(domainSuggestions(parsed.domain))).filter((r) => 'available' in r && r.available);
+      return { success: true, data: { domain: parsed.domain, available: false, suggestions: alternatives.slice(0, 4).map((r) => ngOffer(r.domain)) } };
+    }
 
     const [result] = await searchDomains([parsed.domain]);
-    const held = await domainHeldElsewhere(parsed.domain, ctx.organization.id);
     if (result.available && !held) {
       return { success: true, data: { domain: parsed.domain, available: true, offer: await offer(result) } };
     }
-    const alternatives = (await searchDomains(comSuggestions(parsed.domain))).filter(
+    const alternatives = (await searchDomains(domainSuggestions(parsed.domain))).filter(
       (r): r is Extract<typeof r, { available: true }> => r.available,
     );
     return {
@@ -71,6 +91,34 @@ export async function searchComDomain(query: string): Promise<ActionResult<Domai
     };
   } catch (error) {
     return failure(error, 'We couldn’t search domains just now. Try again in a minute.');
+  }
+}
+
+/**
+ * Takes the plan's free .com.ng (ROADMAP 22.3): no payment — it goes
+ * straight to our team, like a paid registration. Every rule is checked again
+ * in lib/domains/free-domain.ts.
+ */
+export async function claimFreeDomain(domain: string): Promise<ActionResult<{ domain: string }>> {
+  if (await isBusinessAppRequest()) return { success: false, error: NOT_IN_THE_APP };
+  try {
+    const ctx = await getOrganizationContext();
+    requirePermission(ctx.membership.role.permissions, PERMISSIONS.BILLING_MANAGE);
+    const organizationId = ctx.organization.id;
+    const claimed = await claimFreeComNg(organizationId, String(domain ?? '').slice(0, 100));
+    await createAuditLog({
+      organizationId,
+      userId: ctx.userId,
+      action: 'settings.domain.free_claimed',
+      entityType: 'DomainOrder',
+      entityId: claimed.orderId,
+      metadata: { domain: claimed.domain },
+    });
+    await notifyPendingDomainOrder(organizationId, { type: 'REGISTER', domain: claimed.domain });
+    revalidatePath('/settings/domain');
+    return { success: true, data: { domain: claimed.domain } };
+  } catch (error) {
+    return failure(error, 'We couldn’t take your free domain just now. Try again.');
   }
 }
 
@@ -213,7 +261,14 @@ export async function removeDomain(): Promise<ActionResult> {
     if (!domain || domain.status === 'DISCONNECTED') return { success: true, data: undefined };
 
     const paidInProgress = await prisma.domainOrder.findFirst({
-      where: { organizationId, type: 'REGISTER', domain: domain.hostname, status: 'PENDING_FULFILLMENT', billingTransaction: { status: 'SUCCESS' } },
+      where: {
+        organizationId,
+        type: 'REGISTER',
+        domain: domain.hostname,
+        status: 'PENDING_FULFILLMENT',
+        // Paid for, or the plan's free one (22.3): either way our team is registering it.
+        OR: [{ billingTransaction: { status: 'SUCCESS' } }, { isFree: true }],
+      },
       select: { id: true },
     });
     if (paidInProgress) {

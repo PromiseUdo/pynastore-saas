@@ -82,7 +82,7 @@ describe('who can use it', () => {
     session.userId = merchantId;
     expect(await plans.listConsolePlans()).toMatchObject({ success: false, error: expect.stringMatching(/platform staff/) });
     expect(await plans.createPlan(draft())).toMatchObject({ success: false });
-    expect(await settingsActions.updateBillingSettings({ trialDays: 1, trialPlanId: '', graceDays: 1, usdToNgnRate: 1, mobileAppSetupFee: null, mobileAppYearlyFee: null, mobileAppGraceDays: 14 })).toMatchObject({
+    expect(await settingsActions.updateBillingSettings({ trialDays: 1, trialPlanId: '', graceDays: 1, usdToNgnRate: 1, mobileAppSetupFee: null, mobileAppYearlyFee: null, mobileAppGraceDays: 14, comNgRegisterPrice: null, comNgRenewPrice: null })).toMatchObject({
       success: false,
       error: expect.stringMatching(/platform staff/),
     });
@@ -208,6 +208,8 @@ describe('billing settings', () => {
       mobileAppSetupFee: current.data.mobileAppSetupFee,
       mobileAppYearlyFee: current.data.mobileAppYearlyFee,
       mobileAppGraceDays: current.data.mobileAppGraceDays,
+      comNgRegisterPrice: current.data.comNgRegisterPrice,
+      comNgRenewPrice: current.data.comNgRenewPrice,
     });
     expect(result).toMatchObject({ success: true });
     const after = await settingsActions.getConsoleBillingSettings();
@@ -224,7 +226,7 @@ describe('billing settings', () => {
   it('refuses days out of range and a trial plan that isn’t on sale', async () => {
     session.userId = staffId;
     const offSale = createdPlanIds[0]; // taken off sale above
-    const result = await settingsActions.updateBillingSettings({ trialDays: 400, trialPlanId: offSale, graceDays: -1, usdToNgnRate: 0, mobileAppSetupFee: null, mobileAppYearlyFee: null, mobileAppGraceDays: 14 });
+    const result = await settingsActions.updateBillingSettings({ trialDays: 400, trialPlanId: offSale, graceDays: -1, usdToNgnRate: 0, mobileAppSetupFee: null, mobileAppYearlyFee: null, mobileAppGraceDays: 14, comNgRegisterPrice: null, comNgRenewPrice: null });
     expect(result).toMatchObject({ success: false });
     if (!result.success) expect(Object.keys(result.fieldErrors ?? {}).sort()).toEqual(['graceDays', 'trialDays', 'trialPlanId', 'usdToNgnRate']);
   });

@@ -16,11 +16,14 @@
  * - A store's own app (ROADMAP 16.2): the setup fee (the first year
  *   included), the yearly fee, and the app's own grace days. A blank fee
  *   takes the add-on off sale; what merchants already paid is unchanged.
+ * - .com.ng addresses (ROADMAP 22.3): the naira price to register and to
+ *   renew, since staff buy them at QServers rather than Namecheap. Both empty
+ *   = .com.ng isn't offered, free or paid.
  */
 import { prisma } from '@/lib/prisma';
 import { requirePlatformStaff } from '@/lib/platform-staff';
 import { writePlatformAudit } from '@/lib/platform-audit';
-import { getBillingSettings, getMobileAppPricing, getUsdToNgnRate, MOBILE_APP_SETTING_KEYS } from '@/lib/settings';
+import { COMNG_SETTING_KEYS, getBillingSettings, getComNgPricing, getMobileAppPricing, getUsdToNgnRate, MOBILE_APP_SETTING_KEYS } from '@/lib/settings';
 
 export type ActionResult<T = void> =
   | { success: true; data: T }
@@ -36,6 +39,9 @@ export interface BillingSettingsInput {
   mobileAppSetupFee: number | null;
   mobileAppYearlyFee: number | null;
   mobileAppGraceDays: number;
+  /** NGN; null = .com.ng isn't offered */
+  comNgRegisterPrice: number | null;
+  comNgRenewPrice: number | null;
 }
 
 export interface ConsoleBillingSettings extends BillingSettingsInput {
@@ -51,6 +57,7 @@ const KEYS = {
   graceDays: 'grace_days',
   usdToNgnRate: 'usd_to_ngn_rate',
   ...MOBILE_APP_SETTING_KEYS,
+  ...COMNG_SETTING_KEYS,
 };
 
 function denied(error: unknown, fallback: string): { success: false; error: string } {
@@ -64,10 +71,11 @@ function denied(error: unknown, fallback: string): { success: false; error: stri
 export async function getConsoleBillingSettings(): Promise<ActionResult<ConsoleBillingSettings>> {
   try {
     await requirePlatformStaff();
-    const [settings, rate, app, plans] = await Promise.all([
+    const [settings, rate, app, comNg, plans] = await Promise.all([
       getBillingSettings(),
       getUsdToNgnRate(),
       getMobileAppPricing(),
+      getComNgPricing(),
       prisma.billingPlan.findMany({
         where: { isOnSale: true },
         orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
@@ -85,6 +93,8 @@ export async function getConsoleBillingSettings(): Promise<ActionResult<ConsoleB
         mobileAppSetupFee: app.setupFee,
         mobileAppYearlyFee: app.yearlyFee,
         mobileAppGraceDays: app.graceDays,
+        comNgRegisterPrice: comNg.registerPrice,
+        comNgRenewPrice: comNg.renewPrice,
         plans: plans.map((p) => ({ id: p.id, name: p.name })),
         trialPlanMissing: !trialPlan,
       },
@@ -117,9 +127,14 @@ export async function updateBillingSettings(input: BillingSettingsInput): Promis
       fieldErrors.mobileAppYearlyFee = 'Set both fees to sell the add-on, or leave both empty.';
     }
     if (!wholeDays(input.mobileAppGraceDays)) fieldErrors.mobileAppGraceDays = 'Enter a whole number of days from 0 to 365.';
+    if (!fee(input.comNgRegisterPrice)) fieldErrors.comNgRegisterPrice = 'Enter an amount in naira, or leave it empty.';
+    if (!fee(input.comNgRenewPrice)) fieldErrors.comNgRenewPrice = 'Enter an amount in naira, or leave it empty.';
+    if ((input.comNgRegisterPrice === null) !== (input.comNgRenewPrice === null)) {
+      fieldErrors.comNgRenewPrice = 'Set both prices to offer .com.ng, or leave both empty.';
+    }
     if (Object.keys(fieldErrors).length) return { success: false, error: 'Check the highlighted fields.', fieldErrors };
 
-    const [current, rate, app] = await Promise.all([getBillingSettings(), getUsdToNgnRate(), getMobileAppPricing()]);
+    const [current, rate, app, comNg] = await Promise.all([getBillingSettings(), getUsdToNgnRate(), getMobileAppPricing(), getComNgPricing()]);
     const before = {
       trialDays: current.trialDays,
       trialPlanKey: current.trialPlanKey,
@@ -128,6 +143,8 @@ export async function updateBillingSettings(input: BillingSettingsInput): Promis
       mobileAppSetupFee: app.setupFee,
       mobileAppYearlyFee: app.yearlyFee,
       mobileAppGraceDays: app.graceDays,
+      comNgRegisterPrice: comNg.registerPrice,
+      comNgRenewPrice: comNg.renewPrice,
     };
     const naira = (n: number | null) => (n === null ? null : Math.round(n * 100) / 100);
     const after = {
@@ -139,13 +156,15 @@ export async function updateBillingSettings(input: BillingSettingsInput): Promis
       mobileAppSetupFee: naira(input.mobileAppSetupFee),
       mobileAppYearlyFee: naira(input.mobileAppYearlyFee),
       mobileAppGraceDays: input.mobileAppGraceDays,
+      comNgRegisterPrice: naira(input.comNgRegisterPrice),
+      comNgRenewPrice: naira(input.comNgRenewPrice),
     };
     const changed = (Object.keys(after) as (keyof typeof after)[]).filter((k) => before[k] !== after[k]);
     if (!changed.length) return { success: true, data: { changed: [] } };
 
     await prisma.$transaction(async (tx) => {
       for (const key of changed) {
-        // An emptied fee takes the add-on off sale.
+        // An emptied fee or price takes the add-on (or .com.ng) off sale.
         if (after[key] === null) {
           await tx.platformSetting.deleteMany({ where: { key: KEYS[key] } });
           continue;

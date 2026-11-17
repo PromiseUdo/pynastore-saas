@@ -25,7 +25,7 @@ import { getAdminUrl } from '@/lib/tenant/urls';
 import { dnsTargets, checkDns, putDomainLive, type DnsCheck } from '@/lib/domains/shop-domain';
 import { getAccountBalance } from '@/lib/domains/namecheap';
 import { domainFailedEmail, domainLiveEmail } from '@/lib/domains/emails';
-import { dnsRecordsFor, STEPS_FOR, type DnsRecord, type DomainStep } from '@/lib/domains/rules';
+import { dnsRecordsFor, registrarFor, STEPS_FOR, type DnsRecord, type DomainStep } from '@/lib/domains/rules';
 
 export type ActionResult<T = void> = { success: true; data: T } | { success: false; error: string };
 
@@ -40,6 +40,8 @@ export interface DomainQueueRow {
   shopName: string;
   readyAt: Date;
   fulfilledAt: Date | null;
+  /** the plan's free .com.ng (22.3) */
+  isFree: boolean;
   /** steps ticked / steps for the kind */
   stepsDone: number;
   stepsTotal: number;
@@ -51,7 +53,7 @@ export interface DomainQueuePage {
   page: number;
   pageSize: number;
   counts: { WAITING: number; DONE: number; FAILED: number };
-  renewals: { domain: string; shopName: string; organizationId: string; expiresAt: Date; renewalPaid: boolean }[];
+  renewals: { domain: string; shopName: string; organizationId: string; expiresAt: Date; renewalPaid: boolean; registrar: string }[];
   /** the last figure staff typed in — shown when the live read fails */
   namecheapBalance: { usd: number; updatedAt: Date } | null;
   /** read from Namecheap just now, or why it couldn't be */
@@ -73,9 +75,13 @@ export interface DomainOrderDetail {
   currentExpiry: Date | null;
   failureReason: string | null;
   paid: { amount: number; reference: string } | null;
+  /** the plan's free .com.ng (22.3): nothing paid, first year only */
+  isFree: boolean;
+  /** where it's registered: Namecheap (.com) or QServers (.com.ng) */
+  registrar: string;
   refund: { amount: number; reference: string | null; at: Date } | null;
   organization: { id: string; name: string; slug: string };
-  registrant: { name: string | null; email: string | null; phone: string | null; businessName: string | null };
+  registrant: { name: string | null; email: string | null; phone: string | null; businessName: string | null; address: string | null };
   dnsRecords: DnsRecord[];
 }
 
@@ -173,6 +179,7 @@ export async function listDomainQueue(params: { tab?: QueueTab; page?: number })
             shopName: o.organization.name,
             readyAt: o.readyAt ?? o.createdAt,
             fulfilledAt: o.fulfilledAt,
+            isFree: o.isFree,
             stepsDone: steps.filter((st) => o[STEP_FIELD[st]]).length,
             stepsTotal: steps.length,
           };
@@ -187,6 +194,7 @@ export async function listDomainQueue(params: { tab?: QueueTab; page?: number })
           organizationId: d.organizationId,
           expiresAt: d.expiresAt!,
           renewalPaid: paidSet.has(d.organizationId),
+          registrar: registrarFor(d.hostname),
         })),
         namecheapBalance: balance ? { usd: Number(balance.value), updatedAt: balance.updatedAt } : null,
         liveBalance: live,
@@ -211,6 +219,8 @@ export async function getDomainOrder(orderId: string): Promise<ActionResult<Doma
             name: true,
             slug: true,
             shopDomain: true,
+            businessAddress: true,
+            supportPhone: true,
             paymentAccount: { select: { businessName: true, contactName: true, contactEmail: true, contactPhone: true } },
             memberships: {
               where: { status: 'ACTIVE', role: { isSystem: true, name: SYSTEM_ROLES.OWNER.name } },
@@ -239,6 +249,8 @@ export async function getDomainOrder(orderId: string): Promise<ActionResult<Doma
         currentExpiry: o.organization.shopDomain?.expiresAt ?? null,
         failureReason: o.failureReason,
         paid: o.billingTransaction?.status === 'SUCCESS' ? { amount: Number(o.billingTransaction.amount), reference: o.billingTransaction.reference } : null,
+        isFree: o.isFree,
+        registrar: o.domain ? registrarFor(o.domain) : 'Namecheap',
         refund: o.refundedAt ? { amount: Number(o.refundAmount ?? 0), reference: o.refundReference, at: o.refundedAt } : null,
         organization: { id: o.organization.id, name: o.organization.name, slug: o.organization.slug },
         // The merchant is the registrant (decided): their business and payments contact (10.2), else the owner.
@@ -246,7 +258,9 @@ export async function getDomainOrder(orderId: string): Promise<ActionResult<Doma
           businessName: account?.businessName ?? o.organization.name,
           name: account?.contactName ?? owner?.name ?? null,
           email: account?.contactEmail ?? owner?.email ?? null,
-          phone: account?.contactPhone ?? null,
+          phone: account?.contactPhone ?? o.organization.supportPhone ?? null,
+          // .com.ng registrations ask for an address (22.3): the one the shop shows its customers.
+          address: o.organization.businessAddress ?? null,
         },
         dnsRecords: dnsRecordsFor(dnsTargets()),
       },
@@ -286,7 +300,7 @@ export async function setDomainStep(
     if (step === 'registered' && done) {
       expiry = expiresAt ? new Date(`${expiresAt}T00:00:00Z`) : null;
       if (!expiry || Number.isNaN(expiry.getTime()) || expiry.getTime() < Date.now()) {
-        return { success: false, error: 'Enter the expiry date Namecheap shows — a date in the future.' };
+        return { success: false, error: 'Enter the expiry date the registrar shows — a date in the future.' };
       }
     }
     await prisma.domainOrder.update({
@@ -373,6 +387,10 @@ export async function markDomainFailed(orderId: string, reason: string): Promise
       if (o.type !== 'RENEW' && o.organization.shopDomain?.hostname === o.domain && o.organization.shopDomain.status === 'PENDING') {
         await tx.shopDomain.update({ where: { organizationId: o.organizationId }, data: { status: 'FAILED' } });
       }
+      // The plan's free .com.ng wasn't used up: the shop can choose another name (22.3).
+      if (o.isFree) {
+        await tx.organization.update({ where: { id: o.organizationId }, data: { freeDomainClaimedAt: null } });
+      }
     });
     await createAuditLog({
       organizationId: o.organizationId,
@@ -387,6 +405,7 @@ export async function markDomainFailed(orderId: string, reason: string): Promise
       domain: o.domain ?? 'your domain',
       reason: why,
       paid: o.billingTransaction?.status === 'SUCCESS',
+      free: o.isFree,
       pageUrl: getAdminUrl(o.organization.slug, '/settings/domain'),
     });
     await listOwnerNotice(o.organizationId, failedEmail, '/settings/domain', `domain-order:${orderId}:failed`);

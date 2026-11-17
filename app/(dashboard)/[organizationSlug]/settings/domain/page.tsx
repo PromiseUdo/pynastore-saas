@@ -1,6 +1,7 @@
 /*
  * Settings → Domain (ROADMAP 12.6): the shop's own web address. Buy a `.com`
- * (a paid plan), or connect one the merchant owns (allowed on the trial);
+ * or `.com.ng` (a paid plan; a `.com.ng` free for a year on yearly plans that
+ * include it, 22.3), or connect one the merchant owns (allowed on the trial);
  * follow it to live; renew it; remove it. The domain serves the storefront
  * only — the dashboard stays on the platform address.
  */
@@ -14,8 +15,9 @@ import { getOrganizationEntitlements } from '@/lib/billing/entitlements';
 import { getStorefrontUrl } from '@/lib/tenant/urls';
 import { dnsTargets } from '@/lib/domains/shop-domain';
 import { dnsRecordsFor } from '@/lib/domains/rules';
-import { getTldPriceUsd } from '@/lib/domains/namecheap';
-import { quoteDomainNgn } from '@/lib/domains/pricing';
+import { renewalPriceNgn } from '@/lib/domains/pricing';
+import { freeDomainStatus } from '@/lib/domains/free-domain';
+import { comNgOnSale, getComNgPricing } from '@/lib/settings';
 import { DomainClient, type DomainPageData } from './DomainClient';
 
 export const metadata: Metadata = { title: 'Domain' };
@@ -26,9 +28,11 @@ export default async function DomainSettingsPage() {
   if (!hasPermission(perms, PERMISSIONS.SETTINGS_VIEW)) return <AccessDenied what="your domain settings" />;
   const organizationId = ctx.organization.id;
 
-  const [domain, { access, subscription }] = await Promise.all([
+  const [domain, { access, subscription }, comNg, free] = await Promise.all([
     prisma.shopDomain.findUnique({ where: { organizationId } }),
     getOrganizationEntitlements(),
+    getComNgPricing(),
+    freeDomainStatus(organizationId),
   ]);
   const [order, renewalPaid] = await Promise.all([
     domain
@@ -50,14 +54,8 @@ export default async function DomainSettingsPage() {
       : 0,
   ]);
 
-  let renewNgn: number | null = null;
-  if (domain?.source === 'REGISTERED') {
-    try {
-      renewNgn = (await quoteDomainNgn(await getTldPriceUsd(domain.hostname.split('.').slice(1).join('.'), 'renew'))).ngnPrice;
-    } catch {
-      renewNgn = null; // Namecheap unreachable: the page says the price isn't available right now.
-    }
-  }
+  // null: the price can't be read right now, and the page says so.
+  const renewNgn = domain?.source === 'REGISTERED' ? await renewalPriceNgn(domain.hostname) : null;
 
   const data: DomainPageData = {
     platformUrl: getStorefrontUrl(ctx.organization.slug),
@@ -83,10 +81,13 @@ export default async function DomainSettingsPage() {
           fulfilledAt: order.fulfilledAt,
           failureReason: order.failureReason,
           paid: order.billingTransaction?.status === 'SUCCESS',
+          isFree: order.isFree,
           refundedAt: order.refundedAt,
         }
       : null,
     renewalPaid: renewalPaid > 0,
+    comNg: comNgOnSale(comNg) ? { registerNgn: comNg.registerPrice!, renewNgn: comNg.renewPrice! } : null,
+    freeDomain: free.kind,
     renewNgn,
     records: dnsRecordsFor(dnsTargets()),
     paidPlan: access.state === 'active' && (subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE'),

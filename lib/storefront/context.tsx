@@ -12,6 +12,8 @@ export interface StorefrontOrg {
   slug: string;
   name: string;
   logoUrl: string | null;
+  /** a light logo for dark mode; absent = the normal logo on a light backing there */
+  logoDarkUrl?: string | null;
   /** the plan includes the AI shopping assistant and search by photo (ROADMAP 22.1) */
   aiShopping?: boolean;
 }

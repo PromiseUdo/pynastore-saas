@@ -158,6 +158,7 @@ export default async function StorefrontRootLayout({
       name: true,
       slug: true,
       logoUrl: true,
+      logoDarkUrl: true,
       status: true,
       storefrontChatEnabled: true,
       storefrontChatGreeting: true,
@@ -342,7 +343,7 @@ export default async function StorefrontRootLayout({
         <StorefrontAnalytics gaId={look.analytics.gaId} metaPixelId={look.analytics.metaPixelId} nonce={nonce} />
       )}
       <StorefrontProviders
-        org={{ slug: organization.slug, name: organization.name, logoUrl: organization.logoUrl, aiShopping }}
+        org={{ slug: organization.slug, name: organization.name, logoUrl: organization.logoUrl, logoDarkUrl: organization.logoDarkUrl, aiShopping }}
         isMobileRuntime={isMobileRuntime}
         privacyHref={privacyPage?.href ?? null}
         chat={chat}

@@ -7,8 +7,10 @@
  */
 import { cache } from 'react';
 import { prisma } from '@/lib/prisma';
+import { comNgOnSale, getComNgPricing } from '@/lib/settings';
 import {
   CYCLE_ORDER,
+  FEATURES,
   isFeatureKey,
   type BillingCycleKey,
   type EffectivePlan,
@@ -93,14 +95,23 @@ export const loadEffectivePlan = cache(async (planId: string): Promise<Effective
   return row ? toEffectivePlan(row) : null;
 });
 
-/** Plans on sale, cheapest tier first. A retired plan isn't offered. */
+/**
+ * Plans on sale, cheapest tier first. A retired plan isn't offered. The free
+ * .com.ng (22.3) is listed only while .com.ng is on sale — a plan never
+ * advertises what a merchant couldn't then claim.
+ */
 export async function listPlansForSale(): Promise<PlanOffer[]> {
-  const rows = await prisma.billingPlan.findMany({
-    where: { isOnSale: true },
-    include: PLAN_INCLUDE,
-    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-  });
-  return rows.map(toOffer);
+  const [rows, comNg] = await Promise.all([
+    prisma.billingPlan.findMany({
+      where: { isOnSale: true },
+      include: PLAN_INCLUDE,
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    }),
+    getComNgPricing(),
+  ]);
+  const offers = rows.map(toOffer);
+  if (comNgOnSale(comNg)) return offers;
+  return offers.map((o) => ({ ...o, features: o.features.filter((f) => f !== FEATURES.FREE_DOMAIN) }));
 }
 
 /**

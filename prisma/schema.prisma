@@ -226,6 +226,13 @@ model Organization {
   logoUrl      String?
   logoPublicId String?
   /**
+   * A light version of the logo for the online shop's dark mode (optional).
+   * Without one, dark mode shows the normal logo on a light backing, so a
+   * dark logo never disappears into the page.
+   */
+  logoDarkUrl      String?
+  logoDarkPublicId String?
+  /**
    * The icon in the online shop's browser tab. Optional: without one the tab
    * shows the logo. Kept apart because a wide logo is unreadable at 16–32px,
    * and many businesses have a small square mark for exactly this.
@@ -496,6 +503,12 @@ model Organization {
   billingTransactions BillingTransaction[]
   domainOrders        DomainOrder[]
   shopDomain          ShopDomain?
+  /**
+   * When this shop took its free .com.ng (ROADMAP 22.3): one per shop, ever.
+   * Set atomically when it's claimed; cleared only if staff couldn't
+   * register it, so the shop can choose another name.
+   */
+  freeDomainClaimedAt DateTime?
   mobileApp           MobileApp?
   pushDevices         PushDevice[]
 
@@ -3722,6 +3735,11 @@ model DomainOrder {
   usdPrice     Decimal? @db.Decimal(10, 2) // REGISTER only
   ngnPrice     Decimal? @db.Decimal(12, 2) // REGISTER only; null for FREE/EXISTING
   exchangeRate Decimal? @db.Decimal(10, 4) // rate snapshot used at charge time
+  /**
+   * A .com.ng registered free with the shop's plan (ROADMAP 22.3): no
+   * charge, no billing transaction, first year only.
+   */
+  isFree       Boolean  @default(false)
 
   notes       String? // filled in manually by admins during fulfillment
   fulfilledAt DateTime?

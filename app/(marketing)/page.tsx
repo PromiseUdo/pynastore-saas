@@ -23,7 +23,7 @@ import {
   PLATFORM_SUPPORT_EMAIL,
 } from '@/lib/brand';
 import { formatMoney } from '@/lib/format';
-import { getPublicOffer } from '@/lib/marketing/offer';
+import { getPublicOffer, orList } from '@/lib/marketing/offer';
 import { getDemoShopUrl } from '@/lib/marketing/demo';
 import { listPlansForSale, type PlanOffer } from '@/lib/billing/catalogue';
 import { cn } from '@/lib/utils';
@@ -128,7 +128,7 @@ export default async function HomePage() {
     },
     {
       q: 'Can I use my own domain, like yourshop.com.ng?',
-      a: `Yes. Every shop starts at shop-yourname.${PLATFORM_DOMAIN}. If you already own a domain — a .com, a .com.ng or any other — you can connect it for free on any plan, even during your trial. On a paid plan you can also buy a .com through us, registered in your business’s name, with the price and what it renews at shown before you pay. It’s usually ready within 24 hours.`,
+      a: `Yes. Every shop starts at shop-yourname.${PLATFORM_DOMAIN}. If you already own a domain — a .com, a .com.ng or any other — you can connect it for free on any plan, even during your trial. On a paid plan you can also buy ${offer.comNg ? 'a .com or .com.ng' : 'a .com'} through us, registered in your business’s name, with the price and what it renews at shown before you pay. It’s usually ready within 24 hours.${offer.freeDomainPlans.length ? ` Pay yearly on ${orList(offer.freeDomainPlans)} and your first year of a .com.ng is free.` : ''}`,
     },
     {
       q: 'Can my customers shop from an app?',

@@ -241,6 +241,8 @@ export async function purgeClosedWorkspace(organizationId: string, now: Date = n
           closedDataPurgedAt: now,
           logoUrl: null,
           logoPublicId: null,
+          logoDarkUrl: null,
+          logoDarkPublicId: null,
           faviconUrl: null,
           faviconPublicId: null,
           closureReason: null,

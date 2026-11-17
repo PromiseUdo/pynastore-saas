@@ -23,6 +23,7 @@
  * separate `relative` is needed (and stacking two position utilities is
  * undefined behaviour).
  */
+import { StoreLogo } from './store-logo';
 import * as React from 'react';
 import Link from 'next/link';
 import { Heart, Search, ShoppingBag, User } from 'lucide-react';
@@ -158,8 +159,7 @@ export function SiteHeader({
   const logo = (
     <Link href="/" className={cn('flex shrink-0 items-center gap-2.5', layout === 'centered' && 'justify-center')}>
       {org.logoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={org.logoUrl} alt={org.name} className="h-9 w-auto" />
+        <StoreLogo src={org.logoUrl} darkSrc={org.logoDarkUrl} alt={org.name} className="h-9 w-auto" />
       ) : (
         <>
           <span
@@ -183,8 +183,7 @@ export function SiteHeader({
   const phoneMark = (
     <Link href="/" aria-label={`${org.name} home`} className="flex shrink-0 items-center">
       {org.logoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={org.logoUrl} alt="" className="h-8 w-auto max-w-20 object-contain" />
+        <StoreLogo src={org.logoUrl} darkSrc={org.logoDarkUrl} alt="" className="h-8 w-auto max-w-20 object-contain" />
       ) : (
         <span
           aria-hidden

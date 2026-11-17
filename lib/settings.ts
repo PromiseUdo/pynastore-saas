@@ -146,3 +146,35 @@ export const MOBILE_APP_SETTING_KEYS = {
   mobileAppYearlyFee: MOBILE_APP_YEARLY_FEE_KEY,
   mobileAppGraceDays: MOBILE_APP_GRACE_DAYS_KEY,
 } as const;
+
+/* ---------------- .com.ng addresses (ROADMAP 22.3) ---------------- */
+
+/*
+ * .com.ng isn't sold by Namecheap: staff register it by hand at QServers, so
+ * its prices are set here in naira rather than converted from dollars. Both
+ * left empty = .com.ng isn't offered at all, free or paid.
+ */
+const COMNG_REGISTER_PRICE_KEY = 'comng_register_price';
+const COMNG_RENEW_PRICE_KEY = 'comng_renew_price';
+
+export interface ComNgPricing {
+  /** NGN, or null when .com.ng isn't on sale */
+  registerPrice: number | null;
+  renewPrice: number | null;
+}
+
+export async function getComNgPricing(): Promise<ComNgPricing> {
+  const rows = await prisma.platformSetting.findMany({
+    where: { key: { in: [COMNG_REGISTER_PRICE_KEY, COMNG_RENEW_PRICE_KEY] } },
+  });
+  const value = (key: string) => rows.find((r) => r.key === key)?.value;
+  return { registerPrice: naira(value(COMNG_REGISTER_PRICE_KEY)), renewPrice: naira(value(COMNG_RENEW_PRICE_KEY)) };
+}
+
+/** On sale only with both prices set. */
+export const comNgOnSale = (p: ComNgPricing) => p.registerPrice !== null && p.renewPrice !== null;
+
+export const COMNG_SETTING_KEYS = {
+  comNgRegisterPrice: COMNG_REGISTER_PRICE_KEY,
+  comNgRenewPrice: COMNG_RENEW_PRICE_KEY,
+} as const;

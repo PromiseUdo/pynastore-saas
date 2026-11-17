@@ -31,6 +31,8 @@ export const FEATURES = {
   WHOLESALE: 'sales.wholesale',
   /** the storefront's AI shopping assistant and search by photo (22.1) */
   AI_SHOPPING: 'storefront.ai_shopping',
+  /** a .com.ng free for its first year, when the plan is paid yearly (22.3) */
+  FREE_DOMAIN: 'domain.free_com_ng',
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
@@ -54,6 +56,11 @@ export const FEATURE_INFO: Record<FeatureKey, { label: string; description: stri
   'marketing.campaigns': { label: 'Campaigns', description: 'Sales that start and end on their own, with a banner or pop-up', built: true },
   'sales.wholesale': { label: 'Wholesale', description: 'Sell at wholesale prices to businesses you approve', built: true },
   'storefront.ai_shopping': { label: 'AI shopping assistant', description: 'Shoppers ask questions or search with a photo', built: true },
+  'domain.free_com_ng': {
+    label: 'Free .com.ng for a year',
+    description: 'Paying yearly? Your shop gets a .com.ng address, registered and connected for you, free for the first year',
+    built: true,
+  },
 };
 
 /** What a server action answers when the plan doesn't include a feature (22.1). */

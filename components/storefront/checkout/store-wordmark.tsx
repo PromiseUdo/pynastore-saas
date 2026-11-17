@@ -14,7 +14,7 @@
  * payment page is how a checkout loses trust.
  */
 import Link from 'next/link';
-import Image from 'next/image';
+import { StoreLogo } from '@/components/storefront/layout/store-logo';
 import { useStorefront } from '@/lib/storefront/context';
 
 export function StoreWordmark() {
@@ -23,7 +23,7 @@ export function StoreWordmark() {
   return (
     <Link href="/" className="flex items-center gap-2.5" aria-label={`${org.name} — home`}>
       {org.logoUrl ? (
-        <Image src={org.logoUrl} alt="" width={28} height={28} className="size-7 rounded-md object-contain" />
+        <StoreLogo src={org.logoUrl} darkSrc={org.logoDarkUrl} alt="" className="size-7 rounded-md object-contain" />
       ) : null}
       <span className="font-display text-lg leading-none">{org.name}</span>
     </Link>

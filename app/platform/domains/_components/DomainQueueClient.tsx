@@ -96,7 +96,10 @@ export function DomainQueueClient({ data, tab }: { data: DomainQueuePage; tab: Q
                           </Link>
                           <span className="block text-xs text-muted-foreground">{r.shopName}</span>
                         </TableCell>
-                        <TableCell>{ORDER_KIND_LABEL[r.type]}</TableCell>
+                        <TableCell>
+                          {ORDER_KIND_LABEL[r.type]}
+                          {r.isFree && <span className="text-muted-foreground"> · free with plan</span>}
+                        </TableCell>
                         <TableCell className="tabular-nums text-muted-foreground">
                           {r.stepsDone} of {r.stepsTotal}
                         </TableCell>
@@ -155,7 +158,7 @@ function Renewals({ renewals, now }: { renewals: DomainQueuePage['renewals']; no
                 <span className="text-xs text-muted-foreground" title={formatDate(r.expiresAt)}>
                   {new Date(r.expiresAt) < now ? 'expired' : 'expires'} {formatRelativeTime(r.expiresAt, now)}
                 </span>
-                <Badge variant={r.renewalPaid ? 'warning' : 'muted'}>{r.renewalPaid ? 'Paid — renew at Namecheap' : 'Not renewed by merchant'}</Badge>
+                <Badge variant={r.renewalPaid ? 'warning' : 'muted'}>{r.renewalPaid ? `Paid — renew at ${r.registrar}` : 'Not renewed by merchant'}</Badge>
               </span>
             </li>
           ))}

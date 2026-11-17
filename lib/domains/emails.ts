@@ -42,7 +42,7 @@ export function domainLiveEmail(input: { shopName: string; host: string; renewed
   };
 }
 
-export function domainFailedEmail(input: { shopName: string; domain: string; reason: string; paid: boolean; pageUrl: string }): Email {
+export function domainFailedEmail(input: { shopName: string; domain: string; reason: string; paid: boolean; free?: boolean; pageUrl: string }): Email {
   return {
     subject: `We couldn’t set up ${input.domain}`,
     preview: 'Here’s what happened',
@@ -51,7 +51,9 @@ export function domainFailedEmail(input: { shopName: string; domain: string; rea
       `Here’s what happened: ${input.reason}`,
       input.paid
         ? 'Your payment for it is being returned to you. It can take a few working days to reach your account.'
-        : 'Your shop keeps working at its current address.',
+        : input.free
+          ? 'Your free .com.ng is still yours to use: choose another name and we’ll register that one instead.'
+          : 'Your shop keeps working at its current address.',
     ],
     button: { label: 'Choose another address', url: input.pageUrl },
     footer: footer(input.shopName),

@@ -17,21 +17,12 @@ import { Prisma } from '@/lib/generated/prisma/client';
 import { sendPlatformNoticeEmail } from '@/lib/email';
 import { getAdminUrl, getMarketingUrl } from '@/lib/tenant/urls';
 import { SYSTEM_ROLES } from '@/lib/permissions';
-import { getTldPriceUsd } from './namecheap';
-import { quoteDomainNgn } from './pricing';
+import { renewalPriceNgn } from './pricing';
 import { reminderDue, GRACE_DAYS } from './rules';
 import { takeDomainOffline } from './shop-domain';
 import { renewalReminderEmail, staffRenewalDigest } from './emails';
 
 const DAY = 24 * 60 * 60 * 1000;
-
-async function renewPriceNgn(domain: string): Promise<number | null> {
-  try {
-    return (await quoteDomainNgn(await getTldPriceUsd(domain.split('.').slice(1).join('.'), 'renew'))).ngnPrice;
-  } catch {
-    return null; // Namecheap unreachable: the email simply leaves the price out.
-  }
-}
 
 export async function runDomainLifecycle(options: { now?: Date; only?: string[] } = {}) {
   const now = options.now ?? new Date();
@@ -93,7 +84,7 @@ export async function runDomainLifecycle(options: { now?: Date; only?: string[] 
       shopName: d.organization.name,
       domain: d.hostname,
       expiresAt: d.expiresAt,
-      renewNgn: await renewPriceNgn(d.hostname),
+      renewNgn: await renewalPriceNgn(d.hostname), // null: the email leaves the price out
       pageUrl: getAdminUrl(d.organization.slug, '/settings/domain'),
       kind: kind.split(':')[0],
     });

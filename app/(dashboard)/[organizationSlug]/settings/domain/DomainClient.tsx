@@ -10,13 +10,14 @@
 import { UpgradeLink, useNoBuying } from '@/components/business-app/no-buying';
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Check, Copy, ExternalLink, Globe, Loader2, Lock, Search, X } from 'lucide-react';
+import { AlertTriangle, Check, Copy, ExternalLink, Gift, Globe, Loader2, Lock, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SelectContent, SelectItem, SelectRoot, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialogAction,
   AlertDialogCancel,
@@ -30,14 +31,16 @@ import {
 import { Table, TableBody, TableCell, TableColumnHeader, TableHead, TableRow, TableWrapper } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { formatDate, formatMoney, formatRelativeTime } from '@/lib/format';
-import { isOverdue, orderTimeline, renewalDeadline, renewalStage, PROMISE_HOURS, type DnsRecord } from '@/lib/domains/rules';
+import { isOverdue, orderTimeline, renewalDeadline, renewalStage, PROMISE_HOURS, type BuyEnding, type DnsRecord } from '@/lib/domains/rules';
+import type { FreeDomainStatus } from '@/lib/domains/free-domain';
 import {
   buyDomain,
   checkMyDomain,
+  claimFreeDomain,
   connectDomain,
   removeDomain,
   renewDomain,
-  searchComDomain,
+  searchDomain,
   type DomainOffer,
   type DomainSearchResult,
 } from '@/features/domains/actions';
@@ -63,9 +66,14 @@ export interface DomainPageData {
     fulfilledAt: Date | null;
     failureReason: string | null;
     paid: boolean;
+    isFree: boolean;
     refundedAt: Date | null;
   };
   renewalPaid: boolean;
+  /** .com.ng prices, or null when it isn't on sale (22.3) */
+  comNg: { registerNgn: number; renewNgn: number } | null;
+  /** the plan's free .com.ng (22.3) */
+  freeDomain: FreeDomainStatus['kind'];
   renewNgn: number | null;
   records: DnsRecord[];
   paidPlan: boolean;
@@ -117,6 +125,9 @@ export function DomainClient({ data }: { data: DomainPageData }) {
 /* ─── No domain yet ─────────────────────────────────────────────────────── */
 
 function BuyCard({ data }: { data: DomainPageData }) {
+  const router = useRouter();
+  const freeNow = data.freeDomain === 'available' && data.comNg !== null;
+  const [ending, setEnding] = React.useState<BuyEnding>(freeNow ? 'com.ng' : 'com');
   const [query, setQuery] = React.useState('');
   const [searching, setSearching] = React.useState(false);
   const [result, setResult] = React.useState<DomainSearchResult | null>(null);
@@ -131,7 +142,7 @@ function BuyCard({ data }: { data: DomainPageData }) {
     setError(null);
     setResult(null);
     setSearching(true);
-    const r = await searchComDomain(query);
+    const r = await searchDomain(query, ending);
     setSearching(false);
     if (!r.success) setError(r.error);
     else setResult(r.data);
@@ -140,6 +151,18 @@ function BuyCard({ data }: { data: DomainPageData }) {
   async function pay() {
     if (!buying) return;
     setPaying(true);
+    if (buying.free) {
+      const r = await claimFreeDomain(buying.domain);
+      setPaying(false);
+      setBuying(null);
+      if (!r.success) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success(`${r.data.domain} is yours — we’ll register and connect it`);
+      router.refresh();
+      return;
+    }
     const r = await buyDomain(buying.domain);
     if (!r.success) {
       setPaying(false);
@@ -151,7 +174,25 @@ function BuyCard({ data }: { data: DomainPageData }) {
   }
 
   return (
-    <Card title="Get a new domain" description=".com addresses. We register it in your business’s name and connect it for you.">
+    <Card
+      title="Get a new domain"
+      description={`${data.comNg ? '.com and .com.ng' : '.com'} addresses. We register it in your business’s name and connect it for you.`}
+    >
+      {!locked && data.canBuy && freeNow && (
+        <p className="flex items-start gap-2 rounded-md bg-emerald-50 p-3 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <Gift className="mt-0.5 size-4 shrink-0" aria-hidden />
+          Your plan includes a .com.ng free for the first year. Search for the name you’d like.
+        </p>
+      )}
+      {!locked && data.canBuy && data.freeDomain === 'not_yearly' && data.comNg && (
+        <p className="flex items-start gap-2 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
+          <Gift className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            Your plan includes a free .com.ng for the first year when you pay yearly.{' '}
+            <UpgradeLink className="font-medium text-primary hover:underline">Switch to yearly</UpgradeLink>
+          </span>
+        </p>
+      )}
       {locked ? (
         <div className="flex flex-col gap-3 rounded-md bg-muted/50 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-start gap-2 text-muted-foreground">
@@ -168,8 +209,8 @@ function BuyCard({ data }: { data: DomainPageData }) {
         <p className="text-sm text-muted-foreground">Someone who manages billing can buy a domain for your shop.</p>
       ) : (
         <>
-          <form role="search" onSubmit={search} className="flex gap-2">
-            <div className="relative flex-1">
+          <form role="search" onSubmit={search} className="flex flex-wrap gap-2 sm:flex-nowrap">
+            <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
               <Input
                 aria-label="Domain name"
@@ -177,9 +218,20 @@ function BuyCard({ data }: { data: DomainPageData }) {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="pl-8"
-                endAdornment={<span className="text-sm text-muted-foreground">.com</span>}
+                endAdornment={data.comNg ? undefined : <span className="text-sm text-muted-foreground">.com</span>}
               />
             </div>
+            {data.comNg && (
+              <SelectRoot value={ending} onValueChange={(v) => setEnding(v as BuyEnding)}>
+                <SelectTrigger aria-label="Ending" className="w-28 shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="com.ng">.com.ng</SelectItem>
+                  <SelectItem value="com">.com</SelectItem>
+                </SelectContent>
+              </SelectRoot>
+            )}
             <Button type="submit" size="sm" disabled={searching || !query.trim()}>
               {searching && <Loader2 className="size-3.5 animate-spin" />}
               Search
@@ -209,9 +261,16 @@ function BuyCard({ data }: { data: DomainPageData }) {
       <AlertDialogRoot open={buying !== null} onOpenChange={(o) => !paying && !o && setBuying(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Buy {buying?.domain}?</AlertDialogTitle>
+            <AlertDialogTitle>{buying?.free ? `Get ${buying.domain} free?` : `Buy ${buying?.domain}?`}</AlertDialogTitle>
             <AlertDialogDescription>
-              {buying && (
+              {buying?.free && (
+                <>
+                  Free for the first year with your plan, then {formatMoney(buying.renewNgn)} a year when you renew. It’s registered in
+                  your business’s name, with the padlock and the www address included, and is usually ready within {PROMISE_HOURS} hours.
+                  This uses your shop’s one free domain, so check the spelling.
+                </>
+              )}
+              {buying && !buying.free && (
                 <>
                   {formatMoney(buying.priceNgn)} for the first year, then {formatMoney(buying.renewNgn)} a year when you renew. It’s
                   registered in your business’s name, with the padlock and the www address included, and is usually ready within{' '}
@@ -230,7 +289,7 @@ function BuyCard({ data }: { data: DomainPageData }) {
               }}
             >
               {paying && <Loader2 className="size-3.5 animate-spin" />}
-              Pay {buying ? formatMoney(buying.priceNgn) : ''} with Paystack
+              {buying?.free ? 'Get it free' : `Pay ${buying ? formatMoney(buying.priceNgn) : ''} with Paystack`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -249,12 +308,12 @@ function OfferRow({ offer, headline, onChoose }: { offer: DomainOffer; headline?
           {headline && <span className="font-normal text-muted-foreground"> is available</span>}
         </p>
         <p className="text-xs text-muted-foreground tabular-nums">
-          {formatMoney(offer.priceNgn)} for the first year · renews at {formatMoney(offer.renewNgn)} a year · usually ready within{' '}
-          {PROMISE_HOURS} hours
+          {offer.free ? 'Free for the first year with your plan' : `${formatMoney(offer.priceNgn)} for the first year`} · renews at{' '}
+          {formatMoney(offer.renewNgn)} a year · usually ready within {PROMISE_HOURS} hours
         </p>
       </div>
       <Button size="sm" variant={headline ? 'default' : 'outline'} onClick={() => onChoose(offer)}>
-        Buy {offer.domain}
+        {offer.free ? `Get ${offer.domain} free` : `Buy ${offer.domain}`}
       </Button>
     </div>
   );
@@ -446,7 +505,8 @@ function Timeline({ order, now }: { order: NonNullable<DomainPageData['order']>;
         </Notice>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Usually ready within {PROMISE_HOURS} hours of {order.type === 'EXISTING' ? 'your records being found' : 'paying'}. We’ll email you
+          Usually ready within {PROMISE_HOURS} hours of{' '}
+          {order.type === 'EXISTING' ? 'your records being found' : order.isFree ? 'choosing it' : 'paying'}. We’ll email you
           when it’s live.
         </p>
       )}

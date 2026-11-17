@@ -9,7 +9,7 @@ import { formatMoney } from '@/lib/format';
 import { SupportChatLink } from '@/components/marketing/support-chat';
 import { supportChatOn } from '@/components/marketing/support-chat-mount';
 import { listPlansForSale, type PlanOffer } from '@/lib/billing/catalogue';
-import { getPublicOffer } from '@/lib/marketing/offer';
+import { getPublicOffer, orList } from '@/lib/marketing/offer';
 import { PrimaryCta } from '@/components/marketing/cta';
 import { Marked, SectionIntro } from '@/components/marketing/section';
 import { Faq } from '@/components/marketing/faq';
@@ -125,7 +125,7 @@ export default async function PricingPage() {
               },
               {
                 q: 'Can I use my own domain?',
-                a: 'Yes. Every shop gets its own address on our domain, and you can connect a domain you already own — a .com, a .com.ng or any other — for free on any plan, even during your trial. On a paid plan you can also buy a .com through us; the price, and what it renews at, are shown before you pay.',
+                a: `Yes. Every shop gets its own address on our domain, and you can connect a domain you already own — a .com, a .com.ng or any other — for free on any plan, even during your trial. On a paid plan you can also buy ${offer.comNg ? 'a .com or .com.ng' : 'a .com'} through us; the price, and what it renews at, are shown before you pay.${offer.freeDomainPlans.length ? ` Pay yearly on ${orList(offer.freeDomainPlans)} and your first year of a .com.ng is free; renewing it after that is at the normal price.` : ''}`,
               },
             ]}
           />

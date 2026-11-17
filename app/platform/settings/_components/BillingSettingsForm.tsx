@@ -28,6 +28,8 @@ export function BillingSettingsForm({ settings }: { settings: ConsoleBillingSett
       mobileAppSetupFee: settings.mobileAppSetupFee === null ? '' : String(settings.mobileAppSetupFee),
       mobileAppYearlyFee: settings.mobileAppYearlyFee === null ? '' : String(settings.mobileAppYearlyFee),
       mobileAppGraceDays: String(settings.mobileAppGraceDays),
+      comNgRegisterPrice: settings.comNgRegisterPrice === null ? '' : String(settings.comNgRegisterPrice),
+      comNgRenewPrice: settings.comNgRenewPrice === null ? '' : String(settings.comNgRenewPrice),
     }),
     [settings],
   );
@@ -56,6 +58,9 @@ export function BillingSettingsForm({ settings }: { settings: ConsoleBillingSett
       mobileAppSetupFee: state.mobileAppSetupFee.trim() === '' ? null : num(state.mobileAppSetupFee),
       mobileAppYearlyFee: state.mobileAppYearlyFee.trim() === '' ? null : num(state.mobileAppYearlyFee),
       mobileAppGraceDays: num(state.mobileAppGraceDays),
+      // Empty = .com.ng isn't offered.
+      comNgRegisterPrice: state.comNgRegisterPrice.trim() === '' ? null : num(state.comNgRegisterPrice),
+      comNgRenewPrice: state.comNgRenewPrice.trim() === '' ? null : num(state.comNgRenewPrice),
     });
     setSaving(false);
     if (!result.success) {
@@ -203,6 +208,37 @@ export function BillingSettingsForm({ settings }: { settings: ConsoleBillingSett
         </div>
         <p className="text-xs text-muted-foreground">
           New prices apply to the next payment. A merchant who already paid keeps what they paid for.
+        </p>
+      </Section>
+
+      <Section
+        title=".com.ng addresses"
+        description="What merchants pay for a .com.ng, which our team registers at QServers. Plans that include a free .com.ng use the register price’s first year; renewals are always paid. Leave both empty to stop offering .com.ng."
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          {(
+            [
+              ['comNgRegisterPrice', 'First year', 'Registering a new .com.ng for a year.'],
+              ['comNgRenewPrice', 'Renewal, per year', 'Each year after the first — free domains too.'],
+            ] as const
+          ).map(([field, label, help]) => (
+            <div key={field} className="space-y-1.5">
+              <Label htmlFor={field}>{label}</Label>
+              <Input
+                id={field}
+                inputMode="decimal"
+                startAdornment={<span className="text-sm text-muted-foreground">₦</span>}
+                value={state[field]}
+                onChange={(e) => set(field, e.target.value)}
+                {...aria(field)}
+              />
+              <p className="text-xs text-muted-foreground">{help}</p>
+              {err(field)}
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          New prices apply from the next purchase or renewal. Which plans include the free .com.ng is set on each plan, under Plans.
         </p>
       </Section>
 

@@ -19,6 +19,7 @@ import {
   type OrganizationSettings,
 } from '@/features/settings/organization';
 import { SOCIAL_PLATFORMS, SOCIAL_PLATFORM_INFO, type SocialPlatform } from '@/lib/storefront/social-links';
+import { checkLogoForDarkMode } from '@/lib/storefront/design/logo-contrast';
 
 type Currency = { code: string; label: string };
 
@@ -48,6 +49,9 @@ export function GeneralSettingsClient({
       ? [{ url: settings.logoUrl, publicId: settings.logoPublicId }]
       : [],
   );
+  const [logoDark, setLogoDark] = React.useState<UploadedImage[]>(
+    settings.logoDarkUrl && settings.logoDarkPublicId ? [{ url: settings.logoDarkUrl, publicId: settings.logoDarkPublicId }] : [],
+  );
   const [favicon, setFavicon] = React.useState<UploadedImage[]>(
     settings.faviconUrl && settings.faviconPublicId
       ? [{ url: settings.faviconUrl, publicId: settings.faviconPublicId }]
@@ -56,7 +60,24 @@ export function GeneralSettingsClient({
 
   const [logoUploading, setLogoUploading] = React.useState(false);
   const [faviconUploading, setFaviconUploading] = React.useState(false);
-  const uploading = logoUploading || faviconUploading;
+  const [logoDarkUploading, setLogoDarkUploading] = React.useState(false);
+  const uploading = logoUploading || faviconUploading || logoDarkUploading;
+
+  /* Will the logo disappear on the shop's dark mode? Asked only while there's
+   * no light version; can't-tell says nothing. */
+  const logoUrl = logo[0]?.url ?? null;
+  const [hiddenOnDark, setHiddenOnDark] = React.useState<{ url: string; hidden: boolean } | null>(null);
+  React.useEffect(() => {
+    if (!logoUrl || logoDark.length) return;
+    let live = true;
+    void checkLogoForDarkMode(logoUrl).then((hidden) => {
+      if (live && hidden !== null) setHiddenOnDark({ url: logoUrl, hidden });
+    });
+    return () => {
+      live = false;
+    };
+  }, [logoUrl, logoDark.length]);
+  const warnDark = Boolean(logoUrl) && !logoDark.length && hiddenOnDark?.url === logoUrl && hiddenOnDark.hidden;
   const [pending, setPending] = React.useState(false);
   const [fieldErrors, setFieldErrors] = React.useState<OrganizationFieldErrors>({});
   const [formError, setFormError] = React.useState<string | null>(null);
@@ -78,6 +99,7 @@ export function GeneralSettingsClient({
     socialLinks,
     logo: logo[0]?.publicId ?? null,
     favicon: favicon[0]?.publicId ?? null,
+    logoDark: logoDark[0]?.publicId ?? null,
   });
   const [savedSnapshot, setSavedSnapshot] = React.useState(snapshot);
   const dirty = canManage && snapshot !== savedSnapshot;
@@ -94,6 +116,7 @@ export function GeneralSettingsClient({
       name,
       logo: logo[0] ? { url: logo[0].url, publicId: logo[0].publicId } : null,
       favicon: favicon[0] ? { url: favicon[0].url, publicId: favicon[0].publicId } : null,
+      logoDark: logoDark[0] ? { url: logoDark[0].url, publicId: logoDark[0].publicId } : null,
       supportEmail,
       supportPhone,
       businessAddress,
@@ -168,6 +191,29 @@ export function GeneralSettingsClient({
               disabled={!canManage}
               onBusyChange={setLogoUploading}
               hint="PNG, JPG or WebP, up to 10MB"
+            />
+          </Field>
+
+          <Field>
+            <Label>Logo for dark mode</Label>
+            <FieldDescription>
+              Optional. Shoppers can switch your online shop to dark mode. If your logo is dark, add a light version (white or
+              light-coloured, on a transparent background) to use there. Without one, dark mode shows your logo on a light
+              backing so it stays visible.
+            </FieldDescription>
+            {warnDark && (
+              <p role="status" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+                Your logo is dark on a transparent background, so it’s hard to see in dark mode. Add a light version here.
+              </p>
+            )}
+            <ImageUploader
+              purpose="organization"
+              value={logoDark}
+              onChange={setLogoDark}
+              max={1}
+              disabled={!canManage}
+              onBusyChange={setLogoDarkUploading}
+              hint="A PNG with a transparent background works best"
             />
           </Field>
 

@@ -23,7 +23,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { formatDate, formatMoney, formatRelativeTime } from '@/lib/format';
-import { PROMISE_HOURS, STEPS_FOR, STEP_INFO, type DomainStep } from '@/lib/domains/rules';
+import { PROMISE_HOURS, STEPS_FOR, stepInfo, type DomainStep } from '@/lib/domains/rules';
 import {
   checkOrderDns,
   markDomainFailed,
@@ -39,6 +39,7 @@ export function DomainOrderClient({ order }: { order: DomainOrderDetail }) {
   const now = new Date();
   const open = order.status === 'PENDING_FULFILLMENT';
   const steps = STEPS_FOR[order.type];
+  const words = stepInfo(order.type, order.domain);
   const allDone = steps.every((s) => order.steps[s]);
   const due = new Date(new Date(order.readyAt).getTime() + PROMISE_HOURS * 3600_000);
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -121,16 +122,16 @@ export function DomainOrderClient({ order }: { order: DomainOrderDetail }) {
                       checked={Boolean(at)}
                       disabled={!open || busy !== null}
                       onCheckedChange={(v) => tick(step, v === true)}
-                      aria-label={STEP_INFO[order.type][step]}
+                      aria-label={words[step]}
                       className="mt-0.5"
                     />
                     <div className="min-w-0 flex-1 text-sm">
-                      <p className={at ? 'text-muted-foreground' : 'text-foreground'}>{STEP_INFO[order.type][step]}</p>
+                      <p className={at ? 'text-muted-foreground' : 'text-foreground'}>{words[step]}</p>
                       {at && <p className="text-xs text-muted-foreground">Done {formatRelativeTime(at, now)}</p>}
                       {step === 'registered' && (
                         <div className="mt-2 flex items-center gap-2">
                           <Label htmlFor="expiry" className="text-xs">
-                            Expiry date at Namecheap
+                            Expiry date at {order.registrar}
                           </Label>
                           <Input id="expiry" type="date" value={expiry} disabled={!open || Boolean(at)} onChange={(e) => setExpiry(e.target.value)} className="h-8 w-44" />
                         </div>
@@ -216,11 +217,28 @@ export function DomainOrderClient({ order }: { order: DomainOrderDetail }) {
               <Fact label="Contact" value={order.registrant.name} />
               <Fact label="Email" value={order.registrant.email} />
               <Fact label="Phone" value={order.registrant.phone} />
+              {order.registrar === 'QServers' && <Fact label="Address" value={order.registrant.address} />}
             </dl>
+            {order.registrar === 'QServers' && order.type === 'REGISTER' && !order.registrant.address && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                QServers asks for an address and the shop hasn’t added one. Ask the merchant before registering.
+              </p>
+            )}
           </Section>
           <Section title="Payment">
             <dl className="space-y-1.5 text-sm">
-              <Fact label="Paid" value={order.paid ? formatMoney(order.paid.amount) : order.type === 'EXISTING' ? 'Free (their own domain)' : 'Not paid'} />
+              <Fact
+                label="Paid"
+                value={
+                  order.paid
+                    ? formatMoney(order.paid.amount)
+                    : order.isFree
+                      ? 'Free with their plan (first year only)'
+                      : order.type === 'EXISTING'
+                        ? 'Free (their own domain)'
+                        : 'Not paid'
+                }
+              />
               <Fact label="Reference" value={order.paid?.reference ?? null} />
               {order.currentExpiry && <Fact label="Current expiry" value={formatDate(order.currentExpiry)} />}
             </dl>

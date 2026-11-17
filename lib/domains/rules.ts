@@ -3,8 +3,10 @@
  *
  * The rules for a shop's own domain (ROADMAP 12.6). Pure and client-safe.
  *
- *   - Buying: `.com` only (decided). "adafabrics" means adafabrics.com; any
- *     other ending is explained, not silently refused.
+ *   - Buying: `.com`, and `.com.ng` (ROADMAP 22.3) when its naira prices are
+ *     set. A bare name takes the ending the merchant picked; any other ending
+ *     is explained, not silently refused. `.com` is registered at Namecheap,
+ *     `.com.ng` by hand at QServers (decided 2026-11-17).
  *   - Connecting: any domain the merchant owns, given as the domain itself
  *     (yourshop.com, yourshop.com.ng), not a sub-address.
  *   - The shop answers on the domain and its www; www is canonical (decided
@@ -50,6 +52,40 @@ export function comDomain(input: string): DomainParse {
   return { ok: true, domain: labels.join('.') };
 }
 
+/** The endings we register, and where. */
+export const BUY_ENDINGS = ['com', 'com.ng'] as const;
+export type BuyEnding = (typeof BUY_ENDINGS)[number];
+
+export function endingOf(domain: string): BuyEnding | null {
+  if (domain.endsWith('.com.ng')) return 'com.ng';
+  if (domain.endsWith('.com')) return 'com';
+  return null;
+}
+
+/** Who registers it: Namecheap through its API for .com; .com.ng by hand at QServers. */
+export function registrarFor(domain: string): 'Namecheap' | 'QServers' {
+  return endingOf(domain) === 'com.ng' ? 'QServers' : 'Namecheap';
+}
+
+/**
+ * A name to buy: `.com` or `.com.ng`. A bare name ("adafabrics") takes
+ * `ending`; `allowed` is what's on sale right now.
+ */
+export function buyableDomain(input: string, ending: BuyEnding, allowed: readonly BuyEnding[] = BUY_ENDINGS): DomainParse {
+  const host = cleanHost(input);
+  if (!host) return { ok: false, error: 'Type the name you’d like, e.g. adafabrics.' };
+  const typed = host.includes('.') ? endingOf(host) : ending;
+  const name = host.includes('.') && typed ? host.slice(0, -(typed.length + 1)) : host;
+  if (!typed || !allowed.includes(typed) || name.includes('.')) {
+    const offered = allowed.map((e) => `.${e}`).join(' or ');
+    return { ok: false, error: `We offer ${offered} addresses. Try the same name ending in ${offered}.` };
+  }
+  if (!LABEL.test(name)) {
+    return { ok: false, error: 'Use letters, numbers and hyphens only, not starting or ending with a hyphen.' };
+  }
+  return { ok: true, domain: `${name}.${typed}` };
+}
+
 /** A domain the merchant owns, to connect: the domain itself, any ending. */
 export function ownedDomain(input: string): DomainParse {
   const host = cleanHost(input);
@@ -71,22 +107,20 @@ export function ownedDomain(input: string): DomainParse {
 /** The host shoppers are sent to. */
 export const canonicalHostFor = (domain: string) => `www.${domain}`;
 
-/** Close `.com` alternatives when a name is taken, best first. */
-export function comSuggestions(domain: string): string[] {
-  const name = domain.replace(/\.com$/, '');
+/** Close alternatives with the same ending when a name is taken, best first. */
+export function domainSuggestions(domain: string): string[] {
+  const ending = endingOf(domain) ?? 'com';
+  const name = domain.slice(0, -(ending.length + 1));
   const plain = name.replace(/-/g, '');
-  const raw = [
-    name.includes('-') ? `${plain}.com` : '',
-    `${name}ng.com`,
-    `${name}-ng.com`,
-    `${name}shop.com`,
-    `${name}-shop.com`,
-    `${name}store.com`,
-    `shop${plain}.com`,
-    `get${plain}.com`,
-  ];
-  return [...new Set(raw)].filter((d) => d && d !== domain && comDomain(d).ok).slice(0, 6);
+  const ng = ending === 'com' ? [`${name}ng`, `${name}-ng`] : [];
+  const raw = [name.includes('-') ? plain : '', ...ng, `${name}shop`, `${name}-shop`, `${name}store`, `shop${plain}`, `get${plain}`]
+    .filter(Boolean)
+    .map((n) => `${n}.${ending}`);
+  return [...new Set(raw)].filter((d) => d !== domain && buyableDomain(d, ending).ok).slice(0, 6);
 }
+
+/** Close `.com` alternatives when a name is taken, best first. */
+export const comSuggestions = (domain: string) => domainSuggestions(domain);
 
 /* ─── Renewal ────────────────────────────────────────────────────────────── */
 
@@ -182,6 +216,8 @@ export type TimelineStep = { key: 'paid' | 'registering' | 'connecting' | 'live'
 
 export function orderTimeline(order: {
   type: 'EXISTING' | 'REGISTER' | 'RENEW' | 'FREE';
+  /** the plan's free .com.ng (22.3): nothing was paid */
+  isFree?: boolean;
   readyAt: Date | null;
   stepRegisteredAt: Date | null;
   stepDnsAt: Date | null;
@@ -197,7 +233,7 @@ export function orderTimeline(order: {
   }
   const connecting = order.stepHostAt ?? order.stepDnsAt;
   return [
-    { key: 'paid', label: order.type === 'EXISTING' ? 'Records found' : 'Paid', at: order.readyAt },
+    { key: 'paid', label: order.type === 'EXISTING' ? 'Records found' : order.isFree ? 'Chosen — free with your plan' : 'Paid', at: order.readyAt },
     ...(order.type === 'REGISTER' ? [{ key: 'registering' as const, label: 'Registering your domain', at: order.stepRegisteredAt }] : []),
     { key: 'connecting', label: 'Connecting it to your shop', at: connecting },
     { key: 'live', label: 'Live', at: order.fulfilledAt },
@@ -219,6 +255,15 @@ export const STEPS_FOR: Record<'REGISTER' | 'EXISTING' | 'RENEW', DomainStep[]> 
   EXISTING: ['dns', 'host', 'checked'],
   RENEW: ['registered'],
 };
+
+/** The checklist's words for one order — naming the registrar its domain is registered at. */
+export function stepInfo(kind: 'REGISTER' | 'EXISTING' | 'RENEW', domain: string | null): Record<DomainStep, string> {
+  const registrar = domain ? registrarFor(domain) : 'Namecheap';
+  const words = STEP_INFO[kind];
+  return Object.fromEntries(
+    (Object.keys(words) as DomainStep[]).map((k) => [k, words[k].replace(/Namecheap/g, registrar)]),
+  ) as Record<DomainStep, string>;
+}
 
 export const STEP_INFO: Record<'REGISTER' | 'EXISTING' | 'RENEW', Record<DomainStep, string>> = {
   REGISTER: {

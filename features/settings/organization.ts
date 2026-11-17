@@ -37,6 +37,9 @@ export interface OrganizationSettings {
   slug: string;
   logoUrl: string | null;
   logoPublicId: string | null;
+  /** a light logo for the online shop's dark mode; null = the normal logo on a light backing */
+  logoDarkUrl: string | null;
+  logoDarkPublicId: string | null;
   /** the shop's browser-tab icon; null = the tab shows the logo */
   faviconUrl: string | null;
   faviconPublicId: string | null;
@@ -65,6 +68,7 @@ const OrganizationSchema = z.object({
     .max(80, 'Keep the business name under 80 characters'),
   logo: z.object({ url: z.string().url(), publicId: z.string() }).nullable().optional(),
   favicon: z.object({ url: z.string().url(), publicId: z.string() }).nullable().optional(),
+  logoDark: z.object({ url: z.string().url(), publicId: z.string() }).nullable().optional(),
   supportEmail: z
     .string()
     .trim()
@@ -107,6 +111,8 @@ export async function getOrganizationSettings(): Promise<ActionResult<Organizati
         slug: true,
         logoUrl: true,
         logoPublicId: true,
+        logoDarkUrl: true,
+        logoDarkPublicId: true,
         faviconUrl: true,
         faviconPublicId: true,
         currency: true,
@@ -164,10 +170,13 @@ export async function saveOrganizationSettings(
     if (data.favicon && !isOrgAsset(data.favicon, organizationId)) {
       return { success: false, error: 'That tab icon wasn’t uploaded through this workspace. Remove it and upload it again.' };
     }
+    if (data.logoDark && !isOrgAsset(data.logoDark, organizationId)) {
+      return { success: false, error: 'That dark-mode logo wasn’t uploaded through this workspace. Remove it and upload it again.' };
+    }
 
     const current = await prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { logoPublicId: true, faviconPublicId: true, vatRegistered: true, vatRate: true },
+      select: { logoPublicId: true, logoDarkPublicId: true, faviconPublicId: true, vatRegistered: true, vatRate: true },
     });
     const vatRegistered = data.vatRegistered ?? current?.vatRegistered ?? false;
     const vatRate = data.vatRate ?? Number(current?.vatRate ?? DEFAULT_VAT_RATE_PCT);
@@ -179,6 +188,10 @@ export async function saveOrganizationSettings(
       data.favicon === undefined
         ? undefined
         : { faviconUrl: data.favicon?.url ?? null, faviconPublicId: data.favicon?.publicId ?? null };
+    const logoDark =
+      data.logoDark === undefined
+        ? undefined
+        : { logoDarkUrl: data.logoDark?.url ?? null, logoDarkPublicId: data.logoDark?.publicId ?? null };
 
     await prisma.organization.update({
       where: { id: organizationId },
@@ -187,6 +200,7 @@ export async function saveOrganizationSettings(
         logoUrl,
         logoPublicId,
         ...(favicon ?? {}),
+        ...(logoDark ?? {}),
         supportEmail: data.supportEmail?.trim() || null,
         supportPhone: data.supportPhone?.trim() || null,
         businessAddress: data.businessAddress?.trim() || null,
@@ -208,6 +222,10 @@ export async function saveOrganizationSettings(
     if (faviconChanged && current?.faviconPublicId) {
       await destroyAsset(current.faviconPublicId);
     }
+    const logoDarkChanged = logoDark !== undefined && (current?.logoDarkPublicId ?? null) !== logoDark.logoDarkPublicId;
+    if (logoDarkChanged && current?.logoDarkPublicId) {
+      await destroyAsset(current.logoDarkPublicId);
+    }
 
     await createAuditLog({
       organizationId,
@@ -219,6 +237,7 @@ export async function saveOrganizationSettings(
         name: data.name,
         logoChanged: (current?.logoPublicId ?? null) !== logoPublicId,
         faviconChanged,
+        logoDarkChanged,
         socialLinks: Object.keys(social.links),
         vatRegistered,
         vatRate,

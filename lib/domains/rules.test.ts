@@ -1,7 +1,11 @@
 /* A shop's own domain (ROADMAP 12.6) — the pure rules and the email wording. */
 import { describe, expect, it } from 'vitest';
 import {
+  buyableDomain,
   canonicalHostFor,
+  domainSuggestions,
+  registrarFor,
+  stepInfo,
   cleanHost,
   comDomain,
   comSuggestions,
@@ -115,5 +119,29 @@ describe('what the emails say', () => {
     expect(before.subject).toContain('Renew ada.com by 23 Jun 2027');
     expect(before.paragraphs[0]).toContain('₦20,000');
     expect(renewalReminderEmail({ shopName: 'Ada', domain: 'ada.com', expiresAt: expiry, renewNgn: null, pageUrl: 'u', kind: 'grace_w1' }).subject).toContain('has expired');
+  });
+});
+
+describe('buying a .com or .com.ng (22.3)', () => {
+  it('gives a bare name the chosen ending, and keeps a typed one', () => {
+    expect(buyableDomain('AdaFabrics', 'com.ng')).toEqual({ ok: true, domain: 'adafabrics.com.ng' });
+    expect(buyableDomain('https://www.adafabrics.com.ng/', 'com')).toEqual({ ok: true, domain: 'adafabrics.com.ng' });
+    expect(buyableDomain('adafabrics.com', 'com.ng')).toEqual({ ok: true, domain: 'adafabrics.com' });
+  });
+
+  it('refuses other endings, sub-addresses, and .com.ng while it isn’t on sale', () => {
+    expect(buyableDomain('adafabrics.ng', 'com')).toMatchObject({ ok: false });
+    expect(buyableDomain('shop.adafabrics.com.ng', 'com')).toMatchObject({ ok: false });
+    expect(buyableDomain('adafabrics.com.ng', 'com', ['com'])).toMatchObject({ ok: false, error: expect.stringContaining('.com addresses') });
+    expect(buyableDomain('-ada.com.ng', 'com.ng')).toMatchObject({ ok: false });
+  });
+
+  it('suggests names with the same ending, and names the registrar', () => {
+    expect(domainSuggestions('ada.com.ng').every((d) => d.endsWith('.com.ng'))).toBe(true);
+    expect(domainSuggestions('ada.com')).toContain('adang.com');
+    expect(registrarFor('ada.com.ng')).toBe('QServers');
+    expect(registrarFor('ada.com')).toBe('Namecheap');
+    expect(stepInfo('REGISTER', 'ada.com.ng').registered).toContain('QServers');
+    expect(stepInfo('REGISTER', 'ada.com').registered).toContain('Namecheap');
   });
 });

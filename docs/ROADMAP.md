@@ -1314,7 +1314,7 @@ Launch (C) needs both.
 | A3 | 14.7 Returns for counter sales (unpaused: the wallet decision is made) | DONE 2026-11-12 |
 | A4 | Remove EduPay wallets everywhere (Phase 20) | DONE 2026-11-14 |
 | A5 | Admin menu regrouped and renamed for shop owners (Sell / Products and stock / Grow / Settings; account menu in the header; stock reports reached from Reports) — labels only, no address changed; see AGENTS §7a | DONE 2026-11-14 |
-| A6 | Phase 22 Plans and pricing: plan keys that lock what they say, three plans set in the console, a free .com.ng with yearly plans | 22.1 DONE 2026-11-14; 22.2 (prices, spread) waits on the owner; 22.3 next |
+| A6 | Phase 22 Plans and pricing: plan keys that lock what they say, three plans set in the console, a free .com.ng with yearly plans | 22.1 DONE 2026-11-14; 22.3 DONE 2026-11-17 (needs .com.ng prices in Billing settings); 22.2 (prices, spread) waits on the owner |
 | A7 | Phase 23 New landing page, with website chat (Freshchat) for visitors | Chat DONE 2026-11-15 (needs FRESHCHAT_* on Vercel); redesigned site built 2026-11-15, waiting on the owner's review |
 
 **B. Owner (docs/GO-LIVE.md)**
@@ -4617,6 +4617,17 @@ API (12.4).
 ---
 
 ## Phase 15 — Make my store look like me (storefront customisation) — DONE (2026-10-02)
+
+**Added 2026-11-17 — the logo in dark mode.** A dark logo on a transparent
+background vanished on the shop's dark theme. Now: an optional "Logo for dark
+mode" (`Organization.logoDarkUrl`, Settings → Business details); without one,
+dark mode shows the normal logo on a light backing — never a recoloured
+picture. Both images are in the page and `storefront.css` picks by
+`data-sf-theme`, so the toggle needs no script (`StoreLogo`,
+components/storefront/layout/store-logo.tsx; header and checkout). The
+settings page warns when an uploaded logo is mostly dark on transparent
+(`logoHiddenOnDark`, lib/storefront/design/logo-contrast.ts, against the
+lightest dark background of any look). Invoices stay on paper white: no change.
 
 Agreed 2026-10-02, from a "visual storefront builder" proposal checked against
 the code and cut down. **The principle: fewer decisions, each making a bigger
@@ -8339,15 +8350,39 @@ As shipped (migration `20261116090000_plan_keys`):
 ### 22.2 The catalogue in the console — TODO (owner, no code)
 Names, prices, limits, features and the trial plan, once 22.1 ships.
 
-### 22.3 A free .com.ng with yearly plans — TODO
-- Buying allows `.com.ng` (naira price set in the console) beside `.com`.
-- A per-plan "includes a free .com.ng" setting: off, first year, or first
-  year and renewals.
-- The domain page shows it as free when the shop's plan and cycle qualify;
-  one free domain per shop, ever. Renewal reminders charge the shop when its
-  plan no longer covers renewals.
-- The staff queue shows a free order like any other, with the merchant's
-  registrant details.
+### 22.3 A free .com.ng with yearly plans — DONE (2026-11-17)
+Decided 2026-11-17: **first year only**, on **Growth and Business** (keys
+`pro`, `enterprise`), when the shop **pays yearly**. Registered by hand at
+**QServers** (Namecheap doesn't sell .com.ng).
+- **The plan feature** `domain.free_com_ng` (`FEATURES.FREE_DOMAIN`), put on
+  Growth and Business by migration `20261117090000_free_com_ng`; staff change
+  it per plan in the console like any feature. The plan cards list it only
+  while .com.ng is on sale (`listPlansForSale`), so nothing is advertised that
+  can't be claimed; the landing and pricing FAQs name the plans from the
+  catalogue (`getPublicOffer().freeDomainPlans`).
+- **.com.ng prices** in console → Billing settings (`comng_register_price`,
+  `comng_renew_price`, naira). Both empty = no .com.ng at all, free or paid.
+  `quoteDomain`/`renewalPriceNgn` (lib/domains/pricing.ts) price either
+  ending, for the page, checkout and renewal reminders alike.
+- **Is it free?** Asked of the .ng registry's RDAP (`rdap.nic.net.ng`, 404 =
+  free; lib/domains/comng.ts). No answer = not sold; WHOIS on port 43 didn't
+  answer when tested.
+- **Who gets it** (`freeDomainStatus`, lib/domains/free-domain.ts): the
+  subscription is ACTIVE (paid — never a trial) on the YEARLY cycle, its plan
+  has the feature, and the shop hasn't had one. **One per shop, ever**:
+  `Organization.freeDomainClaimedAt`, claimed with a conditional update so two
+  presses can't both win; only staff marking the registration failed gives
+  it back. Removing the domain later doesn't.
+- **Claiming** (Settings → Domain, `claimFreeDomain`, `billing.manage`): no
+  checkout — a REGISTER `DomainOrder` with `isFree`, ₦0, ready at once, the
+  shop's pending domain, and the usual staff alert. A free registration in
+  progress can't be removed by the merchant, like a paid one.
+- **Renewal** is the normal .com.ng renewal price, through the usual
+  reminders and Renew button — nothing special.
+- **Staff**: the queue marks it "free with plan"; the order page says
+  "Free with their plan (first year only)", names QServers in the checklist
+  and the expiry field, and shows the shop's business address (QServers asks
+  for one) with a note when there isn't one.
 
 ### Later
 - Paying for extra staff and stores without changing plan.

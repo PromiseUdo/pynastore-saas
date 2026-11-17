@@ -62,7 +62,7 @@ const { NoBuyingProvider, UpgradeLink } = await import('@/components/business-ap
 const { PlanNotice, PlanEndedPage } = await import('@/components/layout/plan-notice');
 const { planStatusLine } = await import('@/lib/billing/status-line');
 const { createCheckoutSession } = await import('@/features/billing/actions');
-const { searchComDomain, buyDomain, renewDomain } = await import('@/features/domains/actions');
+const { searchDomain: searchComDomain, buyDomain, renewDomain } = await import('@/features/domains/actions');
 const { saveMobileAppRequestAction, payForMobileAppAction } = await import('@/features/mobile-app/actions');
 const UpgradePage = (await import('@/app/(dashboard)/[organizationSlug]/upgrade/page')).default;
 const BillingPage = (await import('@/app/(dashboard)/[organizationSlug]/settings/billing/page')).default;
@@ -180,6 +180,8 @@ describe('no buying in the app', () => {
       paidPlan: true,
       canBuy: true,
       canConnect: true,
+      comNg: null,
+      freeDomain: 'none' as const,
     };
     const inApp = html(<DomainClient data={data} />, true);
     expect(inApp).not.toContain('Get a new domain');

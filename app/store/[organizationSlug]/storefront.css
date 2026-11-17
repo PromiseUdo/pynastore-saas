@@ -756,3 +756,21 @@
 [data-storefront][data-sf-cards='framed'] .sf-card-media {
   border-radius: var(--radius);
 }
+
+/* ── The shop's logo in dark mode (components/storefront/layout/store-logo.tsx) ──
+ * A light version, when the merchant gave one; otherwise the normal logo on a
+ * light backing, so a dark logo never disappears into the page. */
+[data-storefront] .sf-logo-dark {
+  display: none;
+}
+[data-storefront][data-sf-theme='dark'] .sf-logo[data-has-dark] .sf-logo-default {
+  display: none;
+}
+[data-storefront][data-sf-theme='dark'] .sf-logo[data-has-dark] .sf-logo-dark {
+  display: block;
+}
+[data-storefront][data-sf-theme='dark'] .sf-logo:not([data-has-dark]) .sf-logo-default {
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 3px;
+}
