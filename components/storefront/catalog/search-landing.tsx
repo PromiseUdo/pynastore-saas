@@ -8,7 +8,7 @@
  * the merchant doesn't carry) the moment the catalogue changes.
  */
 import Link from 'next/link';
-import { Search, TrendingUp } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { ProductCard } from '@/components/storefront/product/product-card';
 import { categoryHref } from '@/lib/storefront/navigation';
 import type { Category, Product } from '@/lib/storefront/types';
@@ -27,8 +27,9 @@ export function SearchLanding({
       {popularSearches.length > 0 && (
         <section>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-            <TrendingUp aria-hidden className="size-4 text-muted-foreground" />
-            Popular searches
+            {/* The shop's busiest departments and its brands — we don't record
+              * searches, so this never claims to be what people searched for. */}
+            Try searching for
           </h2>
           <div className="flex flex-wrap gap-2">
             {popularSearches.map((term) => (
@@ -64,7 +65,10 @@ export function SearchLanding({
 
       {trending.length > 0 && (
         <section>
-          <h2 className="mb-4 text-sm font-semibold">Trending right now</h2>
+          <h2 className="mb-4 text-sm font-semibold">
+            {/* Ordered by real sales; "Best sellers" only once something has sold. */}
+            {trending.some((p) => p.soldCount > 0) ? 'Best sellers' : 'From the shop'}
+          </h2>
           <div className="grid grid-cols-2 gap-x-4 gap-y-9 sm:gap-x-5 md:grid-cols-3 lg:grid-cols-4">
             {trending.map((product, i) => (
               <ProductCard key={product.id} product={product} priority={i < 4} />

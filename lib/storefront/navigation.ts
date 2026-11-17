@@ -61,8 +61,8 @@ export async function getNavItems(scope?: StoreScope): Promise<NavItem[]> {
 
   const hasProducts = tree.some((root) => root.productCount > 0);
   return [
-    ...(hasProducts ? [{ id: 'new', name: 'New in', href: '/products?sort=newest', columns: [], quickLinks: [] }] : []),
+    ...(hasProducts ? [{ id: 'new', name: 'New in', href: '/products?sort=newest', columns: [], quickLinks: [], shortcut: true as const }] : []),
     ...items,
-    ...(hasProducts ? [{ id: 'sale', name: 'Sale', href: '/sale', columns: [], quickLinks: [], highlight: 'sale' as const }] : []),
+    ...(hasProducts ? [{ id: 'sale', name: 'Sale', href: '/sale', columns: [], quickLinks: [], highlight: 'sale' as const, shortcut: true as const }] : []),
   ];
 }

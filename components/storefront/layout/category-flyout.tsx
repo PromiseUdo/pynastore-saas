@@ -43,7 +43,9 @@ export function CategoryFlyout({
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h3 className="text-xl font-bold">{item.name}</h3>
             {item.productCount != null && item.productCount > 0 && (
-              <span className="text-xs text-muted-foreground">{item.productCount} products</span>
+              <span className="text-xs text-muted-foreground">
+                {item.productCount} {item.productCount === 1 ? 'product' : 'products'}
+              </span>
             )}
           </div>
           {item.description && (
@@ -76,7 +78,7 @@ export function CategoryFlyout({
         </div>
       )}
 
-      {/* leaf grid */}
+      {/* leaf grid — empty for a department with no subcategories; "Shop all" above covers it */}
       <div className="sf-thin-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
         <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {leaves.map((leaf) => (
@@ -98,7 +100,7 @@ export function CategoryFlyout({
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">{leaf.name}</span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {leaf.productCount ? `${leaf.productCount} products` : 'Browse the range'}
+                    {leaf.productCount ? `${leaf.productCount} ${leaf.productCount === 1 ? 'product' : 'products'}` : 'Browse the range'}
                   </span>
                 </span>
               </Link>

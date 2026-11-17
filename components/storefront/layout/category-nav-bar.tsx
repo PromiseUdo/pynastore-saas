@@ -32,9 +32,10 @@ export function CategoryNavBar({ navItems }: { navItems: NavItem[] }) {
   const [open, setOpen] = React.useState(false);
   const [activeId, setActiveId] = React.useState<string | null>(null);
 
-  // Only roots with a real subtree belong in the category rail — the synthetic
-  // "New in"/"Sale" nav entries carry no columns and live in PRIMARY_LINKS.
-  const roots = React.useMemo(() => navItems.filter((i) => i.columns.length > 0), [navItems]);
+  // Every one of the shop's departments, with or without subcategories (a
+  // "Skincare" with products but no children belongs here too). Only the
+  // "New in"/"Sale" shortcuts are left out — they live in PRIMARY_LINKS.
+  const roots = React.useMemo(() => navItems.filter((i) => !i.shortcut), [navItems]);
   const active = roots.find((r) => r.id === activeId) ?? roots[0];
 
   // Close on route change — the panel outlives the navigation otherwise.

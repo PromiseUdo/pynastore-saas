@@ -43,6 +43,8 @@ export interface NavItem {
   quickLinks: NavLink[];
   promo?: NavPromo;
   highlight?: 'sale';
+  /** "New in" / "Sale": a link, not one of the merchant's categories */
+  shortcut?: true;
 }
 
 /** Every leaf category under a nav item, flattened — the flyout renders these

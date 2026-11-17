@@ -229,7 +229,7 @@ export function SiteHeader({
       {/* Phones: the search box, and nothing else (see the note at the top). */}
       <div className="sf-container flex h-16 items-center gap-2.5 lg:hidden">
         {!isMobileRuntime && phoneMark}
-        <HeaderSearch className="min-w-0 flex-1" />
+        <HeaderSearch className="min-w-0 flex-1" navItems={navItems} />
       </div>
 
       {layout === 'centered' ? (
@@ -242,6 +242,7 @@ export function SiteHeader({
         <div className="sf-container hidden h-18 items-center gap-8 lg:flex">
           {logo}
           <HeaderSearch
+            navItems={navItems}
             className={cn(
               'flex-1 transition-opacity duration-200',
               showInlineSearch ? 'opacity-100' : 'pointer-events-none opacity-0',
@@ -254,7 +255,7 @@ export function SiteHeader({
       <CategoryNavBar navItems={navItems} />
 
       <MobileMenu items={navItems} />
-      <SearchOverlay />
+      <SearchOverlay navItems={navItems} />
       <MiniCart />
     </header>
   );

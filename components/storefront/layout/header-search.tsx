@@ -14,12 +14,13 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ProductImage } from '@/components/storefront/product/product-image';
 import { useRouter } from 'next/navigation';
-import { Loader2, Search, TrendingUp, X } from 'lucide-react';
+import { Loader2, Search, X } from 'lucide-react';
 import { ImageSearchLink } from '@/components/storefront/visual-search/image-search-link';
 import { cn } from '@/lib/utils';
 import { formatMoney } from '@/lib/storefront/format';
 import { useStorefront } from '@/lib/storefront/context';
-import { categoryHref } from '@/lib/storefront/nav-types';
+import { categoryHref, type NavItem } from '@/lib/storefront/nav-types';
+import { SearchShortcuts } from './search-shortcuts';
 
 interface Suggestions {
   products: {
@@ -36,9 +37,7 @@ interface Suggestions {
   brands: { id: string; name: string; slug: string }[];
 }
 
-const TRENDING = ['Headphones', 'Wrap dress', 'Standing desk', 'Vitamin C serum', 'Kettlebell'];
-
-export function HeaderSearch({ className }: { className?: string }) {
+export function HeaderSearch({ className, navItems }: { className?: string; navItems: NavItem[] }) {
   // The suggestions/product endpoints sit outside the tenant rewrite, so the
   // request has to name its store (see the route's header comment).
   const { org } = useStorefront();
@@ -153,25 +152,11 @@ export function HeaderSearch({ className }: { className?: string }) {
         </button>
       </form>
 
-      {open && (
+      {open && (q.trim().length >= 2 || navItems.length > 0) && (
         <div className="sf-fade-in absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-xl border bg-elevated shadow-2xl">
           {q.trim().length < 2 ? (
             <div className="p-4">
-              <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <TrendingUp className="size-3.5" /> Trending searches
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {TRENDING.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setQ(t)}
-                    className="rounded-[var(--sf-radius-button,999px)] border px-3 py-1.5 text-sm transition-colors hover:border-brand hover:text-brand"
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
+              <SearchShortcuts items={navItems} onNavigate={() => setOpen(false)} />
             </div>
           ) : !hasResults ? (
             <p className="p-6 text-center text-sm text-muted-foreground">

@@ -5,13 +5,15 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ProductImage } from '@/components/storefront/product/product-image';
 import { useRouter } from 'next/navigation';
-import { Search, X, TrendingUp } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { SheetRoot, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { useUIStore } from '@/lib/storefront/stores/ui-store';
 import { useStorefront } from '@/lib/storefront/context';
 import { formatMoney } from '@/lib/storefront/format';
 import { categoryHref } from '@/lib/storefront/nav-types';
 import { ImageSearchLink } from '@/components/storefront/visual-search/image-search-link';
+import type { NavItem } from '@/lib/storefront/nav-types';
+import { SearchShortcuts } from './search-shortcuts';
 
 interface Suggestions {
   products: { id: string; slug: string; name: string; brand: string; /** null when the merchant hasn't added one */ image: string | null; priceFrom: number; currency: string }[];
@@ -19,9 +21,7 @@ interface Suggestions {
   brands: { id: string; name: string; slug: string }[];
 }
 
-const TRENDING = ['Headphones', 'Wrap dress', 'Standing desk', 'Vitamin C serum', 'Sneakers'];
-
-export function SearchOverlay() {
+export function SearchOverlay({ navItems }: { navItems: NavItem[] }) {
   // The suggestions/product endpoints sit outside the tenant rewrite, so the
   // request has to name its store (see the route's header comment).
   const { org } = useStorefront();
@@ -72,7 +72,7 @@ export function SearchOverlay() {
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="inset-x-0 top-0 h-auto max-h-[90vh] w-full max-w-none border-l-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top sm:max-w-none"
+        className="inset-x-0 top-0 bottom-auto h-auto max-h-[90vh] w-full max-w-none border-l-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top sm:max-w-none"
       >
         <SheetTitle className="sr-only">Search the store</SheetTitle>
         <SheetDescription className="sr-only">
@@ -104,24 +104,7 @@ export function SearchOverlay() {
               className="mb-4 -mx-3 border-b pb-3.5"
             />
 
-            {q.trim().length < 2 && (
-              <div>
-                <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <TrendingUp className="size-3.5" /> Trending searches
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {TRENDING.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setQ(t)}
-                      className="rounded-[var(--sf-radius-button,999px)] border px-3 py-1.5 text-sm transition-colors hover:bg-accent"
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            {q.trim().length < 2 && <SearchShortcuts items={navItems} onNavigate={close} />}
 
             {loading && <p className="py-6 text-center text-sm text-muted-foreground">Searching…</p>}
 
