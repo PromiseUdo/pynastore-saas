@@ -17,6 +17,9 @@
 import { runAfter } from '@/lib/run-after';
 import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { signChatPhotoUpload, type SignedUpload } from '@/lib/cloudinary/sign';
+import type { ChatPhotoUpload } from '@/lib/chat/rules';
 import { createAuditLog } from '@/lib/audit';
 import {
   sendStaffMessage,
@@ -49,6 +52,8 @@ export async function sendReply(input: {
   conversationId: string;
   clientId: string;
   body: string;
+  /** a photo just uploaded through signReplyPhoto */
+  photo?: ChatPhotoUpload | null;
 }): Promise<ActionResult<{ message: StaffChatMessage }>> {
   try {
     const ctx = await replyContext();
@@ -57,6 +62,7 @@ export async function sendReply(input: {
       staffUserId: ctx.userId,
       clientId: input.clientId,
       body: input.body,
+      photo: input.photo ?? undefined,
     });
     if (!result.ok) return { success: false, error: result.message };
     // Buzz the shopper's phone if they asked and aren't looking (ROADMAP 17.4), after the reply is saved.
@@ -65,6 +71,23 @@ export async function sendReply(input: {
     return { success: true, data: { message } };
   } catch (error) {
     return failure(error, 'Your reply wasn’t sent. Please try again.');
+  }
+}
+
+/**
+ * Permission to upload one photo for a reply straight to Cloudinary — this
+ * shop's chat folder only, JPEG out, longest side 1600. The photo becomes
+ * part of the conversation only when sendReply names it.
+ */
+export async function signReplyPhoto(): Promise<ActionResult<{ upload: SignedUpload }>> {
+  try {
+    const ctx = await replyContext();
+    if (!(await checkRateLimit(`chat-photo:staff:${ctx.organization.id}:${ctx.userId}`, 120, 60 * 60 * 1000))) {
+      return { success: false, error: 'You’ve sent a lot of photos. Please wait a while before sending more.' };
+    }
+    return { success: true, data: { upload: signChatPhotoUpload(ctx.organization.id) } };
+  } catch (error) {
+    return failure(error, 'Photos can’t be sent right now.');
   }
 }
 

@@ -61,6 +61,8 @@ const storeReply = (seq: number, body: string): ShopperChatMessage => ({
   sender: 'STAFF',
   author: 'Store team',
   body,
+  photo: null,
+  photoExpired: false,
   productId: null,
   clientId: `staff-${seq}`,
   createdAt: '2026-10-08T09:00:00.000Z',

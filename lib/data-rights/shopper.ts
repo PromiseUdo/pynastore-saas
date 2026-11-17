@@ -23,6 +23,7 @@
  * A customer with no orders, invoices or quotes at all is deleted outright.
  */
 import { prisma } from '@/lib/prisma';
+import { chatPhotoIds, destroyChatPhotos } from '@/lib/chat/photos';
 import { createAuditLog } from '@/lib/audit';
 import { FINANCIAL_RETENTION_YEARS } from './policy';
 
@@ -88,7 +89,7 @@ export async function exportShopperData(organizationId: string, customerId: stri
       questions: { include: { product: { select: { name: true } } }, orderBy: { createdAt: 'asc' } },
       chatConversations: {
         where: { organizationId },
-        select: { messages: { orderBy: { seq: 'asc' }, select: { sender: true, body: true, createdAt: true } } },
+        select: { messages: { orderBy: { seq: 'asc' }, select: { sender: true, body: true, photoUrl: true, createdAt: true } } },
       },
       notifications: { orderBy: { createdAt: 'asc' }, select: { title: true, body: true, createdAt: true, readAt: true } },
       tradeAccount: true,
@@ -145,6 +146,7 @@ export async function exportShopperData(organizationId: string, customerId: stri
       c.messages.map((m) => ({
         from: m.sender === 'CUSTOMER' ? ('you' as const) : ('Store team' as const),
         message: m.body,
+        ...(m.photoUrl ? { photo: m.photoUrl } : {}),
         sentAt: m.createdAt.toISOString(),
       })),
     ),
@@ -176,6 +178,8 @@ export type DeletionOutcome = 'deleted' | 'records-kept';
  * Idempotent: an account already deleted returns null.
  */
 export async function deleteShopperAccount(organizationId: string, customerId: string): Promise<DeletionOutcome | null> {
+  // Photos either side sent in their chat: noted now, their files removed once the messages are gone.
+  const photos = await chatPhotoIds({ organizationId, customerId });
   const outcome = await prisma.$transaction(async (tx) => {
     const customer = await tx.customer.findFirst({
       where: { id: customerId, organizationId, accountDeletedAt: null },
@@ -236,6 +240,7 @@ export async function deleteShopperAccount(organizationId: string, customerId: s
   });
 
   if (outcome) {
+    await destroyChatPhotos(photos);
     await createAuditLog({
       organizationId,
       userId: null,

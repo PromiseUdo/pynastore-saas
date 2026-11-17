@@ -14,6 +14,7 @@
 import type { Metadata } from 'next';
 import { PLATFORM_DOMAIN, PLATFORM_NAME, PLATFORM_OPERATOR, PLATFORM_OPERATOR_REGISTRATION } from '@/lib/brand';
 import { CLOSURE_GRACE_DAYS, FINANCIAL_RETENTION_YEARS, GUEST_CHAT_RETENTION_MONTHS } from '@/lib/data-rights/policy';
+import { CHAT_PHOTO_DAYS } from '@/lib/chat/rules';
 import Link from 'next/link';
 import {
   LegalContact,
@@ -142,7 +143,8 @@ export default function PrivacyPolicyPage() {
             Messages a shopper sends a store through its chat, and the store’s replies. A shopper can chat
             without an account; they may give a name, and nothing else is asked for. The store’s staff see the
             conversation; the shopper sees the store’s replies signed “Store team”. Merchants can turn chat off,
-            and can block a shopper from sending more.
+            and can block a shopper from sending more. Either side can send a photo in the chat; photos are
+            deleted {CHAT_PHOTO_DAYS} days after they were sent.
           </li>
           <li>
             In a store’s own phone app, only if the shopper turns on notifications for an order or for a
@@ -297,7 +299,7 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <strong className="font-medium text-foreground">Cloudinary.</strong> Stores and serves uploaded
-            product and store images. Uploads go from the browser straight to Cloudinary using a signature we
+            product and store images, and photos sent in a store’s chat (deleted after {CHAT_PHOTO_DAYS} days). Uploads go from the browser straight to Cloudinary using a signature we
             generate.
           </li>
           <li>
@@ -424,7 +426,9 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <strong className="font-medium text-foreground">A guest’s chat with a store</strong> (sent without signing
-            in) is removed once nobody has written in it for {GUEST_CHAT_RETENTION_MONTHS} months.
+            in) is removed once nobody has written in it for {GUEST_CHAT_RETENTION_MONTHS} months. A photo sent in
+            any store chat, by either side, is deleted {CHAT_PHOTO_DAYS} days after it was sent; the conversation
+            then shows that a photo was there.
           </li>
           <li>
             Short-lived items expire on their own — password reset tokens, email-change confirmations,

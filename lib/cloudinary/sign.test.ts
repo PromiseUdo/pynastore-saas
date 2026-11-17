@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { isOrgAsset, isOrgDocument, privateDownloadUrl, signDocumentUpload, signParams, signUpload } from './sign';
+import { chatPhotoFolder, isChatPhoto, isOrgAsset, isOrgDocument, privateDownloadUrl, signChatPhotoUpload, signDocumentUpload, signParams, signUpload } from './sign';
 import { cloudinaryImage } from './url';
 
 const config = { cloudName: 'demo', apiKey: 'key', apiSecret: 'secret' };
@@ -79,5 +79,24 @@ describe('cloudinary signing', () => {
       'https://res.cloudinary.com/demo/image/upload/c_fill,w_80,h_80,f_auto,q_auto/v1/a.jpg',
     );
     expect(cloudinaryImage('https://picsum.photos/a.jpg', { width: 80 })).toBe('https://picsum.photos/a.jpg');
+  });
+});
+
+describe('chat photos', () => {
+  it('signs uploads into the shop’s chat folder, shrunk and stored as JPEG', () => {
+    const signed = signChatPhotoUpload('org1', config, 1_700_000_000_000);
+    expect(signed.fields).toMatchObject({ folder: 'mansaas/org1/chat', format: 'jpg', transformation: 'c_limit,w_1600,h_1600,q_auto:good' });
+    expect(signed.fields.allowed_formats).toContain('heic');
+    const { signature, api_key, ...signedParams } = signed.fields;
+    expect(api_key).toBe('key');
+    expect(signature).toBe(signParams(signedParams, 'secret'));
+  });
+
+  it('accepts only this shop’s chat photos', () => {
+    const id = `${chatPhotoFolder('org1')}/abc`;
+    expect(isChatPhoto({ url: `https://res.cloudinary.com/demo/image/upload/v1/${id}.jpg`, publicId: id }, 'org1', 'demo')).toBe(true);
+    expect(isChatPhoto({ url: `https://res.cloudinary.com/demo/image/upload/v1/${id}.jpg`, publicId: id }, 'org2', 'demo')).toBe(false);
+    const product = 'mansaas/org1/products/abc';
+    expect(isChatPhoto({ url: `https://res.cloudinary.com/demo/image/upload/v1/${product}.jpg`, publicId: product }, 'org1', 'demo')).toBe(false);
   });
 });

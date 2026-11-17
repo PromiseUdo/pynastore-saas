@@ -12,13 +12,17 @@
  * sent", with Try again (the same clientId, so it can't post twice) and
  * Edit — what the shopper typed is never thrown away.
  *
+ * A photo can go with a message (the words are then optional): chosen with
+ * the photo button, shown before sending, uploaded straight to Cloudinary
+ * when sent, and kept CHAT_PHOTO_DAYS — after that the message says so.
+ *
  * Nothing here is written for the merchant: the greeting is theirs, or the
  * fixed line "Send the shop a message", and the store's replies are signed
  * "Store team". No promise about how fast anyone replies.
  */
 import * as React from 'react';
 import Link from 'next/link';
-import { Loader2, Send, WifiOff, X } from 'lucide-react';
+import { ImageOff, ImagePlus, Loader2, Send, WifiOff, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -35,7 +39,9 @@ import {
   earliestSeq,
   latestSeq,
   mergeMessages,
-  validateMessage,
+  validateMessageText,
+  CHAT_PHOTO_DAYS,
+  type ChatPhotoUpload,
   type ShopperChatMessage,
 } from '@/lib/chat/rules';
 import {
@@ -43,17 +49,24 @@ import {
   fetchShopperChat,
   leaveShopperChat,
   markShopperChatRead,
+  requestShopperPhotoUpload,
   sendShopperMessage,
   type ShopperChatResponse,
 } from '@/lib/storefront/chat-client';
 import { useChatConfig } from './chat-config';
 import { ChatRepliesPrompt } from './chat-replies-prompt';
+import { PhotoError, photoProblem, uploadChatPhoto } from '@/lib/chat/photo-upload-client';
+import { cloudinaryImage } from '@/lib/cloudinary/url';
+
+/** A photo chosen in this browser: shown from the file until it's saved. */
+type LocalPhoto = { file: File; previewUrl: string; uploaded?: ChatPhotoUpload };
 
 type PanelMessage = Omit<ShopperChatMessage, 'seq' | 'id'> & {
   id: string | null;
   seq: number | null;
   state?: 'sending' | 'failed';
   error?: string;
+  localPhoto?: LocalPhoto;
 };
 
 const NEAR_BOTTOM_PX = 120;
@@ -87,6 +100,20 @@ export function ChatPanel() {
   const [draft, setDraft] = React.useState('');
   const [guestName, setGuestName] = React.useState('');
   const [sending, setSending] = React.useState(false);
+  const [photo, setPhoto] = React.useState<LocalPhoto | null>(null);
+  const [photoError, setPhotoError] = React.useState<string | null>(null);
+  const photoInput = React.useRef<HTMLInputElement>(null);
+
+  function choosePhoto(file: File | undefined) {
+    if (!file) return;
+    const problem = photoProblem(file);
+    if (problem) {
+      setPhotoError(problem);
+      return;
+    }
+    setPhotoError(null);
+    setPhoto({ file, previewUrl: URL.createObjectURL(file) });
+  }
 
   const messagesRef = React.useRef(messages);
   const loadedRef = React.useRef(loaded);
@@ -204,11 +231,20 @@ export function ChatPanel() {
     setSending(true);
     setMessages((current) => current.map((m) => (m.clientId === message.clientId ? { ...m, state: 'sending', error: undefined } : m)));
     try {
+      // Upload the photo once; a retry reuses it.
+      let uploaded = message.localPhoto?.uploaded;
+      if (message.localPhoto && !uploaded) {
+        uploaded = await uploadChatPhoto(message.localPhoto.file, await requestShopperPhotoUpload(org.slug));
+        const local = { ...message.localPhoto, uploaded };
+        setMessages((current) => current.map((m) => (m.clientId === message.clientId ? { ...m, localPhoto: local } : m)));
+        message = { ...message, localPhoto: local };
+      }
       const saved = await sendShopperMessage(org.slug, {
         clientId: message.clientId,
         body: message.body,
         productId: message.productId,
         guestName: shopper ? undefined : guestName.trim() || undefined,
+        photo: uploaded ?? null,
       });
       const merged = mergeMessages(messagesRef.current, [saved]);
       messagesRef.current = merged;
@@ -216,7 +252,10 @@ export function ChatPanel() {
       setStatus({ unread: 0, hasConversation: true });
       pollNow();
     } catch (error) {
-      const failure = error instanceof ChatRequestError ? error : new ChatRequestError('Your message wasn’t sent.', 0);
+      const failure =
+        error instanceof ChatRequestError
+          ? error
+          : new ChatRequestError(error instanceof PhotoError ? error.message : 'Your message wasn’t sent.', 0);
       if (failure.code === 'unavailable') setAvailable(false);
       if (failure.code === 'blocked') setConversation((c) => (c ? { ...c, blocked: true } : c));
       setMessages((current) =>
@@ -229,7 +268,7 @@ export function ChatPanel() {
 
   function send() {
     if (sending) return;
-    const checked = validateMessage(draft);
+    const checked = validateMessageText(draft, { hasPhoto: photo !== null });
     if (!checked.ok) return;
     const message: PanelMessage = {
       id: null,
@@ -238,6 +277,9 @@ export function ChatPanel() {
       sender: 'CUSTOMER',
       author: null,
       body: checked.value,
+      photo: null,
+      photoExpired: false,
+      localPhoto: photo ?? undefined,
       productId: product?.id ?? null,
       createdAt: new Date().toISOString(),
       state: 'sending',
@@ -245,6 +287,7 @@ export function ChatPanel() {
     stickToBottom.current = true;
     setMessages((current) => [...current, message]);
     setDraft('');
+    setPhoto(null);
     clearProduct();
     void deliver(message);
   }
@@ -252,6 +295,7 @@ export function ChatPanel() {
   function editFailed(message: PanelMessage) {
     setMessages((current) => current.filter((m) => m.clientId !== message.clientId));
     setDraft((current) => (current ? `${message.body}\n${current}` : message.body));
+    if (message.localPhoto) setPhoto(message.localPhoto);
   }
 
   const blocked = conversation?.blocked ?? false;
@@ -371,7 +415,47 @@ export function ChatPanel() {
             <Label htmlFor="chat-message" className="text-xs font-semibold">
               Your message
             </Label>
+            {photo && (
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo.previewUrl} alt="The photo you’re sending" className="size-16 rounded-xl border object-cover" />
+                <p className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  Add a few words if you like. Photos are kept for {CHAT_PHOTO_DAYS} days.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPhoto(null)}
+                  aria-label="Remove the photo"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-(--sf-radius-button) hover:bg-accent"
+                >
+                  <X aria-hidden className="size-4" />
+                </button>
+              </div>
+            )}
+            {photoError && <p className="text-xs text-destructive">{photoError}</p>}
             <div className="flex items-end gap-2">
+              <input
+                ref={photoInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+                className="sr-only"
+                tabIndex={-1}
+                aria-hidden
+                onChange={(event) => {
+                  choosePhoto(event.target.files?.[0]);
+                  event.target.value = '';
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => photoInput.current?.click()}
+                disabled={!canWrite || sending}
+                aria-label="Add a photo"
+                title="Add a photo"
+                className="inline-flex size-11 shrink-0 items-center justify-center rounded-(--sf-radius-button) border text-muted-foreground transition-colors hover:border-brand hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              >
+                <ImagePlus aria-hidden className="size-4" />
+              </button>
               <Textarea
                 id="chat-message"
                 value={draft}
@@ -383,14 +467,14 @@ export function ChatPanel() {
                   }
                 }}
                 rows={Math.min(5, Math.max(1, draft.split('\n').length))}
-                placeholder="Type a message…"
+                placeholder={photo ? 'Add a caption (optional)…' : 'Type a message…'}
                 aria-invalid={overLimit || undefined}
                 disabled={!canWrite}
                 className="min-h-11 rounded-xl px-4 py-2.5 text-base sm:text-sm"
               />
               <button
                 type="submit"
-                disabled={sending || !draft.trim() || overLimit}
+                disabled={sending || (!draft.trim() && !photo) || overLimit}
                 aria-label="Send message"
                 className="inline-flex size-11 shrink-0 items-center justify-center rounded-(--sf-radius-button) bg-brand text-primary-foreground transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
               >
@@ -421,15 +505,19 @@ function Bubble({ message, onRetry, onEdit }: { message: PanelMessage; onRetry: 
   const mine = message.sender === 'CUSTOMER';
   return (
     <div className={cn('flex flex-col', mine ? 'items-end' : 'items-start')}>
-      <div
-        className={cn(
-          'max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm',
-          mine ? 'rounded-br-md bg-brand text-primary-foreground' : 'rounded-bl-md bg-secondary text-foreground',
-          message.state && 'opacity-70',
-        )}
-      >
-        {message.body}
-      </div>
+      <ChatPhotoView message={message} mine={mine} />
+      {message.body && (
+        <div
+          className={cn(
+            'max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm',
+            mine ? 'rounded-br-md bg-brand text-primary-foreground' : 'rounded-bl-md bg-secondary text-foreground',
+            message.state && 'opacity-70',
+            (message.photo || message.localPhoto || message.photoExpired) && 'mt-1',
+          )}
+        >
+          {message.body}
+        </div>
+      )}
       <p className="mt-1 text-xs text-muted-foreground">
         {message.state === 'sending' ? (
           'Sending…'
@@ -451,6 +539,43 @@ function Bubble({ message, onRetry, onEdit }: { message: PanelMessage; onRetry: 
           </>
         )}
       </p>
+    </div>
+  );
+}
+
+/** The photo on a message: from the file while sending, then the saved copy; a note once it has expired. */
+function ChatPhotoView({ message, mine }: { message: PanelMessage; mine: boolean }) {
+  const corner = mine ? 'rounded-br-md' : 'rounded-bl-md';
+  if (message.photoExpired) {
+    return (
+      <p className={cn('flex max-w-[85%] items-center gap-2 rounded-2xl border border-dashed px-4 py-2.5 text-xs text-muted-foreground', corner)}>
+        <ImageOff aria-hidden className="size-4 shrink-0" />
+        Photo no longer available — photos are kept for {CHAT_PHOTO_DAYS} days.
+      </p>
+    );
+  }
+  const saved = message.photo;
+  const src = saved ? cloudinaryImage(saved.url, { width: 560, crop: 'limit' }) : message.localPhoto?.previewUrl;
+  if (!src) return null;
+  const image = (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={mine ? 'A photo you sent' : 'A photo from the store'}
+      width={saved?.width ?? undefined}
+      height={saved?.height ?? undefined}
+      className={cn('max-h-72 w-auto max-w-full rounded-2xl border bg-secondary object-contain', corner, message.state && 'opacity-70')}
+    />
+  );
+  return (
+    <div className="max-w-[85%]">
+      {saved ? (
+        <a href={saved.url} target="_blank" rel="noopener noreferrer" aria-label="Open the photo full size">
+          {image}
+        </a>
+      ) : (
+        image
+      )}
     </div>
   );
 }

@@ -6088,6 +6088,31 @@ editing or deleting messages, assigning a conversation to one staff member,
 typing indicators, read receipts shown to the shopper, emailing guests,
 SMS/WhatsApp/Instagram DMs, and analytics such as response times.
 
+### 17.8 — Photos in Messages — DONE (2026-11-17)
+
+Either side can send one photo with a message, with or without words — a
+shopper's "do you have this?", the store's "this one?". Agreed with the owner
+2026-11-17: both directions, kept **7 days** (48 hours was considered: too
+short for a small shop that doesn't open Messages over a weekend).
+
+- **Upload:** the browser shrinks the photo (longest side 1600, JPEG) and
+  uploads it straight to Cloudinary with fields the server signed, into
+  `mansaas/{org}/chat/`, where Cloudinary shrinks and converts again (HEIC
+  included). Shoppers sign through `/api/storefront/chat/photo-upload` (shop
+  must be taking messages; 20 an hour per connection), staff through
+  `signReplyPhoto` (`messages.reply`; 120 an hour).
+- **Sending:** the message names the photo; the service accepts only this
+  shop's chat folder on our Cloudinary (`isChatPhoto`). Words become an
+  optional caption (`validateMessageText`). The inbox preview reads
+  "📷 Photo"; the staff email says a photo was sent and never carries it.
+- **Seven days:** `ChatMessage.photoExpiresAt`; the daily data-retention job
+  (`expireChatPhotos`) deletes the file and clears the link, retrying a
+  delete Cloudinary refused. The message then shows "Photo no longer
+  available". A shopper deleting their account removes their chat's photos
+  at once; a purged shop's folder goes with it.
+- **Seam:** `lib/chat/photos.ts` (server), `lib/chat/photo-upload-client.ts`
+  (browser). Privacy policy states the 7 days. Tests: `tests/chat-photos.test.ts`.
+
 ## Phase 18 — Notifications everywhere (vendors, shoppers, platform staff) — CODE DONE (2026-10-14); 18.7's on-device acceptance is the owner's (docs/NOTIFICATIONS-ACCEPTANCE.md)
 
 Agreed 2026-10-12. Replaces 14.3. The goal: everyone hears about what needs

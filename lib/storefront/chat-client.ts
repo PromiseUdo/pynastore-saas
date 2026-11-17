@@ -7,7 +7,8 @@
  * from the request itself and only uses this as a cross-check — the mobile
  * mall needs it when a browser sends no Referer.
  */
-import type { ChatConversationStatus, ShopperChatMessage } from '@/lib/chat/rules';
+import type { ChatConversationStatus, ChatPhotoUpload, ShopperChatMessage } from '@/lib/chat/rules';
+import type { SignedPhotoUpload } from '@/lib/chat/photo-upload-client';
 
 export interface ShopperChatResponse {
   conversation: { id: string; status: ChatConversationStatus; unread: number; blocked: boolean } | null;
@@ -54,7 +55,7 @@ export async function fetchShopperChat(
 
 export async function sendShopperMessage(
   org: string,
-  message: { clientId: string; body: string; productId?: string | null; guestName?: string },
+  message: { clientId: string; body: string; productId?: string | null; guestName?: string; photo?: ChatPhotoUpload | null },
 ): Promise<ShopperChatMessage> {
   let response: Response;
   try {
@@ -68,6 +69,22 @@ export async function sendShopperMessage(
   }
   if (!response.ok) throw await readError(response, SEND_FAILED);
   return ((await response.json()) as { message: ShopperChatMessage }).message;
+}
+
+/** Permission to upload one photo for a message (see /api/storefront/chat/photo-upload). */
+export async function requestShopperPhotoUpload(org: string): Promise<SignedPhotoUpload> {
+  let response: Response;
+  try {
+    response = await fetch('/api/storefront/chat/photo-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ org }),
+    });
+  } catch {
+    throw new ChatRequestError('The photo didn’t upload. Check your connection and try again.', 0);
+  }
+  if (!response.ok) throw await readError(response, 'Photos can’t be sent right now.');
+  return ((await response.json()) as { upload: SignedPhotoUpload }).upload;
 }
 
 /**

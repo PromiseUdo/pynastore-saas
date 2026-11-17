@@ -5028,6 +5028,17 @@ model ChatMessage {
    */
   clientId       String
 
+  /**
+   * A photo sent with the message (either side), on Cloudinary under
+   * mansaas/{org}/chat/. Deleted after CHAT_PHOTO_DAYS: the url and id go,
+   * photoExpiresAt stays, so the message can say the photo has expired.
+   */
+  photoUrl       String?
+  photoPublicId  String?
+  photoWidth     Int?
+  photoHeight    Int?
+  photoExpiresAt DateTime?
+
   conversation ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   staffUser    User?            @relation(fields: [staffUserId], references: [id], onDelete: SetNull)
@@ -5038,6 +5049,7 @@ model ChatMessage {
   @@unique([conversationId, seq])
   @@unique([conversationId, clientId])
   @@index([organizationId])
+  @@index([photoExpiresAt])
   @@index([staffUserId])
   @@index([productId])
   @@map("chat_messages")

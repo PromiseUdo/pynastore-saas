@@ -168,7 +168,7 @@ export const CRON_JOBS = {
   'data-retention': {
     title: 'Data retention',
     description:
-      'Carries out the retention rules: clears closed shops after 30 days, erases them after 6 years, and removes deleted shoppers’ details from records past 6 years, removes guest chats nobody has written in for a year, and notifications after 90 days. Without it, data is kept longer than the privacy policy says.',
+      'Carries out the retention rules: clears closed shops after 30 days, erases them after 6 years, and removes deleted shoppers’ details from records past 6 years, removes guest chats nobody has written in for a year, photos sent in Messages after 7 days, and notifications after 90 days. Without it, data is kept longer than the privacy policy says.',
     schedule: 'Daily at 4am Lagos time',
     everyMinutes: 24 * 60,
     run: () => runDataRetention(),

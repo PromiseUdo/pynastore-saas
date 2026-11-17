@@ -14,7 +14,9 @@
  *   6. phones' and browsers' order watches past 60 days → ended (16.4, 18.3);
  *   7. notifications past 90 days, with what was sent for them → removed (18.1);
  *   8. spent one-minute sign-in tickets (shoppers' and the business app's,
- *      16.1 and 19.2) → removed an hour after they expired.
+ *      16.1 and 19.2) → removed an hour after they expired;
+ *   9. photos sent in Messages past CHAT_PHOTO_DAYS (7) → deleted from
+ *      Cloudinary; the message says the photo has expired.
  *
  * A running shop's own customers and guest orders are the merchant's records
  * and are never touched here. Each workspace is handled on its own, so one
@@ -27,6 +29,7 @@ import { purgeExpiredHandoffs } from '@/lib/storefront/account/handoff';
 import { purgeExpiredAuthTickets } from '@/lib/account-security/renew';
 import { purgeOldBrowserWatches } from '@/lib/notifications/web-push-subscriptions';
 import { prisma } from '@/lib/prisma';
+import { expireChatPhotos } from '@/lib/chat/photos';
 import { reportCaughtError } from '@/lib/ops/errors';
 import { CLOSURE_GRACE_DAYS, guestChatCutoff, notificationCutoff, retentionCutoff } from './policy';
 import { eraseOrganization } from './erase';
@@ -44,6 +47,8 @@ export interface RetentionResult {
   guestChatsRemoved: number;
   /** notification list entries past NOTIFICATION_RETENTION_DAYS (ROADMAP 18.1) */
   notificationsRemoved: number;
+  /** photos sent in Messages past CHAT_PHOTO_DAYS, deleted from Cloudinary */
+  chatPhotosExpired: number;
   failed: number;
 }
 
@@ -54,7 +59,7 @@ export async function runDataRetention(options: { now?: Date; only?: string[] } 
   const scope = options.only ? { id: { in: options.only } } : {};
   const orgScope = options.only ? { organizationId: { in: options.only } } : {};
   const cutoff = retentionCutoff(now);
-  const result: RetentionResult = { workspacesPurged: 0, filesDeleted: 0, workspacesErased: 0, ordersAnonymized: 0, customersAnonymized: 0, pushWatchesRemoved: 0, guestChatsRemoved: 0, notificationsRemoved: 0, failed: 0 };
+  const result: RetentionResult = { workspacesPurged: 0, filesDeleted: 0, workspacesErased: 0, ordersAnonymized: 0, customersAnonymized: 0, pushWatchesRemoved: 0, guestChatsRemoved: 0, notificationsRemoved: 0, chatPhotosExpired: 0, failed: 0 };
 
   // 1. Past the grace period: keep only the business records.
   const toPurge = await prisma.organization.findMany({
@@ -155,6 +160,16 @@ export async function runDataRetention(options: { now?: Date; only?: string[] } 
 
   // 8. Tickets are worthless after their minute; only their ids are kept.
   if (!options.only) await Promise.all([purgeExpiredHandoffs(), purgeExpiredAppTickets(), purgeExpiredAuthTickets()]);
+
+  // 9. Photos in Messages are kept 7 days. Only on a full run: it isn't per shop.
+  if (!options.only) {
+    try {
+      result.chatPhotosExpired = await expireChatPhotos(now);
+    } catch (error) {
+      result.failed += 1;
+      await reportCaughtError(error, 'data-retention:chat-photos');
+    }
+  }
 
   return result;
 }

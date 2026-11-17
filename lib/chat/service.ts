@@ -30,6 +30,7 @@ import { notifyChatChanged } from './realtime';
 import { markThreadRead } from '@/lib/notifications/inbox';
 import { runAfter } from '@/lib/run-after';
 import type { ChatIdentity } from './identity';
+import { PHOTO_SELECT, checkChatPhoto, photoOf } from './photos';
 import {
   CHAT_STORE_AUTHOR,
   CONVERSATION_PAGE_SIZE,
@@ -39,7 +40,7 @@ import {
   normalizeGuestName,
   previewOf,
   unreadCount,
-  validateMessage,
+  validateMessageText,
   type ChatConversationStatus,
   type ChatSender,
   type InboxView,
@@ -122,6 +123,7 @@ const SHOPPER_MESSAGE_SELECT = {
   seq: true,
   sender: true,
   body: true,
+  ...PHOTO_SELECT,
   productId: true,
   clientId: true,
   createdAt: true,
@@ -143,6 +145,7 @@ function toShopperMessage(m: ShopperMessageRow): ShopperChatMessage {
     sender: m.sender,
     author: m.sender === 'STAFF' ? CHAT_STORE_AUTHOR : null,
     body: m.body,
+    ...photoOf(m),
     productId: m.productId,
     clientId: m.clientId,
     createdAt: m.createdAt.toISOString(),
@@ -157,6 +160,7 @@ function toStaffMessage(m: StaffMessageRow): StaffChatMessage {
     staffUserId: m.staffUserId,
     staffName: m.staffUser ? m.staffUser.name?.trim() || m.staffUser.email : null,
     body: m.body,
+    ...photoOf(m),
     productId: m.productId,
     clientId: m.clientId,
     createdAt: m.createdAt.toISOString(),
@@ -307,7 +311,7 @@ export async function getShopperChat(
 export async function sendCustomerMessage(
   organizationId: string,
   identity: ChatIdentity,
-  input: { clientId: unknown; body: unknown; productId?: unknown; guestName?: unknown },
+  input: { clientId: unknown; body: unknown; productId?: unknown; guestName?: unknown; photo?: unknown },
   now = new Date(),
   /**
    * The store's availability as the caller checked it moments ago in this
@@ -316,7 +320,9 @@ export async function sendCustomerMessage(
    */
   checkedAvailability?: ChatAvailability,
 ): Promise<SendResult<ShopperChatMessage>> {
-  const checked = validateMessage(input.body);
+  const photo = checkChatPhoto(input.photo, organizationId, now);
+  if (!photo.ok) return { ok: false, code: 'invalid', message: photo.message };
+  const checked = validateMessageText(input.body, { hasPhoto: photo.fields !== null });
   if (!checked.ok) return { ok: false, code: 'invalid', message: checked.message };
   if (!isValidClientId(input.clientId)) return { ok: false, code: 'invalid', message: 'Your message wasn’t sent. Please try again.' };
   const clientId = input.clientId;
@@ -335,7 +341,7 @@ export async function sendCustomerMessage(
 
   const guestName = identity.kind === 'guest' ? normalizeGuestName(input.guestName) : null;
   const where = whereShopper(organizationId, identity);
-  const preview = previewOf(checked.value);
+  const preview = previewOf(checked.value, { hasPhoto: photo.fields !== null });
 
   const attempt = () =>
     prisma.$transaction(async (tx) => {
@@ -380,6 +386,7 @@ export async function sendCustomerMessage(
           seq: conversation.lastSeq,
           sender: 'CUSTOMER',
           body: checked.value,
+          ...photo.fields,
           productId,
           clientId,
           createdAt: now,
@@ -639,14 +646,16 @@ export async function listStaffMessages(
  */
 export async function sendStaffMessage(
   organizationId: string,
-  input: { conversationId: string; staffUserId: string; clientId: unknown; body: unknown },
+  input: { conversationId: string; staffUserId: string; clientId: unknown; body: unknown; photo?: unknown },
   now = new Date(),
 ): Promise<SendResult<StaffChatMessage>> {
-  const checked = validateMessage(input.body);
+  const photo = checkChatPhoto(input.photo, organizationId, now);
+  if (!photo.ok) return { ok: false, code: 'invalid', message: photo.message };
+  const checked = validateMessageText(input.body, { hasPhoto: photo.fields !== null });
   if (!checked.ok) return { ok: false, code: 'invalid', message: checked.message };
   if (!isValidClientId(input.clientId)) return { ok: false, code: 'invalid', message: 'Your reply wasn’t sent. Please try again.' };
   const clientId = input.clientId;
-  const preview = previewOf(checked.value);
+  const preview = previewOf(checked.value, { hasPhoto: photo.fields !== null });
 
   const exists = await prisma.chatConversation.findFirst({
     where: { id: input.conversationId, organizationId },
@@ -683,6 +692,7 @@ export async function sendStaffMessage(
           sender: 'STAFF',
           staffUserId: input.staffUserId,
           body: checked.value,
+          ...photo.fields,
           clientId,
           createdAt: now,
         },

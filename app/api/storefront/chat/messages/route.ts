@@ -2,7 +2,9 @@
  * POST /api/storefront/chat/messages — a shopper sends the store a message
  * (ROADMAP 17.3).
  *
- * Body: { clientId, body, productId?, guestName?, org? }. `clientId` is made
+ * Body: { clientId, body, productId?, guestName?, photo?, org? }. `photo` is
+ * one the browser just uploaded through ../photo-upload; the words are then
+ * optional. `clientId` is made
  * by the browser so a retry saves once. The store comes from the request
  * (chatStoreFromRequest); who is writing comes from the session or the guest
  * cookie — and a guest cookie is only ever set here, by a message that is
@@ -20,7 +22,7 @@ import { runAfter } from '@/lib/run-after';
 import { chatStoreFromRequest } from '@/lib/chat/storefront';
 import { currentChatIdentity, newGuestIdentity } from '@/lib/chat/identity';
 import { chatAvailability, hasShopperConversation, sendCustomerMessage, type SendFailure } from '@/lib/chat/service';
-import { isValidClientId, validateMessage } from '@/lib/chat/rules';
+import { isValidClientId, validateMessageText } from '@/lib/chat/rules';
 import { CHAT_TOO_FAST, checkChatSend } from '@/lib/chat/limits';
 import { requestIdentity } from '@/lib/storefront/request-identity';
 import { alertStaffAboutMessage } from '@/lib/chat/alerts';
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
   /* Everything that would refuse the message is checked before a guest
    * cookie can be set, so a refused message leaves nothing behind. The
    * service checks all of it again. */
-  const checked = validateMessage(input.body);
+  const checked = validateMessageText(input.body, { hasPhoto: input.photo !== undefined && input.photo !== null });
   if (!checked.ok) return NextResponse.json({ error: checked.message }, { status: 400, headers: NO_STORE });
   if (!isValidClientId(input.clientId)) {
     return NextResponse.json({ error: 'Your message wasn’t sent. Please try again.' }, { status: 400, headers: NO_STORE });
@@ -98,7 +100,7 @@ export async function POST(request: Request) {
   const result = await sendCustomerMessage(
     store.organizationId,
     identity,
-    { clientId: input.clientId, body: input.body, productId: input.productId, guestName: input.guestName },
+    { clientId: input.clientId, body: input.body, productId: input.productId, guestName: input.guestName, photo: input.photo },
     undefined,
     availability, // checked above in this request
   );

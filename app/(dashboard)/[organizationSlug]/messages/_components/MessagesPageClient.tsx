@@ -15,7 +15,9 @@
  */
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+
+const MESSAGES_PATH = '/messages';
 import { AlertTriangle, MessagesSquare, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/page-header';
@@ -91,7 +93,10 @@ export function MessagesPageClient({
   can: MessagesPermissions;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
+  // Always the slug-free public address. usePathname() would give the
+  // rewritten internal "/{slug}/messages" during server rendering and
+  // "/messages" in the browser, so links built from it didn't match.
+  const pathname = MESSAGES_PATH;
   const searchParams = useSearchParams();
   const syncInbox = useInboxSync();
 

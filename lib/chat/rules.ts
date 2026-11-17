@@ -30,6 +30,44 @@ export type ChatConversationStatus = 'OPEN' | 'RESOLVED';
 
 export type ChatValidation = { ok: true; value: string } | { ok: false; message: string };
 
+/* ─── Photos (either side, kept CHAT_PHOTO_DAYS) ──────────────────────────── */
+
+/** How long a photo sent in Messages is kept before it's deleted. */
+export const CHAT_PHOTO_DAYS = 7;
+/** The biggest photo the browser will try to send, before it's shrunk. */
+export const CHAT_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+/** What the browser shrinks a photo to (longest side) before uploading. */
+export const CHAT_PHOTO_MAX_SIDE = 1600;
+/** Kinds of picture a phone or computer gives us. HEIC is the iPhone's own. */
+export const CHAT_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const;
+/** What the preview line and the store's email say for a photo with no words. */
+export const PHOTO_PREVIEW = '📷 Photo';
+
+/** A photo on a saved message, while it's kept. */
+export interface ChatPhoto {
+  url: string;
+  width: number | null;
+  height: number | null;
+}
+
+/** A photo just uploaded by the browser, about to be attached to a message. */
+export interface ChatPhotoUpload {
+  url: string;
+  publicId: string;
+  width?: number;
+  height?: number;
+}
+
+/**
+ * A message's words when it may carry a photo: with one, the words are an
+ * optional caption; without, they're required as before.
+ */
+export function validateMessageText(body: unknown, { hasPhoto }: { hasPhoto: boolean }): ChatValidation {
+  const trimmed = typeof body === 'string' ? body.trim() : '';
+  if (!trimmed && hasPhoto) return { ok: true, value: '' };
+  return validateMessage(body);
+}
+
 /**
  * Check a message either side typed. Plain text: it is rendered as text,
  * never HTML, so nothing here strips markup — it just can't do anything.
@@ -70,9 +108,10 @@ export function isValidClientId(id: unknown): id is string {
   return typeof id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(id);
 }
 
-/** The start of a message for the inbox list, on one line. */
-export function previewOf(body: string): string {
-  const flat = body.replace(/\s+/g, ' ').trim();
+/** The start of a message for the inbox list, on one line. A photo shows as "📷 Photo", before any caption. */
+export function previewOf(body: string, { hasPhoto = false }: { hasPhoto?: boolean } = {}): string {
+  const words = body.replace(/\s+/g, ' ').trim();
+  const flat = hasPhoto ? (words ? `${PHOTO_PREVIEW} · ${words}` : PHOTO_PREVIEW) : words;
   return flat.length <= PREVIEW_LENGTH ? flat : `${flat.slice(0, PREVIEW_LENGTH - 1).trimEnd()}…`;
 }
 
@@ -134,6 +173,10 @@ export interface ShopperChatMessage {
   /** "Store team" on the store's messages; null on the shopper's own */
   author: string | null;
   body: string;
+  /** the photo sent with it, while it's kept */
+  photo: ChatPhoto | null;
+  /** a photo was sent but has been deleted (after CHAT_PHOTO_DAYS) */
+  photoExpired: boolean;
   productId: string | null;
   clientId: string;
   /** ISO 8601 */
@@ -148,6 +191,8 @@ export interface StaffChatMessage {
   staffUserId: string | null;
   staffName: string | null;
   body: string;
+  photo: ChatPhoto | null;
+  photoExpired: boolean;
   productId: string | null;
   clientId: string;
   /** ISO 8601 */

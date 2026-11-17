@@ -31,6 +31,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import { getAdminUrl } from '@/lib/tenant/urls';
+import { PHOTO_PREVIEW } from './rules';
 import { notify } from '@/lib/notifications/notify';
 import type { Tally } from '@/lib/notifications/outbox';
 
@@ -84,7 +85,7 @@ export async function alertStaffAboutMessage(
         staffReadSeq: true,
         guestName: true,
         customer: { select: { name: true } },
-        messages: { where: { sender: 'CUSTOMER' }, orderBy: { seq: 'desc' }, take: 1, select: { body: true } },
+        messages: { where: { sender: 'CUSTOMER' }, orderBy: { seq: 'desc' }, take: 1, select: { body: true, photoExpiresAt: true } },
       },
     });
     if (!conversation) return claimed.count === 0 ? 'already-alerted' : 'not-found';
@@ -102,7 +103,10 @@ export async function alertStaffAboutMessage(
     });
 
     // Who: active members who can reply, and the Owner.
-    const body = conversation.messages[0]?.body ?? '';
+    // A photo is never put in an email; the line just says one was sent.
+    const latest = conversation.messages[0];
+    const words = latest?.body ?? '';
+    const body = latest?.photoExpiresAt ? (words ? `${PHOTO_PREVIEW} · ${words}` : `${PHOTO_PREVIEW} — open Messages to see it`) : words;
     const result = await notify({
       kind: 'chat.message',
       organizationId,

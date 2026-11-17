@@ -39,6 +39,8 @@ const shopperMessage: StaffChatMessage = {
   staffUserId: null,
   staffName: null,
   body: 'Is this shoe available in size 43?',
+  photo: null,
+  photoExpired: false,
   productId: null,
   clientId: 'client-one',
   createdAt: '2026-10-08T09:00:00.000Z',

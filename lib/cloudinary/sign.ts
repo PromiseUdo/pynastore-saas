@@ -79,6 +79,47 @@ export function isOrgAsset(
   );
 }
 
+/* ---------------- chat photos ---------------- */
+
+/*
+ * Photos sent in Messages (ROADMAP 17, either side). Their own folder, so
+ * the 7-day clean-up and a shop's purge find them; Cloudinary shrinks each
+ * one on arrival (longest side 1600) and stores it as JPEG — iPhones' HEIC
+ * included — whatever the browser managed to do first.
+ */
+export const CHAT_PHOTO_FORMATS = 'jpg,jpeg,png,webp,heic,heif';
+
+export function chatPhotoFolder(organizationId: string): string {
+  return `mansaas/${organizationId}/chat`;
+}
+
+export function signChatPhotoUpload(
+  organizationId: string,
+  config: CloudinaryConfig = getCloudinaryConfig(),
+  now = Date.now(),
+): SignedUpload {
+  const params = {
+    allowed_formats: CHAT_PHOTO_FORMATS,
+    folder: chatPhotoFolder(organizationId),
+    format: 'jpg',
+    timestamp: Math.floor(now / 1000),
+    transformation: 'c_limit,w_1600,h_1600,q_auto:good',
+  };
+  return {
+    uploadUrl: `https://api.cloudinary.com/v1_1/${config.cloudName}/image/upload`,
+    fields: {
+      ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])),
+      api_key: config.apiKey,
+      signature: signParams(params, config.apiSecret),
+    },
+  };
+}
+
+/** True when this is a chat photo uploaded through us for this shop. */
+export function isChatPhoto(image: { url: string; publicId: string }, organizationId: string, cloudName?: string): boolean {
+  return image.publicId.startsWith(`${chatPhotoFolder(organizationId)}/`) && isOrgAsset(image, organizationId, cloudName);
+}
+
 /* ---------------- private documents ---------------- */
 
 /*
@@ -155,8 +196,12 @@ export function privateDownloadUrl(
   return `https://api.cloudinary.com/v1_1/${config.cloudName}/image/download?${query}`;
 }
 
-/** Best-effort delete; a leftover asset is cheaper than a failed save. */
-export async function destroyAsset(publicId: string, { type }: { type?: 'private' } = {}): Promise<void> {
+/**
+ * Best-effort delete; a leftover asset is cheaper than a failed save. True
+ * when Cloudinary answered (deleted, or it was already gone), so a caller
+ * that must know — the chat photo clean-up — can try again another day.
+ */
+export async function destroyAsset(publicId: string, { type }: { type?: 'private' } = {}): Promise<boolean> {
   try {
     const config = getCloudinaryConfig();
     const params: Record<string, string | number> = { public_id: publicId, timestamp: Math.floor(Date.now() / 1000) };
@@ -168,8 +213,10 @@ export async function destroyAsset(publicId: string, { type }: { type?: 'private
     });
     const res = await fetch(`https://api.cloudinary.com/v1_1/${config.cloudName}/image/destroy`, { method: 'POST', body });
     if (!res.ok) console.error('[cloudinary] destroy failed', publicId, res.status);
+    return res.ok;
   } catch (err) {
     console.error('[cloudinary] destroy failed', publicId, err);
+    return false;
   }
 }
 

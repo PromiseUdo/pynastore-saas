@@ -21,6 +21,8 @@ import {
   unreadCount,
   validateGreeting,
   validateMessage,
+  validateMessageText,
+  PHOTO_PREVIEW,
   type ClientMessage,
 } from './rules';
 
@@ -185,5 +187,19 @@ describe('nextPollDelay', () => {
 
   it('never polls a light check faster because it failed', () => {
     expect(nextPollDelay({ sinceActivityMs: 0, failures: 3, fastMs: 60_000, slowMs: 60_000 })).toBe(60_000);
+  });
+});
+
+describe('photos', () => {
+  it('makes words optional only when a photo goes with them', () => {
+    expect(validateMessageText('', { hasPhoto: true })).toEqual({ ok: true, value: '' });
+    expect(validateMessageText('  hi ', { hasPhoto: true })).toEqual({ ok: true, value: 'hi' });
+    expect(validateMessageText('', { hasPhoto: false }).ok).toBe(false);
+  });
+
+  it('previews a photo as “📷 Photo”, before any caption', () => {
+    expect(previewOf('', { hasPhoto: true })).toBe(PHOTO_PREVIEW);
+    expect(previewOf('this one?', { hasPhoto: true })).toBe(`${PHOTO_PREVIEW} · this one?`);
+    expect(previewOf('words only')).toBe('words only');
   });
 });
