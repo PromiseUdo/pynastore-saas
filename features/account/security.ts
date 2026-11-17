@@ -103,7 +103,7 @@ export async function changePasswordAction(input: { current: string; next: strin
     action: { label: 'Reset my password', url: resetUrl() },
     notYou: NOT_YOU,
   });
-  revalidatePath(PAGE);
+  // No revalidatePath: see confirmTwoFactorAction — the page refreshes itself.
   return { success: true, data: undefined };
 }
 
@@ -140,7 +140,10 @@ export async function confirmTwoFactorAction(code: string): Promise<SecurityResu
       notYou: NOT_YOU,
     });
   }
-  revalidatePath(PAGE);
+  /* No revalidatePath here: it would re-render this page inside the same
+   * request, which still carries the session cookie from before
+   * signOutOtherSessions — read as signed out, sending the person to sign
+   * in. The page refreshes itself once the browser holds the renewed one. */
   return { success: true, data: { recoveryCodes: result.recoveryCodes } };
 }
 

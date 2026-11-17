@@ -224,18 +224,25 @@ function ConsoleSidebar({
       </nav>
 
       <div className="flex shrink-0 items-center gap-2.5 border-t px-3 py-3">
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
-          {initials(staff.name)}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[12px] font-medium leading-snug text-sidebar-foreground" title={staff.name}>
-            {staff.name}
-          </p>
-          {/* Which account is signed in; a staff member without a name already shows the email above. */}
-          <p className="truncate text-[10px] text-muted-foreground" title={staff.email}>
-            {staff.name === staff.email ? 'Platform staff' : staff.email}
-          </p>
-        </div>
+        <Link
+          href="/platform/account"
+          title="Your account — password and two-step sign-in"
+          aria-current={pathname === '/platform/account' ? 'page' : undefined}
+          className="-m-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-md p-1 transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+            {initials(staff.name)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[12px] font-medium leading-snug text-sidebar-foreground" title={staff.name}>
+              {staff.name}
+            </p>
+            {/* Which account is signed in; a staff member without a name already shows the email above. */}
+            <p className="truncate text-[10px] text-muted-foreground" title={staff.email}>
+              {staff.name === staff.email ? 'Platform staff' : staff.email}
+            </p>
+          </div>
+        </Link>
         <button
           type="button"
           onClick={() => signOut({ callbackUrl: getMarketingUrl('/login') })}

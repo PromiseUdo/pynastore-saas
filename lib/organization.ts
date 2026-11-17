@@ -11,6 +11,7 @@
 import { headers } from 'next/headers';
 import { cache } from 'react';
 import { notFound, redirect } from 'next/navigation';
+import { accountUrlHere } from '@/lib/tenant/here';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PERMISSIONS, SYSTEM_ROLES } from '@/lib/permissions';
@@ -53,7 +54,9 @@ export const getOrganizationContext = cache(
     const session = await auth();
 
     if (!session?.user?.id) {
-      redirect('/login');
+      /* Sign-in lives on the platform host (or the business host), never on
+       * a shop's {slug}. address — a bare '/login' here was a 404 there. */
+      redirect(await accountUrlHere('/login'));
     }
 
     // headers() is async in Next.js 15+
