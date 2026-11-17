@@ -209,6 +209,7 @@ export function ProductsPageClient({
                 value={params.categoryId ?? null}
                 onChange={(v) => update({ category: v ?? undefined })}
                 noneLabel="All categories"
+                ariaLabel="Category"
               />
             </div>
             {brands.length > 0 && (
