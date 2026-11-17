@@ -160,7 +160,7 @@ export function DiscoveryHero({
               placeholder="Search or describe what you need…"
               autoComplete="off"
               // min-w-0 lets the input shrink instead of pushing the button out
-              className="h-12 min-w-0 flex-1 bg-transparent text-[0.9375rem] outline-none placeholder:text-muted-foreground"
+              className="h-12 min-w-0 flex-1 bg-transparent text-[0.9375rem] outline-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
             />
             {/* Deliberately not `disabled` when empty: this is the page's
              * primary call to action and a greyed-out button is the first

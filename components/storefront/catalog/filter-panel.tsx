@@ -303,7 +303,7 @@ function PriceSection({
           onChange={(e) => setMin(e.target.value)}
           onBlur={commit}
           placeholder={`${symbol}${Math.floor(facets.priceMin / 100)}`}
-          className="h-9 w-full min-w-0 rounded-lg border bg-background px-2.5 text-sm outline-none focus:border-brand"
+          className="h-9 w-full min-w-0 rounded-lg border bg-background px-2.5 text-sm outline-none focus:border-brand focus-visible:ring-0 focus-visible:ring-offset-0"
         />
         <span aria-hidden className="text-muted-foreground">–</span>
         <label className="sr-only" htmlFor="price-max">Maximum price ({symbol})</label>
@@ -314,7 +314,7 @@ function PriceSection({
           onChange={(e) => setMax(e.target.value)}
           onBlur={commit}
           placeholder={`${symbol}${Math.ceil(facets.priceMax / 100)}`}
-          className="h-9 w-full min-w-0 rounded-lg border bg-background px-2.5 text-sm outline-none focus:border-brand"
+          className="h-9 w-full min-w-0 rounded-lg border bg-background px-2.5 text-sm outline-none focus:border-brand focus-visible:ring-0 focus-visible:ring-offset-0"
         />
         <button
           type="submit"

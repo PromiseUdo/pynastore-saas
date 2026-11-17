@@ -79,14 +79,14 @@ export function SearchOverlay({ navItems }: { navItems: NavItem[] }) {
           Find products, brands and categories. Suggestions appear as you type.
         </SheetDescription>
         <div className="sf-container py-4">
-          <form onSubmit={submit} className="flex items-center gap-3 border-b pb-4">
+          <form onSubmit={submit} className="flex items-center gap-3 border-b pb-4 transition-colors focus-within:border-brand">
             <Search className="size-5 shrink-0 text-muted-foreground" />
             <input
               ref={inputRef}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search for products, brands and categories"
-              className="h-10 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+              className="h-10 flex-1 bg-transparent text-base outline-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
               autoComplete="off"
             />
             <button type="button" onClick={close} aria-label="Close search" className="rounded-md p-1.5 hover:bg-accent">

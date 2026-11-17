@@ -205,7 +205,7 @@ export function CartView({
           )}
         </div>
 
-        <div className="lg:sticky lg:top-24">
+        <div className="lg:sticky lg:top-[calc(var(--inset-top,0px)+9rem)]">
           <OrderSummary totals={totals} itemCount={count} discountLabel={coupon?.label} problems={tradeProblems.map((p) => p.message)} />
         </div>
       </div>

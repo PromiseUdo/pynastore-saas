@@ -166,7 +166,7 @@ export function SearchField({
           aria-activedescendant={activeId}
           // min-w-0 is load-bearing: an input's intrinsic width would stop
           // this flex item shrinking and push the button out of the form.
-          className="h-12 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+          className="h-12 min-w-0 flex-1 bg-transparent text-base outline-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
         />
         {value && (
           <button

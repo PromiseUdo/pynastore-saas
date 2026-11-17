@@ -167,7 +167,7 @@ export function AssistantPanel() {
             autoComplete="off"
             maxLength={500}
             /* 16px minimum stops iOS zooming the viewport on focus. */
-            className="h-12 min-w-0 flex-1 rounded-[var(--sf-radius-button,999px)] border bg-card px-4 text-base outline-none transition-colors focus:border-brand sm:text-[0.9375rem]"
+            className="h-12 min-w-0 flex-1 rounded-[var(--sf-radius-button,999px)] border bg-card px-4 text-base outline-none transition-colors focus:border-brand focus-visible:ring-0 focus-visible:ring-offset-0 sm:text-[0.9375rem]"
           />
           <button
             type="submit"

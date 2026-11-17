@@ -113,7 +113,7 @@ export function DiscountCodeBox({
           spellCheck={false}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? `${inputId}-error` : undefined}
-          className="h-11 min-w-0 flex-1 rounded-[var(--sf-radius-button,999px)] border bg-background px-4 font-mono text-sm uppercase outline-none transition-colors placeholder:font-sans placeholder:normal-case focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/30"
+          className="h-11 min-w-0 flex-1 rounded-[var(--sf-radius-button,999px)] border bg-background px-4 font-mono text-sm uppercase outline-none transition-colors placeholder:font-sans placeholder:normal-case focus-visible:border-brand focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:ring-2 focus-visible:ring-brand/30"
         />
         <button
           type="submit"

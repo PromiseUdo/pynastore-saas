@@ -122,7 +122,7 @@ export function HeaderSearch({ className, navItems }: { className?: string; navI
           // `min-w-0` is load-bearing: an <input>'s default intrinsic width
           // would otherwise stop the flex item shrinking and push the submit
           // button out of the form.
-          className="h-11 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          className="h-11 min-w-0 flex-1 bg-transparent text-sm outline-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground"
         />
         {q && (
           <button

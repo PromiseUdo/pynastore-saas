@@ -38,8 +38,9 @@ const ITEMS = [
 export function AccountNav({ trade = false }: { trade?: boolean }) {
   const pathname = usePublicPathname();
 
+  // Sticks below the shop header (125px on desktop: logo row + category bar), not under it.
   return (
-    <nav aria-label="Account" className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+    <nav aria-label="Account" className="min-w-0 lg:sticky lg:top-[calc(var(--inset-top,0px)+9rem)] lg:self-start">
       <ul className="sf-no-scrollbar -mx-5 flex min-w-0 gap-2 overflow-x-auto px-5 pb-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0 lg:pb-0">
         {ITEMS.filter((item) => trade || item.href !== '/account/trade').map(({ href, label, icon: Icon }) => {
           // /account/addresses/new is still "Addresses"; /account is only
