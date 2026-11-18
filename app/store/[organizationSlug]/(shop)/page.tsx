@@ -15,7 +15,7 @@
  * page doesn't know what any of them are.
  */
 import { getRequestDesign } from '@/lib/storefront/catalog';
-import { classicSections } from '@/lib/storefront/sections/schema';
+import { classicSections, placeCategoriesSecond } from '@/lib/storefront/sections/schema';
 import { HomepageSections } from '@/components/storefront/home/homepage-sections';
 
 type Props = { params: Promise<{ organizationSlug: string }> };
@@ -25,5 +25,5 @@ export default async function StorefrontHomePage({ params }: Props) {
   const store = { organizationSlug };
   const { design } = await getRequestDesign(store);
 
-  return <HomepageSections store={store} sections={design.sections ?? classicSections()} />;
+  return <HomepageSections store={store} sections={placeCategoriesSecond(design.sections ?? classicSections())} />;
 }

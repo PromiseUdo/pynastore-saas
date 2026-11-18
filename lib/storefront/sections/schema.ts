@@ -153,10 +153,28 @@ export const SectionListSchema = z
     }
   });
 
+/**
+ * "Shop by category", when the page has it, always comes straight after the
+ * top section (decided by the owner 2026-11-18): it's how most shoppers
+ * leave the front page, and on a phone it is a single dropdown row. Applied
+ * wherever a page's sections are read — the storefront, the editor, the
+ * starting looks — so a page saved with it lower down shows it second too,
+ * with nothing rewritten in the database.
+ */
+export function placeCategoriesSecond(sections: HomepageSection[]): HomepageSection[] {
+  const at = sections.findIndex((s) => s.type === 'category-showcase');
+  if (at <= 1 || sections[0]?.type !== 'hero') return sections;
+  const next = [...sections];
+  const [categories] = next.splice(at, 1);
+  next.splice(1, 0, categories);
+  return next;
+}
+
 /** The front page before sections existed, section for section. */
 export function classicSections(): HomepageSection[] {
   return [
     { id: 'hero', type: 'hero', enabled: true, variant: 'full' },
+    { id: 'categories', type: 'category-showcase', enabled: true, variant: 'tiles' },
     { id: 'missions', type: 'shopping-missions', enabled: true },
     { id: 'for-you', type: 'recommended', enabled: true },
     { id: 'recently-viewed', type: 'recently-viewed', enabled: true },
@@ -178,7 +196,6 @@ export function classicSections(): HomepageSection[] {
       title: 'New arrivals',
       source: { kind: 'newest' },
     },
-    { id: 'categories', type: 'category-showcase', enabled: true, variant: 'tiles' },
   ];
 }
 
@@ -231,7 +248,7 @@ export const SECTION_INFO: Record<SectionType, SectionInfo> = {
   },
   'category-showcase': {
     label: 'Shop by category',
-    description: 'The categories you marked as featured.',
+    description: 'The categories you marked as featured. Always right after the top section; a dropdown list on phones.',
     single: true,
   },
   'image-text': {

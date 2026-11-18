@@ -17,7 +17,7 @@
  * the new look), light or dark first, the footer, and the slides.
  */
 import type { BusinessType } from '@/lib/onboarding/business';
-import { classicSections, type HomepageSection } from '../sections/schema';
+import { classicSections, placeCategoriesSecond, type HomepageSection } from '../sections/schema';
 import type { HeaderLayout, StorefrontDesignConfig } from './schema';
 import type { LookKey } from './looks';
 
@@ -44,13 +44,13 @@ const band = (
 export const STARTING_LOOKS: Record<StartingLookId, StartingLook> = {
   fashion: {
     label: 'Fashion and beauty',
-    description: 'Elegant headings and big pictures. New arrivals first, then your categories.',
+    description: 'Elegant headings and big pictures. Your categories, then new arrivals.',
     look: 'editorial',
     header: 'centered',
     sections: () => [
       { id: 'hero', type: 'hero', enabled: true, variant: 'split' },
-      band('new-arrivals', 'New arrivals', 'feature', { kind: 'newest' }),
       { id: 'categories', type: 'category-showcase', enabled: true, variant: 'tiles' },
+      band('new-arrivals', 'New arrivals', 'feature', { kind: 'newest' }),
       band('popular', 'Popular right now', 'carousel', { kind: 'bestselling' }),
       { id: 'for-you', type: 'recommended', enabled: true },
       { id: 'reviews', type: 'reviews', enabled: true },
@@ -64,9 +64,9 @@ export const STARTING_LOOKS: Record<StartingLookId, StartingLook> = {
     header: 'search',
     sections: () => [
       { id: 'hero', type: 'hero', enabled: true, variant: 'full' },
+      { id: 'categories', type: 'category-showcase', enabled: true, variant: 'circles' },
       { id: 'deal', type: 'deal-of-the-day', enabled: true },
       band('best-sellers', 'Best sellers', 'grid', { kind: 'bestselling' }),
-      { id: 'categories', type: 'category-showcase', enabled: true, variant: 'circles' },
       { id: 'brands', type: 'brands', enabled: true },
       band('new-arrivals', 'Just in', 'carousel', { kind: 'newest' }),
       { id: 'budget', type: 'price-explorer', enabled: true },
@@ -164,7 +164,7 @@ function fingerprint(design: Pick<StorefrontDesignConfig, 'look' | 'corners' | '
     cards: design.cards,
     header: design.header.layout,
     // "No arrangement" and the standard arrangement written out are the same page.
-    sections: design.sections ?? classicSections(),
+    sections: placeCategoriesSecond(design.sections ?? classicSections()),
   });
 }
 

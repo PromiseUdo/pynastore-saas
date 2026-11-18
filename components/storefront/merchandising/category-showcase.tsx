@@ -7,13 +7,18 @@
  * square pictures — the original), `circles` (small round pictures, more
  * per row) and `list` (names only, for a shop without category pictures).
  *
- * Server component; no interactivity beyond the links.
+ * On a phone every layout becomes one dropdown (category-dropdown.tsx):
+ * tiles or circles for a shop with many departments would run for screens.
+ * The layouts below are for tablets and computers.
+ *
+ * Server component; the phone dropdown is the only interactive part.
  */
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Category } from '@/lib/storefront/types';
 import { categoryHref } from '@/lib/storefront/navigation';
 import { SectionHeader } from '@/components/storefront/common/section-header';
+import { CategoryDropdown } from './category-dropdown';
 
 export type CategoryShowcaseVariant = 'tiles' | 'circles' | 'list';
 
@@ -26,6 +31,17 @@ export function CategoryShowcase({
 }) {
   if (!categories.length) return null;
 
+  return (
+    <>
+      <CategoryDropdown categories={categories} className="md:hidden" />
+      <div className="hidden md:block">
+        <Layouts categories={categories} variant={variant} />
+      </div>
+    </>
+  );
+}
+
+function Layouts({ categories, variant }: { categories: Category[]; variant: CategoryShowcaseVariant }) {
   if (variant === 'circles' || variant === 'list') {
     return (
       <section className="sf-container sf-section">

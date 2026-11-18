@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classicSections, SectionListSchema, SourceSchema, MAX_SECTIONS, type HomepageSection } from './schema';
+import { classicSections, placeCategoriesSecond, SectionListSchema, SourceSchema, MAX_SECTIONS, type HomepageSection } from './schema';
 import { parseDesign } from '../design/schema';
 
 const parse = (sections: unknown) => SectionListSchema.safeParse(sections);
@@ -14,9 +14,10 @@ const products = (over: Record<string, unknown> = {}) => ({
 });
 
 describe('classicSections', () => {
-  it('is the front page every shop had, in the same order', () => {
+  it('is the standard front page, with "Shop by category" right after the top (2026-11-18)', () => {
     expect(classicSections().map((s) => (s.type === 'products' ? `products:${s.source.kind}` : s.type))).toEqual([
       'hero',
+      'category-showcase',
       'shopping-missions',
       'recommended',
       'recently-viewed',
@@ -24,7 +25,6 @@ describe('classicSections', () => {
       'price-explorer',
       'deal-of-the-day',
       'products:newest',
-      'category-showcase',
     ]);
   });
 
@@ -137,5 +137,29 @@ describe('15.4 — layouts and new sections', () => {
 
   it('has brands and customer reviews as one-of sections', () => {
     expect(parse([hero, { id: 'brands', type: 'brands', enabled: true }, { id: 'reviews', type: 'reviews', enabled: true }]).success).toBe(true);
+  });
+});
+
+describe('placeCategoriesSecond', () => {
+  const hero: HomepageSection = { id: 'hero', type: 'hero', enabled: true, variant: 'full' };
+  const band = (id?: string) => ({ ...products(), ...(id ? { id } : {}) }) as HomepageSection;
+  const categories: HomepageSection = { id: 'categories', type: 'category-showcase', enabled: true, variant: 'tiles' };
+
+  it('moves "Shop by category" straight after the top section, keeping the rest in order', () => {
+    const a = band();
+    const b = band('b');
+    expect(placeCategoriesSecond([hero, a, b, categories]).map((s) => s.id)).toEqual(['hero', 'categories', a.id, 'b']);
+  });
+
+  it('leaves a page without it, or with it already second, as it is', () => {
+    const page = [hero, band()];
+    expect(placeCategoriesSecond(page)).toBe(page);
+    const already = [hero, categories, band()];
+    expect(placeCategoriesSecond(already)).toBe(already);
+  });
+
+  it('keeps a hidden one hidden', () => {
+    const hidden = { ...categories, enabled: false };
+    expect(placeCategoriesSecond([hero, band(), hidden])[1]).toEqual(hidden);
   });
 });

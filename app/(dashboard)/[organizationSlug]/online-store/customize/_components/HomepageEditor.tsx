@@ -53,7 +53,7 @@ import { cn } from '@/lib/utils';
 import {
   SECTION_INFO,
   SECTION_TAGS,
-  classicSections,
+  classicSections, placeCategoriesSecond,
   newSection,
   type HomepageSection,
   type SectionSource,
@@ -186,7 +186,7 @@ export function HomepageEditor({
 }) {
   const router = useRouter();
   const saved = React.useMemo(
-    () => (editor.draft ?? editor.live).sections ?? classicSections(),
+    () => placeCategoriesSecond((editor.draft ?? editor.live).sections ?? classicSections()),
     [editor],
   );
   const [sections, setSections] = React.useState<HomepageSection[]>(saved);
@@ -226,9 +226,12 @@ export function HomepageEditor({
     setSections((list) => list.map((s) => (s.id === id ? ({ ...s, ...patch } as HomepageSection) : s)));
   }
 
+  /** How many sections at the top don't move: the top section, and "Shop by category" right after it. */
+  const pinned = sections[1]?.type === 'category-showcase' ? 2 : 1;
+
   function moveTo(from: number, to: number) {
-    // The top section stays first.
-    if (from === 0 || to < 1 || to >= sections.length || from === to) return;
+    // The top section stays first, and "Shop by category" second.
+    if (from < pinned || to < pinned || to >= sections.length || from === to) return;
     setSections((list) => {
       const next = [...list];
       const [item] = next.splice(from, 1);
@@ -239,7 +242,7 @@ export function HomepageEditor({
 
   function add(type: SectionType) {
     const section = newSection(type, sections.map((s) => s.id));
-    setSections((list) => [...list, section]);
+    setSections((list) => placeCategoriesSecond([...list, section]));
     if (EDITABLE.has(section.type)) setEditing(section.id);
   }
 
@@ -358,6 +361,8 @@ export function HomepageEditor({
           {sections.map((section, index) => {
             const info = SECTION_INFO[section.type];
             const fixed = section.type === 'hero';
+            // Shown, hidden, edited or removed — but always right after the top section.
+            const pinnedHere = section.type === 'category-showcase' && index === 1;
             const label =
               section.type === 'products'
                 ? section.title || 'Untitled band'
@@ -380,11 +385,11 @@ export function HomepageEditor({
             return (
               <li
                 key={section.id}
-                draggable={!fixed}
+                draggable={!fixed && !pinnedHere}
                 onDragStart={() => setDragging(index)}
                 onDragEnd={() => setDragging(null)}
                 onDragOver={(event) => {
-                  if (dragging !== null && !fixed) event.preventDefault();
+                  if (dragging !== null && !fixed && !pinnedHere) event.preventDefault();
                 }}
                 onDrop={(event) => {
                   event.preventDefault();
@@ -396,12 +401,13 @@ export function HomepageEditor({
                 <div className="flex items-start gap-2">
                   <GripVertical
                     aria-hidden
-                    className={cn('mt-1 size-4 shrink-0 text-muted-foreground', fixed ? 'invisible' : 'cursor-grab')}
+                    className={cn('mt-1 size-4 shrink-0 text-muted-foreground', fixed || pinnedHere ? 'invisible' : 'cursor-grab')}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                       <span className="truncate">{label}</span>
                       {fixed && <Badge variant="muted">Always first</Badge>}
+                      {pinnedHere && <Badge variant="muted">Always second</Badge>}
                       {!section.enabled && <Badge variant="muted">Hidden</Badge>}
                     </p>
                     <p className="text-xs text-muted-foreground">{summary(section, options)}</p>
@@ -422,7 +428,7 @@ export function HomepageEditor({
                         size="icon"
                         className="size-8"
                         aria-label={`Move “${label}” up`}
-                        disabled={index <= 1}
+                        disabled={pinnedHere || index <= pinned}
                         onClick={() => moveTo(index, index - 1)}
                       >
                         <ArrowUp className="size-3.5" />
@@ -433,7 +439,7 @@ export function HomepageEditor({
                         size="icon"
                         className="size-8"
                         aria-label={`Move “${label}” down`}
-                        disabled={index === sections.length - 1}
+                        disabled={pinnedHere || index === sections.length - 1}
                         onClick={() => moveTo(index, index + 1)}
                       >
                         <ArrowDown className="size-3.5" />
