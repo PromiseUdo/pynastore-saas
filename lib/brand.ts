@@ -11,9 +11,11 @@
  * 2026-11-16. It replaced the working name used until then, which is gone
  * from the code entirely — nothing was ever live under it.
  *
- * It is deliberately NOT used on the storefront: a shopper is a customer of
- * the merchant's store, not of the platform, and those pages and emails carry
- * the merchant's name instead (see emails/storefront-reset-password.tsx).
+ * On the storefront it appears ONCE, as the quiet "Powered by" credit
+ * (components/storefront/layout/powered-by.tsx, decided 2026-11-18).
+ * Everything else there — a shopper is a customer of the merchant's store,
+ * not of the platform — carries the merchant's name instead, emails too
+ * (see emails/storefront-reset-password.tsx).
  *
  * Also deliberately NOT renamed: internal identifiers that happen to say
  * "mansaas" — browser storage keys (`mansaas:sf:…`), token issuers and

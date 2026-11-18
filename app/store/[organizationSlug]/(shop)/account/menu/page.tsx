@@ -10,6 +10,7 @@
  * want the privacy policy, a way to contact the shop and account deletion
  * reachable inside the app — the privacy page and "Your data" are here.
  */
+import { PoweredBy } from '@/components/storefront/layout/powered-by';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Bell, ChevronRight, Heart, LayoutGrid, Mail, MapPin, Package, PackageSearch, Phone, ShieldCheck, UserRound } from 'lucide-react';
@@ -112,6 +113,11 @@ export default async function AccountMenuPage({ params }: Props) {
         </Group>
 
         {shopper && <SignOutButton />}
+
+        {/* Phones have no footer, so the platform credit lives here. */}
+        <p className="pt-2 text-center">
+          <PoweredBy />
+        </p>
       </div>
     </div>
   );

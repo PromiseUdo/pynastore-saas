@@ -7,6 +7,7 @@ import { Mail, MapPin, Phone, Smartphone } from 'lucide-react';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import type { SocialPlatform } from '@/lib/storefront/social-links';
 import { StoreLogo } from './store-logo';
+import { PoweredBy } from './powered-by';
 
 /*
  * WHAT THIS FOOTER MAY LINK TO.
@@ -180,7 +181,11 @@ export function SiteFooter({
 
       <div className="border-t">
         <div className="sf-container flex flex-col items-center justify-between gap-3 py-5 text-xs text-muted-foreground sm:flex-row">
-          <p>© {year} {org.name}. All rights reserved.</p>
+          <div className="flex flex-col items-center gap-x-4 gap-y-2 sm:flex-row">
+            <p>© {year} {org.name}. All rights reserved.</p>
+            <span aria-hidden className="hidden h-3.5 w-px bg-border sm:block" />
+            <PoweredBy />
+          </div>
           {/* Only what checkout offers this store. No card-brand badges: which
             * cards work is Paystack's decision, not something this app checks. */}
           {paymentNote && <p className="text-center sm:text-right">{paymentNote}</p>}
