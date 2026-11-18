@@ -21,7 +21,15 @@
  */
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, ImageUp, Loader2, RefreshCw, Search, Upload, X } from 'lucide-react';
+import {
+  Camera,
+  ImageUp,
+  Loader2,
+  RefreshCw,
+  Search,
+  Upload,
+  X,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useVisualSearchStore } from '@/lib/storefront/stores/visual-search-store';
 /* Imported from the leaf modules, never through a barrel: ./service and
@@ -80,7 +88,9 @@ export function ImagePicker({
 
       const validation = validateImageFile(file);
       if (!file || !validation.ok) {
-        setError(validation.ok ? IMAGE_REJECTION_MESSAGES.empty : validation.message);
+        setError(
+          validation.ok ? IMAGE_REJECTION_MESSAGES.empty : validation.message,
+        );
         return;
       }
 
@@ -133,7 +143,11 @@ export function ImagePicker({
     try {
       result = await searchByImageAction(form);
     } catch {
-      result = { ok: false, message: 'We couldn’t reach the store. Check your connection and try again.' };
+      result = {
+        ok: false,
+        message:
+          'We couldn’t reach the store. Check your connection and try again.',
+      };
     }
 
     if (!result.ok) {
@@ -155,7 +169,12 @@ export function ImagePicker({
         compact ? 'p-4 sm:p-5' : 'p-5 sm:p-7',
       )}
     >
-      <div className={cn('grid gap-5', !compact && 'sm:grid-cols-[minmax(0,15rem)_1fr] sm:items-start')}>
+      <div
+        className={cn(
+          'grid gap-5',
+          !compact && 'sm:grid-cols-[minmax(0,15rem)_1fr] sm:items-start',
+        )}
+      >
         {/* ── the drop zone / preview ─────────────────────────────────── */}
         <div>
           <label
@@ -173,7 +192,9 @@ export function ImagePicker({
             className={cn(
               'relative flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border border-dashed bg-tile text-center transition-colors',
               compact ? 'aspect-[4/3]' : 'aspect-square',
-              dragging ? 'border-brand bg-brand/5' : 'border-border hover:border-brand',
+              dragging
+                ? 'border-brand bg-brand/5'
+                : 'border-border hover:border-brand',
             )}
           >
             {chosen ? (
@@ -186,7 +207,10 @@ export function ImagePicker({
                 className="size-full object-cover"
               />
             ) : busy === 'reading' ? (
-              <Loader2 aria-hidden className="size-6 animate-spin text-muted-foreground" />
+              <Loader2
+                aria-hidden
+                className="size-6 animate-spin text-muted-foreground"
+              />
             ) : (
               <>
                 <Upload aria-hidden className="size-6 text-muted-foreground" />
@@ -198,8 +222,8 @@ export function ImagePicker({
           </label>
 
           {/* Named with aria-label rather than a second <label>: the drop
-            * zone above is already this input's label, and two of them
-            * concatenate into one confusing accessible name. */}
+           * zone above is already this input's label, and two of them
+           * concatenate into one confusing accessible name. */}
           <input
             ref={fileInput}
             id="vs-file"
@@ -244,7 +268,10 @@ export function ImagePicker({
 
           {chosen ? (
             <div className={cn(!compact && 'mt-5')}>
-              <p className="truncate text-sm font-medium" title={chosen.fileName}>
+              <p
+                className="truncate text-sm font-medium"
+                title={chosen.fileName}
+              >
                 {chosen.fileName}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -296,7 +323,7 @@ export function ImagePicker({
                 Upload image
               </button>
               {/* Offered on every device: a desktop browser without a camera
-                * simply opens the file picker, which is a harmless outcome. */}
+               * simply opens the file picker, which is a harmless outcome. */}
               <button
                 type="button"
                 onClick={() => cameraInput.current?.click()}
@@ -310,11 +337,14 @@ export function ImagePicker({
           )}
 
           {/* Announced, not just shown: the shopper may have been reading the
-            * file dialog, not this panel, when it failed. */}
+           * file dialog, not this panel, when it failed. */}
           <p
             role="status"
             aria-live="polite"
-            className={cn('mt-3 text-sm', error ? 'text-destructive' : 'sr-only')}
+            className={cn(
+              'mt-3 text-sm',
+              error ? 'text-destructive' : 'sr-only',
+            )}
           >
             {error ??
               (busy === 'reading'
@@ -325,14 +355,14 @@ export function ImagePicker({
                     ? 'Image ready. Choose “Search this image”.'
                     : '')}
           </p>
-
+          {/* 
           {!compact && (
             <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
               We send a small copy of your photo to compare it with this
               store’s product photos. The photo isn’t stored — only a
               numeric summary of it, deleted after a day.
             </p>
-          )}
+          )} */}
         </div>
       </div>
     </div>

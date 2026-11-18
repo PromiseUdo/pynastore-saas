@@ -14,7 +14,9 @@
  *
  *   {slug}/app.json            the build settings (id, name, version, colours…)
  *   {slug}/logo.png            REQUIRED: square, 1024×1024 or larger
- *   {slug}/icon.png            optional: a finished, full-bleed icon (no transparency)
+ *   {slug}/icon.png            optional: a finished, full-bleed icon (no transparency).
+ *                              Without one, the home-screen icon is the shop's favicon
+ *                              (fetched each build into favicon-icon.png), else logo.png
  *   {slug}/splash.png          optional: 2732×2732 splash (splash-dark.png too)
  *   google-services.json       Android push: from the platform's Firebase project,
  *                              in {slug}/ or once in MOBILE_APPS_DIR (ROADMAP 16.4)
@@ -61,7 +63,7 @@ import {
   type StoreAppConfig,
 } from './native-project';
 import { makeListingPack } from './listing-pack';
-import { appIconPngUrl } from '../../lib/mobile/icon';
+import { appIconPngUrl, faviconAppIconPngUrl } from '../../lib/mobile/icon';
 import { appLinkHosts, businessAppLinkSettings, normalizeCertFingerprint } from '../../lib/mobile/app-links';
 import { BUSINESS_APP_ID } from '../../lib/mobile/app-config';
 import { BUSINESS_APP_NAME } from '../../lib/brand';
@@ -149,6 +151,8 @@ interface Registration {
   /** what the merchant asked for in Settings → Mobile app (ROADMAP 16.2) */
   iconUrl: string | null;
   backgroundColor: string | null;
+  /** the shop's favicon (Settings → General): the home-screen icon when there's no icon.png */
+  faviconUrl: string | null;
   host: string;
   /** the store's hosts whose links open the app (ROADMAP 18.5) */
   linkHosts: string[];
@@ -175,6 +179,7 @@ async function readRegistration(slug: string): Promise<Registration | null | 'no
         name: true,
         status: true,
         customStoreDomain: true,
+        faviconUrl: true,
         mobileApp: {
           select: {
             appId: true,
@@ -201,6 +206,7 @@ async function readRegistration(slug: string): Promise<Registration | null | 'no
       iosPush: Boolean(apnsKeySealed),
       iconUrl: app.iconUrl,
       backgroundColor: app.backgroundColor,
+      faviconUrl: store.faviconUrl,
       storeName: store.name,
       storeStatus: store.status,
       publishedPages: store.storePages.map((p) => p.kind),
@@ -210,6 +216,40 @@ async function readRegistration(slug: string): Promise<Registration | null | 'no
     await prisma.$disconnect();
     await pool.end();
   }
+}
+
+/**
+ * The home-screen (app drawer) icon, decided 2026-11-18:
+ *   1. a finished icon.png in the store's folder — an engineer's override;
+ *   2. the shop's favicon, fresh from its record each build;
+ *   3. otherwise none here, and logo.png makes the icon (as it always makes
+ *      the splash screen and the notification icon).
+ * Returns the file to use as the icon, or null for the logo.
+ */
+async function launcherIcon(slug: string, registration: Registration | null | 'no-database'): Promise<string | null> {
+  const dir = storeDir(slug);
+  const manual = path.join(dir, 'icon.png');
+  if (fs.existsSync(manual)) {
+    ok('Home-screen icon: icon.png');
+    return manual;
+  }
+  const fromFavicon = path.join(dir, 'favicon-icon.png');
+  if (registration && registration !== 'no-database' && registration.faviconUrl) {
+    try {
+      const response = await fetch(faviconAppIconPngUrl(registration.faviconUrl));
+      if (!response.ok) throw new Error(String(response.status));
+      fs.writeFileSync(fromFavicon, Buffer.from(await response.arrayBuffer()));
+      ok("Home-screen icon: the shop's favicon");
+      return fromFavicon;
+    } catch (error) {
+      warn(`Couldn't download the shop's favicon (${(error as Error).message}) — the icon is made from logo.png this time.`);
+    }
+  } else if (registration && registration !== 'no-database') {
+    ok('Home-screen icon: logo.png (the shop has no favicon)');
+  }
+  // No favicon now: don't let one from an earlier build linger.
+  if (fs.existsSync(fromFavicon)) fs.rmSync(fromFavicon);
+  return null;
 }
 
 /* ── init ───────────────────────────────────────────────────────────── */
@@ -785,7 +825,17 @@ async function build(slug: string, platforms: Platform[], flags: Record<string, 
   const assets = path.join(work, 'assets');
   fs.mkdirSync(assets);
   fs.copyFileSync(path.join(dir, 'logo.png'), path.join(assets, 'logo.png'));
-  for (const [from, to] of [['icon.png', 'icon-only.png'], ['splash.png', 'splash.png'], ['splash-dark.png', 'splash-dark.png']]) {
+  const icon = isBusiness(slug) ? (fs.existsSync(path.join(dir, 'icon.png')) ? path.join(dir, 'icon.png') : null) : await launcherIcon(slug, registration);
+  if (icon) {
+    // icon-only.png alone only reaches older phones' icons. Android 8 and later
+    // draw the app-drawer icon from two layers, which @capacitor/assets would
+    // otherwise make from logo.png — so the chosen icon is both layers too.
+    // It's an opaque square, so the back layer never shows past it.
+    fs.copyFileSync(icon, path.join(assets, 'icon-only.png'));
+    fs.copyFileSync(icon, path.join(assets, 'icon-foreground.png'));
+    fs.copyFileSync(icon, path.join(assets, 'icon-background.png'));
+  }
+  for (const [from, to] of [['splash.png', 'splash.png'], ['splash-dark.png', 'splash-dark.png']]) {
     if (fs.existsSync(path.join(dir, from))) fs.copyFileSync(path.join(dir, from), path.join(assets, to));
   }
   run(

@@ -114,13 +114,13 @@ export function VisualMatchHeader({
         </Link>
       </div>
 
-      <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+      {/* <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
         <Info aria-hidden className="mt-0.5 size-3.5 shrink-0 text-teal" />
         <span>
           Matched by comparing your photo with this store’s product photos.
           Prices and stock are the store’s own, as shown.
         </span>
-      </p>
+      </p> */}
     </header>
   );
 }

@@ -255,11 +255,18 @@ async function makeGraphics(config: StoreAppConfig, storeDir: string, outDir: st
   const logo = path.join(storeDir, 'logo.png');
   fs.mkdirSync(outDir, { recursive: true });
 
-  const icon = await sharp(logo).resize(410, 410, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
-  await sharp({ create: { width: 512, height: 512, channels: 4, background: config.iconBackgroundColor } })
-    .composite([{ input: icon, gravity: 'center' }])
-    .png()
-    .toFile(path.join(outDir, 'play-icon-512.png'));
+  // The listing's icon matches the one on the phone: the finished icon.png,
+  // or the favicon the last build used, else the logo on its background.
+  const finished = ['icon.png', 'favicon-icon.png'].map((f) => path.join(storeDir, f)).find((f) => fs.existsSync(f));
+  if (finished) {
+    await sharp(finished).resize(512, 512, { fit: 'cover' }).flatten({ background: config.iconBackgroundColor }).png().toFile(path.join(outDir, 'play-icon-512.png'));
+  } else {
+    const icon = await sharp(logo).resize(410, 410, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
+    await sharp({ create: { width: 512, height: 512, channels: 4, background: config.iconBackgroundColor } })
+      .composite([{ input: icon, gravity: 'center' }])
+      .png()
+      .toFile(path.join(outDir, 'play-icon-512.png'));
+  }
 
   const mark = await sharp(logo).resize(300, 300, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
   await sharp({ create: { width: 1024, height: 500, channels: 4, background: config.splashBackgroundColor } })

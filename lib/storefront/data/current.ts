@@ -61,12 +61,17 @@ async function slugFromRequest(): Promise<string | null> {
 const load = cache(async (organizationSlug: string): Promise<Catalogue> => {
   // A shop that isn't open yet lists nothing — except to its own team, who
   // may preview it (ROADMAP 12.5, ../opening.ts).
-  const opening = await getStorefrontOpening(organizationSlug);
   // A Trade only shop lists nothing except to approved trade buyers and its
-  // team (ROADMAP 21.1, ../trade-gate.ts).
-  const visible = (opening.open || opening.previewer) && (await getTradeGate(organizationSlug)).allowed;
-  // Wholesale prices for an approved trade buyer, retail for everyone else (21.2).
-  const catalogue = visible ? await loadCatalogueFromDb(organizationSlug, await getBuyerPricing(organizationSlug)) : null;
+  // team (ROADMAP 21.1, ../trade-gate.ts). Wholesale prices for an approved
+  // trade buyer, retail for everyone else (21.2). The three are independent
+  // reads (each memoised per request), so they're asked together.
+  const [opening, tradeGate, pricing] = await Promise.all([
+    getStorefrontOpening(organizationSlug),
+    getTradeGate(organizationSlug),
+    getBuyerPricing(organizationSlug),
+  ]);
+  const visible = (opening.open || opening.previewer) && tradeGate.allowed;
+  const catalogue = visible ? await loadCatalogueFromDb(organizationSlug, pricing) : null;
   // An unknown or suspended store reads as empty rather than as an error, so
   // an API call with a stale slug returns nothing instead of a 500.
   return catalogue ?? emptyCatalogue(organizationSlug);

@@ -50,10 +50,18 @@ export function NativeShell() {
     let cancelled = false;
     (async () => {
       const { SplashScreen } = await import('@capacitor/splash-screen');
-      // Wait one frame so the storefront is actually on screen.
-      requestAnimationFrame(() => {
-        if (!cancelled) void SplashScreen.hide();
-      });
+      // The page is rendered and running by now. Wait one frame so it's on
+      // screen — but not only for the frame: while Android holds the launch
+      // splash it holds back the WebView's drawing too, so a frame may not
+      // come until the splash goes. The timer makes sure it does.
+      let done = false;
+      const hide = () => {
+        if (cancelled || done) return;
+        done = true;
+        void SplashScreen.hide();
+      };
+      requestAnimationFrame(hide);
+      setTimeout(hide, 100);
     })();
     return () => {
       cancelled = true;

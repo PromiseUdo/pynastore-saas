@@ -78,8 +78,13 @@ const config: CapacitorConfig = {
     SplashScreen: {
       // We hide the splash from JS once the first storefront paint lands
       // (see components/native/native-shell.tsx) so there is no white flash.
-      launchShowDuration: 0,
-      launchAutoHide: false,
+      // The duration must NOT be 0: the plugin then never holds the splash at
+      // all, and Android drops it at the WebView's first (empty, white) frame
+      // while the store is still loading. It's the longest we wait: a page
+      // that never calls hide() (the offline page, a very slow network)
+      // still gets the splash taken down after it.
+      launchShowDuration: 8000,
+      launchAutoHide: true,
       backgroundColor: '#ffffff',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,

@@ -179,8 +179,12 @@ export default async function StorefrontRootLayout({
    *   the setup guide. Their own team sees the real shop with a preview
    *   banner instead. */
   const suspended = organization.status === 'SUSPENDED';
-  const lapsed = !suspended && !(await storefrontIsOpen(organization.id));
-  const opening = await getStorefrontOpening(organization.slug);
+  // Asked together: neither answer depends on the other.
+  const [openOnPlan, opening] = await Promise.all([
+    suspended ? false : storefrontIsOpen(organization.id),
+    getStorefrontOpening(organization.slug),
+  ]);
+  const lapsed = !suspended && !openOnPlan;
   const notOpen = !suspended && !lapsed && !opening.open && !opening.previewer;
   if (suspended || lapsed || notOpen) {
     return (
@@ -212,16 +216,18 @@ export default async function StorefrontRootLayout({
     );
   }
 
-  const requestHeaders = await headers();
-
   /* Trade only (ROADMAP 21.1): anyone who isn't an approved trade buyer or
    * on the team sees what this shop is and how to get in, instead of a shop
    * with nothing in it. Signing in, their account (where they ask) and the
    * merchant's own pages stay open (lib/trade/rules.ts). The catalogue is
-   * empty for them regardless (lib/storefront/trade-gate.ts). */
-  const tradeGate = await getTradeGate(organization.slug);
-  // The AI shopping assistant and search by photo (ROADMAP 22.1).
-  const aiShopping = await workspaceHasFeature(organization.id, FEATURES.AI_SHOPPING);
+   * empty for them regardless (lib/storefront/trade-gate.ts).
+   * The AI shopping assistant and search by photo (ROADMAP 22.1) is asked
+   * at the same time — independent reads, so one round trip, not three. */
+  const [requestHeaders, tradeGate, aiShopping] = await Promise.all([
+    headers(),
+    getTradeGate(organization.slug),
+    workspaceHasFeature(organization.id, FEATURES.AI_SHOPPING),
+  ]);
   if (tradeGate.tradeOnly && !tradeGate.allowed && !openInTradeOnly(requestHeaders.get('x-store-path'))) {
     const button =
       'inline-flex h-12 items-center justify-center rounded-[var(--sf-radius-button,999px)] px-6 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
@@ -256,61 +262,61 @@ export default async function StorefrontRootLayout({
   // The request's CSP nonce (proxy.ts), for the merchant's measurement tags.
   const nonce = requestHeaders.get('x-nonce') ?? undefined;
 
-  /* Resolved here, once, for every storefront surface — including checkout,
-   * which sits outside the (shop) group. Null when nobody is signed in;
-   * nothing below this point may require it. */
-  const shopper = await getShopper();
-
-  /* The account's saved list, resolved here so the browser copy can be
-   * reconciled with it on every load (see <WishlistSync />). Slugs come from
-   * the catalogue because a saved id has to become a link. */
-  let savedItems: { productId: string; slug: string }[] = [];
-  if (shopper) {
-    const ids = await listWishlist({
-      organizationId: shopper.organizationId,
-      customerId: shopper.id,
-    });
-    const products = ids.length
-      ? await getProductsByIds(ids, { organizationSlug: organization.slug })
-      : [];
-    const bySlug = new Map(products.map((product) => [product.id, product.slug]));
-    savedItems = ids
-      .filter((id) => bySlug.has(id))
-      .map((id) => ({ productId: id, slug: bySlug.get(id)! }));
-  }
-
   /* Messages (ROADMAP 17.3): shown only when the merchant has turned it on
    * AND the shop is really open — a team member previewing a closed shop
    * gets no chat, since nothing they sent could be answered. The status
    * (does this browser have a conversation, anything unread) is read only
    * when chat is on, and only finds anything for someone who has written. */
+  const chatOn = organization.storefrontChatEnabled && opening.open;
+
+  /* Everything else this frame needs, asked at once — each is an
+   * independent read, so the page waits for the slowest, not the sum. */
+  const [{ shopper, savedItems }, chatStatus, appPush, storePages, look, cookieStore, { resolved: design, isDraft }] =
+    await Promise.all([
+      /* Resolved here, once, for every storefront surface — including
+       * checkout, which sits outside the (shop) group. Null when nobody is
+       * signed in; nothing below this point may require it. With them, the
+       * account's saved list, so the browser copy can be reconciled with it
+       * on every load (see <WishlistSync />). Slugs come from the catalogue
+       * because a saved id has to become a link. */
+      (async () => {
+        const shopper = await getShopper();
+        if (!shopper) return { shopper, savedItems: [] as { productId: string; slug: string }[] };
+        const ids = await listWishlist({ organizationId: shopper.organizationId, customerId: shopper.id });
+        const products = ids.length ? await getProductsByIds(ids, { organizationSlug: organization.slug }) : [];
+        const bySlug = new Map(products.map((product) => [product.id, product.slug]));
+        return {
+          shopper,
+          savedItems: ids.filter((id) => bySlug.has(id)).map((id) => ({ productId: id, slug: bySlug.get(id)! })),
+        };
+      })(),
+      chatOn ? shopperChatStatus({ slug: organization.slug, organizationId: organization.id }) : null,
+      // Replies reach the store's own app (ROADMAP 17.4)…
+      chatOn && isMobileRuntime ? pushReadyFor(requestHeaders.get('user-agent'), organization.slug) : false,
+      getStorePages({ organizationSlug: organization.slug }),
+      getStorefrontLook({ organizationSlug: organization.slug }),
+      cookies(),
+      /* The shop's design (15.1). A member previewing their draft carries a
+       * signed preview cookie; it is honoured only after re-checking, now,
+       * that they're still on this shop's team with `storefront.design`.
+       * Everyone else — including anyone holding a stale or foreign cookie —
+       * gets the published design. The homepage reads the same decision for
+       * its sections. */
+      getRequestDesign({ organizationSlug: organization.slug }),
+    ]);
+
   const chat =
-    organization.storefrontChatEnabled && opening.open
+    chatOn && chatStatus
       ? {
           greeting: organization.storefrontChatGreeting,
-          ...(await shopperChatStatus({ slug: organization.slug, organizationId: organization.id })),
-          // Replies reach the store's own app (ROADMAP 17.4), or a browser on the website (18.3).
-          push: isMobileRuntime
-            ? (await pushReadyFor(requestHeaders.get('user-agent'), organization.slug))
-              ? ('app' as const)
-              : null
-            : webPushConfigured()
-              ? ('browser' as const)
-              : null,
+          ...chatStatus,
+          // …or a browser on the website (18.3).
+          push: isMobileRuntime ? (appPush ? ('app' as const) : null) : webPushConfigured() ? ('browser' as const) : null,
           realtime: ablyConfigured(),
         }
       : null;
 
-  const privacyPage = pageOfKind(await getStorePages({ organizationSlug: organization.slug }), 'PRIVACY');
-  const look = await getStorefrontLook({ organizationSlug: organization.slug });
-  const cookieStore = await cookies();
-
-  /* The shop's design (15.1). A member previewing their draft carries a
-   * signed preview cookie; it is honoured only after re-checking, now, that
-   * they're still on this shop's team with `storefront.design`. Everyone
-   * else — including anyone holding a stale or foreign cookie — gets the
-   * published design. The homepage reads the same decision for its sections. */
-  const { resolved: design, isDraft } = await getRequestDesign({ organizationSlug: organization.slug });
+  const privacyPage = pageOfKind(storePages, 'PRIVACY');
 
   // Theme is server-rendered from a cookie — see lib/storefront/theme.ts. The
   // shopper's own choice wins; without one, the design's default.

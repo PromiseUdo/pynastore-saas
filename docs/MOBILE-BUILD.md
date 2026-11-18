@@ -150,9 +150,12 @@ npm run mobile:app -- build <slug> --version 1.1.0      # a new version for shop
   repo's copies are never edited;
 - writes in the app id, name, version, build number, deep-link scheme and
   Apple team (`scripts/mobile/native-project.ts`);
-- makes every icon and splash size from `logo.png`
-  (`@capacitor/assets`). A finished `icon.png` or `splash.png`, if present,
-  replaces the generated one;
+- makes every icon and splash size (`@capacitor/assets`). The splash comes
+  from `logo.png`. The **home-screen icon** is, in order: a finished
+  `icon.png` in the folder; else the shop's **favicon** (Settings → General),
+  downloaded fresh each build as `favicon-icon.png`; else `logo.png`. A
+  finished `splash.png` replaces the generated splash. The listing pack's Play
+  icon uses the same choice;
 - builds and signs Android. The files go to `{slug}/builds/{version}-{n}/`
   with a `build.json`, which records the commit, the checksums and the server
   URL. Hand those files over;
