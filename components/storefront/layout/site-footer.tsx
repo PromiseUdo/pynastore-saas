@@ -6,6 +6,7 @@ import { useStorefront } from '@/lib/storefront/context';
 import { Mail, MapPin, Phone, Smartphone } from 'lucide-react';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import type { SocialPlatform } from '@/lib/storefront/social-links';
+import { StoreLogo } from './store-logo';
 
 /*
  * WHAT THIS FOOTER MAY LINK TO.
@@ -60,7 +61,20 @@ export function SiteFooter({
     <footer className="mt-16 hidden border-t bg-muted/30 lg:block">
       <div className="sf-container grid gap-10 py-12 lg:grid-cols-[1.4fr_2fr]">
         <div className="max-w-sm">
-          <p className="font-display text-lg font-semibold">{org.name}</p>
+          {/* The shop's own logo — the light or dark one for the current
+            * theme, same as the header — and its name only when there's none. */}
+          <Link href="/" className="inline-flex" aria-label={org.logoUrl ? `${org.name} home` : undefined}>
+            {org.logoUrl ? (
+              <StoreLogo
+                src={org.logoUrl}
+                darkSrc={org.logoDarkUrl}
+                alt={org.name}
+                className="h-12 w-auto max-w-48 object-contain object-left"
+              />
+            ) : (
+              <span className="font-display text-lg font-semibold">{org.name}</span>
+            )}
+          </Link>
 
           {(contact.email || contact.phone || contact.address) && (
             <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
