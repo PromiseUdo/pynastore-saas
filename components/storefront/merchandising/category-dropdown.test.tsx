@@ -50,4 +50,23 @@ describe('CategoryDropdown', () => {
     expect(container.querySelectorAll('img')).toHaveLength(1);
     expect(container.querySelector('img')!.getAttribute('src')).toBe('https://example.com/women.jpg');
   });
+
+  it('closes on a tap outside it, and on Escape', async () => {
+    render(
+      <div>
+        <CategoryDropdown categories={categories} />
+        <p>Best sellers</p>
+      </div>,
+    );
+    const toggle = screen.getByRole('button', { name: /browse categories/i });
+    await userEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    await userEvent.click(screen.getByText('Best sellers'));
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    await userEvent.click(toggle);
+    await userEvent.keyboard('{Escape}');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(toggle);
+  });
 });

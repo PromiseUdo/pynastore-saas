@@ -7,7 +7,9 @@
  *
  * Each category shows its picture in a small circle, or a neutral stand-in
  * when the merchant hasn't uploaded one, so the list still reads as one set.
- * The list scrolls inside itself, so a long one never takes over the page.
+ * The list opens OVER the page, like any dropdown, rather than pushing the
+ * sections below it down; it scrolls inside itself, and closes on a tap
+ * outside it or Escape.
  */
 import * as React from 'react';
 import Image from 'next/image';
@@ -20,16 +22,38 @@ import { cn } from '@/lib/utils';
 export function CategoryDropdown({ categories, className }: { categories: Category[]; className?: string }) {
   const [open, setOpen] = React.useState(false);
   const listId = React.useId();
+  const root = React.useRef<HTMLDivElement>(null);
+  const toggle = React.useRef<HTMLButtonElement>(null);
+
+  // Close on a tap anywhere else, or Escape (focus back on the button).
+  React.useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      toggle.current?.focus();
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   return (
     <section className={cn('sf-container py-5', className)} aria-label="Browse categories">
-      <div className="overflow-hidden rounded-2xl border bg-card">
+      <div ref={root} className="relative">
         <button
+          ref={toggle}
           type="button"
           aria-expanded={open}
           aria-controls={listId}
           onClick={() => setOpen((v) => !v)}
-          className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="flex min-h-14 w-full items-center gap-3 rounded-2xl border bg-card px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand text-primary-foreground">
             <LayoutGrid className="size-4" />
@@ -46,11 +70,16 @@ export function CategoryDropdown({ categories, className }: { categories: Catego
           />
         </button>
 
-        <ul id={listId} hidden={!open} className="max-h-[60vh] divide-y overflow-y-auto overscroll-contain border-t">
+        <ul
+          id={listId}
+          hidden={!open}
+          className="absolute inset-x-0 top-full z-30 mt-2 max-h-[60vh] divide-y overflow-y-auto overscroll-contain rounded-2xl border bg-card shadow-xl"
+        >
           {categories.map((cat) => (
             <li key={cat.id}>
               <Link
                 href={categoryHref(cat.path)}
+                onClick={() => setOpen(false)}
                 className="flex min-h-14 items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
               >
                 <CategoryAvatar imageUrl={cat.imageUrl} />
@@ -62,6 +91,7 @@ export function CategoryDropdown({ categories, className }: { categories: Catego
           <li>
             <Link
               href="/products"
+              onClick={() => setOpen(false)}
               className="flex min-h-12 items-center justify-center px-4 py-2.5 text-sm font-semibold text-brand hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
             >
               See all products
