@@ -2,11 +2,12 @@
  * "Powered by Pynastore" — the one place the platform's name appears on a
  * shop (decided by the owner 2026-11-18). It links to the platform's own
  * website, opens in a new tab so the shopper's bag and page stay put, and is
- * drawn in the shop's muted text colour, with a one-letter mark in outline
- * rather than the platform's green, so it sits quietly in every look and
- * never competes with the merchant's own brand.
+ * drawn in the shop's muted text colour with a small copy of the platform's
+ * mark (the green tile with its saffron corner, as on pynastore.com) — a
+ * 16px logo, so it sits quietly in every look and never competes with the
+ * merchant's own brand.
  */
-import { PLATFORM_DOMAIN, PLATFORM_NAME } from '@/lib/brand';
+import { PLATFORM_DOMAIN, PLATFORM_MARK_COLORS, PLATFORM_NAME } from '@/lib/brand';
 import { cn } from '@/lib/utils';
 
 export const POWERED_BY_HREF = `https://www.${PLATFORM_DOMAIN}/?utm_source=storefront&utm_medium=powered_by`;
@@ -24,11 +25,17 @@ export function PoweredBy({ className }: { className?: string }) {
       )}
     >
       <span>Powered by</span>
+      {/* The mark from components/marketing/wordmark.tsx at half size. */}
       <span
         aria-hidden
-        className="flex size-4 items-center justify-center rounded-[5px] border border-current text-[9px] font-bold leading-none"
+        className="relative flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-[4.5px] text-[9px] font-bold leading-none"
+        style={{ backgroundColor: PLATFORM_MARK_COLORS.tile, color: PLATFORM_MARK_COLORS.letter }}
       >
         {PLATFORM_NAME.charAt(0)}
+        <span
+          className="absolute -right-[3px] -top-[3px] size-[7px] rounded-full"
+          style={{ backgroundColor: PLATFORM_MARK_COLORS.corner }}
+        />
       </span>
       <span className="font-semibold tracking-tight text-foreground/80 group-hover:text-foreground">{PLATFORM_NAME}</span>
       <span className="sr-only"> (opens in a new tab)</span>

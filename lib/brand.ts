@@ -27,6 +27,13 @@
  */
 export const PLATFORM_NAME = 'Pynastore';
 
+/**
+ * The mark's two colours (the green tile and its saffron corner), for places
+ * outside the public site's `.site` palette that draw the mark — the shop
+ * footer's "Powered by". Same values as `--primary` / `--mk-sun` in `.site`.
+ */
+export const PLATFORM_MARK_COLORS = { tile: '#0e6b47', letter: '#ffffff', corner: '#f2a93b' } as const;
+
 /** The platform's public domain — the marketing site and the legal pages. */
 export const PLATFORM_DOMAIN = 'pynastore.com';
 
