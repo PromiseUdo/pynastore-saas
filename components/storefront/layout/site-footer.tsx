@@ -3,11 +3,11 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useStorefront } from '@/lib/storefront/context';
-import { Mail, MapPin, Phone, Smartphone } from 'lucide-react';
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
+import { ChevronRight, CreditCard, Mail, MapPin, Phone, Smartphone, type LucideIcon } from 'lucide-react';
 import type { SocialPlatform } from '@/lib/storefront/social-links';
 import { StoreLogo } from './store-logo';
 import { PoweredBy } from './powered-by';
+import { SocialGlyph } from './social-glyph';
 
 /*
  * WHAT THIS FOOTER MAY LINK TO.
@@ -26,7 +26,12 @@ import { PoweredBy } from './powered-by';
  *
  * The brand column is how to reach the shop: the contact details and social
  * profiles the merchant entered in Settings → General, each shown only when
- * filled in (ROADMAP 15.0). There is no newsletter sign-up — the one that sat
+ * filled in (ROADMAP 15.0). The contact details lead the footer as a "Get in
+ * touch" strip, since reaching the shop is what most shoppers scroll down
+ * here for; the strip is left out when the merchant gave none.
+ *
+ * Desktop only: on a phone the Account tab carries the same pages and
+ * contact details (ROADMAP 16.5). There is no newsletter sign-up — the one that sat
  * here saved nothing, and promised a discount no merchant had offered.
  */
 export interface FooterColumn {
@@ -58,10 +63,52 @@ export function SiteFooter({
   const { org, isMobileRuntime } = useStorefront();
   const year = new Date().getFullYear();
 
+  const reach: { icon: LucideIcon; label: string; value: string; href?: string }[] = [];
+  if (contact.email) reach.push({ icon: Mail, label: 'Email us', value: contact.email, href: `mailto:${contact.email}` });
+  if (contact.phone) reach.push({ icon: Phone, label: 'Call us', value: contact.phone, href: `tel:${contact.phone.replace(/[^\d+]/g, '')}` });
+  if (contact.address) reach.push({ icon: MapPin, label: 'Visit us', value: contact.address });
+
   return (
     <footer className="mt-16 hidden border-t bg-muted/30 lg:block">
-      <div className="sf-container grid gap-10 py-12 lg:grid-cols-[1.4fr_2fr]">
-        <div className="max-w-sm">
+      {reach.length > 0 && (
+        <div className="border-b">
+          <div className="sf-container py-8">
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Get in touch</p>
+            <ul className={cn('grid gap-4', reach.length === 2 && 'grid-cols-2', reach.length >= 3 && 'grid-cols-3')}>
+              {reach.map(({ icon: Icon, label, value, href }) => {
+                const inner = (
+                  <>
+                    <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+                      <Icon className="size-[18px]" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-xs text-muted-foreground">{label}</span>
+                      <span className="mt-0.5 line-clamp-2 block whitespace-pre-line break-words text-sm font-medium" title={value}>
+                        {value}
+                      </span>
+                    </span>
+                  </>
+                );
+                const box = 'flex h-full items-center gap-3 rounded-2xl border bg-card px-4 py-3.5';
+                return (
+                  <li key={label}>
+                    {href ? (
+                      <a href={href} className={cn(box, 'transition-colors hover:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}>
+                        {inner}
+                      </a>
+                    ) : (
+                      <div className={box}>{inner}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      <div className="sf-container grid grid-cols-12 gap-10 py-12">
+        <div className="col-span-4 flex flex-col items-start gap-6">
           {/* The shop's own logo — the light or dark one for the current
             * theme, same as the header — and its name only when there's none. */}
           <Link href="/" className="inline-flex" aria-label={org.logoUrl ? `${org.name} home` : undefined}>
@@ -73,39 +120,13 @@ export function SiteFooter({
                 className="h-12 w-auto max-w-48 object-contain object-left"
               />
             ) : (
-              <span className="font-display text-lg font-semibold">{org.name}</span>
+              <span className="font-display text-xl font-semibold">{org.name}</span>
             )}
           </Link>
 
-          {(contact.email || contact.phone || contact.address) && (
-            <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-              {contact.email && (
-                <li className="flex items-center gap-2">
-                  <Mail className="size-4 shrink-0" aria-hidden />
-                  <a href={`mailto:${contact.email}`} className="break-all transition-colors hover:text-foreground">
-                    {contact.email}
-                  </a>
-                </li>
-              )}
-              {contact.phone && (
-                <li className="flex items-center gap-2">
-                  <Phone className="size-4 shrink-0" aria-hidden />
-                  <a href={`tel:${contact.phone.replace(/[^\d+]/g, '')}`} className="transition-colors hover:text-foreground">
-                    {contact.phone}
-                  </a>
-                </li>
-              )}
-              {contact.address && (
-                <li className="flex items-start gap-2">
-                  <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
-                  <span className="whitespace-pre-line">{contact.address}</span>
-                </li>
-              )}
-            </ul>
-          )}
-
           {social.length > 0 && (
-            <nav aria-label={`${org.name} on social media`} className="mt-5">
+            <nav aria-label={`${org.name} on social media`}>
+              <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Follow us</p>
               <ul className="flex flex-wrap gap-2">
                 {social.map((link) => (
                   <li key={link.platform}>
@@ -113,9 +134,11 @@ export function SiteFooter({
                       href={link.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex h-8 items-center rounded-[var(--sf-radius-button,999px)] border bg-card px-3 text-xs font-medium transition-colors hover:border-brand hover:text-brand"
+                      aria-label={`${link.label} (opens in a new tab)`}
+                      title={link.label}
+                      className="flex size-9 items-center justify-center rounded-full border bg-card text-foreground/80 transition-colors hover:border-brand hover:bg-brand hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      {link.label}
+                      <SocialGlyph platform={link.platform} />
                     </a>
                   </li>
                 ))}
@@ -126,29 +149,36 @@ export function SiteFooter({
           {appHref && !isMobileRuntime && (
             <Link
               href={appHref}
-              className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-brand underline underline-offset-4"
+              className="group flex w-full max-w-72 items-center gap-3 rounded-2xl border bg-card px-4 py-3 transition-colors hover:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Smartphone aria-hidden className="size-4" />
-              Get our app
+              <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand text-primary-foreground">
+                <Smartphone className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">Get our app</span>
+                <span className="block truncate text-xs text-muted-foreground">{org.name} on your phone</span>
+              </span>
+              <ChevronRight aria-hidden className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
             </Link>
           )}
         </div>
 
-        {/* desktop columns */}
-        <div
+        <nav
+          aria-label="Footer"
           className={cn(
-            'hidden grid-cols-2 gap-8 sm:grid',
-            columns.length === 3 && 'md:grid-cols-3',
-            columns.length >= 4 && 'md:grid-cols-4',
+            'col-span-8 grid gap-8',
+            columns.length <= 2 && 'grid-cols-2',
+            columns.length === 3 && 'grid-cols-3',
+            columns.length >= 4 && 'grid-cols-4',
           )}
         >
           {columns.map((col) => (
             <div key={col.title}>
-              <p className="mb-3 text-sm font-semibold">{col.title}</p>
-              <ul className="space-y-2">
+              <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em]">{col.title}</p>
+              <ul className="space-y-2.5">
                 {col.links.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                    <Link href={link.href} className="text-sm text-muted-foreground transition-colors hover:text-brand">
                       {link.label}
                     </Link>
                   </li>
@@ -156,39 +186,23 @@ export function SiteFooter({
               </ul>
             </div>
           ))}
-        </div>
-
-        {/* mobile accordion */}
-        <Accordion type="multiple" className="sm:hidden">
-          {columns.map((col) => (
-            <AccordionItem key={col.title} value={col.title}>
-              <AccordionTrigger>{col.title}</AccordionTrigger>
-              <AccordionContent>
-                <ul className="space-y-2">
-                  {col.links.map((link) => (
-                    <li key={link.href}>
-                      <Link href={link.href} className="text-sm text-muted-foreground hover:text-foreground">
-                        {link.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
+        </nav>
       </div>
 
       <div className="border-t">
-        <div className="sf-container flex flex-col items-center justify-between gap-3 py-5 text-xs text-muted-foreground sm:flex-row">
-          <div className="flex flex-col items-center gap-x-4 gap-y-2 sm:flex-row">
-            <p>© {year} {org.name}. All rights reserved.</p>
-            <span aria-hidden className="hidden h-3.5 w-px bg-border sm:block" />
-            <PoweredBy />
-          </div>
+        <div className="sf-container grid grid-cols-[1fr_auto_1fr] items-center gap-6 py-5 text-xs text-muted-foreground">
+          <p>© {year} {org.name}. All rights reserved.</p>
           {/* Only what checkout offers this store. No card-brand badges: which
             * cards work is Paystack's decision, not something this app checks. */}
-          {paymentNote && <p className="text-center sm:text-right">{paymentNote}</p>}
+          {paymentNote ? (
+            <p className="flex items-center gap-1.5">
+              <CreditCard aria-hidden className="size-3.5" />
+              {paymentNote}
+            </p>
+          ) : (
+            <span />
+          )}
+          <PoweredBy className="justify-self-end" />
         </div>
       </div>
     </footer>
