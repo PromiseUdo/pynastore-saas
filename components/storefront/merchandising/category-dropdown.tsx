@@ -1,7 +1,7 @@
 'use client';
 
 /*
- * "Shop by category" on a phone: one row that opens into the list of
+ * "Shop by category" on a phone, labelled "Browse categories": one row that opens into the list of
  * categories, instead of tiles or circles wrapping over several screens —
  * a shop with twenty departments otherwise pushes everything else far down.
  *
@@ -22,7 +22,7 @@ export function CategoryDropdown({ categories, className }: { categories: Catego
   const listId = React.useId();
 
   return (
-    <section className={cn('sf-container py-5', className)} aria-label="Shop by category">
+    <section className={cn('sf-container py-5', className)} aria-label="Browse categories">
       <div className="overflow-hidden rounded-2xl border bg-card">
         <button
           type="button"
@@ -35,7 +35,7 @@ export function CategoryDropdown({ categories, className }: { categories: Catego
             <LayoutGrid className="size-4" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[0.9375rem] font-semibold leading-tight">Shop by category</span>
+            <span className="block text-[0.9375rem] font-semibold leading-tight">Browse categories</span>
             <span className="block text-xs text-muted-foreground">
               {categories.length} {categories.length === 1 ? 'category' : 'categories'}
             </span>

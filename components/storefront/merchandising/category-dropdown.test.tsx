@@ -34,7 +34,7 @@ describe('CategoryDropdown', () => {
 
   it('starts closed, showing how many categories there are', () => {
     render(<CategoryDropdown categories={categories} />);
-    const toggle = screen.getByRole('button', { name: /shop by category/i });
+    const toggle = screen.getByRole('button', { name: /browse categories/i });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(toggle.textContent).toContain('2 categories');
     expect(screen.queryByRole('link', { name: 'Women' })).toBeNull();
@@ -42,7 +42,7 @@ describe('CategoryDropdown', () => {
 
   it('opens into links to each category, pictures where there are some', async () => {
     const { container } = render(<CategoryDropdown categories={categories} />);
-    await userEvent.click(screen.getByRole('button', { name: /shop by category/i }));
+    await userEvent.click(screen.getByRole('button', { name: /browse categories/i }));
     expect(screen.getByRole('link', { name: 'Women' }).getAttribute('href')).toBe('/c/women');
     expect(screen.getByRole('link', { name: 'Men' }).getAttribute('href')).toBe('/c/men');
     expect(screen.getByRole('link', { name: 'See all products' }).getAttribute('href')).toBe('/products');
