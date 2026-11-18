@@ -13,6 +13,10 @@
  * delivery times here: they differ by area, and the product page and
  * checkout give the real ones.
  *
+ * The icons take the strip's own text colour, not the brand colour: the
+ * strip is always dark, and a store whose brand colour is black or another
+ * dark shade (most light looks) had icons that vanished into it.
+ *
  * No language or currency picker: the store is in English and prices are in
  * naira only, and a picker that changes nothing would be a false promise.
  */
@@ -34,7 +38,7 @@ export function UtilityBar({ deliveryNote = null }: { deliveryNote?: string | nu
       <div className="sf-container flex h-10 items-center justify-between gap-4">
         {deliveryNote ? (
           <p className="flex min-w-0 items-center gap-2">
-            <Truck className="size-4 shrink-0 text-brand" />
+            <Truck className="size-4 shrink-0" aria-hidden />
             <span className="truncate">{deliveryNote}</span>
           </p>
         ) : (
@@ -49,7 +53,7 @@ export function UtilityBar({ deliveryNote = null }: { deliveryNote?: string | nu
                 href={href}
                 className="flex items-center gap-2 transition-colors hover:text-white"
               >
-                <Icon className="size-4 text-brand" />
+                <Icon className="size-4" aria-hidden />
                 {label}
               </Link>
             </React.Fragment>
