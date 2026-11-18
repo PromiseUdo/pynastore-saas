@@ -7,6 +7,7 @@
  * already carries the bag with its count, so a second fixed one added nothing
  * and sat on top of whatever section CTA was in view.
  */
+import { offersWholesaleEntry } from '@/lib/trade/rules';
 import { UtilityBar } from '@/components/storefront/layout/utility-bar';
 import { SiteHeader } from '@/components/storefront/layout/site-header';
 import { SiteFooter } from '@/components/storefront/layout/site-footer';
@@ -53,10 +54,7 @@ export default async function ShopLayout({
     // "Buy wholesale" in the footer, when there's a way in (ROADMAP 21.1).
     getWholesaleSettingsBySlug(organizationSlug),
   ]);
-  const wholesaleLink =
-    wholesale.mode === 'TRADE_ONLY' || (wholesale.mode === 'RETAIL_AND_TRADE' && wholesale.requestsOpen)
-      ? [{ label: 'Buy wholesale', href: '/wholesale' }]
-      : [];
+  const wholesaleLink = offersWholesaleEntry(wholesale) ? [{ label: 'Buy wholesale', href: '/wholesale' }] : [];
 
   /* At most one of each, newest campaign first: two bars stacked above the
    * header is a worse announcement than one, and two modals in a row is an

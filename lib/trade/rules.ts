@@ -48,6 +48,16 @@ export function wholesaleOn(mode: WholesaleMode): boolean {
 }
 
 /**
+ * Whether the shop offers a way in for businesses — the "Buy wholesale"
+ * link, in the footer on a computer and the Account menu on a phone: always
+ * for a Trade only shop, and for one selling to both while it takes
+ * requests. One rule for both places, so they never disagree.
+ */
+export function offersWholesaleEntry(settings: { mode: WholesaleMode; requestsOpen: boolean }): boolean {
+  return settings.mode === 'TRADE_ONLY' || (settings.mode === 'RETAIL_AND_TRADE' && settings.requestsOpen);
+}
+
+/**
  * The pages of a "Trade only" shop everyone may open: signing in or
  * creating an account, their account (where the request form is), the
  * merchant's own pages (terms, delivery, about), and the page that explains

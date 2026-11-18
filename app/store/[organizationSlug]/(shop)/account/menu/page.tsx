@@ -3,8 +3,9 @@
  *
  * On a phone the header is only a search box and there is no footer, so
  * this page is how a shopper reaches everything else: their account (or
- * signing in), tracking an order, the shop's own pages and contact details,
- * and the dark-mode switch. It works signed in or out.
+ * signing in), tracking an order, buying wholesale (when the shop offers
+ * it), the shop's own pages and contact details, and the dark-mode switch.
+ * It works signed in or out.
  *
  * It is also what keeps a store's own app approvable: Apple and Google both
  * want the privacy policy, a way to contact the shop and account deletion
@@ -13,11 +14,13 @@
 import { PoweredBy } from '@/components/storefront/layout/powered-by';
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Bell, ChevronRight, Heart, LayoutGrid, Mail, MapPin, Package, PackageSearch, Phone, ShieldCheck, UserRound } from 'lucide-react';
+import { Bell, Briefcase, ChevronRight, Heart, LayoutGrid, Mail, MapPin, Package, PackageSearch, Phone, ShieldCheck, UserRound } from 'lucide-react';
 import { getShopper } from '@/lib/storefront/account/session';
 import { unreadCount } from '@/lib/notifications/inbox';
 import { getStorePages, getStorefrontLook } from '@/lib/storefront/catalog';
 import { footerPageLinks } from '@/lib/storefront/pages/rules';
+import { getWholesaleSettingsBySlug } from '@/lib/trade/accounts';
+import { offersWholesaleEntry } from '@/lib/trade/rules';
 import { ThemeToggle } from '@/components/storefront/layout/theme-toggle';
 import { SignOutButton } from '../_components/account-nav';
 import { ChatLauncher } from '@/components/storefront/chat/chat-launcher';
@@ -28,10 +31,11 @@ type Props = { params: Promise<{ organizationSlug: string }> };
 
 export default async function AccountMenuPage({ params }: Props) {
   const { organizationSlug } = await params;
-  const [shopper, pages, look] = await Promise.all([
+  const [shopper, pages, look, wholesale] = await Promise.all([
     getShopper(),
     getStorePages({ organizationSlug }),
     getStorefrontLook({ organizationSlug }),
+    getWholesaleSettingsBySlug(organizationSlug),
   ]);
   const unread = shopper ? await unreadCount({ kind: 'shopper', customerId: shopper.id, organizationId: shopper.organizationId }) : 0;
   const { help, about } = footerPageLinks(pages);
@@ -83,6 +87,16 @@ export default async function AccountMenuPage({ params }: Props) {
               <Row href="/track-order" icon={PackageSearch}>Track an order</Row>
             </Group>
           </>
+        )}
+
+        {/* The phone's way in for businesses (ROADMAP 21.1) — the footer's
+          * "Buy wholesale", which a phone doesn't show. */}
+        {offersWholesaleEntry(wholesale) && (
+          <Group title="For businesses">
+            <Row href="/wholesale" icon={Briefcase}>
+              Buy wholesale
+            </Row>
+          </Group>
         )}
 
         {(shopPages.length > 0 || email || phone) && (

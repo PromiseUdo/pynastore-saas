@@ -88,3 +88,19 @@ describe('validation and payload', () => {
     expect(toProductInput(state).variants).toEqual([expect.objectContaining({ id: 'v1' })]);
   });
 });
+
+describe('validateForm — the server’s length limits, named by field', () => {
+  const base = { ...emptyFormState(), name: 'Perfume', sku: 'P1' };
+
+  it('names the specification whose value is too long', () => {
+    const errors = validateForm({ ...base, specs: [{ label: 'Notes', value: 'x'.repeat(201) }] });
+    expect(errors.specs).toContain('“Notes” is 201');
+    expect(validateForm({ ...base, specs: [{ label: 'Notes', value: 'x'.repeat(200) }] }).specs).toBeUndefined();
+  });
+
+  it('names the image whose description is too long', () => {
+    const image = { url: 'https://res.cloudinary.com/x/a.jpg', publicId: 'a' };
+    const errors = validateForm({ ...base, images: [{ ...image, alt: 'ok' }, { ...image, alt: 'y'.repeat(250) }] });
+    expect(errors.images).toContain('image 2’s is 250');
+  });
+});

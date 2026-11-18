@@ -238,6 +238,12 @@ function parseMoney(value: string): number | null | 'invalid' {
   return Number.isFinite(n) && n >= 0 ? n : 'invalid';
 }
 
+/** The server's limits (features/inventory/products.ts), checked here so the form can say which field. */
+export const SPEC_LABEL_MAX = 60;
+export const SPEC_VALUE_MAX = 200;
+export const HIGHLIGHT_MAX = 120;
+export const IMAGE_ALT_MAX = 200;
+
 export function validateForm(state: FormState): FieldErrors {
   const errors: FieldErrors = {};
   if (!state.name.trim()) errors.name = 'Give the product a name.';
@@ -265,7 +271,19 @@ export function validateForm(state: FormState): FieldErrors {
 
   if (state.shortDescription.length > 200) errors.shortDescription = 'Keep it under 200 characters.';
   if (state.highlights.some((h) => !h.trim())) errors.highlights = 'Fill in or remove the empty highlight.';
+  if (state.highlights.some((h) => h.trim().length > HIGHLIGHT_MAX)) errors.highlights = `Keep each highlight to ${HIGHLIGHT_MAX} characters.`;
   if (state.specs.some((s) => !s.label.trim() || !s.value.trim())) errors.specs = 'Every specification needs a name and a value.';
+  else {
+    const long = state.specs.find((s) => s.label.trim().length > SPEC_LABEL_MAX || s.value.trim().length > SPEC_VALUE_MAX);
+    if (long) {
+      errors.specs =
+        long.label.trim().length > SPEC_LABEL_MAX
+          ? `Keep each specification name to ${SPEC_LABEL_MAX} characters (“${long.label.trim().slice(0, 30)}…” is ${long.label.trim().length}).`
+          : `Keep each specification value to ${SPEC_VALUE_MAX} characters — “${long.label.trim()}” is ${long.value.trim().length}. Longer text belongs in the description.`;
+    }
+  }
+  const longAlt = state.images.findIndex((i) => (i.alt?.trim().length ?? 0) > IMAGE_ALT_MAX);
+  if (longAlt >= 0) errors.images = `Keep each image description to ${IMAGE_ALT_MAX} characters — image ${longAlt + 1}’s is ${state.images[longAlt].alt!.trim().length}.`;
 
   if (state.hasVariants) {
     const problem = optionsProblem(toOptionsPlain(state.options));

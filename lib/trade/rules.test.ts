@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BusinessDetailsSchema, openInTradeOnly, tradeMayPayWith, TRADE_STATUS_LABEL, WHOLESALE_MODES } from './rules';
+import { BusinessDetailsSchema, offersWholesaleEntry, openInTradeOnly, tradeMayPayWith, TRADE_STATUS_LABEL, WHOLESALE_MODES } from './rules';
 
 describe('a Trade only shop', () => {
   it('keeps sign-in, the account, the merchant’s pages and the wholesale page open', () => {
@@ -43,5 +43,17 @@ describe('words on screen', () => {
     for (const label of [...Object.values(TRADE_STATUS_LABEL), ...WHOLESALE_MODES.map((m) => m.label)]) {
       expect(label.slice(1), label).toBe(label.slice(1).toLowerCase());
     }
+  });
+});
+
+describe('offersWholesaleEntry', () => {
+  it('shows "Buy wholesale" for a trade-only shop, and for one selling to both while it takes requests', () => {
+    expect(offersWholesaleEntry({ mode: 'TRADE_ONLY', requestsOpen: false })).toBe(true);
+    expect(offersWholesaleEntry({ mode: 'RETAIL_AND_TRADE', requestsOpen: true })).toBe(true);
+  });
+
+  it('shows nothing when requests are closed, or wholesale is off', () => {
+    expect(offersWholesaleEntry({ mode: 'RETAIL_AND_TRADE', requestsOpen: false })).toBe(false);
+    expect(offersWholesaleEntry({ mode: 'OFF', requestsOpen: true })).toBe(false);
   });
 });

@@ -181,7 +181,10 @@ const ProductSchema = z.object({
   tags: z.array(z.string()).max(10).default([]),
   highlights: z.array(z.string().trim().min(1).max(120, 'Each highlight must be 120 characters or less')).max(8, 'Use at most 8 highlights').default([]),
   specs: z
-    .array(z.object({ label: z.string().trim().min(1).max(60), value: z.string().trim().min(1).max(200) }))
+    .array(z.object({
+        label: z.string().trim().min(1).max(60, 'Each specification name must be 60 characters or less'),
+        value: z.string().trim().min(1).max(200, 'Each specification value must be 200 characters or less'),
+      }))
     .max(30, 'Use at most 30 specifications')
     .default([]),
   images: z
@@ -189,7 +192,7 @@ const ProductSchema = z.object({
       z.object({
         url: z.string().url(),
         publicId: z.string().min(1),
-        alt: z.string().trim().max(200).optional(),
+        alt: z.string().trim().max(200, 'Each image description must be 200 characters or less').optional(),
         width: z.number().int().positive().nullish(),
         height: z.number().int().positive().nullish(),
       }),

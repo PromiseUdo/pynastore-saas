@@ -80,6 +80,7 @@ const ERROR_ANCHOR: Record<string, string> = {
   reorderPoint: 'inventory',
   options: 'variants',
   variants: 'variants',
+  images: 'images',
   highlights: 'details',
   specs: 'details',
   slug: 'online',
@@ -349,6 +350,7 @@ export function ProductForm({ product, categories, brands: initialBrands, suppli
 
             <FormCard id="images" title="Images" description="The first image is the one customers see first. Add a few angles — products with photos sell far better.">
               <ImageUploader purpose="products" value={state.images} onChange={(images) => set('images', images)} onBusyChange={setUploading} disabled={readOnly} />
+              {errors.images && <FieldError>{errors.images}</FieldError>}
               {product && imageSearch && <ImageSearchStatus productId={product.id} status={imageSearch} canRetry={can.save} />}
             </FormCard>
 
