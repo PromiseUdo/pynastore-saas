@@ -34,7 +34,14 @@ export interface Catalogue {
 
   categories: Category[];
   categoryById: Map<string, Category>;
+  /**
+   * By its LAST web-address segment only. Not unique: two parents may each
+   * have an "eau-de-parfum", and the later one wins here — so a shopper's
+   * address is resolved with `categoryByPath`, never with this.
+   */
   categoryBySlug: Map<string, Category>;
+  /** By its full web address ("women/eau-de-parfum"), which is unique. */
+  categoryByPath: Map<string, Category>;
   /** a category id and every id beneath it */
   subtreeIds: (categoryId: string) => string[];
 
@@ -187,6 +194,7 @@ export function buildCatalogue(parts: CataloguePartsInput): Catalogue {
     categories,
     categoryById: new Map(categories.map((c) => [c.id, c])),
     categoryBySlug: new Map(categories.map((c) => [c.slug, c])),
+    categoryByPath: new Map(categories.map((c) => [c.path.join('/'), c])),
     subtreeIds,
 
     brands,

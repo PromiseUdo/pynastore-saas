@@ -56,15 +56,17 @@ export default async function CustomizePage({ searchParams }: { searchParams: Pr
     }),
   ]);
 
-  const pathFor = (id: string): string[] => {
-    const path: string[] = [];
+  /** The category and its parents, top first. */
+  const lineage = (id: string) => {
+    const line: typeof categories = [];
     let current = categories.find((c) => c.id === id);
     while (current) {
-      path.unshift(current.slug);
+      line.unshift(current);
       current = current.parentId ? categories.find((c) => c.id === current!.parentId) : undefined;
     }
-    return path;
+    return line;
   };
+  const pathFor = (id: string): string[] => lineage(id).map((c) => c.slug);
 
   const destinations = [
     { label: 'All products', href: '/products' },
@@ -84,8 +86,10 @@ export default async function CustomizePage({ searchParams }: { searchParams: Pr
         categories: categories
           .map((c) => ({
             id: c.id,
-            label: pathFor(c.id)
-              .map((slug) => categories.find((x) => x.slug === slug)?.name ?? slug)
+            // Names along the category's own line — not looked up by slug,
+            // which two parents can share.
+            label: lineage(c.id)
+              .map((x) => x.name)
               .join(' › '),
           }))
           .sort((a, b) => a.label.localeCompare(b.label)),

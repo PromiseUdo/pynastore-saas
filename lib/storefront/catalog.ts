@@ -94,11 +94,9 @@ export async function getFeaturedCategories(scope?: StoreScope): Promise<Categor
 export async function getCategoryByPath(segments: string[], scope?: StoreScope): Promise<Category | null> {
   if (!segments.length) return ok(null);
   const cat = await getCatalogue(scope);
-  const leaf = cat.categoryBySlug.get(segments[segments.length - 1]);
-  if (!leaf) return ok(null);
-  // the slug path must match exactly (guards against ambiguous slugs)
-  if (leaf.path.join('/') !== segments.join('/')) return ok(null);
-  return ok(leaf);
+  // By the whole address: the last segment alone is ambiguous when two
+  // parents each have one ("women/eau-de-parfum", "men/eau-de-parfum").
+  return ok(cat.categoryByPath.get(segments.join('/')) ?? null);
 }
 
 export async function getCategoryBySlug(slug: string, scope?: StoreScope): Promise<Category | null> {
@@ -316,7 +314,12 @@ export async function listProducts(params: ListProductsParams = {}): Promise<Lis
   }
 
   if (categoryPath?.length) {
-    const category = cat.categoryBySlug.get(categoryPath[categoryPath.length - 1]);
+    // The whole path first (see getCategoryByPath). A one-segment path that
+    // isn't a top-level category still finds a category by that name, as
+    // the discovery shortcuts' ['beauty'] always has.
+    const category =
+      cat.categoryByPath.get(categoryPath.join('/')) ??
+      (categoryPath.length === 1 ? cat.categoryBySlug.get(categoryPath[0]) : undefined);
     if (category) {
       const ids = new Set(cat.subtreeIds(category.id));
       pool = pool.filter((p) => p.categoryIds.some((c) => ids.has(c)));
