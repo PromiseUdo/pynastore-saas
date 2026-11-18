@@ -53,6 +53,8 @@ vi.mock('@/features/messages/actions', () => ({
 
 const { ChatConfigProvider } = await import('./chat-config');
 const { ChatPanel, SHOPPER_BACKUP_POLL_MS } = await import('./chat-panel');
+const { ChatSheet } = await import('./chat-sheet');
+const { useChatStore } = await import('@/lib/storefront/stores/chat-store');
 const { ConversationPane } = await import('@/app/(dashboard)/[organizationSlug]/messages/_components/ConversationPane');
 const { InboxRealtimeContext, ADMIN_BACKUP_POLL_MS } = await import('@/app/(dashboard)/[organizationSlug]/messages/_components/inbox-realtime');
 
@@ -70,6 +72,7 @@ function shopperPanel(realtime = true) {
 }
 
 beforeEach(() => {
+  useChatStore.setState({ open: false, unread: null, hasConversation: null, snapshot: null });
   rt.state = 'off';
   rt.calls = [];
   feed.calls = [];
@@ -188,5 +191,68 @@ describe('the merchant’s open conversation', () => {
     feed.calls = [];
     pane('down', () => () => {});
     expect(feed.calls.at(-1)?.fastMs).toBeUndefined();
+  });
+});
+
+describe('the Messages badge while the chat is closed', () => {
+  function sheet(config: { exists: boolean; realtime: boolean }) {
+    return render(
+      <StorefrontProvider org={ORG} isMobileRuntime={false} shopper={null}>
+        <ChatConfigProvider value={{ greeting: null, unread: 0, ...config }}>
+          <ChatSheet />
+        </ChatConfigProvider>
+      </StorefrontProvider>,
+    );
+  }
+
+  it('listens for the store’s replies, and checks at once when one comes', async () => {
+    sheet({ exists: true, realtime: true });
+    expect(rt.calls.at(-1)).toMatchObject({ enabled: true, tokenUrl: '/api/storefront/chat/realtime-token', tokenBody: { org: 'acme' } });
+    act(() => rt.calls.at(-1)!.onEvent({ type: 'message', conversationId: 'conv-1', seq: 4, sender: 'STAFF' }));
+    expect(feed.pollNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the count the check finds', async () => {
+    client.fetchShopperChat.mockResolvedValue({ conversation: { ...CONVERSATION, unread: 2 }, messages: [], hasEarlier: false, open: true });
+    sheet({ exists: true, realtime: true });
+    await waitFor(() => expect(useChatStore.getState().unread).toBe(2));
+  });
+
+  it('doesn’t listen for someone who has never written, or without real-time', () => {
+    sheet({ exists: false, realtime: true });
+    expect(rt.calls.every((call) => call.enabled === false)).toBe(true);
+    cleanup();
+    rt.calls = [];
+    sheet({ exists: true, realtime: false });
+    expect(rt.calls.every((call) => call.enabled === false)).toBe(true);
+  });
+});
+
+describe('reopening the chat', () => {
+  const reply = {
+    id: 'm7',
+    seq: 7,
+    sender: 'STAFF' as const,
+    author: 'Store team',
+    body: 'Yes, we have it in stock.',
+    photo: null,
+    photoExpired: false,
+    productId: null,
+    clientId: 'staff-7',
+    createdAt: '2026-11-18T09:00:00.000Z',
+  };
+
+  it('shows the conversation at once and asks only for what’s newer', async () => {
+    client.fetchShopperChat.mockResolvedValue({ conversation: CONVERSATION, messages: [reply], hasEarlier: false, open: true });
+    const first = shopperPanel();
+    await first.findByText('Yes, we have it in stock.');
+    cleanup();
+
+    client.fetchShopperChat.mockClear();
+    client.fetchShopperChat.mockReturnValue(new Promise(() => {})); // the network is slow
+    const again = shopperPanel();
+    expect(again.getByText('Yes, we have it in stock.')).toBeTruthy();
+    expect(again.queryByText(/Loading your messages/)).toBeNull();
+    expect(client.fetchShopperChat).toHaveBeenCalledWith('acme', expect.objectContaining({ after: 7 }));
   });
 });

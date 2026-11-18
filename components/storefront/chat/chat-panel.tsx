@@ -91,11 +91,18 @@ export function ChatPanel() {
   const clearProduct = useChatStore((s) => s.clearProduct);
   const setStatus = useChatStore((s) => s.setStatus);
 
-  const [messages, setMessages] = React.useState<PanelMessage[]>([]);
-  const [loaded, setLoaded] = React.useState(false);
-  const [conversation, setConversation] = React.useState<ShopperChatResponse['conversation']>(null);
-  const [available, setAvailable] = React.useState(true);
-  const [hasEarlier, setHasEarlier] = React.useState(false);
+  // Reopened: start from what was on screen last time, then ask only for
+  // what's newer (the first poll sees `loaded` and asks after the last seq).
+  const saveSnapshot = useChatStore((s) => s.saveSnapshot);
+  const [snapshot] = React.useState(() => {
+    const kept = useChatStore.getState().snapshot;
+    return kept?.org === org.slug ? kept : null;
+  });
+  const [messages, setMessages] = React.useState<PanelMessage[]>(() => snapshot?.messages ?? []);
+  const [loaded, setLoaded] = React.useState(Boolean(snapshot));
+  const [conversation, setConversation] = React.useState<ShopperChatResponse['conversation']>(snapshot?.conversation ?? null);
+  const [available, setAvailable] = React.useState(snapshot?.available ?? true);
+  const [hasEarlier, setHasEarlier] = React.useState(snapshot?.hasEarlier ?? false);
   const [loadingEarlier, setLoadingEarlier] = React.useState(false);
   const [draft, setDraft] = React.useState('');
   const [guestName, setGuestName] = React.useState('');
@@ -114,6 +121,19 @@ export function ChatPanel() {
     setPhotoError(null);
     setPhoto({ file, previewUrl: URL.createObjectURL(file) });
   }
+
+  React.useEffect(() => {
+    if (!loaded) return;
+    saveSnapshot({
+      org: org.slug,
+      // Only what the server has: a message still sending or not sent stays
+      // with this panel, where its Try again lives.
+      messages: messages.filter((m): m is ShopperChatMessage & PanelMessage => m.seq !== null && m.id !== null && !m.state),
+      conversation,
+      hasEarlier,
+      available,
+    });
+  }, [loaded, messages, conversation, hasEarlier, available, org.slug, saveSnapshot]);
 
   const messagesRef = React.useRef(messages);
   const loadedRef = React.useRef(loaded);

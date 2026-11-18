@@ -7,9 +7,11 @@
  * frame as the shopping assistant, which is a different thing: this one
  * reaches people at the store.
  *
- * While the panel is closed it checks once a minute whether the store has
- * replied, so the launchers' counts stay true — but only for someone who
- * has a conversation. A shopper who has never written causes no requests.
+ * While the panel is closed it keeps the launchers' counts (the Messages
+ * tab's badge) true — but only for someone who has a conversation; a
+ * shopper who has never written causes no requests. With real-time on, a
+ * reply's hint makes it check at once; the once-a-minute check is the
+ * backup, and it also runs when the app or tab comes back to the front.
  * The panel polls for itself while it's open.
  */
 import * as React from 'react';
@@ -18,6 +20,7 @@ import { SheetRoot, SheetContent, SheetHeader, SheetTitle, SheetDescription } fr
 import { useStorefront } from '@/lib/storefront/context';
 import { useChatStore } from '@/lib/storefront/stores/chat-store';
 import { useChatFeed } from '@/lib/chat/use-chat-feed';
+import { useRealtimeChannel } from '@/lib/realtime/client';
 import { fetchShopperChat } from '@/lib/storefront/chat-client';
 import { useChatConfig, useHasConversation } from './chat-config';
 import { ChatPanel } from './chat-panel';
@@ -42,11 +45,21 @@ export function ChatSheet() {
     return changed;
   }, [org.slug, setStatus]);
 
-  useChatFeed({
-    enabled: Boolean(config) && !open && hasConversation,
+  const watching = Boolean(config) && !open && hasConversation;
+  const { pollNow } = useChatFeed({
+    enabled: watching,
     poll: check,
     fastMs: BACKGROUND_CHECK_MS,
     slowMs: BACKGROUND_CHECK_MS,
+  });
+
+  // The same listen-only hint the open panel uses: a reply → check now.
+  useRealtimeChannel({
+    enabled: watching && Boolean(config?.realtime),
+    tokenUrl: '/api/storefront/chat/realtime-token',
+    tokenBody: { org: org.slug },
+    onEvent: pollNow,
+    onCatchUp: pollNow,
   });
 
   if (!config) return null;

@@ -25,8 +25,8 @@ import { requestIdentity } from '@/lib/storefront/request-identity';
 export const dynamic = 'force-dynamic';
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
-/** Generous for a person (a token lasts an hour), tight for a script. */
-const TOKENS_PER_IP_PER_10_MIN = 30;
+/** Generous for a person (a token lasts an hour; the closed panel's badge and the open panel each hold one), tight for a script. */
+const TOKENS_PER_IP_PER_10_MIN = 60;
 
 export async function POST(request: Request) {
   if (!request.headers.get('content-type')?.startsWith('application/json')) {
