@@ -27,17 +27,13 @@ import { ProductReviews } from '@/components/storefront/product/product-reviews'
 import { ProductQuestions } from '@/components/storefront/product/product-questions';
 import { ProductJsonLd } from '@/components/storefront/product/product-json-ld';
 import { RecentlyViewed } from '@/components/storefront/product/recently-viewed';
-import {
-  DecisionHelp,
-  type DecisionShortcut,
-} from '@/components/storefront/product/decision-help';
 import { AssistantLauncher } from '@/components/storefront/assistant/assistant-launcher';
 import { ChatLauncher } from '@/components/storefront/chat/chat-launcher';
+import { CompareSimilar } from '@/components/storefront/product/compare-similar';
 import { loadProductPage } from '@/lib/storefront/product-detail';
 import { getProductBySlug, getStorePages } from '@/lib/storefront/catalog';
 import { hasSizeOption, pageOfKind } from '@/lib/storefront/pages/rules';
 import { categoryHref } from '@/lib/storefront/navigation';
-import { findSimilarHref } from '@/lib/storefront/visual-search/query';
 import { Recommendations } from '@/components/storefront/recommendations/recommendations';
 import { recommendProducts } from '@/lib/storefront/recommendations/service';
 import { BOUGHT_TOGETHER_TITLE } from '@/lib/storefront/recommendations/complements';
@@ -106,23 +102,6 @@ export default async function ProductDetailPage({ params }: Props) {
     { label: product.name },
   ];
 
-  /* Only offer a shortcut to a section that is actually on the page — plus
-   * the one that leaves it: "find similar" runs this product through the
-   * visual-search service, which (having no vision model yet) simulates the
-   * likeness from the product's own department, colours and material (§21). */
-  const shortcuts: DecisionShortcut[] = [
-    {
-      id: 'find-similar',
-      href: findSimilarHref(product.id),
-      label: 'Find similar products',
-      icon: 'visual' as const,
-    },
-    cheaper.length ? { id: 'cheaper', href: '#cheaper', label: 'Something cheaper', icon: 'cheaper' as const } : null,
-    premium.length ? { id: 'premium', href: '#premium', label: 'A step up', icon: 'premium' as const } : null,
-    mayAlsoLike.total ? { id: 'similar', href: '#similar', label: 'Compare similar', icon: 'similar' as const } : null,
-    questions.items.length ? { id: 'ask', href: '#questions', label: 'Common questions', icon: 'ask' as const } : null,
-  ].filter((s): s is DecisionShortcut => s !== null);
-
   /* "Pay on delivery isn't available for this item" means nothing in a shop
    * that doesn't offer pay on delivery at all. */
   const { payOnDelivery } = await storeCheckoutRules(organizationSlug);
@@ -143,23 +122,6 @@ export default async function ProductDetailPage({ params }: Props) {
         sizeGuideHref={sizeGuide?.href ?? null}
         shareUrl={await storefrontUrlFor(organizationSlug, `/products/${product.slug}`)}
       />
-
-      {/*
-        * The assistant's product-page entry point. It is given the slug
-        * only — the server resolves the row itself, so the page never hands
-        * product data to a client component (§10).
-        */}
-      <div className="mt-8 lg:mt-14">
-        <DecisionHelp
-          shortcuts={shortcuts}
-          action={
-            <AssistantLauncher
-              label="Ask about this product"
-              seed={{ surface: 'product', productSlug: product.slug, productName: product.name }}
-            />
-          }
-        />
-      </div>
 
       <div className="mt-10 border-t pt-8 lg:mt-14 lg:pt-10">
         <ProductDetails product={product} />
@@ -189,7 +151,7 @@ export default async function ProductDetailPage({ params }: Props) {
         <ProductQuestions
           product={product}
           questions={questions.items}
-          /* Two ways to ask, both answered now or privately: the shop's AI,
+          /* Two ways to ask — and a third way to decide: the shop's AI,
             * from this product's own listing, reviews and the store's
             * policies; and a message to the store team (ROADMAP 17.3 — shown
             * only when the shop takes messages). The public "Ask a question"
@@ -200,6 +162,9 @@ export default async function ProductDetailPage({ params }: Props) {
                 seed={{ surface: 'product', productSlug: product.slug, productName: product.name }}
               />
               <ChatLauncher variant="button" product={{ id: product.id, name: product.name }} />
+              {/* Side by side with its closest matches — the same products as
+                * "You may also like" below, so the two agree on "similar". */}
+              <CompareSimilar product={product} candidates={mayAlsoLike.items.map((item) => item.product)} />
             </>
           }
         />

@@ -7,7 +7,10 @@
  *   /search/image?vq=<query id>   → a shopper's photo, embedded and stored
  *                                   server-side (the id means nothing to
  *                                   any other store)
- *   /search/image?p=<product id>  → "find similar" from a product
+ *   /search/image?p=<product id>  → "find similar" from a product (the
+ *                                   product page no longer links here —
+ *                                   2026-11-19 — but links already shared
+ *                                   still open)
  *
  * Both forms survive filtering, sorting and paging because `buildHref`
  * carries whatever the route already pinned on the pathname, so the search
@@ -55,11 +58,6 @@ export function visualSearchPathname(source: VisualSearchSource): string {
       ? `${VISUAL_QUERY_PARAM}=${encodeURIComponent(source.queryId)}`
       : `${VISUAL_SOURCE_PRODUCT_PARAM}=${encodeURIComponent(source.productId)}`;
   return `${VISUAL_SEARCH_PATH}?${token}`;
-}
-
-/** Link to "find similar products" for a product. Used by the product page. */
-export function findSimilarHref(productId: string): string {
-  return `${VISUAL_SEARCH_PATH}?${VISUAL_SOURCE_PRODUCT_PARAM}=${encodeURIComponent(productId)}`;
 }
 
 /** Link to the results of a stored image search. */
