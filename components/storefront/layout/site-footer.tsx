@@ -8,6 +8,7 @@ import type { SocialPlatform } from '@/lib/storefront/social-links';
 import { StoreLogo } from './store-logo';
 import { PoweredBy } from './powered-by';
 import { SocialGlyph } from './social-glyph';
+import { mapsHref } from '@/lib/storefront/maps';
 
 /*
  * WHAT THIS FOOTER MAY LINK TO.
@@ -26,9 +27,9 @@ import { SocialGlyph } from './social-glyph';
  *
  * The brand column is how to reach the shop: the contact details and social
  * profiles the merchant entered in Settings → General, each shown only when
- * filled in (ROADMAP 15.0). The contact details lead the footer as a "Get in
- * touch" strip, since reaching the shop is what most shoppers scroll down
- * here for; the strip is left out when the merchant gave none.
+ * filled in (ROADMAP 15.0). The address, phone and email sit under the social
+ * links in the shop's own column (not a strip of their own), each only when
+ * the merchant gave it.
  *
  * Desktop only: on a phone the Account tab carries the same pages and
  * contact details (ROADMAP 16.5). There is no newsletter sign-up — the one that sat
@@ -63,50 +64,15 @@ export function SiteFooter({
   const { org, isMobileRuntime } = useStorefront();
   const year = new Date().getFullYear();
 
-  const reach: { icon: LucideIcon; label: string; value: string; href?: string }[] = [];
-  if (contact.email) reach.push({ icon: Mail, label: 'Email us', value: contact.email, href: `mailto:${contact.email}` });
-  if (contact.phone) reach.push({ icon: Phone, label: 'Call us', value: contact.phone, href: `tel:${contact.phone.replace(/[^\d+]/g, '')}` });
-  if (contact.address) reach.push({ icon: MapPin, label: 'Visit us', value: contact.address });
+  // Under "Follow us": the address from Business details (opens in Maps for
+  // directions), then phone and email — each only when the shop gave it.
+  const reach: { icon: LucideIcon; label: string; value: string; href: string; newTab?: boolean }[] = [];
+  if (contact.address) reach.push({ icon: MapPin, label: 'Address', value: contact.address, href: mapsHref(contact.address), newTab: true });
+  if (contact.phone) reach.push({ icon: Phone, label: 'Phone', value: contact.phone, href: `tel:${contact.phone.replace(/[^\d+]/g, '')}` });
+  if (contact.email) reach.push({ icon: Mail, label: 'Email', value: contact.email, href: `mailto:${contact.email}` });
 
   return (
     <footer className="mt-16 hidden border-t bg-muted/30 lg:block">
-      {reach.length > 0 && (
-        <div className="border-b">
-          <div className="sf-container py-8">
-            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Get in touch</p>
-            <ul className={cn('grid gap-4', reach.length === 2 && 'grid-cols-2', reach.length >= 3 && 'grid-cols-3')}>
-              {reach.map(({ icon: Icon, label, value, href }) => {
-                const inner = (
-                  <>
-                    <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
-                      <Icon className="size-[18px]" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-xs text-muted-foreground">{label}</span>
-                      <span className="mt-0.5 line-clamp-2 block whitespace-pre-line break-words text-sm font-medium" title={value}>
-                        {value}
-                      </span>
-                    </span>
-                  </>
-                );
-                const box = 'flex h-full items-center gap-3 rounded-2xl border bg-card px-4 py-3.5';
-                return (
-                  <li key={label}>
-                    {href ? (
-                      <a href={href} className={cn(box, 'transition-colors hover:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}>
-                        {inner}
-                      </a>
-                    ) : (
-                      <div className={box}>{inner}</div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </div>
-      )}
-
       <div className="sf-container grid grid-cols-12 gap-10 py-12">
         <div className="col-span-4 flex flex-col items-start gap-6">
           {/* The shop's own logo — the light or dark one for the current
@@ -144,6 +110,27 @@ export function SiteFooter({
                 ))}
               </ul>
             </nav>
+          )}
+
+          {reach.length > 0 && (
+            <div>
+              <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Visit or contact us</p>
+              <ul className="space-y-2.5 text-sm">
+                {reach.map(({ icon: Icon, label, value, href, newTab }) => (
+                  <li key={label}>
+                    <a
+                      href={href}
+                      {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                      aria-label={`${label}: ${value}${newTab ? ' (opens in a new tab)' : ''}`}
+                      className="group flex max-w-xs items-start gap-2.5 text-muted-foreground transition-colors hover:text-brand"
+                    >
+                      <Icon aria-hidden className="mt-0.5 size-4 shrink-0" />
+                      <span className="whitespace-pre-line break-words">{value}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {appHref && !isMobileRuntime && (

@@ -15,6 +15,7 @@ import { PoweredBy } from '@/components/storefront/layout/powered-by';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Bell, Briefcase, ChevronRight, Heart, LayoutGrid, Mail, MapPin, Package, PackageSearch, Phone, ShieldCheck, UserRound } from 'lucide-react';
+import { mapsHref } from '@/lib/storefront/maps';
 import { getShopper } from '@/lib/storefront/account/session';
 import { unreadCount } from '@/lib/notifications/inbox';
 import { getStorePages, getStorefrontLook } from '@/lib/storefront/catalog';
@@ -40,7 +41,7 @@ export default async function AccountMenuPage({ params }: Props) {
   const unread = shopper ? await unreadCount({ kind: 'shopper', customerId: shopper.id, organizationId: shopper.organizationId }) : 0;
   const { help, about } = footerPageLinks(pages);
   const shopPages = [...help, ...about];
-  const { email, phone } = look.contact;
+  const { email, phone, address } = look.contact;
 
   return (
     <div className="sf-container py-6 sm:py-10">
@@ -99,7 +100,7 @@ export default async function AccountMenuPage({ params }: Props) {
           </Group>
         )}
 
-        {(shopPages.length > 0 || email || phone) && (
+        {(shopPages.length > 0 || email || phone || address) && (
           <Group title="Help and information">
             {shopPages.map((page) => (
               <Row key={page.href} href={page.href}>
@@ -114,6 +115,12 @@ export default async function AccountMenuPage({ params }: Props) {
             {phone && (
               <Row href={`tel:${phone.replace(/[^\d+]/g, '')}`} icon={Phone} external>
                 {phone}
+              </Row>
+            )}
+            {/* The shop's address from Business details — opens in Maps for directions. */}
+            {address && (
+              <Row href={mapsHref(address)} icon={MapPin} external newTab wrap>
+                {address}
               </Row>
             )}
           </Group>
@@ -150,12 +157,18 @@ function Row({
   href,
   icon: Icon,
   external = false,
+  newTab = false,
+  wrap = false,
   count = 0,
   children,
 }: {
   href: string;
   icon?: React.ComponentType<{ className?: string }>;
   external?: boolean;
+  /** opens outside the shop (a map) */
+  newTab?: boolean;
+  /** several lines, e.g. an address, rather than one cut short */
+  wrap?: boolean;
   /** something waiting there, e.g. unread notifications */
   count?: number;
   children: React.ReactNode;
@@ -163,7 +176,7 @@ function Row({
   const inner = (
     <>
       {Icon && <Icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />}
-      <span className="min-w-0 flex-1 truncate">{children}</span>
+      <span className={wrap ? 'min-w-0 flex-1 whitespace-pre-line break-words' : 'min-w-0 flex-1 truncate'}>{children}</span>
       {count > 0 && (
         <span className="rounded-full bg-brand px-2 text-xs font-semibold leading-5 text-primary-foreground tabular-nums">
           {count > 99 ? '99+' : count}
@@ -175,7 +188,7 @@ function Row({
   );
   const className = 'flex min-h-12 items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-accent';
   return external ? (
-    <a href={href} className={className}>
+    <a href={href} className={className} {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>
       {inner}
     </a>
   ) : (

@@ -14,7 +14,7 @@ afterEach(cleanup);
 const columns = [{ title: 'Shop', links: [{ label: 'Women', href: '/c/women' }] }];
 
 describe('SiteFooter', () => {
-  it('leads with a Get in touch strip, and social links as named icons', () => {
+  it('lists the address, phone and email under the social links, each a link', () => {
     render(
       <SiteFooter
         columns={columns}
@@ -24,19 +24,24 @@ describe('SiteFooter', () => {
         appHref="/app"
       />,
     );
-    expect(screen.getByText('Get in touch')).toBeTruthy();
-    expect(screen.getByText('Email us').closest('a')?.getAttribute('href')).toBe('mailto:hi@aura.ng');
-    expect(screen.getByText('Call us').closest('a')?.getAttribute('href')).toBe('tel:08012345678');
-    expect(screen.getByText('Visit us').closest('a')).toBeNull();
+    expect(screen.queryByText('Get in touch')).toBeNull();
+    const heading = screen.getByText('Visit or contact us');
+    // After "Follow us" in the same column.
+    expect(screen.getByText('Follow us').compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const visit = screen.getByRole('link', { name: /Address: Lekki, Lagos/ });
+    expect(visit.getAttribute('href')).toBe('https://www.google.com/maps/search/?api=1&query=Lekki%2C%20Lagos');
+    expect(visit.getAttribute('target')).toBe('_blank');
+    expect(screen.getByRole('link', { name: /Phone: 0801 234 5678/ }).getAttribute('href')).toBe('tel:08012345678');
+    expect(screen.getByRole('link', { name: /Email: hi@aura.ng/ }).getAttribute('href')).toBe('mailto:hi@aura.ng');
     expect(screen.getByRole('link', { name: 'Instagram (opens in a new tab)' })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Get our app/ }).getAttribute('href')).toBe('/app');
     expect(screen.getByText('Pay online or on delivery')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Women' })).toBeTruthy();
   });
 
-  it('leaves out the strip and the social row when the shop gave neither', () => {
+  it('leaves out the contact list and the social row when the shop gave neither', () => {
     render(<SiteFooter columns={columns} />);
-    expect(screen.queryByText('Get in touch')).toBeNull();
+    expect(screen.queryByText('Visit or contact us')).toBeNull();
     expect(screen.queryByText('Follow us')).toBeNull();
     expect(screen.getByText(/© \d{4} Aura/)).toBeTruthy();
   });
