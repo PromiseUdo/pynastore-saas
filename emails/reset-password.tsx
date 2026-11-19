@@ -11,6 +11,7 @@ import {
 } from '@react-email/components';
 import * as React from 'react';
 import { PLATFORM_NAME } from '@/lib/brand';
+import { PlatformEmailLogo } from './platform-logo';
 
 type ResetPasswordEmailProps = {
   resetUrl: string;
@@ -27,7 +28,7 @@ export function ResetPasswordEmail({
       <Preview>Reset your {PLATFORM_NAME} password</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Text style={logo}>{PLATFORM_NAME}</Text>
+          <PlatformEmailLogo align="center" style={{ marginBottom: '32px' }} />
 
           <Section style={card}>
             <Text style={heading}>Reset your password</Text>
@@ -81,13 +82,6 @@ const container: React.CSSProperties = {
   padding: '40px 20px',
 };
 
-const logo: React.CSSProperties = {
-  fontSize: '20px',
-  fontWeight: '700',
-  color: '#18181b',
-  textAlign: 'center',
-  marginBottom: '32px',
-};
 
 const card: React.CSSProperties = {
   backgroundColor: '#ffffff',

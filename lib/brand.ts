@@ -28,11 +28,13 @@
 export const PLATFORM_NAME = 'Pynastore';
 
 /**
- * The mark's two colours (the green tile and its saffron corner), for places
- * outside the public site's `.site` palette that draw the mark — the shop
- * footer's "Powered by". Same values as `--primary` / `--mk-sun` in `.site`.
+ * The logo's colours, from the brand pack (brand-source/README.txt, v1.1
+ * "Rise"): Pynastore Green for the block and wordmark, Saffron for the orb.
+ * The logo itself is drawn by components/brand/pynastore-logo.tsx; these are
+ * here for anything that needs the raw values (generated icons). Same values
+ * as `--primary` / `--mk-sun` on the public site.
  */
-export const PLATFORM_MARK_COLORS = { tile: '#0e6b47', letter: '#ffffff', corner: '#f2a93b' } as const;
+export const PLATFORM_MARK_COLORS = { block: '#0e6b47', orb: '#f2a93b', reverse: '#ffffff' } as const;
 
 /** The platform's public domain — the marketing site and the legal pages. */
 export const PLATFORM_DOMAIN = 'pynastore.com';

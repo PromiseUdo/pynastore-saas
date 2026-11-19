@@ -406,3 +406,13 @@
   box-decoration-break: clone;
   padding-inline: 0.04em;
 }
+
+/* The Pynastore logo (components/brand/pynastore-logo.tsx) reverses — white
+ * block and wordmark, saffron orb unchanged — on the admin's dark theme and
+ * a shop's dark theme, unless a tone was chosen for it. */
+.dark .pyna-logo:not([data-tone]),
+[data-sf-theme='dark'] .pyna-logo:not([data-tone]),
+.pyna-logo[data-tone='reverse'] {
+  --pyna-block: #ffffff;
+  --pyna-word: #ffffff;
+}

@@ -10,7 +10,7 @@ import {
   Text,
 } from '@react-email/components';
 import * as React from 'react';
-import { PLATFORM_NAME } from '@/lib/brand';
+import { PlatformEmailLogo } from './platform-logo';
 
 type InvitationEmailProps = {
   orgName: string;
@@ -34,7 +34,7 @@ export function InvitationEmail({
       <Body style={main}>
         <Container style={container}>
           {/* Wordmark */}
-          <Text style={logo}>{PLATFORM_NAME}</Text>
+          <PlatformEmailLogo align="center" style={{ marginBottom: '32px' }} />
 
           <Section style={card}>
             <Text style={heading}>You have been invited</Text>
@@ -88,13 +88,6 @@ const container: React.CSSProperties = {
   padding: '40px 20px',
 };
 
-const logo: React.CSSProperties = {
-  fontSize: '20px',
-  fontWeight: '700',
-  color: '#18181b',
-  textAlign: 'center',
-  marginBottom: '32px',
-};
 
 const card: React.CSSProperties = {
   backgroundColor: '#ffffff',

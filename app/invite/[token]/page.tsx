@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { AcceptForm } from './accept-form';
 import { adminUrlHere, signInTargetHere } from '@/lib/tenant/here';
-import { PLATFORM_NAME } from '@/lib/brand';
+import { PynastoreLogo } from '@/components/brand/pynastore-logo';
 
 type Params = { token: string };
 type SearchParams = { auto?: string; err?: string };
@@ -212,15 +212,9 @@ function PageShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** The platform's logo above the invitation (the brand pack's horizontal logo). */
 function Wordmark() {
-  return (
-    <div className="mb-8 flex items-center gap-2.5">
-      <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-        S
-      </div>
-      <span className="text-base font-semibold text-foreground">{PLATFORM_NAME}</span>
-    </div>
-  );
+  return <PynastoreLogo className="mb-8 h-7" />;
 }
 
 function OrgBadge({
@@ -248,12 +242,7 @@ function OrgBadge({
 function InviteErrorPage({ title, description }: { title: string; description: string }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 px-4 py-12">
-      <div className="mb-8 flex items-center gap-2.5">
-        <div className="flex size-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-          S
-        </div>
-        <span className="text-base font-semibold text-foreground">{PLATFORM_NAME}</span>
-      </div>
+      <Wordmark />
       <div className="w-full max-w-md rounded-xl border bg-card p-8 shadow-sm text-center">
         <div className="mb-4 flex justify-center">
           <div className="flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">

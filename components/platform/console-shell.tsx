@@ -12,8 +12,9 @@
  */
 import * as React from 'react';
 import Link from 'next/link';
+import { PynastoreSymbol } from '@/components/brand/pynastore-logo';
 import { usePathname } from 'next/navigation';
-import { Smartphone, LayoutDashboard, LogOut, Menu, ShieldCheck, BadgeCheck, Building2, CreditCard, Globe, Tags, SlidersHorizontal, Timer, Bug, Rocket } from 'lucide-react';
+import { Smartphone, LayoutDashboard, LogOut, Menu, BadgeCheck, Building2, CreditCard, Globe, Tags, SlidersHorizontal, Timer, Bug, Rocket } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { SheetContent, SheetRoot, SheetTitle } from '@/components/ui/sheet';
@@ -143,9 +144,7 @@ function ConsoleMark({ platformName }: { platformName: string }) {
       href="/platform"
       className="flex min-w-0 items-center gap-2 rounded-md text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-        <ShieldCheck className="size-4" aria-hidden />
-      </span>
+      <PynastoreSymbol className="size-7" />
       <span className="truncate">
         {platformName} <span className="font-normal text-muted-foreground">console</span>
       </span>

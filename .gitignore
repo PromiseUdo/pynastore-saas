@@ -24,6 +24,10 @@
 .DS_Store
 *.pem
 
+# The brand pack's master files (~6MB of SVG/PDF/PNG/JPG). Kept locally only;
+# the web-ready copies the site serves are in public/brand/.
+/brand-source/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

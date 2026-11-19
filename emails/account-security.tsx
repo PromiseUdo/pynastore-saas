@@ -7,7 +7,7 @@
  */
 import { Body, Button, Container, Head, Hr, Html, Preview, Section, Text } from '@react-email/components';
 import * as React from 'react';
-import { PLATFORM_NAME } from '@/lib/brand';
+import { PlatformEmailLogo } from './platform-logo';
 
 export type AccountSecurityEmailProps = {
   heading: string;
@@ -25,7 +25,7 @@ export function AccountSecurityEmail({ heading, paragraphs, action, notYou }: Ac
       <Preview>{heading}</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Text style={logo}>{PLATFORM_NAME}</Text>
+          <PlatformEmailLogo align="center" style={{ marginBottom: '32px' }} />
           <Section style={card}>
             <Text style={headingStyle}>{heading}</Text>
             {paragraphs.map((text) => (
@@ -63,7 +63,6 @@ const main: React.CSSProperties = {
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 };
 const container: React.CSSProperties = { maxWidth: '560px', margin: '0 auto', padding: '40px 20px' };
-const logo: React.CSSProperties = { fontSize: '20px', fontWeight: '700', color: '#18181b', textAlign: 'center', marginBottom: '32px' };
 const card: React.CSSProperties = { backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e4e4e7', padding: '32px' };
 const headingStyle: React.CSSProperties = { fontSize: '22px', fontWeight: '600', color: '#18181b', margin: '0 0 16px' };
 const paragraph: React.CSSProperties = { fontSize: '15px', lineHeight: '24px', color: '#3f3f46', margin: '0 0 16px' };

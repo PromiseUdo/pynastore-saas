@@ -20,6 +20,11 @@ export function appIconSize(value: string): AppIconSize | null {
   return (APP_ICON_SIZES as readonly number[]).includes(size) ? (size as AppIconSize) : null;
 }
 
+/** The Pynastore app icon at one of the manifest sizes (public/brand, from the brand pack). */
+export function platformAppIconPath(size: AppIconSize): string {
+  return `/brand/app-icon-${size}.png`;
+}
+
 /** The admin's and console's colour: the indigo of --primary in app/globals.css (an image can't read a CSS token). */
 export const PLATFORM_ICON_COLOUR = '#4f46e5';
 

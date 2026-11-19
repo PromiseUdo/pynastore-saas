@@ -1,6 +1,7 @@
 import { Body, Button, Container, Head, Hr, Html, Preview, Section, Text } from '@react-email/components';
 import * as React from 'react';
 import { PLATFORM_NAME } from '@/lib/brand';
+import { PlatformEmailLogo } from './platform-logo';
 
 /*
  * The result of our check of a merchant's business (ROADMAP 10.8 / 11.3).
@@ -33,7 +34,7 @@ export function PaymentVerificationResultEmail({ businessName, outcome, reason, 
       <Preview>{paymentVerificationSubject({ businessName, outcome, reason, setupUrl })}</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Text style={logo}>{PLATFORM_NAME}</Text>
+          <PlatformEmailLogo style={{ marginBottom: '24px' }} />
 
           <Section style={card}>
             <Text style={heading}>{approved ? 'Your business is approved' : 'Your details need a change'}</Text>
@@ -83,7 +84,6 @@ const main: React.CSSProperties = {
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 };
 const container: React.CSSProperties = { margin: '0 auto', padding: '40px 20px', maxWidth: '560px' };
-const logo: React.CSSProperties = { fontSize: '18px', fontWeight: 700, color: '#1c1917', margin: '0 0 24px' };
 const card: React.CSSProperties = {
   backgroundColor: '#ffffff',
   borderRadius: '8px',

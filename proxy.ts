@@ -561,5 +561,7 @@ export default async function proxy(req: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|sw\\.js$|.*\\.svg$).*)'],
+  // brand/: the platform's logo files and icons (public/brand), served as
+  // they are on every host — a shop or admin host must not rewrite them.
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|brand/|sw\\.js$|.*\\.svg$).*)'],
 };

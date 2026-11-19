@@ -96,6 +96,7 @@ The sidebar (`components/layout/sidebar.tsx`) is grouped by what a shop owner is
 Before writing any new UI, check `components/ui/`, `components/layout/` and `components/dashboard/`. If a pattern appears on a second page (status label map, money cell, empty state, access denied, confirm dialog), extract it into a shared component instead of copying it.
 
 Shared pieces that already exist — use them:
+- `components/brand/pynastore-logo.tsx` — the Pynastore logo (`PynastoreLogo`, `PynastoreSymbol`, `small` under 24px), drawn from the brand pack in `brand-source/` (its README has the rules: orb always saffron, minimum sizes). Never redraw the mark; ready files for the web are in `public/brand/`.
 - `lib/format.ts` — `formatMoney`, `formatMoneyRange`, `formatNumber`, `formatDate`, `enumLabel`.
 - `components/layout/empty-state.tsx` (`variant="filtered"` when a search hid everything), `components/layout/page-tabs.tsx` (tab selection lives in the URL).
 - `components/dashboard/export-csv-button.tsx` + `lib/csv.ts` — every report offers its rows as a spreadsheet, matching the filters on screen.

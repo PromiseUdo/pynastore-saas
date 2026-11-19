@@ -1,6 +1,6 @@
 import { Body, Button, Container, Head, Hr, Html, Preview, Section, Text } from '@react-email/components';
 import * as React from 'react';
-import { PLATFORM_NAME } from '@/lib/brand';
+import { PlatformEmailLogo } from './platform-logo';
 
 /*
  * One layout for the platform's short account emails — verifying an address,
@@ -28,7 +28,7 @@ export function PlatformNoticeEmail({ preview, heading, paragraphs, list, button
       <Preview>{preview}</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Text style={logo}>{PLATFORM_NAME}</Text>
+          <PlatformEmailLogo style={{ marginBottom: '24px' }} />
           <Section style={card}>
             <Text style={headingStyle}>{heading}</Text>
             {paragraphs.map((p, i) => (
@@ -71,7 +71,6 @@ const main: React.CSSProperties = {
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 };
 const container: React.CSSProperties = { margin: '0 auto', padding: '40px 20px', maxWidth: '560px' };
-const logo: React.CSSProperties = { fontSize: '18px', fontWeight: 700, color: '#1c1917', margin: '0 0 24px' };
 const card: React.CSSProperties = { backgroundColor: '#ffffff', borderRadius: '8px', padding: '32px', border: '1px solid #e7e5e4' };
 const headingStyle: React.CSSProperties = { fontSize: '20px', fontWeight: 600, color: '#1c1917', margin: '0 0 16px' };
 const paragraph: React.CSSProperties = { fontSize: '14px', lineHeight: '22px', color: '#44403c', margin: '0 0 16px' };

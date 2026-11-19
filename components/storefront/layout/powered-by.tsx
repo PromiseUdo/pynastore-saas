@@ -2,13 +2,14 @@
  * "Powered by Pynastore" — the one place the platform's name appears on a
  * shop (decided by the owner 2026-11-18). It links to the platform's own
  * website, opens in a new tab so the shopper's bag and page stay put, and is
- * drawn in the shop's muted text colour with a small copy of the platform's
- * mark (the green tile with its saffron corner, as on pynastore.com) — a
- * 16px logo, so it sits quietly in every look and never competes with the
- * merchant's own brand.
+ * drawn in the shop's muted text colour with the Pynastore symbol in its
+ * small-size cut (the brand pack's choice under 24px) — 16px, the pack's
+ * minimum, so it sits quietly in every look and never competes with the
+ * merchant's own brand. On a dark shop the symbol reverses by itself.
  */
-import { PLATFORM_DOMAIN, PLATFORM_MARK_COLORS, PLATFORM_NAME } from '@/lib/brand';
+import { PLATFORM_DOMAIN, PLATFORM_NAME } from '@/lib/brand';
 import { cn } from '@/lib/utils';
+import { PynastoreSymbol } from '@/components/brand/pynastore-logo';
 
 export const POWERED_BY_HREF = `https://www.${PLATFORM_DOMAIN}/?utm_source=storefront&utm_medium=powered_by`;
 
@@ -25,18 +26,7 @@ export function PoweredBy({ className }: { className?: string }) {
       )}
     >
       <span>Powered by</span>
-      {/* The mark from components/marketing/wordmark.tsx at half size. */}
-      <span
-        aria-hidden
-        className="relative flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-[4.5px] text-[9px] font-bold leading-none"
-        style={{ backgroundColor: PLATFORM_MARK_COLORS.tile, color: PLATFORM_MARK_COLORS.letter }}
-      >
-        {PLATFORM_NAME.charAt(0)}
-        <span
-          className="absolute -right-[3px] -top-[3px] size-[7px] rounded-full"
-          style={{ backgroundColor: PLATFORM_MARK_COLORS.corner }}
-        />
-      </span>
+      <PynastoreSymbol small className="size-4" />
       <span className="font-semibold tracking-tight text-foreground/80 group-hover:text-foreground">{PLATFORM_NAME}</span>
       <span className="sr-only"> (opens in a new tab)</span>
     </a>
