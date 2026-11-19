@@ -18,7 +18,8 @@
  * everything after that.
  */
 import * as React from 'react';
-import { Check, Heart, Loader2, ShieldCheck } from 'lucide-react';
+import { Heart, Loader2, ShieldCheck } from 'lucide-react';
+import { ProductHighlights } from './product-highlights';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RatingStars } from '@/components/storefront/common/rating-stars';
@@ -78,6 +79,7 @@ export function ProductPurchase({
   // A trade buyer starts at the first quantity their rules allow (ROADMAP 21.3).
   const [quantity, setQuantity] = React.useState(() => (product.trade ? firstTradeQuantity(product.trade) : 1));
   const [imageIndex, setImageIndex] = React.useState(0);
+  const stickyTop = useStickyGallery();
   const [adding, setAdding] = React.useState(false);
 
   const wishlisted = useWishlistStore((s) => s.items.some((i) => i.productId === product.id));
@@ -143,6 +145,13 @@ export function ProductPurchase({
   return (
     <>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_26rem] lg:gap-12 xl:grid-cols-[minmax(0,1fr)_28rem]">
+        {/* On a desktop the photos stay in view while the shopper reads down
+          * the column beside them (see useStickyGallery). */}
+        <div
+          ref={stickyTop.ref}
+          className="min-w-0 lg:self-start"
+          style={stickyTop.top != null ? { position: 'sticky', top: stickyTop.top } : undefined}
+        >
         <ProductGallery
           images={product.images}
           productName={product.name}
@@ -163,6 +172,7 @@ export function ProductPurchase({
             </>
           }
         />
+        </div>
 
         {/* ── identity, price, choices, actions ───────────────────── */}
         <div className="min-w-0">
@@ -286,16 +296,8 @@ export function ProductPurchase({
             {shareUrl && <ShareButton title={product.name} url={shareUrl} />}
           </div>
 
-          {product.highlights.length > 0 && (
-            <ul className="mt-6 space-y-2 text-sm">
-              {product.highlights.map((highlight) => (
-                <li key={highlight} className="flex items-start gap-2.5 text-muted-foreground">
-                  <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-teal" />
-                  {highlight}
-                </li>
-              ))}
-            </ul>
-          )}
+          {/* The first five; the rest behind "Read more". */}
+          <ProductHighlights highlights={product.highlights} className="mt-6" />
 
           {/* Where it would ship from, and what that costs, for where the
             * shopper is (ROADMAP Phase 9.8) — for the chosen variant, or one
@@ -402,4 +404,45 @@ function StickyBuyBar({
       </button>
     </div>
   );
+}
+
+/**
+ * Keeps the gallery in view on a desktop while the column beside it — price,
+ * options, highlights, delivery — scrolls past, so a long column doesn't leave
+ * a blank space under the photos.
+ *
+ * It stops just under the shop's sticky header, measured rather than assumed
+ * (each header layout has its own height). And only when the whole gallery
+ * fits in the window under that header: a gallery taller than the window,
+ * held in place, would never show its bottom. Below `lg` the page is one
+ * column and nothing sticks.
+ */
+function useStickyGallery() {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [top, setTop] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return; // not a browser (tests)
+    const wide = window.matchMedia('(min-width: 1024px)');
+    const header = document.querySelector<HTMLElement>('[data-sf-header]');
+    const measure = () => {
+      const gallery = ref.current;
+      if (!gallery || !wide.matches) return setTop(null);
+      const offset = Math.round((header?.getBoundingClientRect().height ?? 0) + 24);
+      setTop(gallery.offsetHeight + offset <= window.innerHeight ? offset : null);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (ref.current) observer.observe(ref.current);
+    if (header) observer.observe(header);
+    window.addEventListener('resize', measure);
+    wide.addEventListener('change', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+      wide.removeEventListener('change', measure);
+    };
+  }, []);
+
+  return { ref, top };
 }

@@ -31,21 +31,37 @@ export function ProductDelivery({
   const nothingSetUp = options.length === 0;
 
   const price = (option: DeliveryPromise['options'][number]) =>
-    option.free ? 'Free' : `${option.fromPrice ? 'From ' : ''}${formatMoney(option.price, currency)}`;
+    option.free
+      ? 'Free'
+      : `${option.fromPrice ? 'From ' : ''}${formatMoney(option.price, currency)}`;
 
   // Nothing that holds wherever the shopper is: the "Deliver to" box says it all.
-  if (!nothingSetUp && pickups.length === 0 && !returnWindowDays && !requiresPrepayment && !policyPage) return null;
+  if (
+    !nothingSetUp &&
+    pickups.length === 0 &&
+    !returnWindowDays &&
+    !requiresPrepayment &&
+    !policyPage
+  )
+    return null;
 
   return (
-    <section aria-labelledby="delivery-heading" className="mt-8 rounded-2xl border bg-card p-5">
-      <h2 id="delivery-heading" className="flex items-center gap-2 text-sm font-semibold">
+    <section
+      aria-labelledby="delivery-heading"
+      className="mt-8 rounded-2xl border bg-card p-5"
+    >
+      <h2
+        id="delivery-heading"
+        className="flex items-center gap-2 text-sm font-semibold"
+      >
         <Truck aria-hidden className="size-4 text-teal" />
         Delivery &amp; returns
       </h2>
 
       {nothingSetUp && (
         <p className="mt-4 text-sm text-muted-foreground">
-          This store hasn’t set up delivery yet, so orders can’t be placed right now.
+          This store hasn’t set up delivery yet, so orders can’t be placed right
+          now.
         </p>
       )}
 
@@ -61,8 +77,12 @@ export function ProductDelivery({
           ))}
           {returnWindowDays ? (
             <li className="flex items-start gap-2.5">
-              <RotateCcw aria-hidden className="mt-0.5 size-4 shrink-0 text-teal" />
-              Ask to return items within {returnWindowDays} days of delivery, from your account
+              <RotateCcw
+                aria-hidden
+                className="mt-0.5 size-4 shrink-0 text-teal"
+              />
+              Ask to return items within {returnWindowDays} days of delivery,
+              from your account
             </li>
           ) : null}
         </ul>
@@ -71,16 +91,20 @@ export function ProductDelivery({
       {/* Said here rather than sprung on the shopper at the payment step. */}
       {requiresPrepayment && (
         <p className="mt-4 flex items-start gap-2.5 border-t pt-4 text-sm">
-          <CreditCard aria-hidden className="mt-0.5 size-4 shrink-0 text-teal" />
+          <CreditCard
+            aria-hidden
+            className="mt-0.5 size-4 shrink-0 text-teal"
+          />
           <span>
-            This item is paid for before delivery — pay on delivery isn’t available for an order containing it.
+            This item is paid for before delivery, pay on delivery isn’t
+            available for an order containing it.
           </span>
         </p>
       )}
 
       {/* The merchant's own words on delivery and returns, when they've
-        * published some — the figures above are the rules, that page is
-        * the detail. */}
+       * published some — the figures above are the rules, that page is
+       * the detail. */}
       {policyPage && (
         <Link
           href={policyPage.href}

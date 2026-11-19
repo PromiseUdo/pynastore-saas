@@ -18,6 +18,8 @@ import { PageBlocks } from '@/components/content/page-blocks';
 import { parsePageBody } from '@/lib/storefront/pages/format';
 import type { Product } from '@/lib/storefront/types';
 
+const SPECS_BOX_ID = 'product-specs';
+
 export function ProductDetails({ product }: { product: Product }) {
   const blocks = parsePageBody(product.description);
 
@@ -28,9 +30,10 @@ export function ProductDetails({ product }: { product: Product }) {
           About this product
         </h2>
 
-        {/* Collapsed on small screens only: on a phone three paragraphs push
-          * the specifications and reviews an entire screen further down. */}
-        <ReadMore className="mt-4">
+        {/* Long copy folds behind "Read more": on a desktop it ends level
+          * with the specifications box beside it, and on a phone it stops
+          * three paragraphs pushing the reviews a whole screen down. */}
+        <ReadMore className="mt-4" matchId={product.specs.length > 0 ? SPECS_BOX_ID : undefined}>
           <PageBlocks blocks={blocks} nested className="sm:text-sm" />
         </ReadMore>
       </section>
@@ -41,8 +44,9 @@ export function ProductDetails({ product }: { product: Product }) {
             Specifications
           </h2>
 
-          <dl className="mt-4 divide-y rounded-2xl border">
-            <Row label="Brand" value={product.brandName} />
+          <dl id={SPECS_BOX_ID} className="mt-4 divide-y rounded-2xl border">
+            {/* No brand on the product: no empty row. */}
+            {product.brandName?.trim() && <Row label="Brand" value={product.brandName} />}
             {product.specs.map((spec) => (
               <Row key={spec.label} label={spec.label} value={spec.value} />
             ))}
