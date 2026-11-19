@@ -6,9 +6,9 @@
  *
  * Four ways in, all resolving against the same catalogue:
  *   • type or describe it        → lib/ai/intent.ts → real catalogue query
- *   • Ask the assistant          → lib/ai/assistant → a conversation that
+ *   • Ask about products         → lib/ai/assistant → a conversation that
  *                                  can be refined turn by turn (§17)
- *   • Help me choose             → guided narrowing, same query shape
+ *   • Help me choose             → guided narrowing in a modal, same query shape
  *   • Search by image            → /search/image, a discovery method of its
  *                                  own rather than a panel bolted on here
  *
@@ -33,25 +33,22 @@ import { useAiShopping, useStorefront } from '@/lib/storefront/context';
 import { useDiscoveryStore } from '@/lib/storefront/stores/discovery-store';
 import { DiscoveryResults } from './discovery-results';
 import { useDiscoveryRun } from './use-discovery-run';
-import { GuidedPicker, type GuidedSelection } from './guided-picker';
 import { ImageSearchLink } from '@/components/storefront/visual-search/image-search-link';
 import { useAssistantStore } from '@/lib/storefront/stores/assistant-store';
-import type { PriceBandOption, RootCategoryOption } from './types';
+import { useGuidedStore } from '@/lib/storefront/stores/guided-store';
+import { ASK_ABOUT_PRODUCTS } from '@/components/storefront/assistant/assistant-launcher';
 
-type Mode = 'search' | 'guided';
 export function DiscoveryHero({
-  categories,
-  priceBands,
   examples,
+  canChoose,
 }: {
-  categories: RootCategoryOption[];
-  priceBands: PriceBandOption[];
+  /** whether "Help me choose" has departments to ask about */
+  canChoose: boolean;
   /** real, catalogue-derived example phrasings */
   examples: string[];
 }) {
   const { org } = useStorefront();
   const aiShopping = useAiShopping();
-  const [mode, setMode] = React.useState<Mode>('search');
   const [q, setQ] = React.useState('');
   /* The fetch, the supersede guard, the scroll and the focus move all live
    * in one place now — <DiscoveryStrip> needs exactly the same behaviour
@@ -63,25 +60,11 @@ export function DiscoveryHero({
     e.preventDefault();
     const text = q.trim();
     if (!text) return;
-    setMode('search');
     void run({ q: text }, `“${text}”`);
   };
 
-  const onGuided = (selection: GuidedSelection) => {
-    setMode('search');
-    void run(
-      {
-        // A guided pick is already structured, so no text is sent — there is
-        // nothing to parse and nothing to misread.
-        mission: undefined,
-        minPrice: selection.minPrice,
-        maxPrice: selection.maxPrice,
-        sort: selection.sort,
-        q: selection.categoryPath?.at(-1),
-      },
-      selection.summary || 'your picks',
-    );
-  };
+  // "Help me choose" is one modal for the whole shop (guided-dialog.tsx).
+  const openGuided = useGuidedStore((s) => s.setOpen);
 
   /*
    * Missions and budget bands are server-rendered and publish their query to
@@ -96,7 +79,6 @@ export function DiscoveryHero({
   React.useEffect(() => {
     if (!pending) return;
     const { label, ...body } = pending;
-    setMode('search');
     setQ(pending.q ?? '');
     void run(body, label);
     clearPending();
@@ -169,7 +151,7 @@ export function DiscoveryHero({
               type="submit"
               className="flex h-12 shrink-0 items-center gap-2 rounded-[var(--sf-radius-button,999px)] bg-brand px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-brand-hover sm:px-7"
             >
-              {state.status === 'loading' && mode === 'search' ? (
+              {state.status === 'loading' ? (
                 <Loader2 aria-hidden className="size-4 animate-spin" />
               ) : (
                 <Search aria-hidden className="size-4 sm:hidden" />
@@ -188,24 +170,21 @@ export function DiscoveryHero({
               onClick={askAssistant}
               icon={<MessagesSquare className="size-4" />}
             >
-              Ask the assistant
+              {ASK_ABOUT_PRODUCTS}
             </SecondaryAction>
           )}
-          <SecondaryAction
-            active={mode === 'guided'}
-            onClick={() => setMode(mode === 'guided' ? 'search' : 'guided')}
-            icon={<Sparkles className="size-4" />}
-          >
-            Help me choose
-          </SecondaryAction>
+          {canChoose && (
+            <SecondaryAction active={false} onClick={() => openGuided(true)} icon={<Sparkles className="size-4" />}>
+              Help me choose
+            </SecondaryAction>
+          )}
           {/* A real link to a real page: visual search is one of the
             * store's discovery methods, not a panel that lives in the hero. */}
           <ImageSearchLink />
         </div>
 
         {/* Real phrasings built from this store's own catalogue. */}
-        {mode === 'search' &&
-          state.status === 'idle' &&
+        {state.status === 'idle' &&
           examples.length > 0 && (
             <p className="mt-6 flex flex-wrap items-center justify-center gap-x-2 gap-y-2 text-sm text-muted-foreground">
               <span className="shrink-0">Try:</span>
@@ -225,17 +204,6 @@ export function DiscoveryHero({
             </p>
           )}
       </div>
-
-      {mode === 'guided' && (
-        <div className="mx-auto mt-8 max-w-3xl">
-          <GuidedPicker
-            categories={categories}
-            priceBands={priceBands}
-            onSubmit={onGuided}
-            onCancel={() => setMode('search')}
-          />
-        </div>
-      )}
 
       {/*
        * tabIndex -1 so focus can be moved here once results land. The ring is

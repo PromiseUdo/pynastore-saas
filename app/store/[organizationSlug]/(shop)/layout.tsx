@@ -31,6 +31,9 @@ import type { FooterColumn } from '@/components/storefront/layout/site-footer';
 import { GetAppBanner } from '@/components/storefront/layout/get-app-banner';
 import { getStoreAppListing } from '@/lib/mobile/listing';
 import { getWholesaleSettingsBySlug } from '@/lib/trade/accounts';
+import { getCategoryTree } from '@/lib/storefront/catalog';
+import { getPriceBands, getStoreCurrency } from '@/lib/storefront/discovery';
+import { ShopHelperDock } from '@/components/storefront/helper/shop-helper-dock';
 
 export default async function ShopLayout({
   children,
@@ -40,7 +43,8 @@ export default async function ShopLayout({
   params: Promise<{ organizationSlug: string }>;
 }) {
   const { organizationSlug } = await params;
-  const [navItems, departments, pages, delivery, checkout, announcements, look, { design }, appListing, wholesale] = await Promise.all([
+  const store = { organizationSlug };
+  const [navItems, departments, pages, delivery, checkout, announcements, look, { design }, appListing, wholesale, categoryTree, priceBands] = await Promise.all([
     getNavItems({ organizationSlug }),
     getFeaturedCategories({ organizationSlug }),
     getStorePages({ organizationSlug }),
@@ -53,7 +57,14 @@ export default async function ShopLayout({
     getStoreAppListing({ organizationSlug }),
     // "Buy wholesale" in the footer, when there's a way in (ROADMAP 21.1).
     getWholesaleSettingsBySlug(organizationSlug),
+    // "Help me choose" (the helper button on every page): its departments and budgets.
+    getCategoryTree(store),
+    getStoreCurrency(store).then((currency) => getPriceBands(currency, store)),
   ]);
+  const chooseDepartments = categoryTree
+    .filter((c) => c.productCount > 0)
+    .map(({ id, name, path, productCount }) => ({ id, name, path, productCount }));
+  const chooseBudgets = priceBands.map(({ id, label, minPrice, maxPrice, productCount }) => ({ id, label, minPrice, maxPrice, productCount }));
   const wholesaleLink = offersWholesaleEntry(wholesale) ? [{ label: 'Buy wholesale', href: '/wholesale' }] : [];
 
   /* At most one of each, newest campaign first: two bars stacked above the
@@ -124,6 +135,8 @@ export default async function ShopLayout({
         appHref={appListing ? '/app' : null}
       />
       <MobileTabBar />
+      {/* Ask about products, search by image, help me choose — bottom left, every page. */}
+      <ShopHelperDock categories={chooseDepartments} priceBands={chooseBudgets} />
       {modal && <CampaignModal announcement={modal} />}
     </div>
   );

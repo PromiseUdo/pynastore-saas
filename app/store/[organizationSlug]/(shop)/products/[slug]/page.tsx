@@ -192,7 +192,7 @@ export default async function ProductDetailPage({ params }: Props) {
           ask={
             <div className="flex flex-wrap items-center gap-3">
               <AssistantLauncher
-                label="Or ask the store assistant now"
+                label="Or get an instant answer now"
                 seed={{ surface: 'product', productSlug: product.slug, productName: product.name }}
               />
               <ChatLauncher variant="button" product={{ id: product.id, name: product.name }} />

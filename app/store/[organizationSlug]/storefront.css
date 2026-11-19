@@ -341,7 +341,7 @@
   }
 }
 
-/* The floating "Ask the assistant" button shares the bottom-right corner with
+/* The floating "Message us" button (and, in older layouts, the assistant's) shares the bottom-right corner with
  * the back-to-top arrow, so only one of them owns that spot at a time: it
  * rests at the bottom of the screen and slides up by one arrow's height while
  * the arrow is showing (`data-lifted`, set from the same scroll state the
@@ -368,6 +368,23 @@
 @media (prefers-reduced-motion: reduce) {
   .sf-assistant-fab {
     transition: none;
+  }
+}
+
+/* The shopping helpers' button, bottom LEFT (components/storefront/helper/
+ * shop-helper-dock.tsx): above the phone's tab bar, and lifted clear of the
+ * product page's sticky buy bar while that is showing. */
+.sf-helper-dock {
+  bottom: calc(max(var(--sf-tabbar), var(--inset-bottom)) + 1.25rem);
+}
+@media (max-width: 1023.98px) {
+  :root[data-sticky-buy-bar] .sf-helper-dock {
+    bottom: calc(max(var(--sf-tabbar), var(--inset-bottom)) + 5.5rem);
+  }
+}
+@media (min-width: 1024px) {
+  .sf-helper-dock {
+    bottom: 1.5rem;
   }
 }
 

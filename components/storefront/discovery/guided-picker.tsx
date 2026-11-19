@@ -2,6 +2,8 @@
 
 /*
  * "Help me choose" — a guided narrowing flow, deliberately NOT a chat window.
+ * It is the body of one modal (./guided-dialog.tsx), which brings the title
+ * and the close button.
  *
  * Three questions, each of which maps onto a real catalogue parameter:
  *
@@ -19,7 +21,7 @@
  * submitted shape is the same ShoppingIntent the parser produces.
  */
 import * as React from 'react';
-import { ArrowLeft, Check, Sparkles } from 'lucide-react';
+import { ArrowLeft, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SortKey } from '@/lib/storefront/types';
 import type { PriceBandOption, RootCategoryOption } from './types';
@@ -44,12 +46,10 @@ export function GuidedPicker({
   categories,
   priceBands,
   onSubmit,
-  onCancel,
 }: {
   categories: RootCategoryOption[];
   priceBands: PriceBandOption[];
   onSubmit: (selection: GuidedSelection) => void;
-  onCancel: () => void;
 }) {
   const [step, setStep] = React.useState(0);
   const [category, setCategory] = React.useState<RootCategoryOption | null>(null);
@@ -72,32 +72,9 @@ export function GuidedPicker({
   };
 
   return (
-    <div className="rounded-3xl border border-border bg-card p-6 text-left lg:p-8">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-2.5">
-          <span
-            aria-hidden
-            className="flex size-9 items-center justify-center rounded-full bg-highlight text-highlight-foreground"
-          >
-            <Sparkles className="size-4.5" />
-          </span>
-          <div>
-            <h3 className="text-base font-bold">Help me choose</h3>
-            <p className="text-xs text-muted-foreground">
-              Three questions, then real options from this store.
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={onCancel}
-          className="shrink-0 text-sm font-semibold underline underline-offset-4 hover:text-teal"
-        >
-          Close
-        </button>
-      </div>
-
+    <div className="text-left">
       {/* progress */}
-      <ol className="mt-6 flex items-center gap-2" aria-label="Progress">
+      <ol className="flex items-center gap-2" aria-label="Progress">
         {steps.map((label, i) => (
           <li key={label} className="flex flex-1 items-center gap-2">
             <span

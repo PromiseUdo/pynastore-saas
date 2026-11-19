@@ -17,7 +17,8 @@ import { Loader2, PackageSearch, SlidersHorizontal } from 'lucide-react';
 import type { Product } from '@/lib/storefront/types';
 import type { RecognisedConstraint } from '@/lib/ai/types';
 import { ProductCard, ProductCardSkeleton } from '@/components/storefront/product/product-card';
-import { AssistantLauncher } from '@/components/storefront/assistant/assistant-launcher';
+import { AssistantLauncher, ASK_ABOUT_PRODUCTS } from '@/components/storefront/assistant/assistant-launcher';
+import { cn } from '@/lib/utils';
 
 export interface DiscoveryResult {
   products: Product[];
@@ -30,10 +31,15 @@ export function DiscoveryResults({
   state,
   heading,
   onReset,
+  resetLabel = 'Clear',
+  className,
 }: {
   state: { status: 'idle' } | { status: 'loading' } | { status: 'error'; message: string } | { status: 'done'; result: DiscoveryResult };
   heading?: string;
   onReset: () => void;
+  /** the button that empties the results; the modal says "Start over" */
+  resetLabel?: string;
+  className?: string;
 }) {
   if (state.status === 'idle') return null;
 
@@ -41,7 +47,7 @@ export function DiscoveryResults({
     <section
       aria-live="polite"
       aria-busy={state.status === 'loading'}
-      className="mt-10 border-t border-border pt-8"
+      className={cn('mt-10 border-t border-border pt-8', className)}
     >
       {state.status === 'loading' && (
         <>
@@ -101,7 +107,7 @@ export function DiscoveryResults({
               onClick={onReset}
               className="shrink-0 text-sm font-semibold underline underline-offset-4 hover:text-teal"
             >
-              Clear
+              {resetLabel}
             </button>
           </div>
 
@@ -125,7 +131,7 @@ export function DiscoveryResults({
                   * so it never sends the shopper to a second empty page. */}
                 <AssistantLauncher
                   className="mt-4"
-                  label="Ask the assistant instead"
+                  label={`${ASK_ABOUT_PRODUCTS} instead`}
                   seed={{ surface: 'search', initialMessage: heading?.replace(/[“”]/g, '') }}
                 />
               </div>

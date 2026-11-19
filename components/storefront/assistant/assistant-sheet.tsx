@@ -42,12 +42,12 @@ export function AssistantSheet() {
         <SheetHeader className="pr-12">
           <SheetTitle className="flex items-center gap-2">
             <Sparkles aria-hidden className="size-4 text-teal" />
-            Shopping assistant
+            Instant product answers
           </SheetTitle>
           <SheetDescription>
             {seed.productName
-              ? `Answers about the ${seed.productName}, from its listing and reviews.`
-              : 'Answers from this store’s products, prices and reviews.'}
+              ? `Instant answers about the ${seed.productName}, from its listing and reviews.`
+              : 'Instant answers from this store’s products, prices and reviews.'}
           </SheetDescription>
         </SheetHeader>
 

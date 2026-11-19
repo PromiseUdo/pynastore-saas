@@ -33,7 +33,6 @@ import { recommendProducts } from '@/lib/storefront/recommendations/service';
 import type { HomepageSection, SectionType } from '@/lib/storefront/sections/schema';
 import type { Product, StoreScope } from '@/lib/storefront/types';
 import { HeroCarousel } from '@/components/storefront/marketing/hero-carousel';
-import { AssistantLauncher } from '@/components/storefront/assistant/assistant-launcher';
 import { DiscoveryStrip } from '@/components/storefront/discovery/discovery-strip';
 import { DiscoveryHero } from '@/components/storefront/discovery/discovery-hero';
 import { ShoppingMissions } from '@/components/storefront/discovery/shopping-missions';
@@ -96,15 +95,6 @@ function define<T extends SectionType, P>(_type: T, definition: SectionDefinitio
   return definition;
 }
 
-const bands = async (shared: Shared) =>
-  (await shared.priceBands()).map(({ id, label, minPrice, maxPrice, productCount }) => ({
-    id,
-    label,
-    minPrice,
-    maxPrice,
-    productCount,
-  }));
-
 /* ─── The registry ────────────────────────────────────────────────────── */
 
 const REGISTRY = {
@@ -112,29 +102,24 @@ const REGISTRY = {
    * The merchant's slides REPLACE the discovery hero rather than stacking
    * above it — two full-width openings is two answers to "what is this
    * shop". Nothing is lost: the header shows its search box straight away
-   * when slides are in use, the assistant becomes a floating button, and
-   * DiscoveryStrip carries the guided narrowing — and is what ANSWERS the
-   * mission and budget tiles, which publish to the discovery store.
+   * when slides are in use, the shopping helpers (ask, image search, help
+   * me choose) are in the corner button on every page, and DiscoveryStrip is
+   * what ANSWERS the mission and budget tiles, which publish to the
+   * discovery store.
    */
   hero: define('hero', {
     load: async (_section, { shared }) => {
-      const [look, categories, priceBands, examples] = await Promise.all([
-        shared.look(),
-        shared.rootCategories(),
-        bands(shared),
-        shared.examples(),
-      ]);
-      return { slides: look.hero, categories, priceBands, examples };
+      const [look, categories, examples] = await Promise.all([shared.look(), shared.rootCategories(), shared.examples()]);
+      return { slides: look.hero, canChoose: categories.length > 0, examples };
     },
-    render: ({ slides, categories, priceBands, examples }, section) =>
+    render: ({ slides, canChoose, examples }, section) =>
       slides.length > 0 ? (
         <>
           <HeroCarousel slides={slides} layout={section.variant} />
-          <DiscoveryStrip categories={categories} priceBands={priceBands} />
-          <AssistantLauncher seed={{ surface: 'home' }} label="Ask the assistant" variant="floating" />
+          <DiscoveryStrip />
         </>
       ) : (
-        <DiscoveryHero categories={categories} priceBands={priceBands} examples={examples} />
+        <DiscoveryHero examples={examples} canChoose={canChoose} />
       ),
   }),
 

@@ -13,7 +13,7 @@
  */
 import Link from 'next/link';
 import { SearchX } from 'lucide-react';
-import { AssistantLauncher } from '@/components/storefront/assistant/assistant-launcher';
+import { AssistantLauncher, ASK_ABOUT_PRODUCTS } from '@/components/storefront/assistant/assistant-launcher';
 import { categoryHref } from '@/lib/storefront/navigation';
 import type { EmptyStateOptions } from '@/lib/storefront/product-discovery';
 import type { Category } from '@/lib/storefront/types';
@@ -79,7 +79,7 @@ export function NoResults({
         <AssistantLauncher
           className="mt-4"
           variant="button"
-          label="Ask the shopping assistant"
+          label={ASK_ABOUT_PRODUCTS}
           seed={{ surface: 'search', searchQuery: query, initialMessage: query }}
         />
       </div>

@@ -1,62 +1,25 @@
 'use client';
 
 /*
- * The discovery tools, without the hero.
+ * What answers the homepage's shopping-mission and budget tiles when the
+ * merchant's own slides have taken the discovery hero's place.
  *
- * When a merchant uses their own front-page slides those replace
- * <DiscoveryHero>, and three things went with it: the search box (now always
- * in the header), "Ask the assistant" (a floating button, or a chip in this
- * row when "Message us" holds that corner), and this —
- * guided narrowing, plus the surface that ANSWERS the shopping-mission and
- * budget tiles further down the page.
+ * Those tiles publish a request to the discovery store and something on the
+ * page has to listen; without a listener, tapping one did nothing at all.
+ * This is that listener, and the results it shows — nothing else.
  *
- * That last part is not a nicety. Those tiles publish a request to the
- * discovery store and the hero was the only thing listening; without a
- * listener, tapping one did nothing at all.
- *
- * Deliberately slim. The merchant's slides are the opening statement here —
- * this is a single line of help underneath, not a second hero competing with
- * the first.
+ * It used to carry a row of "Help me choose", "Search by image" and the
+ * assistant too. Those now live in the helper button in the corner of every
+ * page (components/storefront/helper/shop-helper-dock.tsx), so a row here
+ * would only repeat it under the merchant's slides.
  */
 import * as React from 'react';
-import { Sparkles, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { useDiscoveryStore } from '@/lib/storefront/stores/discovery-store';
 import { useDiscoveryRun } from './use-discovery-run';
 import { DiscoveryResults } from './discovery-results';
-import { GuidedPicker, type GuidedSelection } from './guided-picker';
-import { ImageSearchLink } from '@/components/storefront/visual-search/image-search-link';
-import { AssistantLauncher } from '@/components/storefront/assistant/assistant-launcher';
-import { useChatConfig } from '@/components/storefront/chat/chat-config';
-import type { PriceBandOption, RootCategoryOption } from './types';
 
-export function DiscoveryStrip({
-  categories,
-  priceBands,
-}: {
-  categories: RootCategoryOption[];
-  priceBands: PriceBandOption[];
-}) {
-  const [guiding, setGuiding] = React.useState(false);
-  /* With chat on, "Message us" owns the floating corner, so the assistant
-   * sits in this row with the other ways in (see AssistantLauncher). */
-  const chatOn = useChatConfig() !== null;
+export function DiscoveryStrip() {
   const { state, heading, resultsRef, run, reset } = useDiscoveryRun();
-
-  const onGuided = (selection: GuidedSelection) => {
-    setGuiding(false);
-    void run(
-      {
-        // A guided pick is already structured, so no text is sent — there is
-        // nothing to parse and nothing to misread.
-        minPrice: selection.minPrice,
-        maxPrice: selection.maxPrice,
-        sort: selection.sort,
-        q: selection.categoryPath?.at(-1),
-      },
-      selection.summary || 'your picks',
-    );
-  };
 
   /*
    * Missions and budget bands are server-rendered and publish their query to
@@ -71,7 +34,6 @@ export function DiscoveryStrip({
   React.useEffect(() => {
     if (!pending) return;
     const { label, ...body } = pending;
-    setGuiding(false);
     void run(body, label);
     clearPending();
     // `pending` is intentionally omitted: `nonce` is the trigger, and
@@ -80,78 +42,7 @@ export function DiscoveryStrip({
   }, [nonce]);
 
   return (
-    <section className="sf-container pt-6">
-      {/*
-        * One row on every width. On a phone the prompt is dropped and the
-        * image-search label becomes its icon — the two actions then fit side
-        * by side instead of wrapping onto a second line, which read as two
-        * unrelated things rather than one offer of help.
-        */}
-      <div className="flex items-center gap-2">
-        <span className="mr-1 hidden text-sm text-muted-foreground sm:inline">
-          Not sure where to start?
-        </span>
-
-        <button
-          type="button"
-          onClick={() => setGuiding((open) => !open)}
-          aria-expanded={guiding}
-          className={cn(
-            'inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[var(--sf-radius-button,999px)] border px-4 text-sm font-semibold transition-colors sm:flex-none sm:px-5',
-            guiding
-              ? 'border-brand text-brand'
-              : 'border-border hover:border-brand hover:text-brand',
-          )}
-        >
-          {guiding ? (
-            <X aria-hidden className="size-4" />
-          ) : (
-            <Sparkles aria-hidden className="size-4" />
-          )}
-          {guiding ? 'Close' : 'Help me choose'}
-        </button>
-
-        {/* The fourth way in. It lives in the header's search box too, but a
-         * shopper who has just landed is looking down here.
-         *
-         * Two elements, one of which is always `display:none` — so the
-         * hidden one is not a second tab stop, and neither is read twice. */}
-        <ImageSearchLink className="hidden sm:inline-flex" />
-        <ImageSearchLink
-          variant="icon"
-          className="size-11 shrink-0 border border-border hover:border-brand sm:hidden"
-        />
-
-        {chatOn && (
-          <>
-            <AssistantLauncher
-              seed={{ surface: 'home' }}
-              label="Ask the assistant"
-              variant="chip"
-              className="hidden sm:inline-flex"
-            />
-            {/* A phone has no room for three labels in one row. */}
-            <AssistantLauncher
-              seed={{ surface: 'home' }}
-              label="Ask"
-              variant="chip"
-              className="shrink-0 sm:hidden"
-            />
-          </>
-        )}
-      </div>
-
-      {guiding && (
-        <div className="mt-5 max-w-3xl">
-          <GuidedPicker
-            categories={categories}
-            priceBands={priceBands}
-            onSubmit={onGuided}
-            onCancel={() => setGuiding(false)}
-          />
-        </div>
-      )}
-
+    <section className="sf-container">
       {/*
        * tabIndex -1 so focus can be moved here once results land. The ring is
        * cleared explicitly: globals.css applies `ring-2` to every

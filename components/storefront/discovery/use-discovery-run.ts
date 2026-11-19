@@ -32,7 +32,7 @@ export type DiscoveryState =
   | { status: 'error'; message: string }
   | { status: 'done'; result: DiscoveryResult };
 
-export function useDiscoveryRun() {
+export function useDiscoveryRun({ scroll = true }: { scroll?: boolean } = {}) {
   const { org } = useStorefront();
   const [state, setState] = React.useState<DiscoveryState>({ status: 'idle' });
   const [heading, setHeading] = React.useState<string | undefined>();
@@ -40,6 +40,8 @@ export function useDiscoveryRun() {
   const requestId = React.useRef(0);
 
   const scrollToResults = React.useCallback(() => {
+    // Inside the "Help me choose" modal the page behind stays where it is.
+    if (!scroll) return;
     const el = resultsRef.current;
     if (!el) return;
     const header = document.querySelector<HTMLElement>('[data-sf-header]');
@@ -48,7 +50,7 @@ export function useDiscoveryRun() {
     if (Math.abs(window.scrollY - top) < 4) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({ top: Math.max(0, top), behavior: reduced ? 'auto' : 'smooth' });
-  }, []);
+  }, [scroll]);
 
   const run = React.useCallback(
     async (body: Record<string, unknown>, label?: string) => {

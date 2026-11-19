@@ -31,6 +31,14 @@ import {
   type AssistantSeed,
 } from '@/lib/storefront/stores/assistant-store';
 
+/**
+ * What the assistant is called wherever a shopper meets it. "Ask the
+ * assistant" read as messaging a person at the shop; this says what it is —
+ * questions about the products, answered on the spot. The panel's own title
+ * and the helper button's note say "instant".
+ */
+export const ASK_ABOUT_PRODUCTS = 'Ask about products';
+
 export function AssistantLauncher({
   seed,
   label,
