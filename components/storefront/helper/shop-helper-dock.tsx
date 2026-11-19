@@ -14,7 +14,8 @@
  * helpers on the other side keeps the two kinds of help apart.
  *
  * Closed, it is a small card-coloured circle with the shop's accent on the
- * icon — present, not loud. Open, the three choices rise out of it, each with
+ * icon — present, not loud — and every few seconds a line in the shop's
+ * colour runs once around its edge, so it isn't missed. Open, the three choices rise out of it, each with
  * a line saying what it does. It closes on a tap outside, Escape (focus back
  * on the button), choosing something, or moving to another page.
  *
@@ -182,8 +183,9 @@ export function ShopHelperDock({
           title={open ? undefined : 'Shopping help'}
           onClick={() => setOpen((v) => !v)}
           className={cn(
-            'pointer-events-auto relative flex size-12 items-center justify-center rounded-full border shadow-lg shadow-foreground/15 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            open ? 'border-brand bg-brand text-primary-foreground' : 'bg-card text-brand hover:border-brand',
+            'pointer-events-auto relative flex size-12 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            // Closed, a line now and then runs once around it so it isn't missed (storefront.css).
+            open ? 'border-brand bg-brand text-primary-foreground' : 'sf-helper-ring bg-card text-brand hover:border-brand',
           )}
         >
           <Sparkles aria-hidden className={cn('size-5 transition-all duration-200', open ? 'rotate-90 scale-0 opacity-0' : 'rotate-0 scale-100')} />

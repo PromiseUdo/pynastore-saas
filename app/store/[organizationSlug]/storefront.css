@@ -388,6 +388,49 @@
   }
 }
 
+/* Now and then, a line runs once around the closed helpers' button so it
+ * isn't missed — then it rests for a few seconds. Drawn in `--brand`, which
+ * every look sets separately for light and dark, so it shows in both. The
+ * angle is animatable because it is a registered property; a ring is cut out
+ * of the sweep with a mask, so the button itself stays untouched. Nothing
+ * moves for anyone who asks for less motion. */
+@property --sf-ring-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.sf-helper-ring::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--sf-ring-angle),
+    transparent 0deg,
+    transparent 200deg,
+    color-mix(in oklab, var(--brand) 35%, transparent) 280deg,
+    var(--brand) 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+  opacity: 0;
+  animation: sf-helper-ring 7s ease-in-out 2s infinite;
+}
+@keyframes sf-helper-ring {
+  0% { --sf-ring-angle: 0deg; opacity: 0; }
+  3% { opacity: 1; }
+  22% { --sf-ring-angle: 360deg; opacity: 1; }
+  27%, 100% { --sf-ring-angle: 360deg; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sf-helper-ring::before {
+    animation: none;
+  }
+}
+
 /* ─── Campaign announcement bar ───────────────────────────────────────────
  *
  * A marquee for a notice a merchant wants scrolling.
