@@ -28,7 +28,7 @@ export function AssistantAnswer({
   /** send a suggestion / quick reply as the next message */
   onAsk: (message: string) => void;
 }) {
-  const { kind, message, products, reasons, comparison, suggestions, followUp, actions, total } =
+  const { kind, message, products, comparison, suggestions, followUp, actions, total } =
     response;
 
   return (
@@ -49,13 +49,10 @@ export function AssistantAnswer({
         * narrow phone so nothing is squeezed below a usable size. */}
       {products.length > 0 && kind !== 'comparison' && (
         <div className="grid grid-cols-2 gap-x-4 gap-y-6">
+          {/* No line under the card: the reason line repeated its price,
+            * rating, old price and stock, all of which the card shows. */}
           {products.map((product) => (
-            <div key={product.id}>
-              <ProductCard product={product} />
-              {reasons[product.id] && (
-                <p className="mt-1.5 text-xs text-muted-foreground">{reasons[product.id]}</p>
-              )}
-            </div>
+            <ProductCard key={product.id} product={product} />
           ))}
         </div>
       )}

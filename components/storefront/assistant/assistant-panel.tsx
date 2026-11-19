@@ -51,7 +51,10 @@ export function AssistantPanel() {
 
   /* Keep the newest turn in view as the conversation grows. */
   React.useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end', behavior: messages.length > 1 ? 'smooth' : 'auto' });
+    endRef.current?.scrollIntoView({
+      block: 'end',
+      behavior: messages.length > 1 ? 'smooth' : 'auto',
+    });
   }, [messages.length, status]);
 
   const onSubmit = (e: React.FormEvent) => {
@@ -79,14 +82,14 @@ export function AssistantPanel() {
             <span className="flex size-10 items-center justify-center rounded-full bg-teal-soft">
               <Sparkles aria-hidden className="size-5 text-teal" />
             </span>
-            <h3 className="mt-4 text-lg font-semibold">Shopping assistant</h3>
+            <h3 className="mt-4 text-lg font-semibold">Ask about our products</h3>
             <p className="mt-2 text-[0.9375rem] leading-relaxed text-muted-foreground">
               {openingLineFor(seed.surface, seed.productName)}
             </p>
-            <p className="mt-3 text-xs text-muted-foreground">
+            {/* <p className="mt-3 text-xs text-muted-foreground">
               Everything it tells you comes from {org.name}&rsquo;s own product listings — it
               won&rsquo;t make things up, and it will say when it doesn&rsquo;t know.
-            </p>
+            </p> */}
           </div>
         )}
 
@@ -102,7 +105,11 @@ export function AssistantPanel() {
               {message.text}
             </p>
           ) : message.response ? (
-            <AssistantAnswer key={message.id} response={message.response} onAsk={ask} />
+            <AssistantAnswer
+              key={message.id}
+              response={message.response}
+              onAsk={ask}
+            />
           ) : (
             <p key={message.id} className="text-[0.9375rem] leading-relaxed">
               {message.text}
@@ -129,12 +136,18 @@ export function AssistantPanel() {
       {/* ── quick prompts ───────────────────────────────────────────── */}
       {empty && (
         <div className="shrink-0 border-t px-5 py-3">
-          <p id="sf-assistant-prompts" className="text-xs font-medium text-muted-foreground">
+          <p
+            id="sf-assistant-prompts"
+            className="text-xs font-medium text-muted-foreground"
+          >
             Try one of these
           </p>
           {/* Wraps rather than scrolls: a hidden chip off the right edge is
-            * a chip nobody taps. */}
-          <ul aria-labelledby="sf-assistant-prompts" className="mt-2 flex flex-wrap gap-2">
+           * a chip nobody taps. */}
+          <ul
+            aria-labelledby="sf-assistant-prompts"
+            className="mt-2 flex flex-wrap gap-2"
+          >
             {prompts.map((prompt) => (
               <li key={prompt}>
                 <button

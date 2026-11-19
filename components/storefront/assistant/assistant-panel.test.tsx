@@ -86,12 +86,10 @@ afterEach(() => {
 });
 
 describe('empty state', () => {
-  it('explains what the assistant is for and what it will not do', () => {
+  it('says what the assistant is for', () => {
     renderPanel({ surface: 'home' });
 
-    expect(screen.getByRole('heading', { name: /shopping assistant/i })).toBeTruthy();
-    // The grounding promise is made to the shopper, not just in the code.
-    expect(screen.getByText(/won’t make things up/i)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /ask about our products/i })).toBeTruthy();
   });
 
   it('offers the surface’s quick prompts, each keyboard operable', () => {

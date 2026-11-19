@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { StorefrontProvider } from '@/lib/storefront/context';
 import { useAssistantStore } from '@/lib/storefront/stores/assistant-store';
 import { useGuidedStore } from '@/lib/storefront/stores/guided-store';
-import { ShopHelperDock, seedForPath } from './shop-helper-dock';
+import { ShopHelperDock, askShopAiLabel, seedForPath } from './shop-helper-dock';
 
 const pathname = vi.hoisted(() => ({ value: '/' }));
 vi.mock('next/navigation', () => ({
@@ -40,7 +40,7 @@ describe('ShopHelperDock', () => {
 
     fireEvent.click(toggle());
     expect(toggle().getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByRole('button', { name: /Ask about products/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Ask Aura AI/ })).toBeTruthy();
     expect(screen.getByText('Instant answers about what we sell')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Search by image/ }).getAttribute('href')).toBe('/search/image');
     expect(screen.getByRole('button', { name: /Help me choose/ })).toBeTruthy();
@@ -99,14 +99,14 @@ describe('ShopHelperDock', () => {
     useAssistantStore.setState({ openPanel });
     wrap();
     fireEvent.click(toggle());
-    fireEvent.click(screen.getByRole('button', { name: /Ask about products/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Ask Aura AI/ }));
     expect(openPanel).toHaveBeenCalledWith({ surface: 'product', productSlug: 'oud-noir' }, 'aura');
   });
 
   it('offers only "Help me choose" when the plan has no AI shopping, and nothing with nothing to offer', () => {
     wrap(false);
     fireEvent.click(toggle());
-    expect(screen.queryByRole('button', { name: /Ask about products/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Ask Aura AI/ })).toBeNull();
     expect(screen.queryByRole('link', { name: /Search by image/ })).toBeNull();
     expect(screen.getByRole('button', { name: /Help me choose/ })).toBeTruthy();
     cleanup();
@@ -124,5 +124,13 @@ describe('seedForPath', () => {
     expect(seedForPath('/search', '?q=vanilla')).toEqual({ surface: 'search', searchQuery: 'vanilla' });
     expect(seedForPath('/cart')).toEqual({ surface: 'cart' });
     expect(seedForPath('/search/image')).toEqual({ surface: 'home' });
+  });
+});
+
+describe('askShopAiLabel', () => {
+  it('names the shop, or says "our" when the name is too long for the row', () => {
+    expect(askShopAiLabel('AurafumeNG')).toBe('Ask AurafumeNG AI');
+    expect(askShopAiLabel('The Very Long Perfume House of Lagos')).toBe('Ask our AI');
+    expect(askShopAiLabel('  ')).toBe('Ask our AI');
   });
 });

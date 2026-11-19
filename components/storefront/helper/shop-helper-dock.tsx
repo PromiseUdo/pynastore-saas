@@ -4,7 +4,7 @@
  * The shopping helpers, always within reach: one quiet round button in the
  * bottom-left corner of every shop page (not checkout) that opens into
  *
- *   • Ask about products — instant, automatic answers from the catalogue
+ *   • Ask {shop} AI      — instant, automatic answers from the catalogue
  *     (the assistant sheet), seeded with the page the shopper is on;
  *   • Search by image    — the /search/image page;
  *   • Help me choose     — three questions, in a modal (guided-dialog.tsx).
@@ -32,7 +32,6 @@ import { useAiShopping, useStorefront } from '@/lib/storefront/context';
 import { useAssistantStore, type AssistantSeed } from '@/lib/storefront/stores/assistant-store';
 import { useGuidedStore } from '@/lib/storefront/stores/guided-store';
 import { VISUAL_SEARCH_PATH } from '@/lib/storefront/visual-search/query';
-import { ASK_ABOUT_PRODUCTS } from '@/components/storefront/assistant/assistant-launcher';
 import { GuidedDialog } from '@/components/storefront/discovery/guided-dialog';
 import type { PriceBandOption, RootCategoryOption } from '@/components/storefront/discovery/types';
 
@@ -50,6 +49,17 @@ export function seedForPath(pathname: string, search = ''): AssistantSeed {
   }
   if (path === '/cart') return { surface: 'cart' };
   return { surface: 'home' };
+}
+
+/**
+ * "Ask {shop} AI" — the same name as the panel it opens, so the shopper knows
+ * they opened the right thing, and "AI" so nobody expects a person. A very
+ * long name would be cut off mid-word in the row, so it becomes "Ask our AI".
+ */
+export const SHOP_AI_NAME_MAX = 18;
+export function askShopAiLabel(shopName: string): string {
+  const name = shopName.trim();
+  return name && name.length <= SHOP_AI_NAME_MAX ? `Ask ${name} AI` : 'Ask our AI';
 }
 
 interface Helper {
@@ -104,7 +114,7 @@ export function ShopHelperDock({
     helpers.push({
       key: 'ask',
       icon: MessagesSquare,
-      title: ASK_ABOUT_PRODUCTS,
+      title: askShopAiLabel(org.name),
       note: 'Instant answers about what we sell',
       onSelect: () => openAssistant(seedForPath(pathname, window.location.search), org.slug),
     });
@@ -179,7 +189,7 @@ export function ShopHelperDock({
           type="button"
           aria-expanded={open}
           aria-controls={listId}
-          aria-label={open ? 'Close shopping help' : 'Shopping help: ask about products, search by image, help me choose'}
+          aria-label={open ? 'Close shopping help' : `Shopping help: ${helpers.map((h) => h.title.toLowerCase()).join(', ')}`}
           title={open ? undefined : 'Shopping help'}
           onClick={() => setOpen((v) => !v)}
           className={cn(

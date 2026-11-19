@@ -22,9 +22,11 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { useAssistantStore } from '@/lib/storefront/stores/assistant-store';
+import { useStorefront } from '@/lib/storefront/context';
 import { AssistantPanel } from './assistant-panel';
 
 export function AssistantSheet() {
+  const { org } = useStorefront();
   const open = useAssistantStore((s) => s.open);
   const seed = useAssistantStore((s) => s.seed);
   const close = useAssistantStore((s) => s.closePanel);
@@ -40,9 +42,11 @@ export function AssistantSheet() {
         className="safe-top w-full p-0 sm:max-w-lg"
       >
         <SheetHeader className="pr-12">
-          <SheetTitle className="flex items-center gap-2">
-            <Sparkles aria-hidden className="size-4 text-teal" />
-            Instant product answers
+          {/* "Ask {shop} AI": the shop's own name on it, and "AI" so nobody
+            * takes it for a person at the shop (that's Messages). */}
+          <SheetTitle className="flex min-w-0 items-center gap-2">
+            <Sparkles aria-hidden className="size-4 shrink-0 text-teal" />
+            <span className="truncate">Ask {org.name} AI</span>
           </SheetTitle>
           <SheetDescription>
             {seed.productName
