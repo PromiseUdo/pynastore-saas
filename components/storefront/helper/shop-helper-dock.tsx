@@ -33,6 +33,9 @@ import { useAssistantStore, type AssistantSeed } from '@/lib/storefront/stores/a
 import { useGuidedStore } from '@/lib/storefront/stores/guided-store';
 import { VISUAL_SEARCH_PATH } from '@/lib/storefront/visual-search/query';
 import { GuidedDialog } from '@/components/storefront/discovery/guided-dialog';
+import { askShopAiLabel } from '@/components/storefront/assistant/assistant-launcher';
+
+export { askShopAiLabel };
 import type { PriceBandOption, RootCategoryOption } from '@/components/storefront/discovery/types';
 
 /** What the assistant is told about where it was opened, from the address alone. */
@@ -49,17 +52,6 @@ export function seedForPath(pathname: string, search = ''): AssistantSeed {
   }
   if (path === '/cart') return { surface: 'cart' };
   return { surface: 'home' };
-}
-
-/**
- * "Ask {shop} AI" — the same name as the panel it opens, so the shopper knows
- * they opened the right thing, and "AI" so nobody expects a person. A very
- * long name would be cut off mid-word in the row, so it becomes "Ask our AI".
- */
-export const SHOP_AI_NAME_MAX = 18;
-export function askShopAiLabel(shopName: string): string {
-  const name = shopName.trim();
-  return name && name.length <= SHOP_AI_NAME_MAX ? `Ask ${name} AI` : 'Ask our AI';
 }
 
 interface Helper {

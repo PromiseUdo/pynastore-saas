@@ -14,22 +14,23 @@
  * WHAT IS ON THIS PAGE was asked by a customer of this store and answered by
  * the merchant (lib/storefront/questions/). Nothing here is generated, and a
  * question the merchant hasn't answered is not shown — an unanswered
- * objection under a product helps nobody. A store with no answered question
- * yet shows the form and says so.
+ * objection under a product helps nobody.
  *
- * Two ways to ask, side by side: the assistant (`ask`), which answers
- * straight away from this product's own listing, reviews and the store's
- * policies, and the form, which reaches a human and whose answer lands on
- * this page for the next shopper. A guest is invited to sign in for the
- * second — asking needs an account so the merchant knows who they are
- * answering.
+ * There is no "Ask a question" form any more (removed 2026-11-19). It came
+ * before Messages, and a shopper now has two better ways to ask, both in
+ * `ask`: the shop's AI, which answers at once from the product's listing,
+ * reviews and the store's policies, and a private message to the store team
+ * (ROADMAP 17.3). Questions already answered stay here — they are the
+ * merchant's own words and still help the next shopper — and anything still
+ * waiting can be answered from Customers → Questions as before.
+ *
+ * With no answered questions, the section is just the offer to ask, and with
+ * neither the AI nor Messages on the shop's plan it isn't shown at all.
  */
 import type * as React from 'react';
-import Link from 'next/link';
 import { MessagesSquare, Sparkles } from 'lucide-react';
 import { relativeTime } from '@/lib/storefront/format';
-import { QuestionForm } from './question-form';
-import type { PendingQuestion } from '@/lib/storefront/questions/read';
+import { cn } from '@/lib/utils';
 import type { Product, ProductQuestion } from '@/lib/storefront/types';
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -38,58 +39,34 @@ const SOURCE_LABEL: Record<string, string> = {
   assistant: 'Store assistant',
 };
 
-export interface QuestionViewer {
-  /** the viewer's own questions the store hasn't answered yet */
-  pending: PendingQuestion[];
-  /** false for a guest — they're invited to sign in rather than shown a form */
-  signedIn: boolean;
-}
-
 export function ProductQuestions({
   product,
   questions,
-  viewer,
   ask,
 }: {
   product: Product;
   questions: ProductQuestion[];
-  viewer: QuestionViewer;
-  /** the assistant launcher, offered beside the form */
+  /** the ways to ask now: the shop's AI and, when the shop takes them, a message */
   ask?: React.ReactNode;
 }) {
   const productName = product.name;
 
   return (
-    <section id="questions" aria-labelledby="questions-heading" className="scroll-mt-24">
+    <section
+      id="questions"
+      aria-labelledby="questions-heading"
+      className="scroll-mt-24"
+    >
       <h2 id="questions-heading" className="flex items-start gap-2 font-display text-xl sm:text-2xl">
         <MessagesSquare aria-hidden className="mt-1 size-5 shrink-0 text-teal" />
-        Questions about {productName}
+        {questions.length > 0 ? `Questions about ${productName}` : `Have a question about ${productName}?`}
       </h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        {questions.length > 0
-          ? `Asked by customers, answered by the store team. ${questions.length} ${
-              questions.length === 1 ? 'question' : 'questions'
-            } so far.`
-          : 'No questions answered on this product yet — yours would be the first.'}
-      </p>
-
-      <div className="mt-4 max-w-xl space-y-3">
-        {viewer.signedIn ? (
-          <QuestionForm productId={product.id} productName={productName} pending={viewer.pending} />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Want to ask the store team something?{' '}
-            <Link
-              href={`/account/sign-in?next=${encodeURIComponent(`/products/${product.slug}`)}`}
-              className="font-semibold text-foreground underline underline-offset-2"
-            >
-              Sign in
-            </Link>{' '}
-            to ask — they answer here, on this page.
-          </p>
-        )}
-        {ask}
-      </div>
+      {questions.length > 0 && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Asked by customers, answered by the store team. {questions.length}{' '}
+          {questions.length === 1 ? 'question' : 'questions'} so far.
+        </p>
+      )}
 
       {questions.length > 0 && (
         <ul className="mt-6 divide-y rounded-2xl border">
@@ -135,6 +112,14 @@ export function ProductQuestions({
           ))}
         </ul>
       )}
+
+      {/* Hidden when neither way to ask is on the shop's plan (both render nothing). */}
+      <div className={cn('has-[[data-ask]:empty]:hidden', questions.length > 0 ? 'mt-6' : 'mt-4')}>
+        {questions.length > 0 && <p className="mb-3 text-sm font-semibold">Still have a question?</p>}
+        <div data-ask className="flex flex-wrap items-center gap-3">
+          {ask}
+        </div>
+      </div>
     </section>
   );
 }

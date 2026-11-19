@@ -5530,7 +5530,10 @@ in this phase. The shopping assistant (Gemini) stays a separate thing.
 - **Admin page is "Messages"**, top level in the sidebar's Business group next
   to Social, with an unread count. Not "Inbox", so it can't be mistaken for
   Sales → Questions. Storefront wording: "Message the store" (chat) next to
-  "Ask a question" (public).
+  "Ask a question" (public). **2026-11-19:** the public "Ask a question" form
+  was retired: Messages and the shop's AI ("Ask {shop} AI") cover asking.
+  Answered questions still show on the product page, and Sales → Questions
+  keeps the ones already asked.
 - **Where the chat button lives:**
   - **Desktop (`lg` and up):** a floating "Message us" button in the
     `.sf-assistant-fab` slot. When chat is on, the homepage assistant drops to

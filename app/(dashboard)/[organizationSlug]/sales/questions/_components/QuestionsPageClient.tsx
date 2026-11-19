@@ -162,7 +162,7 @@ export function QuestionsPageClient({
     <>
       <PageHeader
         title="Questions"
-        description="What shoppers asked about your products. A question only appears on your store once you answer it."
+        description="Questions shoppers asked about your products. New questions now come to you in Messages; the ones here appear on your store once you answer them."
       />
 
       {summary.total > 0 && (
@@ -234,7 +234,7 @@ export function QuestionsPageClient({
             <EmptyState
               icon={MessagesSquare}
               title="No questions yet"
-              description="Signed-in shoppers can ask about a product from its page on your store. Anything they ask lands here for you to answer."
+              description="Shoppers now ask through Messages, or get an instant answer from your shop's AI. Questions asked before that change show up here for you to answer."
               action={
                 <Button size="sm" variant="outline" asChild>
                   <Link href="../../inventory/products">Go to products</Link>

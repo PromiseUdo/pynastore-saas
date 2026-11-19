@@ -331,8 +331,6 @@ describe('questions and delivery', () => {
     // Nobody is signed in in a test, so there is no form and no vote.
     expect(page!.reviews.signedIn).toBe(false);
     expect(page!.questions.items).toEqual([]);
-    expect(page!.questions.pending).toEqual([]);
-    expect(page!.questions.signedIn).toBe(false);
     expect(page!.reviews.viewer.canReview).toBe(false);
     expect(page!.reviews.votedIds).toEqual([]);
   });

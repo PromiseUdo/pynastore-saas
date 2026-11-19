@@ -179,24 +179,28 @@ export default async function ProductDetailPage({ params }: Props) {
         />
       </div>
 
-      <div className="mt-10 border-t pt-8 lg:mt-14 lg:pt-10">
+      {/* With no answered questions and neither way to ask on the shop's
+        * plan, the whole block (rule included) goes. */}
+      <div
+        className={
+          'mt-10 border-t pt-8 lg:mt-14 lg:pt-10' + (questions.items.length === 0 ? ' has-[[data-ask]:empty]:hidden' : '')
+        }
+      >
         <ProductQuestions
           product={product}
           questions={questions.items}
-          viewer={{ pending: questions.pending, signedIn: questions.signedIn }}
-          /* Three ways to ask: the form reaches the store team and its answer
-            * is published here; the assistant answers now from this
-            * product's own listing, reviews and the store's policies; and a
-            * private message reaches the store without being published
-            * (ROADMAP 17.3 — shown only when the shop takes messages). */
+          /* Two ways to ask, both answered now or privately: the shop's AI,
+            * from this product's own listing, reviews and the store's
+            * policies; and a message to the store team (ROADMAP 17.3 — shown
+            * only when the shop takes messages). The public "Ask a question"
+            * form was retired 2026-11-19 (see product-questions.tsx). */
           ask={
-            <div className="flex flex-wrap items-center gap-3">
+            <>
               <AssistantLauncher
-                label="Or get an instant answer now"
                 seed={{ surface: 'product', productSlug: product.slug, productName: product.name }}
               />
               <ChatLauncher variant="button" product={{ id: product.id, name: product.name }} />
-            </div>
+            </>
           }
         />
       </div>

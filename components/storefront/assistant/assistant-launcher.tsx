@@ -39,6 +39,17 @@ import {
  */
 export const ASK_ABOUT_PRODUCTS = 'Ask about products';
 
+/**
+ * "Ask {shop} AI" — the same name as the panel it opens, so the shopper knows
+ * they opened the right thing, and "AI" so nobody expects a person. A very
+ * long name would be cut off mid-word in the row, so it becomes "Ask our AI".
+ */
+export const SHOP_AI_NAME_MAX = 18;
+export function askShopAiLabel(shopName: string): string {
+  const name = shopName.trim();
+  return name && name.length <= SHOP_AI_NAME_MAX ? `Ask ${name} AI` : 'Ask our AI';
+}
+
 export function AssistantLauncher({
   seed,
   label,
@@ -46,7 +57,8 @@ export function AssistantLauncher({
   className,
 }: {
   seed: AssistantSeed;
-  label: string;
+  /** defaults to "Ask {shop} AI" */
+  label?: string;
   variant?: 'chip' | 'button' | 'link' | 'floating';
   className?: string;
 }) {
@@ -87,7 +99,7 @@ export function AssistantLauncher({
         aria-hidden
         className={cn('size-4', variant !== 'button' && 'text-teal')}
       />
-      {label}
+      {label ?? askShopAiLabel(org.name)}
     </button>
   );
 }
