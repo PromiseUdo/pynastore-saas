@@ -58,7 +58,7 @@ export function buildRows(products: Product[]): Row[] {
     'Price',
     products.map(priceText),
     (p) => (
-      <span className="flex flex-wrap items-baseline gap-x-2">
+      <span data-price className="flex flex-wrap items-baseline gap-x-2">
         <span className="font-semibold text-price">{priceText(p)}</span>
         {p.compareAtPrice != null && p.compareAtPrice > p.priceFrom && (
           <span className="text-xs text-muted-foreground line-through">{formatMoney(p.compareAtPrice, p.currency)}</span>
@@ -219,13 +219,24 @@ export function CompareSimilar({ product, candidates }: { product: Product; cand
                 onView={() => setOpen(false)}
               />
             ) : (
-            <table className="w-full border-separate border-spacing-0 text-sm">
+            <table
+              // Fixed layout: every product column the same width (and every
+              // photo the same size), whatever the names and values in it.
+              className="w-full table-fixed border-separate border-spacing-0 text-sm"
+              style={{ minWidth: `calc(9rem + ${compared.length} * 13rem)` }}
+            >
               <caption className="sr-only">
                 {compared.map((p) => p.name).join(' compared with ')}
               </caption>
+              <colgroup>
+                <col className="w-28 sm:w-36" />
+                {compared.map((p) => (
+                  <col key={p.id} />
+                ))}
+              </colgroup>
               <thead>
                 <tr>
-                  <td className="sticky left-0 z-10 w-28 min-w-28 bg-card px-4 py-4 align-bottom sm:w-36 sm:min-w-36 sm:px-6">
+                  <td className="sticky left-0 z-10 bg-card px-4 py-4 align-bottom sm:px-6">
                     {compared.length > 1 && (
                       <label className="flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
                         <input
@@ -239,8 +250,9 @@ export function CompareSimilar({ product, candidates }: { product: Product; cand
                     )}
                   </td>
                   {compared.map((p, i) => (
-                    <th key={p.id} scope="col" className="min-w-40 px-3 py-4 text-left align-top font-normal sm:min-w-52">
-                      <div className="relative">
+                    <th key={p.id} scope="col" className="px-3 py-4 text-left align-top font-normal">
+                      {/* One photo size for every column, however wide the columns are. */}
+                      <div className="relative w-full max-w-56">
                         <div className="relative aspect-square overflow-hidden rounded-2xl bg-tile">
                           <ProductImage src={p.images[0]?.url} alt="" name={p.name} fill sizes="(min-width: 640px) 200px, 160px" className="object-cover" />
                         </div>
@@ -377,9 +389,11 @@ function PhoneComparison({
           <div key={row.label} className={cn('grid gap-3 border-t py-4', cols)}>
             {row.cells.map((cell, i) => (
               // Label first for screen readers (dt before dd); shown under the value.
-              <div key={compared[i].id} className="flex min-w-0 flex-col-reverse text-center text-sm">
+              // `justify-end` because the column is reversed: it keeps a shorter
+              // value (two highlights beside six) at the TOP of the row.
+              <div key={compared[i].id} className="flex min-w-0 flex-col-reverse justify-end text-center text-sm">
                 <dt className="mt-1 text-xs text-muted-foreground">{row.label}</dt>
-                <dd className="break-words [&_ul]:text-left">{cell}</dd>
+                <dd className="break-words [&_ul]:text-left [&>[data-price]]:justify-center">{cell}</dd>
               </div>
             ))}
           </div>

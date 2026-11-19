@@ -91,7 +91,9 @@ export function ProductGallery({
     <div className="lg:flex lg:gap-4">
       {/* ── thumbnails (pointer devices) ───────────────────────────── */}
       <div
-        className="sf-thin-scrollbar hidden lg:flex lg:max-h-[34rem] lg:w-20 lg:shrink-0 lg:flex-col lg:gap-3 lg:overflow-y-auto"
+        // p-1: the scrolling column clips what's drawn outside it, and the
+        // selected thumbnail's ring (2px, with a 2px gap) sits just outside.
+        className="sf-thin-scrollbar hidden lg:flex lg:max-h-[34rem] lg:w-[5.5rem] lg:shrink-0 lg:flex-col lg:gap-3 lg:overflow-y-auto lg:-ml-1 lg:-mt-1 lg:p-1"
         role="tablist"
         aria-label={`${productName} images`}
       >
