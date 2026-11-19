@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import * as React from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { PRODUCTS } from '@/lib/storefront/mock/products';
 import type { Product } from '@/lib/storefront/types';
@@ -63,5 +63,34 @@ describe('CompareSimilar', () => {
   it('only shows a brand row when one of them has a brand', () => {
     expect(buildRows([{ ...VIEWING, brandName: '' }, { ...B, brandName: ' ' }]).map((r) => r.label)).not.toContain('Brand');
     expect(buildRows([{ ...VIEWING, brandName: 'Aurafume' }, B]).map((r) => r.label)).toContain('Brand');
+  });
+});
+
+describe('CompareSimilar on a phone', () => {
+  const phone = () =>
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('max-width: 639.98px'),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('compares two side by side, each value above its label, and a tap swaps the other', () => {
+    phone();
+    render(<CompareSimilar product={VIEWING} candidates={[B, C, D]} />);
+    const dialog = openIt();
+    expect(within(dialog).queryByRole('table')).toBeNull();
+    expect(dialog.textContent).toContain('Choose one to put beside');
+
+    const size = within(dialog).getAllByText('Size');
+    expect(size).toHaveLength(2); // one label under each value
+    expect(size[0].parentElement!.textContent).toBe('Size50ml');
+
+    // Scent b is in; tapping Scent d swaps it in instead of being blocked.
+    const choice = (name: string) => within(dialog).getByRole('button', { name: new RegExp(`^${name}`) });
+    expect(choice('Scent d').hasAttribute('disabled')).toBe(false);
+    fireEvent.click(choice('Scent d'));
+    expect(choice('Scent d').getAttribute('aria-pressed')).toBe('true');
+    expect(choice('Scent b').getAttribute('aria-pressed')).toBe('false');
   });
 });

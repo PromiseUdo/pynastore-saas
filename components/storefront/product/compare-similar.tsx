@@ -11,6 +11,11 @@
  * doesn't list something shows "—" rather than a guess. Nothing here is
  * generated.
  *
+ * On a phone it is two columns — this product and one other — with each
+ * value above its label, the way Apple lays out its comparisons; a third
+ * column and a column of labels leave no room for the values. Tapping
+ * another product there swaps it in.
+ *
  * Two are picked to start with, so the table is useful the moment it opens;
  * the shopper swaps them from the row of choices at the top. "Only show
  * differences" hides the rows where every product says the same thing — the
@@ -120,16 +125,26 @@ export function CompareSimilar({ product, candidates }: { product: Product; cand
   const [open, setOpen] = React.useState(false);
   const [picked, setPicked] = React.useState<string[]>(() => options.slice(0, MAX_COMPARED).map((c) => c.id));
   const [onlyDifferences, setOnlyDifferences] = React.useState(false);
+  const phone = usePhone();
 
   if (options.length === 0) return null;
 
-  const compared = [product, ...picked.map((id) => options.find((c) => c.id === id)).filter((c): c is Product => !!c)];
+  // A phone has room for this product and one other.
+  const max = phone ? 1 : MAX_COMPARED;
+  const active = picked.slice(0, max);
+  const compared = [product, ...active.map((id) => options.find((c) => c.id === id)).filter((c): c is Product => !!c)];
   const rows = buildRows(compared);
   const shown = onlyDifferences && compared.length > 1 ? rows.filter((r) => new Set(r.keys).size > 1) : rows;
-  const full = picked.length >= MAX_COMPARED;
+  const full = active.length >= max;
 
   const toggle = (id: string) =>
-    setPicked((current) => (current.includes(id) ? current.filter((x) => x !== id) : current.length >= MAX_COMPARED ? current : [...current, id]));
+    setPicked((current) => {
+      const now = current.slice(0, max);
+      if (now.includes(id)) return now.filter((x) => x !== id);
+      if (now.length < max) return [...now, id];
+      // One slot (a phone): the new choice takes it.
+      return max === 1 ? [id] : now;
+    });
 
   return (
     <>
@@ -147,14 +162,18 @@ export function CompareSimilar({ product, candidates }: { product: Product; cand
           <div className="border-b px-5 py-4 pr-12 sm:px-6">
             <DialogTitle className="font-display text-lg font-bold">Compare similar products</DialogTitle>
             <DialogDescription className="mt-0.5 text-xs">
-              Choose up to {MAX_COMPARED} to put beside {product.name}.
+              {max === 1 ? 'Choose one' : `Choose up to ${max}`} to put beside {product.name}.
             </DialogDescription>
 
             {/* the choices */}
-            <ul className="sf-thin-scrollbar -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1" aria-label="Products to compare">
+            <ul
+              className="sf-thin-scrollbar -mx-5 mt-3 flex gap-2 overflow-x-auto px-5 pb-1 sm:-mx-6 sm:px-6"
+              aria-label="Products to compare"
+            >
               {options.map((c) => {
-                const on = picked.includes(c.id);
-                const blocked = !on && full;
+                const on = active.includes(c.id);
+                // With one slot a tap swaps, so nothing is ever blocked.
+                const blocked = !on && full && max > 1;
                 return (
                   <li key={c.id} className="shrink-0">
                     <button
@@ -164,7 +183,7 @@ export function CompareSimilar({ product, candidates }: { product: Product; cand
                       title={blocked ? `Remove one to add another — up to ${MAX_COMPARED} at a time` : undefined}
                       onClick={() => toggle(c.id)}
                       className={cn(
-                        'flex w-52 items-center gap-2 rounded-2xl border p-1.5 pr-3 text-left text-xs transition-colors',
+                        'flex w-48 items-center sm:w-52 gap-2 rounded-2xl border p-1.5 pr-3 text-left text-xs transition-colors',
                         on ? 'border-brand bg-brand/5' : 'bg-card hover:border-brand',
                         blocked && 'cursor-not-allowed opacity-50 hover:border-border',
                       )}
@@ -190,6 +209,16 @@ export function CompareSimilar({ product, candidates }: { product: Product; cand
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
+            {phone ? (
+              <PhoneComparison
+                compared={compared}
+                rows={shown}
+                onlyDifferences={onlyDifferences}
+                setOnlyDifferences={setOnlyDifferences}
+                onRemove={toggle}
+                onView={() => setOpen(false)}
+              />
+            ) : (
             <table className="w-full border-separate border-spacing-0 text-sm">
               <caption className="sr-only">
                 {compared.map((p) => p.name).join(' compared with ')}
@@ -269,6 +298,7 @@ export function CompareSimilar({ product, candidates }: { product: Product; cand
                 )}
               </tbody>
             </table>
+            )}
             {compared.length === 1 && (
               <p className="px-6 pb-6 text-sm text-muted-foreground">Choose a product above to compare it with this one.</p>
             )}
@@ -277,4 +307,103 @@ export function CompareSimilar({ product, candidates }: { product: Product; cand
       </DialogRoot>
     </>
   );
+}
+
+/** Below `sm`: two columns, each value above its label (see the note at the top). */
+function PhoneComparison({
+  compared,
+  rows,
+  onlyDifferences,
+  setOnlyDifferences,
+  onRemove,
+  onView,
+}: {
+  compared: Product[];
+  rows: Row[];
+  onlyDifferences: boolean;
+  setOnlyDifferences: (value: boolean) => void;
+  onRemove: (id: string) => void;
+  onView: () => void;
+}) {
+  const cols = compared.length > 1 ? 'grid-cols-2' : 'grid-cols-1';
+  return (
+    <div className="px-4 pb-6">
+      <div className={cn('grid gap-3 pt-4', cols)}>
+        {compared.map((p, i) => (
+          <div key={p.id} className="min-w-0 text-center">
+            <div className="relative">
+              <div className="relative mx-auto aspect-square overflow-hidden rounded-2xl bg-tile">
+                <ProductImage src={p.images[0]?.url} alt="" name={p.name} fill sizes="45vw" className="object-cover" />
+              </div>
+              {i === 0 ? (
+                <span className="absolute left-2 top-2 rounded-full bg-background/90 px-2 py-0.5 text-[0.6875rem] font-semibold">
+                  Viewing
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onRemove(p.id)}
+                  aria-label={`Remove ${p.name} from the comparison`}
+                  className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-background/90"
+                >
+                  <X aria-hidden className="size-4" />
+                </button>
+              )}
+            </div>
+            <p className="mt-2 line-clamp-2 text-sm font-semibold leading-snug">{p.name}</p>
+            {i > 0 && (
+              <Link href={`/products/${p.slug}`} onClick={onView} className="mt-0.5 inline-block text-xs font-semibold text-brand">
+                View product
+              </Link>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {compared.length > 1 && (
+        <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={onlyDifferences}
+            onChange={(e) => setOnlyDifferences(e.target.checked)}
+            className="size-4 accent-[var(--brand)]"
+          />
+          Only show differences
+        </label>
+      )}
+
+      <dl className="mt-2">
+        {rows.map((row) => (
+          <div key={row.label} className={cn('grid gap-3 border-t py-4', cols)}>
+            {row.cells.map((cell, i) => (
+              // Label first for screen readers (dt before dd); shown under the value.
+              <div key={compared[i].id} className="flex min-w-0 flex-col-reverse text-center text-sm">
+                <dt className="mt-1 text-xs text-muted-foreground">{row.label}</dt>
+                <dd className="break-words [&_ul]:text-left">{cell}</dd>
+              </div>
+            ))}
+          </div>
+        ))}
+        {rows.length === 0 && (
+          <p className="border-t py-6 text-center text-sm text-muted-foreground">
+            These products don’t differ in anything their listings say.
+          </p>
+        )}
+      </dl>
+    </div>
+  );
+}
+
+/** True below `sm` (640px). False until mounted, and where there's no matchMedia. */
+function usePhone(): boolean {
+  const [phone, setPhone] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(max-width: 639.98px)');
+    const update = () => setPhone(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return phone;
 }
