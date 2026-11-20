@@ -45,6 +45,7 @@ import {
 } from '@/lib/storefront/checkout/payment-terms';
 import { FieldError } from '@/components/ui/form-field';
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group';
+import { OnlinePaymentLogos } from '@/components/storefront/payment/payment-badges';
 
 /* Icons are decoration on top of the label, never the only signal. */
 const ICONS: Record<string, typeof CreditCard> = {
@@ -115,6 +116,8 @@ export function PaymentStep({
                   <span className="mt-0.5 block text-sm text-muted-foreground">
                     {allowed ? method.description : 'Not available for this order'}
                   </span>
+                  {/* Who takes the payment and the cards they accept — online only. */}
+                  {method.provider === 'paystack' && allowed && <OnlinePaymentLogos className="mt-2" />}
                   {!allowed && (
                     <span className="mt-2 flex items-start gap-2 text-sm text-foreground">
                       <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { deliveryHeadline, deliverySummary, paymentHeadline } from './store-claims';
+import { deliveryHeadline, deliverySummary } from './store-claims';
 import type { DeliveryPromise } from './types';
-import type { PaymentMethodOption } from './checkout/types';
 
 const option = (
   label: string,
@@ -16,16 +15,6 @@ const option = (
   kind,
   nationwide: label.startsWith('Delivery across Nigeria'),
   ...over,
-});
-
-const method = (id: string, label: string, provider: 'paystack' | 'manual', enabled = true): PaymentMethodOption => ({
-  id,
-  label,
-  description: '',
-  handoffNote: '',
-  provider,
-  settlesOnDelivery: id === 'pod',
-  enabled,
 });
 
 describe('deliverySummary', () => {
@@ -62,23 +51,5 @@ describe('deliveryHeadline', () => {
   it('promises nothing — and never a delivery time — when there is nothing set up', () => {
     expect(deliveryHeadline([])).toBeNull();
     expect(deliveryHeadline([option('Delivery across Nigeria')])).not.toMatch(/day/);
-  });
-});
-
-describe('paymentHeadline', () => {
-  it('lists the enabled checkout methods, naming Paystack for online payment', () => {
-    expect(
-      paymentHeadline([
-        method('paystack', 'Pay online', 'paystack'),
-        method('pod', 'Pay on delivery', 'manual'),
-        method('transfer', 'Bank transfer', 'manual'),
-        method('off', 'Switched off', 'manual', false),
-      ]),
-    ).toBe('Pay online securely with Paystack · Pay on delivery · Bank transfer');
-    expect(paymentHeadline([])).toBeNull();
-  });
-
-  it('names Paystack only when checkout actually offers online payment', () => {
-    expect(paymentHeadline([method('pod', 'Pay on delivery', 'manual')])).not.toMatch(/paystack/i);
   });
 });

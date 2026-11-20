@@ -18,7 +18,9 @@ describe('SiteFooter', () => {
     render(
       <SiteFooter
         columns={columns}
-        paymentNote="Pay online or on delivery"
+        paymentMethods={[
+          { id: 'pod', label: 'Pay on delivery', description: '', handoffNote: '', provider: 'manual', settlesOnDelivery: true, enabled: true },
+        ]}
         contact={{ email: 'hi@aura.ng', phone: '0801 234 5678', address: 'Lekki, Lagos' }}
         social={[{ platform: 'instagram', label: 'Instagram', url: 'https://www.instagram.com/aura' }]}
         appHref="/app"
@@ -35,7 +37,7 @@ describe('SiteFooter', () => {
     expect(screen.getByRole('link', { name: /Email: hi@aura.ng/ }).getAttribute('href')).toBe('mailto:hi@aura.ng');
     expect(screen.getByRole('link', { name: 'Instagram (opens in a new tab)' })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Get our app/ }).getAttribute('href')).toBe('/app');
-    expect(screen.getByText('Pay online or on delivery')).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Ways to pay' }).textContent).toContain('Pay on delivery');
     expect(screen.getByRole('link', { name: 'Women' })).toBeTruthy();
   });
 
@@ -44,5 +46,6 @@ describe('SiteFooter', () => {
     expect(screen.queryByText('Visit or contact us')).toBeNull();
     expect(screen.queryByText('Follow us')).toBeNull();
     expect(screen.getByText(/© \d{4} Aura/)).toBeTruthy();
+    expect(screen.queryByRole('list', { name: 'Ways to pay' })).toBeNull();
   });
 });

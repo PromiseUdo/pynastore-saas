@@ -25,7 +25,7 @@ import { arrangeFooter } from '@/lib/storefront/design/footer';
 import { CampaignBar } from '@/components/storefront/marketing/campaign-bar';
 import { CampaignModal } from '@/components/storefront/marketing/campaign-modal';
 import { getStoreCheckoutConfig } from '@/lib/storefront/checkout/store-config';
-import { deliveryHeadline, paymentHeadline } from '@/lib/storefront/store-claims';
+import { deliveryHeadline } from '@/lib/storefront/store-claims';
 import { footerPageLinks } from '@/lib/storefront/pages/rules';
 import type { FooterColumn } from '@/components/storefront/layout/site-footer';
 import { GetAppBanner } from '@/components/storefront/layout/get-app-banner';
@@ -129,7 +129,7 @@ export default async function ShopLayout({
         * shop's pages and contact details, and the app is for shopping. */}
       <SiteFooter
         columns={footerColumns}
-        paymentNote={paymentHeadline(checkout.paymentMethods)}
+        paymentMethods={checkout.paymentMethods}
         contact={look.contact}
         social={look.social}
         appHref={appListing ? '/app' : null}

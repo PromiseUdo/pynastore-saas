@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useStorefront } from '@/lib/storefront/context';
-import { ChevronRight, CreditCard, Mail, MapPin, Phone, Smartphone, type LucideIcon } from 'lucide-react';
+import { ChevronRight, Mail, MapPin, Phone, Smartphone, type LucideIcon } from 'lucide-react';
+import { PaymentBadges } from '@/components/storefront/payment/payment-badges';
+import type { PaymentMethodOption } from '@/lib/storefront/checkout/types';
 import type { SocialPlatform } from '@/lib/storefront/social-links';
 import { StoreLogo } from './store-logo';
 import { PoweredBy } from './powered-by';
@@ -48,14 +50,14 @@ export interface FooterContact {
 
 export function SiteFooter({
   columns,
-  paymentNote = null,
+  paymentMethods = [],
   contact = { email: null, phone: null, address: null },
   social = [],
   appHref = null,
 }: {
   columns: FooterColumn[];
-  /** how this store's checkout takes payment (lib/storefront/store-claims.ts); null says nothing */
-  paymentNote?: string | null;
+  /** the ways this store's checkout takes payment — shown as badges; none says nothing */
+  paymentMethods?: PaymentMethodOption[];
   contact?: FooterContact;
   social?: { platform: SocialPlatform; label: string; url: string }[];
   /** "Get our app", when the store's own app is listed (ROADMAP 16.4) */
@@ -179,13 +181,9 @@ export function SiteFooter({
       <div className="border-t">
         <div className="sf-container grid grid-cols-[1fr_auto_1fr] items-center gap-6 py-5 text-xs text-muted-foreground">
           <p>© {year} {org.name}. All rights reserved.</p>
-          {/* Only what checkout offers this store. No card-brand badges: which
-            * cards work is Paystack's decision, not something this app checks. */}
-          {paymentNote ? (
-            <p className="flex items-center gap-1.5">
-              <CreditCard aria-hidden className="size-3.5" />
-              {paymentNote}
-            </p>
+          {/* Only what checkout offers this store (components/storefront/payment/payment-badges.tsx). */}
+          {paymentMethods.some((m) => m.enabled) ? (
+            <PaymentBadges methods={paymentMethods} className="justify-center" />
           ) : (
             <span />
           )}
