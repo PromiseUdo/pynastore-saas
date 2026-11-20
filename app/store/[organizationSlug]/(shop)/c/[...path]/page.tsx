@@ -135,6 +135,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
               initial={popular}
               categoryName={category.name}
               href={`${pathname}?sort=bestselling`}
+              linkLabel={`See all in ${category.name}`}
               minItems={4}
             />
           )}

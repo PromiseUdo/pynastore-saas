@@ -737,8 +737,29 @@ export async function getBrandShowcase(scope?: StoreScope): Promise<(Brand & { p
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** What a front-page band's "See all" link is called — it names where it goes. */
+const SEE_ALL_TAG: Record<Extract<SectionSource, { kind: 'tag' }>['tag'], string> = {
+  new: 'See all new products',
+  featured: 'See all featured products',
+  bestseller: 'See all best sellers',
+  sale: 'See all sale items',
+  'deal-of-day': 'See all deals',
+  trending: 'See all trending products',
+  limited: 'See all limited editions',
+};
+
+export interface SectionProducts {
+  products: Product[];
+  /** where "See all" goes */
+  href: string;
+  /** what "See all" says — names the destination */
+  linkLabel: string;
+  /** how many products that page lists; "See all" shows only when it's more than the band does */
+  total: number;
+}
+
 /**
- * The products a front-page band shows, and where its "View all" goes
+ * The products a front-page band shows, and where its "See all" goes
  * (ROADMAP 15.2). A band only NAMES its source; the picking happens here,
  * with the same rules as everywhere else in the catalogue — so a band can't
  * show a product the shop wouldn't sell, or one from another store.
@@ -751,52 +772,56 @@ export async function getSectionProducts(
   source: SectionSource,
   scope?: StoreScope,
   limit = 8,
-): Promise<{ products: Product[]; href: string } | null> {
-  const found = async (params: ListProductsParams, href: string) => {
-    const { items } = await listProducts({ ...params, store: scope, perPage: limit });
-    return items.length ? { products: items, href } : null;
+): Promise<SectionProducts | null> {
+  const found = async (params: ListProductsParams, href: string, linkLabel: string) => {
+    const { items, total } = await listProducts({ ...params, store: scope, perPage: limit });
+    return items.length ? { products: items, href, linkLabel, total } : null;
   };
 
   switch (source.kind) {
     /* The two the front page always had — exactly as it worked out its
      * "Popular" and "New arrivals" bands, falling back to the cross-category
-     * best sellers so a thin shop never shows an empty band. */
+     * best sellers so a thin shop never shows an empty band. Their "See all"
+     * is the whole catalogue, sorted. */
     case 'bestselling':
     case 'newest': {
       const sections = await getHomepageSections(scope);
       const key = source.kind === 'bestselling' ? 'bestsellers' : 'new';
       const products = sections.collections.find((c) => c.key === key)?.products ?? sections.recommended;
       if (!products.length) return null;
+      const { total } = await listProducts({ store: scope, perPage: 1 });
       // Not trimmed to `limit`: the bands already hold what they always showed.
-      return { products, href: `/products?sort=${source.kind}` };
+      return {
+        products,
+        href: `/products?sort=${source.kind}`,
+        linkLabel: source.kind === 'bestselling' ? 'See all best sellers' : 'See all new arrivals',
+        total,
+      };
     }
     case 'tag':
-      return found({ tag: source.tag }, `/products?tag=${encodeURIComponent(source.tag)}`);
+      return found({ tag: source.tag }, `/products?tag=${encodeURIComponent(source.tag)}`, SEE_ALL_TAG[source.tag]);
     case 'collection': {
       const collection = (await getCatalogue(scope)).collections.find((c) => c.id === source.id);
       if (!collection) return null;
-      return found({ ...collectionQuery(collection), sort: collection.sort }, `/collections/${collection.slug}`);
+      return found(
+        { ...collectionQuery(collection), sort: collection.sort },
+        `/collections/${collection.slug}`,
+        `See all in ${collection.name}`,
+      );
     }
     case 'category': {
       const category = await getCategoryById(source.id, scope);
       if (!category) return null;
-      return found({ categoryPath: category.path }, categoryHref(category.path));
+      return found({ categoryPath: category.path }, categoryHref(category.path), `See all in ${category.name}`);
     }
     case 'brand': {
       const brand = await getBrandById(source.id, scope);
       if (!brand) return null;
-      return found({ brandSlugs: [brand.slug] }, `/products?brand=${encodeURIComponent(brand.slug)}`);
+      return found({ brandSlugs: [brand.slug] }, `/products?brand=${encodeURIComponent(brand.slug)}`, `See all from ${brand.name}`);
     }
   }
 }
 
-
-/**
- * The homepage's merchandised bands, every one derived from what the
- * merchant actually published: the tags they set, the categories they
- * featured, the sales their invoices record. Nothing here invents social
- * proof — a store with no reviews, press or Instagram shows none.
- */
 export async function getHomepageSections(scope?: StoreScope): Promise<HomepageSections> {
   const cat = await getCatalogue(scope);
   const products = cat.products;

@@ -32,6 +32,7 @@ export function Recommendations({
   enabled,
   id,
   href,
+  linkLabel,
   categoryName,
   showReasons,
   minItems = 1,
@@ -46,6 +47,8 @@ export function Recommendations({
   enabled?: boolean;
   id?: string;
   href?: string;
+  /** what "See all" says; name the destination */
+  linkLabel?: string;
   /** for "Popular in {category}" */
   categoryName?: string;
   showReasons?: boolean;
@@ -77,6 +80,7 @@ export function Recommendations({
       loading={loading}
       error={error}
       href={href}
+      linkLabel={linkLabel}
       showReasons={showReasons}
       variant={variant}
       className={className}

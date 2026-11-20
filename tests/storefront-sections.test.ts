@@ -137,6 +137,11 @@ describe('the bands every shop had', () => {
     );
     expect(popular?.href).toBe('/products?sort=bestselling');
     expect(fresh?.href).toBe('/products?sort=newest');
+
+    // "See all" opens the whole catalogue, and says which order it's in.
+    expect(popular?.linkLabel).toBe('See all best sellers');
+    expect(fresh?.linkLabel).toBe('See all new arrivals');
+    expect(popular?.total).toBe(3); // the shop's three products; the band shows the one tagged Bestseller
   });
 });
 
@@ -145,24 +150,30 @@ describe('a band built from a source', () => {
     const result = await getSectionProducts({ kind: 'tag', tag: 'sale' }, store());
     expect(names(result)).toEqual(['Raffia Tote']);
     expect(result?.href).toBe('/products?tag=sale');
+    expect(result?.linkLabel).toBe('See all sale items');
+    // The band already shows everything with the tag, so there's no more to see.
+    expect(result?.total).toBe(1);
   });
 
   it('shows a collection’s products, linking to the collection', async () => {
     const result = await getSectionProducts({ kind: 'collection', id: ids.picks }, store());
     expect(names(result)).toEqual(['Raffia Tote']);
     expect(result?.href).toBe('/collections/picks');
+    expect(result?.linkLabel).toBe('See all in Picks');
   });
 
   it('shows a category’s products, linking to the category', async () => {
     const result = await getSectionProducts({ kind: 'category', id: ids.dresses }, store());
     expect(names(result)).toEqual(['Adire Dress']);
     expect(result?.href).toBe('/c/dresses');
+    expect(result?.linkLabel).toBe('See all in Dresses');
   });
 
   it('shows a brand’s products', async () => {
     const result = await getSectionProducts({ kind: 'brand', id: ids.brand }, store());
     expect(names(result)).toEqual(['Adire Dress']);
     expect(result?.href).toBe('/products?brand=adire-co');
+    expect(result?.linkLabel).toBe('See all from Adire Co');
   });
 });
 

@@ -27,6 +27,7 @@ import {
   getSectionProducts,
   getStoreReviews,
   getStorefrontLook,
+  type SectionProducts,
 } from '@/lib/storefront/catalog';
 import { getExampleQueries, getMissions, getPriceBands, getStoreCurrency } from '@/lib/storefront/discovery';
 import { recommendProducts } from '@/lib/storefront/recommendations/service';
@@ -154,14 +155,16 @@ const REGISTRY = {
 
   products: define('products', {
     load: async (section, { shared }) => getSectionProducts(section.source, shared.store),
-    render: ({ products, href }: { products: Product[]; href: string }, section) =>
-      section.variant === 'grid' ? (
-        <ProductGrid title={section.title} href={href} products={products} />
+    render: ({ products, href, linkLabel, total }: SectionProducts, section) => {
+      const band = { title: section.title, href, linkLabel, total, products };
+      return section.variant === 'grid' ? (
+        <ProductGrid {...band} />
       ) : section.variant === 'feature' ? (
-        <ProductFeature title={section.title} href={href} products={products} />
+        <ProductFeature {...band} />
       ) : (
-        <ProductCarousel title={section.title} href={href} products={products} />
-      ),
+        <ProductCarousel {...band} />
+      );
+    },
     productIds: ({ products }) => products.map((p) => p.id),
   }),
 

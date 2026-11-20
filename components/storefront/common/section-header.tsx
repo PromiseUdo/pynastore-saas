@@ -14,7 +14,8 @@ export function SectionHeader({
   title,
   subtitle,
   href,
-  linkLabel = 'View all',
+  linkLabel = 'See all',
+  linkClassName,
   align = 'left',
   className,
   children,
@@ -24,6 +25,8 @@ export function SectionHeader({
   subtitle?: string;
   href?: string;
   linkLabel?: string;
+  /** e.g. `hidden lg:inline-flex` when a <SeeAllLink> under the band takes over on smaller screens */
+  linkClassName?: string;
   align?: 'left' | 'center';
   className?: string;
   children?: React.ReactNode;
@@ -56,7 +59,10 @@ export function SectionHeader({
           {href && (
             <Link
               href={href}
-              className="group inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border px-5 text-sm font-semibold transition-colors hover:border-brand"
+              className={cn(
+                'group inline-flex h-11 items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border px-5 text-sm font-semibold transition-colors hover:border-brand',
+                linkClassName,
+              )}
             >
               {linkLabel}
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />

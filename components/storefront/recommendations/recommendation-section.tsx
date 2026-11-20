@@ -19,6 +19,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import { SeeAllLink } from '@/components/storefront/common/see-all-link';
 import { ProductCard, ProductCardSkeleton } from '@/components/storefront/product/product-card';
 import type { Product } from '@/lib/storefront/types';
 import { cn } from '@/lib/utils';
@@ -123,6 +124,9 @@ export function RecommendationSection({
               </li>
             ))}
       </ul>
+
+      {/* On a phone the heading link is hidden: "See all" goes under the rail instead. */}
+      {href && items.length > 0 && <SeeAllLink href={href} label={linkLabel} className="mt-6 sm:hidden" />}
     </section>
   );
 }

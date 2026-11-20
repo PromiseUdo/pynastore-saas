@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import type { Product } from '@/lib/storefront/types';
 import { ProductCard } from '@/components/storefront/product/product-card';
 import { SectionHeader } from '@/components/storefront/common/section-header';
+import { SeeAllLink } from '@/components/storefront/common/see-all-link';
 
 /**
  * Horizontally scrolling product rail.
@@ -14,12 +15,18 @@ import { SectionHeader } from '@/components/storefront/common/section-header';
  * Free-drag with trimmed snaps: on a rail the exact snap position matters far
  * less than being able to flick it, and trimming stops the last card floating
  * in dead space.
+ *
+ * "See all" sits in the heading beside the arrows on a computer, and centred
+ * under the row on smaller screens, which have no arrows. It's only there
+ * when the page it opens has more than the row shows (`total`).
  */
 export function ProductCarousel({
   eyebrow,
   title,
   subtitle,
   href,
+  linkLabel = 'See all',
+  total,
   products,
   priority,
 }: {
@@ -27,6 +34,10 @@ export function ProductCarousel({
   title: string;
   subtitle?: string;
   href?: string;
+  /** what "See all" says; name the destination */
+  linkLabel?: string;
+  /** how many products `href` lists — without it, "See all" always shows */
+  total?: number;
   products: Product[];
   /** eager-load the first cards — pass on the first rail of the page only */
   priority?: boolean;
@@ -55,10 +66,18 @@ export function ProductCarousel({
   }, [embla]);
 
   if (!products.length) return null;
+  const seeAll = href && (total === undefined || total > products.length) ? href : undefined;
 
   return (
     <section className="sf-container sf-section">
-      <SectionHeader eyebrow={eyebrow} title={title} subtitle={subtitle} href={href}>
+      <SectionHeader
+        eyebrow={eyebrow}
+        title={title}
+        subtitle={subtitle}
+        href={seeAll}
+        linkLabel={linkLabel}
+        linkClassName="hidden lg:inline-flex"
+      >
         <div className="hidden gap-2 lg:flex">
           <RailButton dir="prev" disabled={!canPrev} onClick={() => embla?.scrollPrev()} />
           <RailButton dir="next" disabled={!canNext} onClick={() => embla?.scrollNext()} />
@@ -77,6 +96,8 @@ export function ProductCarousel({
           ))}
         </div>
       </div>
+
+      {seeAll && <SeeAllLink href={seeAll} label={linkLabel} className="lg:hidden" />}
     </section>
   );
 }

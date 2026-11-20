@@ -21,7 +21,10 @@ export default async function TradeAccountPage() {
   const [settings, standing, customer] = await Promise.all([
     getWholesaleSettings(shopper.organizationId),
     tradeStanding(shopper.organizationId, shopper.id),
-    prisma.customer.findFirst({ where: { id: shopper.id, organizationId: shopper.organizationId }, select: { taxId: true } }),
+    prisma.customer.findFirst({
+      where: { id: shopper.id, organizationId: shopper.organizationId },
+      select: { taxId: true },
+    }),
   ]);
   const taxId = customer?.taxId ?? null;
   const on = settings.mode !== 'OFF';
@@ -30,7 +33,10 @@ export default async function TradeAccountPage() {
    * even if the store has since taken the credit away. */
   const [terms, balance] =
     standing?.status === 'APPROVED' || standing?.status === 'SUSPENDED'
-      ? await Promise.all([accountTerms(shopper.organizationId, shopper.id), accountBalance(shopper.organizationId, shopper.id)])
+      ? await Promise.all([
+          accountTerms(shopper.organizationId, shopper.id),
+          accountBalance(shopper.organizationId, shopper.id),
+        ])
       : [null, null];
   const money = (major: number) => formatMoney(Math.round(major * 100));
 
@@ -71,18 +77,24 @@ export default async function TradeAccountPage() {
           description={
             terms
               ? `You can order now and pay the store within ${terms.days} days${
-                  terms.creditLimit !== null ? `, owing up to ${money(terms.creditLimit)} at once` : ''
+                  terms.creditLimit !== null
+                    ? `, owing up to ${money(terms.creditLimit)} at once`
+                    : ''
                 }. New orders on account need nothing overdue.`
               : 'What you still owe the store.'
           }
         >
           <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-[10rem_1fr]">
             <dt className="text-muted-foreground">You owe</dt>
-            <dd className="font-semibold tabular-nums">{money(balance?.owed ?? 0)}</dd>
+            <dd className="font-semibold tabular-nums">
+              {money(balance?.owed ?? 0)}
+            </dd>
             {balance && balance.overdue > 0 && (
               <>
                 <dt className="text-muted-foreground">Overdue</dt>
-                <dd className="font-semibold text-destructive tabular-nums">{money(balance.overdue)}</dd>
+                <dd className="font-semibold text-destructive tabular-nums">
+                  {money(balance.overdue)}
+                </dd>
               </>
             )}
           </dl>
@@ -90,30 +102,47 @@ export default async function TradeAccountPage() {
             <ul className="mt-4 divide-y rounded-2xl border text-sm">
               {balance.items.map((item) => {
                 const href =
-                  item.kind === 'order' ? `/account/orders/${encodeURIComponent(item.number)}` : item.token ? `/invoice/${item.token}` : null;
+                  item.kind === 'order'
+                    ? `/account/orders/${encodeURIComponent(item.number)}`
+                    : item.token
+                      ? `/invoice/${item.token}`
+                      : null;
                 const label = `${item.kind === 'order' ? 'Order' : 'Invoice'} ${item.number}`;
                 return (
-                  <li key={`${item.kind}-${item.id}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+                  <li
+                    key={`${item.kind}-${item.id}`}
+                    className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
+                  >
                     <span>
                       {href ? (
-                        <Link href={href} className="font-medium underline underline-offset-4">
+                        <Link
+                          href={href}
+                          className="font-medium underline underline-offset-4"
+                        >
                           {label}
                         </Link>
                       ) : (
                         <span className="font-medium">{label}</span>
                       )}
                       <span className="block text-xs text-muted-foreground">
-                        {item.dueAt ? `${item.overdue ? 'Overdue since' : 'Due'} ${formatDate(item.dueAt)}` : 'No due date'}
+                        {item.dueAt
+                          ? `${item.overdue ? 'Overdue since' : 'Due'} ${formatDate(item.dueAt)}`
+                          : 'No due date'}
                       </span>
                     </span>
-                    <span className={`tabular-nums ${item.overdue ? 'font-semibold text-destructive' : ''}`}>{money(item.owed)}</span>
+                    <span
+                      className={`tabular-nums ${item.overdue ? 'font-semibold text-destructive' : ''}`}
+                    >
+                      {money(item.owed)}
+                    </span>
                   </li>
                 );
               })}
             </ul>
           )}
           <p className="mt-4 text-sm text-muted-foreground">
-            Pay the store directly — each order’s invoice shows how. They record payments as they arrive.
+            Pay the store directly — each order’s invoice shows how. They record
+            payments as they arrive.
           </p>
         </AccountCard>
       )}
@@ -132,7 +161,11 @@ export default async function TradeAccountPage() {
           title="Your wholesale account is paused"
           description="Wholesale terms don’t apply for now. Please contact the store if you have questions."
         >
-          {standing.decisionReason && <p className="text-sm">The store’s note: “{standing.decisionReason}”</p>}
+          {standing.decisionReason && (
+            <p className="text-sm">
+              The store’s note: “{standing.decisionReason}”
+            </p>
+          )}
           {details}
         </AccountCard>
       )}
@@ -142,11 +175,18 @@ export default async function TradeAccountPage() {
           title="The store couldn’t open a wholesale account for you"
           description="You can keep shopping as a normal customer."
         >
-          {standing.decisionReason && <p className="text-sm">The store’s note: “{standing.decisionReason}”</p>}
+          {standing.decisionReason && (
+            <p className="text-sm">
+              The store’s note: “{standing.decisionReason}”
+            </p>
+          )}
           {settings.requestsOpen && (
             <div className="mt-5 space-y-3">
               <p className="text-sm font-semibold">Ask again</p>
-              <TradeRequestForm businessName={standing.businessName} taxId={taxId ?? ''} />
+              <TradeRequestForm
+                businessName={standing.businessName}
+                taxId={taxId ?? ''}
+              />
             </div>
           )}
         </AccountCard>
@@ -156,13 +196,17 @@ export default async function TradeAccountPage() {
         (on && settings.requestsOpen ? (
           <AccountCard
             title="Buy wholesale"
-            description="If you buy for a business — a shop, a restaurant, a reseller — ask the store for a wholesale account. They’ll check your details and email you their answer."
+            description="If you buy for a business, a shop, a reseller, ask the store for a wholesale account."
           >
             <TradeRequestForm taxId={taxId ?? ''} />
           </AccountCard>
         ) : (
           <AccountCard
-            title={on ? 'Wholesale accounts are by invitation' : 'This shop doesn’t sell wholesale'}
+            title={
+              on
+                ? 'Wholesale accounts are by invitation'
+                : 'This shop doesn’t sell wholesale'
+            }
             description={
               on
                 ? 'This shop sets up wholesale accounts for the businesses it supplies. Please contact them if you’d like one.'
