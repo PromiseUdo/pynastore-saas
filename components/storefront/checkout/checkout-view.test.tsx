@@ -488,7 +488,10 @@ describe('delivery and payment selection', () => {
 
     await user.click(screen.getByRole('radio', { name: /^pay online/i }));
 
-    expect(await screen.findByText(/paystack’s secure payment page/i)).toBeDefined();
+    /* The option itself says where the card is paid; what happens next is
+     * said once, on the Review step, not repeated under the options. */
+    expect(screen.getByText(/through paystack/i)).toBeDefined();
+    expect(screen.queryByText(/paystack’s secure payment page/i)).toBeNull();
     /* Nothing anywhere that could take a card number. */
     expect(screen.queryByLabelText(/card number/i)).toBeNull();
     expect(screen.queryByLabelText(/cvv|security code|expiry/i)).toBeNull();

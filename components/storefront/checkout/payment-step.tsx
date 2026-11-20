@@ -13,8 +13,11 @@
  * dangerous thing this phase could ship, so the card option says plainly
  * what happens next instead.
  *
- * Each method's `handoffNote` (lib/storefront/checkout/payment-methods.ts) is the
- * sentence shown once it's picked. It is written in the future tense on
+ * Each method's `handoffNote` (lib/storefront/checkout/payment-methods.ts) —
+ * what happens next — is NOT repeated under the options here: the method's
+ * own one-line description says enough to choose by, and the note appears
+ * once, on the Review step, where the shopper confirms the order. It is
+ * written in the future tense on
  * purpose — "will be completed", "you'll get account details" — because
  * that is the truth, and the day the provider is wired in the sentence is
  * still true.
@@ -32,12 +35,11 @@
  * same one to the order it actually writes.
  */
 import { useWatch, type UseFormReturn } from 'react-hook-form';
-import { Banknote, CreditCard, Landmark, Lock, ShieldCheck, Wallet } from 'lucide-react';
+import { Banknote, CreditCard, Landmark, Lock, Wallet } from 'lucide-react';
 import { ON_ACCOUNT_METHOD_ID, accountAvailability } from '@/lib/trade/credit-rules';
 import type { CheckoutConfig } from '@/lib/storefront/checkout/types';
 import type { CheckoutFormValues } from '@/lib/storefront/checkout/schema';
 import type { CartItem } from '@/lib/storefront/types';
-import { findPaymentMethod } from '@/lib/storefront/checkout/config';
 import {
   isPaymentMethodAllowed,
   prepaymentReason,
@@ -76,7 +78,6 @@ export function PaymentStep({
    * a watch() call is memoised away and the choice never re-renders. */
   const selectedId = useWatch({ control, name: 'paymentMethodId' });
   const error = formState.errors.paymentMethodId?.message;
-  const selected = findPaymentMethod(config, selectedId ?? null);
   const reason = prepaymentReason(items);
 
   const choose = (id: string) => {
@@ -144,19 +145,6 @@ export function PaymentStep({
         <FieldError id="payment-error" className="mt-3 text-sm">
           {error}
         </FieldError>
-      )}
-
-      {/* The honest sentence, in place of a fake card form. */}
-      {selected &&
-        isPaymentMethodAllowed(selected, items) &&
-        !(selected.id === ON_ACCOUNT_METHOD_ID && config.tradeAccount && !accountAvailability(config.tradeAccount, orderTotal, config.currency).ok) && (
-        <p
-          role="status"
-          className="mt-5 flex items-start gap-2.5 rounded-xl border bg-secondary/40 p-4 text-sm leading-relaxed text-muted-foreground"
-        >
-          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
-          <span>{selected.handoffNote}</span>
-        </p>
       )}
     </div>
   );
