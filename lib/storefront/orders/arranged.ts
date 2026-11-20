@@ -152,7 +152,7 @@ export async function acceptArrangedDelivery(input: { organizationId: string; co
       accountTerms(input.organizationId, order.customerId ?? ''),
       prisma.order.findUniqueOrThrow({ where: { id: order.id }, select: { totalAmount: true, currency: true } }),
     ]);
-    if (!standing || !terms) return { ok: false, error: 'Your trade account can’t pay on account just now. Cancel this order and order again with another way to pay.' };
+    if (!standing || !terms) return { ok: false, error: 'Your wholesale account can’t pay on account just now. Cancel this order and order again with another way to pay.' };
     const allowed = accountAvailability(standing, Math.round(Number(current.totalAmount) * 100), current.currency);
     if (!allowed.ok) return { ok: false, error: allowed.reason };
     accountDueAt = dueDateFrom(now, terms.days);

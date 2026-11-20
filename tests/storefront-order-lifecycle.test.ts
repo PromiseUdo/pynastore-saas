@@ -730,7 +730,7 @@ describe('order emails', () => {
     }
   });
 
-  it('links a trade order’s business invoice from the emails about buying it, not cancelling it (21.6)', async () => {
+  it('links a wholesale order’s business invoice from the emails about buying it, not cancelling it (21.6)', async () => {
     const email = (kind: OrderEmailKind) =>
       render(
         StorefrontOrderUpdateEmail({

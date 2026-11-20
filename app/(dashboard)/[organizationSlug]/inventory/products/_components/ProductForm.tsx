@@ -389,7 +389,7 @@ export function ProductForm({ product, categories, brands: initialBrands, suppli
                       <FieldError>{errors.wholesalePrice}</FieldError>
                     ) : (
                       <FieldDescription>
-                        What your approved trade buyers pay{wholesale.vatAdded ? ', before VAT' : ''}. Leave it empty and they pay the selling price.
+                        What your approved wholesalers pay{wholesale.vatAdded ? ', before VAT' : ''}. Leave it empty and they pay the selling price.
                         {state.hasVariants ? ' Variants without their own use this one.' : ''}
                       </FieldDescription>
                     )}
@@ -399,7 +399,7 @@ export function ProductForm({ product, categories, brands: initialBrands, suppli
               {wholesale && (
                 <FormGrid>
                   <Field>
-                    <Label htmlFor="p-trade-min">Trade minimum</Label>
+                    <Label htmlFor="p-trade-min">Wholesale minimum</Label>
                     <Input
                       id="p-trade-min"
                       inputMode="numeric"
@@ -412,12 +412,12 @@ export function ProductForm({ product, categories, brands: initialBrands, suppli
                       <FieldError>{errors.tradeMinQuantity}</FieldError>
                     ) : (
                       <FieldDescription>
-                        The fewest a trade buyer can order{state.hasVariants ? ', all variants together' : ''}.
+                        The fewest a wholesaler can order{state.hasVariants ? ', all variants together' : ''}.
                       </FieldDescription>
                     )}
                   </Field>
                   <Field>
-                    <Label htmlFor="p-trade-pack">Trade pack size</Label>
+                    <Label htmlFor="p-trade-pack">Wholesale pack size</Label>
                     <Input
                       id="p-trade-pack"
                       inputMode="numeric"
@@ -430,7 +430,7 @@ export function ProductForm({ product, categories, brands: initialBrands, suppli
                       <FieldError>{errors.tradePackSize}</FieldError>
                     ) : (
                       <FieldDescription>
-                        For a carton of 24, enter 24: trade buyers then order {state.hasVariants ? 'each variant ' : ''}in whole cartons.
+                        For a carton of 24, enter 24: wholesalers then order {state.hasVariants ? 'each variant ' : ''}in whole cartons.
                       </FieldDescription>
                     )}
                   </Field>

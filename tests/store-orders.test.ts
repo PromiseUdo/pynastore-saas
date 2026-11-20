@@ -251,7 +251,7 @@ describe('a store’s own order list', () => {
     expect(result.data.rows[0].unitsFromStore).toBeNull();
   });
 
-  it('filters by trade buyer, and marks their orders (ROADMAP 21.8)', async () => {
+  it('filters by wholesaler, and marks their orders (ROADMAP 21.8)', async () => {
     const ref = 'ORD-0003';
     await prisma.order.updateMany({ where: { organizationId: ctx.organization.id, reference: ref }, data: { buyerBusinessName: 'Bola Stores' } });
     try {

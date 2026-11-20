@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BusinessDetailsSchema, offersWholesaleEntry, openInTradeOnly, tradeMayPayWith, TRADE_STATUS_LABEL, WHOLESALE_MODES } from './rules';
 
-describe('a Trade only shop', () => {
+describe('a Wholesale only shop', () => {
   it('keeps sign-in, the account, the merchant’s pages and the wholesale page open', () => {
     for (const path of ['/account', '/account/sign-in?next=%2F', '/account/trade', '/pages/terms', '/wholesale', '/invoice/abc', '/order-invoice/abc']) {
       expect(openInTradeOnly(path), path).toBe(true);
@@ -15,7 +15,7 @@ describe('a Trade only shop', () => {
   });
 });
 
-describe('how a trade buyer may pay', () => {
+describe('how a wholesaler may pay', () => {
   const all = { tradePayOnline: true, tradePayTransfer: true, tradePayOnDelivery: true };
   it('follows the merchant’s choices, method by method', () => {
     expect(['paystack', 'transfer', 'pod'].every((id) => tradeMayPayWith(id, all))).toBe(true);

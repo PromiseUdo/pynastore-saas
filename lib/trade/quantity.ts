@@ -119,7 +119,7 @@ export function tradeBagProblems(
       const currency = items[0]?.currency ?? 'NGN';
       problems.push({
         productId: null,
-        message: `Trade orders start at ${formatMoney(minOrderValue, currency)} of goods. Add ${formatMoney(minOrderValue - goods, currency)} more to order.`,
+        message: `Wholesale orders start at ${formatMoney(minOrderValue, currency)} of goods. Add ${formatMoney(minOrderValue - goods, currency)} more to order.`,
       });
     }
   }

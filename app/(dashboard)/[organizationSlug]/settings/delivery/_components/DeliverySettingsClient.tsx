@@ -589,7 +589,7 @@ function StoreSection({
         </>
       )}
 
-      {/* Delivery to be arranged for big trade orders (ROADMAP 21.4B) — while the
+      {/* Delivery to be arranged for big wholesale orders (ROADMAP 21.4B) — while the
         * shop has trade buyers, or while it's still on from before. */}
       {(wholesaleOn || store.arranged.on) && !empty && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-sm">
@@ -602,8 +602,8 @@ function StoreSection({
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {store.arranged.on
-                ? `Big trade orders: ${arrangedSummary(store.arranged)}. You set the delivery price after the order.`
-                : 'For trade orders too big for a fixed price: the buyer orders, you price delivery after, they pay once they’ve seen it.'}
+                ? `Big wholesale orders: ${arrangedSummary(store.arranged)}. You set the delivery price after the order.`
+                : 'For wholesale orders too big for a fixed price: the buyer orders, you price delivery after, they pay once they’ve seen it.'}
             </p>
           </div>
           {canManage && (
@@ -900,7 +900,7 @@ function AddressCheck({ wholesaleOn, zones }: { wholesaleOn: boolean; zones: Del
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="retail">A retail customer</SelectItem>
-                <SelectItem value="trade">A trade buyer</SelectItem>
+                <SelectItem value="trade">A wholesaler</SelectItem>
               </SelectContent>
             </SelectRoot>
           </div>

@@ -145,7 +145,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
               <Printer className="size-3.5" />
               Receipt
             </Link>
-            {/* A trade order's business invoice — the same page the buyer opens (ROADMAP 21.6). */}
+            {/* A wholesale order's business invoice — the same page the buyer opens (ROADMAP 21.6). */}
             {order.buyer && (
               <Link
                 href={`/sales/orders/${order.id}/invoice`}
@@ -211,8 +211,8 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
           <Badge variant={ORDER_CHANNEL_VARIANT[order.channel] ?? 'draft'}>
             {ORDER_CHANNEL_LABEL[order.channel] ?? order.channel}
           </Badge>
-          {/* Placed by a trade buyer (ROADMAP 21.8) */}
-          {order.buyer && <Badge variant="approved">Trade</Badge>}
+          {/* Placed by a wholesaler (ROADMAP 21.8) */}
+          {order.buyer && <Badge variant="approved">Wholesale</Badge>}
           {order.isGuest && !isCounterSale && <Badge variant="draft">Guest checkout</Badge>}
           {order.partiallySent && <Badge variant="processing">Partially sent</Badge>}
         </div>
@@ -300,7 +300,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
               {order.buyer && (
                 <>
                   <div>
-                    <dt className="text-xs text-muted-foreground">Business (trade buyer)</dt>
+                    <dt className="text-xs text-muted-foreground">Business (wholesaler)</dt>
                     <dd>{order.buyer.businessName}</dd>
                   </div>
                   <div>
@@ -521,7 +521,7 @@ export default async function StoreOrderDetailPage({ params }: { params: Promise
               <dt className="text-muted-foreground">Delivery</dt>
               <dd className="tabular-nums">{formatMoney(order.deliveryFee, order.currency)}</dd>
             </div>
-            {/* A trade buyer's wholesale lines had VAT added (ROADMAP 21.2): its own line. */}
+            {/* A wholesaler's wholesale lines had VAT added (ROADMAP 21.2): its own line. */}
             {order.vatAddedAmount > 0 && (
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">VAT (added to wholesale prices)</dt>

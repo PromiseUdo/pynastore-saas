@@ -150,7 +150,7 @@ describe('A — options and thresholds by buyer', () => {
     ]);
   });
 
-  it('holds a trade order to the trade threshold, and a retail one to the usual', async () => {
+  it('holds a wholesale order to the trade threshold, and a retail one to the usual', async () => {
     // ₦72,000 of rice at wholesale: free for retail's threshold, not trade's.
     const trade = await order(buyerId, 9, `rate_${rates.standard}`);
     expect(trade.ok).toBe(true);
@@ -250,7 +250,7 @@ describe('B — delivery to be arranged', () => {
       },
     });
 
-  it('is offered only to a trade buyer, and only for a big enough bag', async () => {
+  it('is offered only to a wholesaler, and only for a big enough bag', async () => {
     expect(await ids(buyerId, 70)).toContain(arrangedId);
     expect(await ids(buyerId, 10)).not.toContain(arrangedId);
     expect(await ids(shopperId, 70)).not.toContain(arrangedId);

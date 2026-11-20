@@ -103,9 +103,9 @@ describe('Settings → Wholesale', () => {
     expect(org.wholesaleRequestsOpen).toBe(true);
   });
 
-  it('keeps at least one way for a trade buyer to pay', async () => {
+  it('keeps at least one way for a wholesaler to pay', async () => {
     const result = await saveWholesaleSettings({ ...settingsOn, tradePayOnline: false, tradePayTransfer: false, tradePayOnDelivery: false });
-    expect(result).toEqual({ success: false, error: 'Leave at least one way for trade buyers to pay.' });
+    expect(result).toEqual({ success: false, error: 'Leave at least one way for wholesalers to pay.' });
   });
 
   it('needs settings.edit', async () => {
@@ -132,7 +132,7 @@ describe('a shopper asks', () => {
     expect(await isTradeBuyer(store.id, shopperId)).toBe(false);
   });
 
-  it('shows in Customers under Trade requests, with its badge', async () => {
+  it('shows in Customers under Wholesale requests, with its badge', async () => {
     const list = await listCustomerInsights({ segment: 'trade-requests' });
     expect(list.success && list.data.rows.map((r) => [r.id, r.tradeStatus])).toEqual([[shopperId, 'REQUESTED']]);
   });
@@ -143,7 +143,7 @@ describe('a shopper asks', () => {
     await flushAfterTasks();
     const sent = email.sendStorefrontNoticeEmail.mock.calls.at(-1)?.[0];
     expect(sent?.to).toEqual([`ada-${suffix}@example.com`]);
-    expect(sent?.subject).toContain('trade account');
+    expect(sent?.subject).toContain('wholesale account');
     // Their note travels with it.
     expect(JSON.stringify(sent)).toContain('We only supply shops in Lagos');
 
@@ -151,19 +151,19 @@ describe('a shopper asks', () => {
     expect(again).toMatchObject({ ok: true, status: 'REQUESTED' });
   });
 
-  it('becomes a trade buyer when approved, and is told', async () => {
+  it('becomes a wholesaler when approved, and is told', async () => {
     const result = await trade.approveTradeBuyer(shopperId);
     expect(result).toEqual({ success: true, data: { invite: null } });
     expect(await isTradeBuyer(store.id, shopperId)).toBe(true);
     await flushAfterTasks();
-    expect(email.sendStorefrontNoticeEmail.mock.calls.at(-1)?.[0].subject).toBe('Your trade account with Trade Shop is ready');
-    expect(await trade.approveTradeBuyer(shopperId)).toEqual({ success: false, error: 'They’re already a trade buyer.' });
+    expect(email.sendStorefrontNoticeEmail.mock.calls.at(-1)?.[0].subject).toBe('Your wholesale account with Trade Shop is ready');
+    expect(await trade.approveTradeBuyer(shopperId)).toEqual({ success: false, error: 'They’re already a wholesaler.' });
   });
 
   it('can be paused and reinstated, but not approved while paused', async () => {
     expect((await trade.suspendTradeBuyer(shopperId, {})).success).toBe(true);
     expect(await isTradeBuyer(store.id, shopperId)).toBe(false);
-    expect(await trade.approveTradeBuyer(shopperId)).toEqual({ success: false, error: 'Their trade account is paused. Reinstate it instead.' });
+    expect(await trade.approveTradeBuyer(shopperId)).toEqual({ success: false, error: 'Their wholesale account is paused. Reinstate it instead.' });
     expect((await trade.reinstateTradeBuyer(shopperId)).success).toBe(true);
     expect(await isTradeBuyer(store.id, shopperId)).toBe(true);
   });
@@ -175,7 +175,7 @@ describe('a shopper asks', () => {
 });
 
 describe('inviting a business', () => {
-  it('creates the customer, makes them a trade buyer, and emails a sign-in link', async () => {
+  it('creates the customer, makes them a wholesaler, and emails a sign-in link', async () => {
     const result = await trade.inviteTradeBuyer({ name: 'Bola Ade', email: ` Bola-${suffix}@Example.com `, phone: '0803 123 4567', ...details, businessName: 'Bola Stores' });
     expect(result.success).toBe(true);
     if (!result.success) return;
@@ -223,7 +223,7 @@ describe('who may do what', () => {
   });
 });
 
-describe('checkout for a trade buyer', () => {
+describe('checkout for a wholesaler', () => {
   it('offers only the ways the merchant allows for trade, and everyone else is unchanged', async () => {
     await saveWholesaleSettings({ ...settingsOn, tradePayOnDelivery: false });
     const retail = await getStoreCheckoutConfig({ organizationSlug: store.slug });
@@ -234,8 +234,8 @@ describe('checkout for a trade buyer', () => {
   });
 });
 
-describe('Trade only', () => {
-  it('shows the catalogue to approved trade buyers and nobody else', async () => {
+describe('Wholesale only', () => {
+  it('shows the catalogue to approved wholesalers and nobody else', async () => {
     expect(await getTradeGate(store.slug)).toEqual({ tradeOnly: false, allowed: true });
     await saveWholesaleSettings({ ...settingsOn, mode: 'TRADE_ONLY' });
 
@@ -254,7 +254,7 @@ describe('Trade only', () => {
 });
 
 describe('the shopper’s own data', () => {
-  it('includes their trade account', async () => {
+  it('includes their wholesale account', async () => {
     const data = await exportShopperData(store.id, shopperId);
     expect(data?.tradeAccount).toMatchObject({ status: 'APPROVED', businessName: 'Ada Provisions', taxId: details.taxId });
   });

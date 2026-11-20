@@ -177,11 +177,11 @@ export function InformationStep({
         />
       </FormSection>
 
-      {/* A trade buyer's order comes with an invoice made out to their business (ROADMAP 21.6). */}
+      {/* A wholesaler's order comes with an invoice made out to their business (ROADMAP 21.6). */}
       {config.tradeBuyer && (
         <FormSection
           title="Your business"
-          description="Your invoice for this order is made out to this business. We’ve filled it in from your trade account."
+          description="Your invoice for this order is made out to this business. We’ve filled it in from your wholesale account."
         >
           <TextField
             id="business-name"

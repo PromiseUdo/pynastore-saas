@@ -67,7 +67,7 @@ function PricingBody(props: StoreOrderAlertEmailProps) {
   return (
     <>
       <Text style={paragraph}>
-        {props.customerName} placed trade order <strong>{props.reference}</strong> ({props.total} of goods) with{' '}
+        {props.customerName} placed wholesale order <strong>{props.reference}</strong> ({props.total} of goods) with{' '}
         <strong>delivery to be arranged</strong>. Work out what it costs to deliver and set the price on the order
         {props.priceBy ? <> by <strong>{props.priceBy}</strong></> : null}.
       </Text>

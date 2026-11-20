@@ -63,7 +63,7 @@ export function ArrangedDeliveryPanel({ order, canManage }: { order: StoreOrderD
                 ? `The customer accepted ${fee === null ? 'the price' : formatMoney(fee, order.currency)} on ${formatDateTime(arranged.acceptedAt)}. It now goes ahead like any order.`
                 : arranged.pricedAt
                   ? `You priced delivery at ${fee === null ? '—' : formatMoney(fee, order.currency)}. The customer has until ${formatDateTime(arranged.acceptBy)} to accept it; then they pay the way they chose. You can still change it.`
-                  : `This trade order is too big for a fixed delivery price. Work out what it costs to deliver from ${
+                  : `This wholesale order is too big for a fixed delivery price. Work out what it costs to deliver from ${
                       order.parcels[0]?.storeName ?? 'your store'
                     } and set it by ${formatDateTime(arranged.priceDueAt)} — otherwise the order is cancelled and its stock released. The customer sees the price and accepts it before paying anything.`}
           </p>

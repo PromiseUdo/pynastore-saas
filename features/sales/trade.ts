@@ -46,14 +46,14 @@ async function wholesaleBlocked(organizationId: string): Promise<string | null> 
 
 const REASONS: Record<string, string> = {
   'not-found': 'We couldn’t find that customer.',
-  changed: 'Someone else just changed this trade account. Refresh to see where it is now.',
-  'already-trade': 'They’re already a trade buyer.',
-  paused: 'Their trade account is paused. Reinstate it instead.',
+  changed: 'Someone else just changed this wholesale account. Refresh to see where it is now.',
+  'already-trade': 'They’re already a wholesaler.',
+  paused: 'Their wholesale account is paused. Reinstate it instead.',
   'needs-details': 'Enter the business name first.',
 };
 
 function refused(change: Extract<TradeChange<string>, { ok: false }>): ActionResult<never> {
-  return { success: false, error: REASONS[change.reason] ?? 'We couldn’t change this trade account.' };
+  return { success: false, error: REASONS[change.reason] ?? 'We couldn’t change this wholesale account.' };
 }
 
 async function manager() {
@@ -130,7 +130,7 @@ export async function approveTradeBuyer(
     runAfter(() => tellShopperTradeDecision({ organizationId, customerId, decision: 'approved', reason: null, actorUserId: ctx.userId }));
     return { success: true, data: { invite } };
   } catch (error) {
-    return toActionError(error, 'We couldn’t approve this trade buyer');
+    return toActionError(error, 'We couldn’t approve this wholesaler');
   }
 }
 
@@ -219,7 +219,7 @@ export async function inviteTradeBuyer(input: InviteTradeBuyerInput): Promise<Ac
     }
     return { success: true, data: { customerId, existing: Boolean(found), invite } };
   } catch (error) {
-    return toActionError(error, 'We couldn’t invite this trade buyer');
+    return toActionError(error, 'We couldn’t invite this wholesaler');
   }
 }
 
@@ -231,7 +231,7 @@ export async function resendTradeInvite(customerId: string): Promise<ActionResul
       where: { organizationId: ctx.organization.id, customerId, status: 'APPROVED' },
       select: { businessName: true },
     });
-    if (!account) return { success: false, error: 'Only an approved trade buyer can be sent an invitation.' };
+    if (!account) return { success: false, error: 'Only an approved wholesaler can be sent an invitation.' };
     const invite = await sendTradeInvite({ organizationId: ctx.organization.id, customerId, businessName: account.businessName });
     if (invite === 'sent') await audit(ctx, 'sales.trade.invited', customerId, {});
     return { success: true, data: { invite } };
@@ -272,7 +272,7 @@ export async function suspendTradeBuyer(customerId: string, input: { reason?: st
     );
     return { success: true, data: undefined };
   } catch (error) {
-    return toActionError(error, 'We couldn’t pause this trade account');
+    return toActionError(error, 'We couldn’t pause this wholesale account');
   }
 }
 
@@ -291,7 +291,7 @@ export async function reinstateTradeBuyer(customerId: string): Promise<ActionRes
     );
     return { success: true, data: undefined };
   } catch (error) {
-    return toActionError(error, 'We couldn’t reinstate this trade account');
+    return toActionError(error, 'We couldn’t reinstate this wholesale account');
   }
 }
 
@@ -339,7 +339,7 @@ export async function saveAccountTerms(customerId: string, input: AccountTermsIn
     });
     if (!before) return { success: false, error: REASONS['not-found'] };
     if (terms.onAccount && before.status !== 'APPROVED') {
-      return { success: false, error: 'Only an approved trade buyer can pay on account.' };
+      return { success: false, error: 'Only an approved wholesaler can pay on account.' };
     }
     await prisma.tradeAccount.update({
       where: { id: before.id },

@@ -106,7 +106,7 @@ export const IMPORT_COLUMNS: { field: ImportField; header: string; required?: bo
   { field: 'option3Value', header: 'Option 3 value', help: 'Optional third option value', aliases: ['option3 value'] },
   { field: 'price', header: 'Price', help: 'Selling price in naira, e.g. 15000.', aliases: ['selling price', 'price (ngn)'] },
   { field: 'compareAtPrice', header: 'Compare-at price', help: 'Optional “was” price, higher than Price.', aliases: ['compare at price', 'was price', 'old price'] },
-  { field: 'wholesalePrice', header: 'Wholesale price', help: 'Optional. What approved trade buyers pay, if you sell wholesale (Settings → Wholesale).', aliases: ['trade price'] },
+  { field: 'wholesalePrice', header: 'Wholesale price', help: 'Optional. What approved wholesalers pay, if you sell wholesale (Settings → Wholesale).', aliases: ['trade price'] },
   { field: 'costPrice', header: 'Cost price', help: 'Optional. What you paid per item — used for the opening stock’s value and your profit reports.', aliases: ['cost', 'unit cost'] },
   { field: 'barcode', header: 'Barcode', help: 'Optional.', aliases: ['ean', 'upc'] },
   { field: 'unit', header: 'Unit', help: 'Optional. How it’s counted, e.g. pcs, kg, pack. Defaults to pcs.' },
@@ -114,8 +114,8 @@ export const IMPORT_COLUMNS: { field: ImportField; header: string; required?: bo
   { field: 'category', header: 'Category', help: 'Optional. A category you already have, e.g. Women or Women > Dresses.' },
   { field: 'brand', header: 'Brand', help: 'Optional. A brand you already have.' },
   { field: 'reorderPoint', header: 'Reorder point', help: 'Optional. When stock falls to this number, you’re alerted.', aliases: ['reorder level'] },
-  { field: 'tradeMinQuantity', header: 'Trade minimum', help: 'Optional. The fewest a trade buyer can order of this product, all variants together.', aliases: ['trade min', 'minimum order quantity', 'moq'] },
-  { field: 'tradePackSize', header: 'Trade pack size', help: 'Optional. Trade buyers order in whole packs of this many, e.g. 24 for a carton.', aliases: ['pack size', 'carton size'] },
+  { field: 'tradeMinQuantity', header: 'Wholesale minimum', help: 'Optional. The fewest a wholesaler can order of this product, all variants together.', aliases: ['trade minimum', 'trade min', 'minimum order quantity', 'moq'] },
+  { field: 'tradePackSize', header: 'Wholesale pack size', help: 'Optional. Wholesalers order in whole packs of this many, e.g. 24 for a carton.', aliases: ['trade pack size', 'pack size', 'carton size'] },
 ];
 
 export const STOCK_COLUMN_PREFIX = 'Stock:';
@@ -299,7 +299,7 @@ export function parseProductImport(text: string): ParsedImport {
       if (Number.isNaN(reorder) || reorder < 0) rowError('Reorder point must be a number of 0 or more.');
       else product.reorderPoint ??= reorder;
     }
-    for (const [field, label] of [['tradeMinQuantity', 'Trade minimum'], ['tradePackSize', 'Trade pack size']] as const) {
+    for (const [field, label] of [['tradeMinQuantity', 'Wholesale minimum'], ['tradePackSize', 'Wholesale pack size']] as const) {
       const whole = parseAmount(cell(r, field));
       if (whole === null) continue;
       if (Number.isNaN(whole) || whole < 1 || !Number.isInteger(whole)) rowError(`${label} must be a whole number of 1 or more.`);

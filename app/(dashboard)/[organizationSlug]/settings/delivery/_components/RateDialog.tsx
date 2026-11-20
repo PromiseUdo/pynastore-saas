@@ -202,7 +202,7 @@ export function RateDialog({
               ) : (
                 <FieldDescription>
                   When the items in an order come to at least this much, this option is free.
-                  {showTrade && audience !== 'RETAIL' ? ' Applies to trade buyers too, unless you set their own amount below.' : ''}
+                  {showTrade && audience !== 'RETAIL' ? ' Applies to wholesalers too, unless you set their own amount below.' : ''}
                 </FieldDescription>
               )}
             </Field>
@@ -227,14 +227,14 @@ export function RateDialog({
                     <FieldError>{errors.audience}</FieldError>
                   ) : (
                     <FieldDescription>
-                      Trade buyers are the businesses you’ve approved to buy wholesale. Each customer only sees the options meant for them.
+                      Wholesalers are the businesses you’ve approved to buy wholesale. Each customer only sees the options meant for them.
                     </FieldDescription>
                   )}
                 </Field>
 
                 {audience !== 'RETAIL' && (
                   <Field>
-                    <Label htmlFor="rate-trade-free">Free for trade orders over (₦)</Label>
+                    <Label htmlFor="rate-trade-free">Free for wholesale orders over (₦)</Label>
                     <Input
                       id="rate-trade-free"
                       inputMode="decimal"
@@ -247,7 +247,7 @@ export function RateDialog({
                       <FieldError>{errors.tradeFreeOver}</FieldError>
                     ) : (
                       <FieldDescription>
-                        Trade orders are bigger, so they often need their own amount — ₦50,000 is a big retail order and a small trade one.
+                        Wholesale orders are bigger, so they often need their own amount — ₦50,000 is a big retail order and a small wholesale one.
                       </FieldDescription>
                     )}
                   </Field>

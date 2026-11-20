@@ -126,7 +126,7 @@ const MESSAGES: Record<PlaceOrderFailure, string> = {
   'store-closed': 'This shop is closed for now, so it can’t take orders. Nothing has been charged.',
   'store-not-open': 'This shop isn’t open yet, so it can’t take orders. Nothing has been charged.',
   'sign-in-required': 'Sign in or create an account to order from this shop. Your bag is saved.',
-  'trade-rules': 'Your bag doesn’t meet this shop’s trade order rules yet. Go back to your bag to see what to change.',
+  'trade-rules': 'Your bag doesn’t meet this shop’s wholesale order rules yet. Go back to your bag to see what to change.',
   'order-failed': 'We couldn’t place your order. Nothing has been charged — please try again.',
 };
 

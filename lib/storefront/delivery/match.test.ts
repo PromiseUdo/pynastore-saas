@@ -173,7 +173,7 @@ describe('delivery from several stores', () => {
   });
 });
 
-describe('delivery for trade buyers (ROADMAP 21.4A)', () => {
+describe('delivery for wholesalers (ROADMAP 21.4A)', () => {
   const setup: DeliverySetup = {
     zones: [
       zone({
@@ -201,7 +201,7 @@ describe('delivery for trade buyers (ROADMAP 21.4A)', () => {
     expect(offeredTo('TRADE', 'retail')).toBe(false);
   });
 
-  it('gives a trade buyer their own free-delivery threshold, and everyone else the usual one', () => {
+  it('gives a wholesaler their own free-delivery threshold, and everyone else the usual one', () => {
     const address = { state: 'Lagos', city: 'Ikeja' };
     const at = (buyer: 'retail' | 'trade', subtotal: number) =>
       quoteFromSetup(deliveryFor(setup, buyer), address, subtotal).options.find((o) => o.id === 'rate_standard')!.price;

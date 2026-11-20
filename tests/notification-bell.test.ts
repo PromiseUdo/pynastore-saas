@@ -157,7 +157,7 @@ describe('whose list it is', () => {
     expect(items[0].href).toBe('/account/orders/R-9');
   });
 
-  it('links a trade account request to the customer, and the shopper to their trade page (ROADMAP 21.1)', async () => {
+  it('links a wholesale account request to the customer, and the shopper to their trade page (ROADMAP 21.1)', async () => {
     await entry({ userId: ownerId, organizationId: shop.id, target: { type: 'trade', customerId: 'c-trade' } });
     await entry({ customerId, organizationId: shop.id, target: { type: 'trade', customerId } });
     const staff = await latestNotifications({ kind: 'staff', userId: ownerId, organizationId: shop.id });

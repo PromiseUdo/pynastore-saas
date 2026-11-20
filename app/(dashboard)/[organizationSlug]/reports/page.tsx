@@ -61,7 +61,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
     { key: 'discounts', label: 'Discounts and campaigns', locked: !advanced },
     { key: 'by-store', label: 'Which store sells', locked: !advanced },
     // Wholesale (ROADMAP 21.8): while the shop sells to trade buyers, or has trade orders to look back on.
-    ...(showTrade ? [{ key: 'trade' as const, label: 'Retail and trade' }] : []),
+    ...(showTrade ? [{ key: 'trade' as const, label: 'Retail and wholesale' }] : []),
     { key: 'owed', label: 'Money owed' },
   ];
 

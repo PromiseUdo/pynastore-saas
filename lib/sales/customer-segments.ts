@@ -36,8 +36,8 @@ export const CUSTOMER_SEGMENTS = [
     hint: 'Customers who told you they’re happy to hear from you.',
   },
   // Wholesale (ROADMAP 21.1): offered only while wholesale is on (TRADE_SEGMENTS).
-  { key: 'trade', label: 'Trade buyers', hint: 'Businesses you’ve approved to shop as trade buyers.' },
-  { key: 'trade-requests', label: 'Trade requests', hint: 'Shoppers who asked for a trade account and are waiting for your answer.' },
+  { key: 'trade', label: 'Wholesalers', hint: 'Businesses you’ve approved to shop as wholesalers.' },
+  { key: 'trade-requests', label: 'Wholesale requests', hint: 'Shoppers who asked for a wholesale account and are waiting for your answer.' },
 ] as const;
 
 /** The segments that only mean something while the shop sells wholesale. */

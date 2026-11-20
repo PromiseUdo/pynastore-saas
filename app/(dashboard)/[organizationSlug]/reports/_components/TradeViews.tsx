@@ -23,22 +23,22 @@ export function TradeView({ report }: { report: TradeReport }) {
   return (
     <>
       <StatGrid className="sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Trade sales" value={formatMoney(report.trade.sales)} icon={Building2} description={`${pct(report.tradeShareRatio)} of all sales`} />
+        <StatCard title="Wholesale sales" value={formatMoney(report.trade.sales)} icon={Building2} description={`${pct(report.tradeShareRatio)} of all sales`} />
         <StatCard title="Retail sales" value={formatMoney(report.retail.sales)} icon={ShoppingBag} description={`${formatNumber(report.retail.orders)} orders`} />
         <StatCard
-          title="Average trade order"
+          title="Average wholesale order"
           value={report.trade.averageOrder === null ? '—' : formatMoney(report.trade.averageOrder)}
           icon={Building2}
           description={report.retail.averageOrder === null ? undefined : `Retail: ${formatMoney(report.retail.averageOrder)}`}
         />
-        <StatCard title="Trade buyers who ordered" value={formatNumber(report.tradeBuyers)} icon={Users} description={`${formatNumber(report.trade.orders)} trade orders`} />
+        <StatCard title="Wholesalers who ordered" value={formatNumber(report.tradeBuyers)} icon={Users} description={`${formatNumber(report.trade.orders)} wholesale orders`} />
       </StatGrid>
 
       {report.rows.length === 0 ? (
         <EmptyState
           icon={Building2}
-          title="No trade orders in this period"
-          description="Orders placed by your approved trade buyers show here. Make a customer a trade buyer from their page in Customers."
+          title="No wholesale orders in this period"
+          description="Orders placed by your approved wholesalers show here. Make a customer a wholesaler from their page in Customers."
         />
       ) : (
         <TableWrapper>
@@ -46,7 +46,7 @@ export function TradeView({ report }: { report: TradeReport }) {
             <TableHead>
               <TableRow>
                 <TableColumnHeader className="w-10">#</TableColumnHeader>
-                <TableColumnHeader primary>Trade buyer</TableColumnHeader>
+                <TableColumnHeader primary>Wholesaler</TableColumnHeader>
                 <TableColumnHeader align="right">Orders</TableColumnHeader>
                 <TableColumnHeader align="right">Spent</TableColumnHeader>
                 <TableColumnHeader align="right">Owes you now</TableColumnHeader>
@@ -106,7 +106,7 @@ export function MoneyOwedView({ report }: { report: MoneyOwedReport }) {
         <EmptyState
           icon={Wallet}
           title="Nobody owes you anything"
-          description="Orders on a trade buyer’s account and invoices you’ve sent show here until they’re paid."
+          description="Orders on a wholesaler’s account and invoices you’ve sent show here until they’re paid."
         />
       ) : (
         <TableWrapper>
@@ -134,7 +134,7 @@ export function MoneyOwedView({ report }: { report: MoneyOwedReport }) {
                       >
                         {r.name}
                       </Link>
-                      {r.trade && <Badge variant="approved">Trade</Badge>}
+                      {r.trade && <Badge variant="approved">Wholesale</Badge>}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {formatNumber(r.items)} open · {r.oldestDueAt ? `oldest due ${formatDate(r.oldestDueAt)}` : 'no due date'} ·{' '}

@@ -76,7 +76,7 @@ export function WholesaleSettingsClient({
     const typed = minOrder.replace(/,/g, '').trim();
     const minOrderValue = typed ? Number(typed) : null;
     if (minOrderValue !== null && (!Number.isFinite(minOrderValue) || minOrderValue < 0)) {
-      setError('Enter the minimum trade order as an amount, like 50000 — or leave it empty.');
+      setError('Enter the minimum wholesale order as an amount, like 50000 — or leave it empty.');
       return;
     }
     const days = Number(accountDays.trim());
@@ -100,10 +100,10 @@ export function WholesaleSettingsClient({
     <>
       <PageHeader
         title="Wholesale"
-        description="Sell to other businesses on the same website, as trade buyers you approve."
+        description="Sell to other businesses on the same website, as wholesalers you approve."
         actions={
           <Link href="/sales/customers?segment=trade" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-            Trade buyers
+            Wholesalers
             <ArrowRight className="size-3.5" />
           </Link>
         }
@@ -111,8 +111,8 @@ export function WholesaleSettingsClient({
       <PageBody className="max-w-3xl space-y-8">
         {!onPlan && (
           <PlanLockedNote feature="sales.wholesale">
-            Wholesale isn’t on your plan, so it’s off: trade buyers see your usual prices and can’t ask for a trade account.
-            Your settings and trade buyers are kept for when it’s back.
+            Wholesale isn’t on your plan, so it’s off: wholesalers see your usual prices and can’t ask for a wholesale account.
+            Your settings and wholesalers are kept for when it’s back.
           </PlanLockedNote>
         )}
         {error && (
@@ -141,7 +141,7 @@ export function WholesaleSettingsClient({
               Who can shop
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Trade buyers are businesses you approve. You manage them in Customers.
+              Wholesalers are businesses you approve. You manage them in Customers.
             </p>
           </div>
           <RadioGroupPrimitive.Root
@@ -182,14 +182,14 @@ export function WholesaleSettingsClient({
           <>
             <section aria-labelledby="wholesale-requests" className="space-y-3">
               <h2 id="wholesale-requests" className="text-sm font-semibold">
-                New trade buyers
+                New wholesalers
               </h2>
               <div className="flex items-start justify-between gap-4 rounded-lg border bg-card p-3.5">
                 <div className="min-w-0">
-                  <Label htmlFor="wholesale-requests-open">Let businesses ask for a trade account</Label>
+                  <Label htmlFor="wholesale-requests-open">Let businesses ask for a wholesale account</Label>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Adds a “Buy wholesale” page to your shop, where a signed-in shopper can send their business details. Each
-                    request waits for you to approve or decline it. Off, only businesses you invite become trade buyers.
+                    request waits for you to approve or decline it. Off, only businesses you invite become wholesalers.
                   </p>
                 </div>
                 <SwitchRoot
@@ -203,10 +203,10 @@ export function WholesaleSettingsClient({
 
             <section aria-labelledby="wholesale-min-order" className="space-y-3">
               <h2 id="wholesale-min-order" className="text-sm font-semibold">
-                Minimum trade order
+                Minimum wholesale order
               </h2>
               <div className="rounded-lg border bg-card p-3.5">
-                <Label htmlFor="wholesale-min-order-value">Smallest trade order</Label>
+                <Label htmlFor="wholesale-min-order-value">Smallest wholesale order</Label>
                 <Input
                   id="wholesale-min-order-value"
                   className="mt-1.5 max-w-48"
@@ -218,7 +218,7 @@ export function WholesaleSettingsClient({
                   disabled={!canEdit}
                 />
                 <FieldDescription className="mt-1.5">
-                  What a trade buyer’s goods must come to before they can check out — before any discount and delivery. Each
+                  What a wholesaler’s goods must come to before they can check out — before any discount and delivery. Each
                   product’s own minimum and pack size are set on the product.
                 </FieldDescription>
               </div>
@@ -251,7 +251,7 @@ export function WholesaleSettingsClient({
                   Wholesale prices and VAT
                 </h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Your retail prices always include VAT. Many wholesalers quote trade prices before VAT instead.
+                  Your retail prices always include VAT. Many wholesalers quote wholesale prices before VAT instead.
                 </p>
               </div>
               {vatRegistered ? (
@@ -263,11 +263,11 @@ export function WholesaleSettingsClient({
                   className="grid gap-2"
                 >
                   {[
-                    { value: 'included', label: 'My wholesale prices include VAT', hint: 'Like your retail prices: what trade buyers see is what they pay.' },
+                    { value: 'included', label: 'My wholesale prices include VAT', hint: 'Like your retail prices: what wholesalers see is what they pay.' },
                     {
                       value: 'added',
                       label: 'VAT is added to my wholesale prices',
-                      hint: 'Trade buyers see “+ VAT” beside every wholesale price, and VAT is added as its own line at checkout and on their receipt.',
+                      hint: 'Wholesalers see “+ VAT” beside every wholesale price, and VAT is added as its own line at checkout and on their receipt.',
                     },
                   ].map((choice) => (
                     <label
@@ -308,10 +308,10 @@ export function WholesaleSettingsClient({
             <section aria-labelledby="wholesale-pay" className="space-y-3">
               <div>
                 <h2 id="wholesale-pay" className="text-sm font-semibold">
-                  How trade buyers can pay
+                  How wholesalers can pay
                 </h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  For example, turn off pay on delivery to have every trade order paid before it leaves. This only narrows
+                  For example, turn off pay on delivery to have every wholesale order paid before it leaves. This only narrows
                   what your shop already offers.
                 </p>
               </div>

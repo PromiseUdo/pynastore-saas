@@ -74,7 +74,7 @@ export function AccountTermsCard({
           ? `They can order now and pay you within ${days} days${data.days === null ? ' (your default)' : ''}${
               data.creditLimit !== null ? `, owing up to ${formatMoney(data.creditLimit)} at once` : ', with no limit'
             }. Nothing overdue is allowed before a new order.`
-          : 'Off: they pay at checkout or on delivery, as you allow for trade orders. Give credit only to buyers you trust.'}
+          : 'Off: they pay at checkout or on delivery, as you allow for wholesale orders. Give credit only to buyers you trust.'}
       </p>
 
       <dl className="grid grid-cols-2 gap-2">

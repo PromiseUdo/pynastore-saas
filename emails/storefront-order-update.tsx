@@ -203,7 +203,7 @@ function body(props: StorefrontOrderUpdateEmailProps): string[] {
       ];
     case 'placed-on-account':
       return [
-        `${props.storeName} has your order and is getting it ready. It’s on your trade account: nothing to pay now.`,
+        `${props.storeName} has your order and is getting it ready. It’s on your wholesale account: nothing to pay now.`,
         `Pay ${props.total} to the store by ${props.accountDueDate ?? 'the due date'}. Your invoice shows how to pay.`,
       ];
     case 'account-due-soon':

@@ -120,7 +120,7 @@ describe('discount codes', () => {
   });
 });
 
-describe('a trade buyer’s bag when VAT is added to wholesale prices (ROADMAP 21.2)', () => {
+describe('a wholesaler’s bag when VAT is added to wholesale prices (ROADMAP 21.2)', () => {
   const wholesale = item({ atWholesale: true, unitPrice: 1_000_000 }); // ₦10,000 before VAT
   const retail = item({ variantId: 'v2', unitPrice: 1_075_000 }); // ₦10,750, VAT inside
 

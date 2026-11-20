@@ -25,11 +25,11 @@ export type TradeRequestState = {
 } | null;
 
 const REFUSED: Record<string, string> = {
-  'wholesale-off': 'This shop isn’t taking trade accounts at the moment.',
-  'requests-closed': 'This shop isn’t taking trade account requests at the moment. Please contact them directly.',
-  'already-trade': 'You already have a trade account here.',
+  'wholesale-off': 'This shop isn’t taking wholesale accounts at the moment.',
+  'requests-closed': 'This shop isn’t taking wholesale account requests at the moment. Please contact them directly.',
+  'already-trade': 'You already have a wholesale account here.',
   waiting: 'Your request is already with the store.',
-  paused: 'Your trade account is paused. Please contact the store.',
+  paused: 'Your wholesale account is paused. Please contact the store.',
   'not-found': 'Your session has ended. Please sign in again.',
   changed: 'Your request was just updated. Refresh the page to see where it is.',
 };

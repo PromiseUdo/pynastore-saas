@@ -52,7 +52,7 @@ import {
 /** What happened to a sign-in invitation, in the merchant's words. */
 const INVITE_WORDS: Record<InviteResult, string | null> = {
   sent: 'We’ve emailed them a link to set up their sign-in.',
-  'has-sign-in': 'They can already sign in, so we’ve emailed them that they’re a trade buyer.',
+  'has-sign-in': 'They can already sign in, so we’ve emailed them that they’re a wholesaler.',
   'no-email': 'They have no email address, so they can’t be invited to sign in. Add one first.',
   'too-soon': 'An invitation went out a moment ago — try again in a minute.',
   'not-sent': 'We couldn’t send the invitation email. Try again from their customer page.',
@@ -160,8 +160,8 @@ export function InviteTradeBuyerDialog({ open, onOpenChange }: { open: boolean; 
       return;
     }
     const words = INVITE_WORDS[result.data.invite];
-    if (result.data.invite === 'sent' || result.data.invite === 'has-sign-in') toast.success(`${details.businessName} is a trade buyer. ${words}`);
-    else toast.warning(`${details.businessName} is a trade buyer. ${words}`);
+    if (result.data.invite === 'sent' || result.data.invite === 'has-sign-in') toast.success(`${details.businessName} is a wholesaler. ${words}`);
+    else toast.warning(`${details.businessName} is a wholesaler. ${words}`);
     onOpenChange(false);
     router.push(`/sales/customers/${result.data.customerId}`);
   }
@@ -171,9 +171,9 @@ export function InviteTradeBuyerDialog({ open, onOpenChange }: { open: boolean; 
       <DialogContent>
         <form onSubmit={submit} noValidate>
           <DialogHeader>
-            <DialogTitle>Invite a trade buyer</DialogTitle>
+            <DialogTitle>Invite a wholesaler</DialogTitle>
             <DialogDescription>
-              A business you already supply. They become a trade buyer straight away, and we email them a link to set up
+              A business you already supply. They become a wholesaler straight away, and we email them a link to set up
               their sign-in. If they’re already a customer, we use that record.
             </DialogDescription>
           </DialogHeader>
@@ -212,7 +212,7 @@ export function InviteTradeBuyerDialog({ open, onOpenChange }: { open: boolean; 
             </DialogClose>
             <Button type="submit" size="sm" disabled={pending}>
               {pending && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
-              Invite trade buyer
+              Invite wholesaler
             </Button>
           </DialogFooter>
         </form>
@@ -293,7 +293,7 @@ export function TradeAccountCard({
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold">
           <Building2 className="size-3.5 text-muted-foreground" aria-hidden />
-          Trade account
+          Wholesale account
         </h2>
         {trade && <TradeStatusBadge status={trade.status} />}
       </div>
@@ -301,11 +301,11 @@ export function TradeAccountCard({
       {!trade ? (
         <>
           <p className="text-xs text-muted-foreground">
-            Not a trade buyer. Make them one if they buy for a business you supply.
+            Not a wholesaler. Make them one if they buy for a business you supply.
           </p>
           {canManage && (
             <Button size="sm" variant="outline" className="w-full" onClick={() => setDialog('make')}>
-              Make trade buyer
+              Make wholesaler
             </Button>
           )}
         </>
@@ -330,7 +330,7 @@ export function TradeAccountCard({
             <p className="text-xs text-muted-foreground">
               Approved{trade.decidedAt ? ` ${formatDate(trade.decidedAt)}` : ''}
               {trade.decidedByName ? ` by ${trade.decidedByName}` : ''}.
-              {!wholesaleOn && ' Wholesale is off, so trade terms don’t apply right now.'}
+              {!wholesaleOn && ' Wholesale is off, so wholesale terms don’t apply right now.'}
               {!canSignIn && (hasEmail ? ' They haven’t set up their sign-in yet.' : ' They have no email, so they can’t sign in to your shop.')}
             </p>
           )}
@@ -377,7 +377,7 @@ export function TradeAccountCard({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => run(() => reinstateTradeBuyer(customerId), `${trade.businessName} is a trade buyer again`)}
+                  onClick={() => run(() => reinstateTradeBuyer(customerId), `${trade.businessName} is a wholesaler again`)}
                   disabled={pending || !wholesaleOn}
                 >
                   {pending && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
@@ -395,7 +395,7 @@ export function TradeAccountCard({
               <Link href="/settings/wholesale" className="font-medium text-primary hover:underline">
                 Settings → Wholesale
               </Link>{' '}
-              to approve trade buyers.
+              to approve wholesalers.
             </p>
           )}
         </>
@@ -425,7 +425,7 @@ export function TradeAccountCard({
               return;
             }
             const inviteWords = result.data.invite ? INVITE_WORDS[result.data.invite] : null;
-            const message = `${details.businessName} is a trade buyer${inviteWords ? `. ${inviteWords}` : ' — they’ve been emailed'}`;
+            const message = `${details.businessName} is a wholesaler${inviteWords ? `. ${inviteWords}` : ' — they’ve been emailed'}`;
             if (result.data.invite && result.data.invite !== 'sent' && result.data.invite !== 'has-sign-in') toast.warning(message);
             else toast.success(message);
             setDialog(null);
@@ -442,7 +442,7 @@ export function TradeAccountCard({
           onConfirm={(reason) =>
             run(
               () => (dialog === 'decline' ? declineTradeRequest(customerId, { reason }) : suspendTradeBuyer(customerId, { reason })),
-              dialog === 'decline' ? 'Request declined — they’ve been told' : 'Trade account paused — they’ve been told',
+              dialog === 'decline' ? 'Request declined — they’ve been told' : 'Wholesale account paused — they’ve been told',
             )
           }
           pending={pending}
@@ -493,8 +493,8 @@ function DetailsDialog({
     setPending(false);
   }
 
-  const title = mode === 'edit' ? 'Business details' : mode === 'approve' ? 'Approve trade account' : 'Make trade buyer';
-  const action = mode === 'edit' ? 'Save details' : mode === 'approve' ? 'Approve trade buyer' : 'Make trade buyer';
+  const title = mode === 'edit' ? 'Business details' : mode === 'approve' ? 'Approve wholesale account' : 'Make wholesaler';
+  const action = mode === 'edit' ? 'Save details' : mode === 'approve' ? 'Approve wholesaler' : 'Make wholesaler';
 
   return (
     <DialogRoot open onOpenChange={(next) => !next && !pending && onClose()}>
@@ -505,7 +505,7 @@ function DetailsDialog({
             <DialogDescription>
               {mode === 'edit'
                 ? 'Correct the business they buy for.'
-                : 'They’ll shop as a trade buyer from now on, and we’ll email to tell them.'}
+                : 'They’ll shop as a wholesaler from now on, and we’ll email to tell them.'}
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 space-y-4">
@@ -560,11 +560,11 @@ function ReasonDialog({
     <AlertDialogRoot open onOpenChange={(next) => !next && !pending && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{kind === 'decline' ? `Decline ${businessName}’s request?` : `Pause ${businessName}’s trade account?`}</AlertDialogTitle>
+          <AlertDialogTitle>{kind === 'decline' ? `Decline ${businessName}’s request?` : `Pause ${businessName}’s wholesale account?`}</AlertDialogTitle>
           <AlertDialogDescription>
             {kind === 'decline'
-              ? 'They’ll be emailed that you can’t open a trade account for them now, and can still shop at your normal prices. They may ask again later.'
-              : 'Trade terms stop applying to them until you reinstate the account, and they’ll be emailed that it’s paused.'}
+              ? 'They’ll be emailed that you can’t open a wholesale account for them now, and can still shop at your normal prices. They may ask again later.'
+              : 'Wholesale terms stop applying to them until you reinstate the account, and they’ll be emailed that it’s paused.'}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <Field>
@@ -576,7 +576,7 @@ function ReasonDialog({
           <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
           <Button variant="destructive" onClick={() => onConfirm(reason)} disabled={pending}>
             {pending && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
-            {kind === 'decline' ? 'Decline request' : 'Pause trade account'}
+            {kind === 'decline' ? 'Decline request' : 'Pause wholesale account'}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

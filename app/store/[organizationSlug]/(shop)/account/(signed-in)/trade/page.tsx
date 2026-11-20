@@ -14,7 +14,7 @@ import { AccountCard } from '../../_components/account-card';
 import { AccountHeading } from '../../_components/account-heading';
 import { TradeRequestForm } from '../../_components/trade-request-form';
 
-export const metadata: Metadata = { title: 'Trade account' };
+export const metadata: Metadata = { title: 'Wholesale account' };
 
 export default async function TradeAccountPage() {
   const shopper = (await getShopper())!;
@@ -47,11 +47,11 @@ export default async function TradeAccountPage() {
 
   return (
     <div className="space-y-5">
-      <AccountHeading>Trade account</AccountHeading>
+      <AccountHeading>Wholesale account</AccountHeading>
 
       {standing?.status === 'APPROVED' && (
         <AccountCard
-          title="You’re a trade buyer"
+          title="You’re a wholesaler"
           description={
             on
               ? `You shop here as ${standing.businessName}.${standing.decidedAt ? ` Approved ${formatDate(standing.decidedAt.toISOString())}.` : ''}`
@@ -129,8 +129,8 @@ export default async function TradeAccountPage() {
 
       {standing?.status === 'SUSPENDED' && (
         <AccountCard
-          title="Your trade account is paused"
-          description="Trade terms don’t apply for now. Please contact the store if you have questions."
+          title="Your wholesale account is paused"
+          description="Wholesale terms don’t apply for now. Please contact the store if you have questions."
         >
           {standing.decisionReason && <p className="text-sm">The store’s note: “{standing.decisionReason}”</p>}
           {details}
@@ -139,7 +139,7 @@ export default async function TradeAccountPage() {
 
       {standing?.status === 'DECLINED' && (
         <AccountCard
-          title="The store couldn’t open a trade account for you"
+          title="The store couldn’t open a wholesale account for you"
           description="You can keep shopping as a normal customer."
         >
           {standing.decisionReason && <p className="text-sm">The store’s note: “{standing.decisionReason}”</p>}
@@ -156,16 +156,16 @@ export default async function TradeAccountPage() {
         (on && settings.requestsOpen ? (
           <AccountCard
             title="Buy wholesale"
-            description="If you buy for a business — a shop, a restaurant, a reseller — ask the store for a trade account. They’ll check your details and email you their answer."
+            description="If you buy for a business — a shop, a restaurant, a reseller — ask the store for a wholesale account. They’ll check your details and email you their answer."
           >
             <TradeRequestForm taxId={taxId ?? ''} />
           </AccountCard>
         ) : (
           <AccountCard
-            title={on ? 'Trade accounts are by invitation' : 'This shop doesn’t sell wholesale'}
+            title={on ? 'Wholesale accounts are by invitation' : 'This shop doesn’t sell wholesale'}
             description={
               on
-                ? 'This shop sets up trade accounts for the businesses it supplies. Please contact them if you’d like one.'
+                ? 'This shop sets up wholesale accounts for the businesses it supplies. Please contact them if you’d like one.'
                 : 'There’s nothing to set up here.'
             }
           >

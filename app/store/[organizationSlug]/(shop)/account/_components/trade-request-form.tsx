@@ -61,7 +61,7 @@ export function TradeRequestForm({ businessName = '', taxId = '' }: { businessNa
       />
       <div className="sm:max-w-[16rem]">
         <SubmitButton pending={pending} pendingLabel="Sending…">
-          Ask for a trade account
+          Ask for a wholesale account
         </SubmitButton>
       </div>
     </form>

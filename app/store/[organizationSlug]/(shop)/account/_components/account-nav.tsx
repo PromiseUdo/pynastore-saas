@@ -27,7 +27,7 @@ import { signOutAction } from '@/features/shop-account/actions';
 const ITEMS = [
   { href: '/account', label: 'Overview', icon: LayoutGrid },
   { href: '/account/orders', label: 'Orders', icon: Package },
-  { href: '/account/trade', label: 'Trade account', icon: Building2 },
+  { href: '/account/trade', label: 'Wholesale account', icon: Building2 },
   { href: '/account/notifications', label: 'Notifications', icon: Bell },
   { href: '/account/addresses', label: 'Addresses', icon: MapPin },
   { href: '/account/profile', label: 'Profile', icon: UserRound },

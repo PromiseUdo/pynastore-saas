@@ -243,7 +243,7 @@ export default async function StorefrontRootLayout({
           ) : null}
           <h1 className="font-display text-3xl">{organization.name} sells to businesses</h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            Products and prices are for approved trade buyers. Sign in if you have a trade account, or find out how to get one.
+            Products and prices are for approved wholesalers. Sign in if you have a wholesale account, or find out how to get one.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <a href="/account/sign-in" className={`${button} bg-brand text-primary-foreground hover:opacity-90`}>
