@@ -131,7 +131,7 @@ const row = (id: string) =>
   });
 
 describe('who may pay on account', () => {
-  it('is offered only to a trade buyer given credit', async () => {
+  it('is offered only to a wholesaler given credit', async () => {
     const credit = await configFor(people.credit);
     expect(credit.paymentMethods.map((m) => m.id)).toContain('account');
     expect(credit.tradeAccount).toMatchObject({ days: 30, creditLimit: 10_000_000, owed: 0, overdue: 0 });

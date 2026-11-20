@@ -72,9 +72,9 @@ const EXPLAINER: Record<ReportsView, string> = {
   'by-store':
     'Goods that left each store’s shelf in the period, at the price the customer paid — counter sales and the website together. Delivery and discount codes belong to the whole order, so they are left out, and returns are not deducted.',
   trade:
-    'Orders placed in the period by your approved trade buyers, beside everyone else’s — at what was charged, with delivery and VAT, cancelled orders left out. “Owes you now” is today’s figure, not the period’s.',
+    'Orders placed in the period by your approved wholesalers, beside everyone else’s — at what was charged, with delivery and VAT, cancelled orders left out. “Owes you now” is today’s figure, not the period’s.',
   owed:
-    'What customers owe you today — orders on a trade buyer’s account and invoices you’ve sent, less what you’ve recorded receiving — by how late it is. The period above doesn’t apply: this is where things stand now. Something with no due date counts as not due.',
+    'What customers owe you today — orders on a wholesaler’s account and invoices you’ve sent, less what you’ve recorded receiving — by how late it is. The period above doesn’t apply: this is where things stand now. Something with no due date counts as not due.',
 };
 
 const LOCKED_COPY: Record<'discounts' | 'by-store', { title: string; description: string }> = {
@@ -312,10 +312,10 @@ function ExportFor({ data, suffix }: { data: Exclude<ReportsData, { view: 'locke
     case 'trade':
       return (
         <ExportCsvButton
-          name={`Trade buyers ${suffix}`}
+          name={`Wholesalers ${suffix}`}
           rows={data.report.rows}
           columns={[
-            { header: 'Trade buyer', value: (r) => r.businessName },
+            { header: 'Wholesaler', value: (r) => r.businessName },
             { header: 'Orders', value: (r) => r.orders },
             { header: 'Spent', value: (r) => r.spend },
             { header: 'Owes now', value: (r) => r.owed },
@@ -330,7 +330,7 @@ function ExportFor({ data, suffix }: { data: Exclude<ReportsData, { view: 'locke
           rows={data.report.rows}
           columns={[
             { header: 'Customer', value: (r) => r.name },
-            { header: 'Trade buyer', value: (r) => (r.trade ? 'Yes' : 'No') },
+            { header: 'Wholesaler', value: (r) => (r.trade ? 'Yes' : 'No') },
             { header: 'Not due yet', value: (r) => r.ages.notDue },
             { header: '1–30 days late', value: (r) => r.ages.days1to30 },
             { header: '31–60 days late', value: (r) => r.ages.days31to60 },

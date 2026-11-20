@@ -402,7 +402,7 @@ describe('checkout validation', () => {
     expect(validateCheckout(draft({ paymentMethodId: null }))?.code).toBe('invalid-payment-method');
   });
 
-  it('asks a trade buyer which business the invoice is made out to, and nobody else (21.6)', () => {
+  it('asks a wholesaler which business the invoice is made out to, and nobody else (21.6)', () => {
     const trade = { ...config, tradeBuyer: true };
     const failure = validateCheckout(draft({ config: trade, business: { name: '', taxId: '' } }));
     expect(failure?.code).toBe('invalid-details');
@@ -507,7 +507,7 @@ describe('handing a valid checkout to the server', () => {
     expect(payload).not.toContain('totals');
   });
 
-  it('sends a trade buyer’s business, and nobody else’s (21.6)', async () => {
+  it('sends a wholesaler’s business, and nobody else’s (21.6)', async () => {
     const business = { name: 'Bola Stores', taxId: '1234' };
     await submitCheckout(draft({ config: { ...config, tradeBuyer: true }, business }));
     expect((placeOrderAction.mock.calls[0][0] as { business?: unknown }).business).toEqual(business);

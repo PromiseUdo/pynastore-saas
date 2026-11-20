@@ -42,15 +42,15 @@ export default async function WholesalePage({
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
           {settings.mode === 'TRADE_ONLY'
-            ? 'This shop sells to businesses. Approved trade buyers can see the products and order.'
-            : 'If you buy for a business, you can shop here as a trade buyer.'}
+            ? 'This shop sells to businesses. Approved wholesalers can see the products and order.'
+            : 'If you buy for a business, you can shop here as a wholesaler.'}
         </p>
 
         <div className="mt-7 space-y-4 rounded-3xl border border-border bg-card p-5 sm:p-6">
           {standing?.status === 'APPROVED' ? (
             <>
               <p className="text-sm">
-                You’re a trade buyer here, as {standing.businessName}.
+                You’re a wholesaler here, as {standing.businessName}.
               </p>
               <Link
                 href={
@@ -62,20 +62,20 @@ export default async function WholesalePage({
               >
                 {settings.mode === 'TRADE_ONLY'
                   ? 'Start shopping'
-                  : 'See your trade account'}
+                  : 'See your wholesale account'}
               </Link>
             </>
           ) : standing ? (
             <>
               <p className="text-sm">
-                You’ve already been in touch about a trade account. See where it
+                You’ve already been in touch about a wholesale account. See where it
                 stands in your account.
               </p>
               <Link
                 href="/account/trade"
                 className={`${BUTTON} bg-brand text-primary-foreground hover:opacity-90`}
               >
-                See your trade account
+                See your wholesale account
               </Link>
             </>
           ) : settings.requestsOpen ? (
@@ -96,7 +96,7 @@ export default async function WholesalePage({
                   href="/account/trade"
                   className={`${BUTTON} bg-brand text-primary-foreground hover:opacity-90`}
                 >
-                  Ask for a trade account
+                  Ask for a wholesale account
                 </Link>
               ) : (
                 <div className="flex flex-wrap gap-3">
@@ -118,7 +118,7 @@ export default async function WholesalePage({
           ) : (
             <>
               <p className="text-sm">
-                Trade accounts here are by invitation: the store sets them up
+                Wholesale accounts here are by invitation: the store sets them up
                 for the businesses it supplies. Please get in touch with them if
                 you’d like one.
               </p>

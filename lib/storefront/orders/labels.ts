@@ -51,7 +51,7 @@ export function paymentHint(status: OrderPaymentStatus): string {
     case 'DUE_ON_DELIVERY':
       return 'Have the exact amount ready for the courier.';
     case 'ON_ACCOUNT':
-      return 'On your trade account: pay the store by the due date on your invoice. They record it when it arrives.';
+      return 'On your wholesale account: pay the store by the due date on your invoice. They record it when it arrives.';
     case 'AWAITING_DELIVERY_PRICE':
       return 'The store is working out delivery for an order this size. Nothing is charged until you’ve seen the price and accepted it.';
     case 'PAID':

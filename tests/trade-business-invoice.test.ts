@@ -146,7 +146,7 @@ const business = (orderId: string) =>
   });
 
 describe('business details at checkout', () => {
-  it('fills in a trade buyer’s business from their account', async () => {
+  it('fills in a wholesaler’s business from their account', async () => {
     expect(await tradeBusinessOnFile(store.id, buyerId)).toEqual({ name: 'Bola Stores', taxId: '' });
     expect(await tradeBusinessOnFile(store.id, shopperId)).toBeNull();
   });

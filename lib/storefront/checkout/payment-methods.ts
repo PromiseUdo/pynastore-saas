@@ -74,7 +74,7 @@ export function onAccountPaymentMethod(dueDateLabel: string): PaymentMethodOptio
   return {
     id: 'account',
     label: 'Pay on account',
-    description: `Pay by ${dueDateLabel}, on your trade account`,
+    description: `Pay by ${dueDateLabel}, on your wholesale account`,
     handoffNote: `Nothing is paid now. The store sends your order as usual, and you pay them by ${dueDateLabel} — your invoice for this order shows the amount and how to pay.`,
     provider: 'manual',
     settlesOnDelivery: true,

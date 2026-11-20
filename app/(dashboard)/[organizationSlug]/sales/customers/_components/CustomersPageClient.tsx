@@ -123,7 +123,7 @@ export function CustomersPageClient({
           {wholesaleOn && canManageTrade && (
             <Button size="sm" variant="outline" onClick={() => setInviteOpen(true)}>
               <Building2 className="size-3.5" />
-              Invite a trade buyer
+              Invite a wholesaler
             </Button>
           )}
           {newCustomerButton}
@@ -348,7 +348,7 @@ const CSV_COLUMNS = [
   { header: 'Last order', value: (row: CustomerListRow) => row.lastOrderAt ?? '' },
   { header: 'Returns', value: (row: CustomerListRow) => row.returnCount },
   { header: 'Agreed to marketing', value: (row: CustomerListRow) => (row.marketingConsent ? 'Yes' : 'No') },
-  { header: 'Trade', value: (row: CustomerListRow) => (row.tradeStatus === 'APPROVED' ? 'Trade buyer' : row.tradeStatus === 'REQUESTED' ? 'Asked for trade' : '') },
+  { header: 'Wholesale', value: (row: CustomerListRow) => (row.tradeStatus === 'APPROVED' ? 'Wholesaler' : row.tradeStatus === 'REQUESTED' ? 'Asked for wholesale' : '') },
   { header: 'Labels', value: (row: CustomerListRow) => row.tags.join(', ') },
   { header: 'Added', value: (row: CustomerListRow) => row.createdAt },
 ];

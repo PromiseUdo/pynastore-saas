@@ -84,7 +84,7 @@ export function ArrangedDeliveryDialog({
           <DialogHeader>
             <DialogTitle>Delivery to be arranged</DialogTitle>
             <DialogDescription>
-              For trade orders from {store.name} too big for a fixed price — a truck, not a bike. The buyer orders the goods, you
+              For wholesale orders from {store.name} too big for a fixed price — a truck, not a bike. The buyer orders the goods, you
               work out delivery and set the price, and they pay once they’ve seen it.
             </DialogDescription>
           </DialogHeader>
@@ -98,9 +98,9 @@ export function ArrangedDeliveryDialog({
 
             <div className="flex items-start justify-between gap-4 rounded-md border p-3">
               <div>
-                <Label htmlFor="arranged-on">Offer it to trade buyers</Label>
+                <Label htmlFor="arranged-on">Offer it to wholesalers</Label>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Shown at checkout beside your normal options, only to approved trade buyers and only for orders this size.
+                  Shown at checkout beside your normal options, only to approved wholesalers and only for orders this size.
                 </p>
               </div>
               <SwitchRoot id="arranged-on" checked={on} onCheckedChange={setOn} />

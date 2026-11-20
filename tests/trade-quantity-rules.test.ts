@@ -114,7 +114,7 @@ async function order(customerId: string, quantity: number, tradeBuyer: boolean) 
 }
 
 describe('the catalogue', () => {
-  it('gives a trade buyer the product’s rules, and nobody else any', async () => {
+  it('gives a wholesaler the product’s rules, and nobody else any', async () => {
     const trade = await loadCatalogueFromDb(store.slug, TRADE);
     expect(trade!.products.find((p) => p.id === riceId)!.trade).toEqual({ minQuantity: 20, packSize: 10 });
     const retail = await loadCatalogueFromDb(store.slug, RETAIL_PRICING);
@@ -129,7 +129,7 @@ beforeEach(() => {
 describe('placing an order', () => {
   const as = (customerId: string) => (session.shopper = { id: customerId, organizationId: store.id });
 
-  it('refuses a trade buyer’s order under the product’s minimum', async () => {
+  it('refuses a wholesaler’s order under the product’s minimum', async () => {
     as(buyerId);
     const result = await order(buyerId, 10, true);
     expect(result).toMatchObject({ ok: false, code: 'trade-rules', message: 'Rice (5kg): order at least 20 (you have 10).' });
@@ -142,7 +142,7 @@ describe('placing an order', () => {
     expect(!result.ok && result.message).toContain('packs of 10');
   });
 
-  it('lets a trade buyer order more than 99, in whole packs, at the wholesale price', async () => {
+  it('lets a wholesaler order more than 99, in whole packs, at the wholesale price', async () => {
     as(buyerId);
     const result = await order(buyerId, 150, true);
     expect(result.ok).toBe(true);
@@ -152,16 +152,16 @@ describe('placing an order', () => {
     expect(Number(line.unitPrice)).toBe(8000);
   });
 
-  it('holds the shop’s minimum trade order', async () => {
+  it('holds the shop’s minimum wholesale order', async () => {
     as(buyerId);
     await prisma.organization.update({ where: { id: store.id }, data: { tradeMinOrderValue: 500_000 } });
     const result = await order(buyerId, 20, true);
     expect(result).toMatchObject({ ok: false, code: 'trade-rules' });
-    expect(!result.ok && result.message).toContain('Trade orders start at');
+    expect(!result.ok && result.message).toContain('Wholesale orders start at');
     await prisma.organization.update({ where: { id: store.id }, data: { tradeMinOrderValue: null } });
   });
 
-  it('never applies any of it to a shopper who isn’t a trade buyer', async () => {
+  it('never applies any of it to a shopper who isn’t a wholesaler', async () => {
     as(shopperId);
     const one = await order(shopperId, 1, false);
     expect(one.ok).toBe(true);

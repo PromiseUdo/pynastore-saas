@@ -97,7 +97,7 @@ afterAll(async () => {
 });
 
 describe('retail and trade', () => {
-  it('splits the period’s sales by whether a trade buyer placed the order', async () => {
+  it('splits the period’s sales by whether a wholesaler placed the order', async () => {
     const result = await getTradeReport(PERIOD);
     if (!result.success) throw new Error(result.error);
     const report = result.data;

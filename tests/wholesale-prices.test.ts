@@ -161,7 +161,7 @@ describe('the catalogue', () => {
     expect(catalogue!.products.find((p) => p.id === teeId)!.wholesale).toBeUndefined();
   });
 
-  it('gives a trade buyer the wholesale price — the variant’s own, else the product’s — and retail where there is none', async () => {
+  it('gives a wholesaler the wholesale price — the variant’s own, else the product’s — and retail where there is none', async () => {
     const catalogue = await loadCatalogueFromDb(store.slug, TRADE);
     expect(price(catalogue, teeId, teeRed)).toMatchObject({ price: 350_000, compareAtPrice: null, atWholesale: true });
     expect(price(catalogue, teeId, teeNavy)).toMatchObject({ price: 380_000, atWholesale: true });
@@ -172,7 +172,7 @@ describe('the catalogue', () => {
 });
 
 describe('whose prices a request gets', () => {
-  it('is wholesale only for an approved trade buyer of this shop', async () => {
+  it('is wholesale only for an approved wholesaler of this shop', async () => {
     expect(await getBuyerPricing(store.slug)).toEqual(RETAIL_PRICING);
     session.shopper = { id: walkerId, organizationId: store.id };
     expect(await getBuyerPricing(store.slug)).toEqual(RETAIL_PRICING);
@@ -190,7 +190,7 @@ describe('whose prices a request gets', () => {
   });
 });
 
-describe('placing a trade order', () => {
+describe('placing a wholesale order', () => {
   it('charges the wholesale price, marks the line, and adds VAT only to it', async () => {
     session.shopper = { id: buyerId, organizationId: store.id };
     await prisma.organization.update({ where: { id: store.id }, data: { wholesaleVatAdded: true } });
@@ -230,7 +230,7 @@ describe('placing a trade order', () => {
     await prisma.organization.update({ where: { id: store.id }, data: { wholesaleVatAdded: false } });
   });
 
-  it('charges a shopper who isn’t a trade buyer retail, whatever they claim', async () => {
+  it('charges a shopper who isn’t a wholesaler retail, whatever they claim', async () => {
     session.shopper = { id: walkerId, organizationId: store.id };
     const config = await getStoreCheckoutConfig({ organizationSlug: store.slug });
     const result = await placeOrder({

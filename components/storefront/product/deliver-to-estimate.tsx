@@ -154,7 +154,7 @@ export function DeliverToEstimate({
                   )}
                   {result.estimate.arrangedForLargeOrders && (
                     // Delivery to be arranged (ROADMAP 21.4B): no number for a truck we haven't priced.
-                    <span className="block text-xs text-muted-foreground">Large trade orders: delivery arranged by the store</span>
+                    <span className="block text-xs text-muted-foreground">Large wholesale orders: delivery arranged by the store</span>
                   )}
                 </span>
               </p>

@@ -109,12 +109,12 @@ describe('store pages', () => {
     );
     expect(slug).toBe('wholesale-orders');
 
-    const renamed = ok(await saveStorePage(id, { kind: 'CUSTOM', title: 'Trade accounts', slug: '', body: 'Call us.', isPublished: true }));
+    const renamed = ok(await saveStorePage(id, { kind: 'CUSTOM', title: 'Wholesale accounts', slug: '', body: 'Call us.', isPublished: true }));
     expect(renamed.slug).toBe('wholesale-orders');
 
     const clash = await saveStorePage(id, {
       kind: 'CUSTOM',
-      title: 'Trade accounts',
+      title: 'Wholesale accounts',
       slug: 'delivery-and-returns',
       body: 'Call us.',
       isPublished: true,
@@ -122,7 +122,7 @@ describe('store pages', () => {
     expect(clash.success).toBe(false);
     expect(!clash.success && clash.fieldErrors?.slug).toBeTruthy();
 
-    const bad = await saveStorePage(id, { kind: 'CUSTOM', title: 'Trade accounts', slug: 'Trade Accounts!', body: 'x', isPublished: true });
+    const bad = await saveStorePage(id, { kind: 'CUSTOM', title: 'Wholesale accounts', slug: 'Trade Accounts!', body: 'x', isPublished: true });
     expect(!bad.success && bad.fieldErrors?.slug).toBeTruthy();
 
     // a second custom page from the same title gets its own address

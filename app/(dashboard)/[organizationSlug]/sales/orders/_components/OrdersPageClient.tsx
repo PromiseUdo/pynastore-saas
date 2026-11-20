@@ -195,7 +195,7 @@ export function OrdersPageClient({
           </SelectContent>
         </SelectRoot>
 
-        {/* Trade buyers' orders (ROADMAP 21.8), once there are any — or while filtering by them. */}
+        {/* Wholesalers' orders (ROADMAP 21.8), once there are any — or while filtering by them. */}
         {(list.tradeCount > 0 || buyer !== 'all') && (
           <SelectRoot
             value={buyer}
@@ -203,14 +203,14 @@ export function OrdersPageClient({
           >
             <SelectTrigger
               className="w-40"
-              aria-label="Filter by trade or retail"
+              aria-label="Filter by wholesale or retail"
             >
               <SelectValue placeholder="All customers" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All customers</SelectItem>
               <SelectItem value="trade">
-                Trade buyers ({formatNumber(list.tradeCount)})
+                Wholesalers ({formatNumber(list.tradeCount)})
               </SelectItem>
               <SelectItem value="retail">Retail customers</SelectItem>
             </SelectContent>
@@ -324,7 +324,7 @@ export function OrdersPageClient({
                               order.channel}
                           </Badge>
                           {order.tradeBusiness && (
-                            <Badge variant="approved">Trade</Badge>
+                            <Badge variant="approved">Wholesale</Badge>
                           )}
                         </span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">

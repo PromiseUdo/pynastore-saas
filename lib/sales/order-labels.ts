@@ -212,7 +212,7 @@ export function nextStepHint(input: {
         : 'On its way. Mark it as delivered once it arrives.';
     case 'DELIVERED':
       if (paymentStatus === 'DUE_ON_DELIVERY') return 'Delivered, but the payment hasn’t been recorded yet.';
-      if (paymentStatus === 'ON_ACCOUNT') return 'Delivered, on the customer’s trade account. Record what they pay below as it arrives.';
+      if (paymentStatus === 'ON_ACCOUNT') return 'Delivered, on the customer’s wholesale account. Record what they pay below as it arrives.';
       if (paymentStatus === 'PARTIALLY_REFUNDED') return 'Delivered. Part of the payment has been refunded.';
       if (paymentStatus === 'REFUNDED') return 'Delivered, and the payment has been refunded in full.';
       return 'Delivered and paid — nothing left to do.';

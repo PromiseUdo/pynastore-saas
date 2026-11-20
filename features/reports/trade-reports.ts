@@ -126,7 +126,7 @@ export async function getTradeReport(input: PeriodInput): Promise<ActionResult<T
         tradeBuyers: buyers.length,
         rows: top.map((t) => ({
           customerId: t.customerId,
-          businessName: business.get(t.customerId) ?? name.get(t.customerId) ?? 'Trade buyer',
+          businessName: business.get(t.customerId) ?? name.get(t.customerId) ?? 'Wholesaler',
           orders: t.orders,
           spend: round(t.spend),
           lastOrderAt: t.lastOrderAt.toISOString(),
@@ -135,7 +135,7 @@ export async function getTradeReport(input: PeriodInput): Promise<ActionResult<T
       },
     };
   } catch (error) {
-    return toActionError(error, 'We couldn’t load the trade report');
+    return toActionError(error, 'We couldn’t load the wholesale report');
   }
 }
 

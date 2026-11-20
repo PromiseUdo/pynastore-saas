@@ -40,41 +40,41 @@ function decisionEmail(
     case 'approved':
       return {
         storeName: store.name,
-        subject: `Your trade account with ${store.name} is ready`,
-        preview: 'You’re now a trade buyer.',
-        heading: 'You’re now a trade buyer',
-        paragraphs: [`${store.name} has approved your trade account. Sign in to shop with it.`],
-        button: { label: 'See your trade account', url: accountUrl },
+        subject: `Your wholesale account with ${store.name} is ready`,
+        preview: 'You’re now a wholesaler.',
+        heading: 'You’re now a wholesaler',
+        paragraphs: [`${store.name} has approved your wholesale account. Sign in to shop with it.`],
+        button: { label: 'See your wholesale account', url: accountUrl },
         footer,
       };
     case 'reinstated':
       return {
         storeName: store.name,
-        subject: `Your trade account with ${store.name} is active again`,
-        preview: 'Your trade account is active again.',
-        heading: 'Your trade account is active again',
-        paragraphs: [`${store.name} has turned your trade account back on.`],
-        button: { label: 'See your trade account', url: accountUrl },
+        subject: `Your wholesale account with ${store.name} is active again`,
+        preview: 'Your wholesale account is active again.',
+        heading: 'Your wholesale account is active again',
+        paragraphs: [`${store.name} has turned your wholesale account back on.`],
+        button: { label: 'See your wholesale account', url: accountUrl },
         footer,
       };
     case 'declined':
       return {
         storeName: store.name,
-        subject: `About your trade account request with ${store.name}`,
+        subject: `About your wholesale account request with ${store.name}`,
         preview: 'The store replied to your request.',
-        heading: 'About your trade account request',
-        paragraphs: [`${store.name} can’t open a trade account for you at the moment.`, ...why, 'You can still shop with your normal account.'],
+        heading: 'About your wholesale account request',
+        paragraphs: [`${store.name} can’t open a wholesale account for you at the moment.`, ...why, 'You can still shop with your normal account.'],
         button: { label: 'See your account', url: accountUrl },
         footer,
       };
     case 'suspended':
       return {
         storeName: store.name,
-        subject: `Your trade account with ${store.name} is paused`,
-        preview: 'Your trade account has been paused.',
-        heading: 'Your trade account is paused',
+        subject: `Your wholesale account with ${store.name} is paused`,
+        preview: 'Your wholesale account has been paused.',
+        heading: 'Your wholesale account is paused',
         paragraphs: [
-          `${store.name} has paused your trade account, so trade terms don’t apply for now.`,
+          `${store.name} has paused your wholesale account, so wholesale terms don’t apply for now.`,
           ...why,
           'Please contact the store if you have questions.',
         ],
@@ -158,10 +158,10 @@ export async function sendTradeInvite(input: { organizationId: string; customerI
     to: [email],
     storeName: store.name,
     subject: `${store.name} invited you to buy wholesale`,
-    preview: 'Set up your sign-in to shop with your trade account.',
+    preview: 'Set up your sign-in to shop with your wholesale account.',
     heading: 'You’re invited to buy wholesale',
     paragraphs: [
-      `${store.name} has set up a trade account for ${input.businessName}.`,
+      `${store.name} has set up a wholesale account for ${input.businessName}.`,
       'Choose a password to sign in and shop with it.',
       `This link works once and expires in ${INVITE_TTL_DAYS} days.`,
     ],

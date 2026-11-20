@@ -33,7 +33,7 @@ export const NOTIFICATION_CATEGORIES = {
   stock: { label: 'Low stock', about: 'Products at or below their reorder point in a store you can work in.' },
   purchasing: { label: 'Purchasing', about: 'Purchase orders waiting for approval.' },
   payments: { label: 'Payment disputes', about: 'A customer’s bank disputing a payment, and how it ended.' },
-  trade: { label: 'Trade accounts', about: 'Businesses asking to buy wholesale — or, for a shopper, the answer to yours.' },
+  trade: { label: 'Wholesale accounts', about: 'Businesses asking to buy wholesale — or, for a shopper, the answer to yours.' },
   account: { label: 'Your shop’s account', about: 'Your trial ending, and your domain and store app.' },
   social: { label: 'Social posts', about: 'A post that failed to publish.' },
   merchants: { label: 'Merchants', about: 'New shops, and verification waiting for review.' },
@@ -120,10 +120,10 @@ export interface EventFacts {
 export type TradeDecision = 'approved' | 'declined' | 'suspended' | 'reinstated';
 
 const TRADE_DECISION_WORDS: Record<TradeDecision, (storeName: string) => NotificationWords> = {
-  approved: (store) => ({ title: store, body: 'You’re now a trade buyer. Sign in to shop with your trade account.' }),
-  reinstated: (store) => ({ title: store, body: 'Your trade account is active again.' }),
-  declined: (store) => ({ title: store, body: 'The store replied to your trade account request.' }),
-  suspended: (store) => ({ title: store, body: 'Your trade account has been paused.' }),
+  approved: (store) => ({ title: store, body: 'You’re now a wholesaler. Sign in to shop with your wholesale account.' }),
+  reinstated: (store) => ({ title: store, body: 'Your wholesale account is active again.' }),
+  declined: (store) => ({ title: store, body: 'The store replied to your wholesale account request.' }),
+  suspended: (store) => ({ title: store, body: 'Your wholesale account has been paused.' }),
 };
 
 export type NotificationKind = keyof EventFacts;
@@ -146,7 +146,7 @@ const ORDER_ALERT_WORDS: Record<StoreOrderAlertKind, (f: { reference: string; cu
   'customer-cancelled': (f) => ({ title: `Order ${f.reference} cancelled`, body: `${f.customerName} cancelled their order.` }),
   'return-requested': (f) => ({ title: `Return requested on order ${f.reference}`, body: `${f.customerName} asked to return items.` }),
   // Delivery to be arranged (ROADMAP 21.4B)
-  'delivery-to-price': (f) => ({ title: `Delivery to price: order ${f.reference}`, body: `${f.customerName}’s trade order needs a delivery price.` }),
+  'delivery-to-price': (f) => ({ title: `Delivery to price: order ${f.reference}`, body: `${f.customerName}’s wholesale order needs a delivery price.` }),
   'delivery-price-reminder': (f) => ({ title: `Price delivery soon: order ${f.reference}`, body: 'Set the delivery price before the deadline, or the order is cancelled.' }),
   'delivery-not-priced': (f) => ({ title: `Order ${f.reference} cancelled`, body: 'Its delivery wasn’t priced in time. The stock is back on sale.' }),
 };
@@ -169,7 +169,7 @@ const ORDER_LIST_LINES: Record<OrderEmailKind, (reference: string) => string> = 
   'delivery-priced': (ref) => `The delivery price for order ${ref} is ready. Accept it to go ahead.`,
   'delivery-not-priced': (ref) => `Order ${ref} was cancelled — the store couldn’t price delivery in time.`,
   'delivery-price-lapsed': (ref) => `Order ${ref} was cancelled — the delivery price wasn’t accepted in time.`,
-  'placed-on-account': (ref) => `Order ${ref} was placed on your trade account.`,
+  'placed-on-account': (ref) => `Order ${ref} was placed on your wholesale account.`,
   'account-due-soon': (ref) => `Payment for order ${ref} is due soon.`,
   'account-overdue': (ref) => `Payment for order ${ref} is overdue.`,
   'account-payment-recorded': (ref) => `The store recorded a payment towards order ${ref}.`,
@@ -366,7 +366,7 @@ export const EVENTS: Catalogue = {
     reaches: { staff: PERMISSIONS.CUSTOMER_TRADE_MANAGE },
     audiences: () => [{ type: 'staff', permission: PERMISSIONS.CUSTOMER_TRADE_MANAGE, owner: true }],
     channels: { EMAIL: 'digest', WEB_PUSH: 'on', NATIVE_PUSH: 'on' },
-    words: (f) => ({ title: 'Trade account request', body: `${f.businessName} asked to buy wholesale.` }),
+    words: (f) => ({ title: 'Wholesale account request', body: `${f.businessName} asked to buy wholesale.` }),
     target: (f) => ({ type: 'trade', customerId: f.customerId }),
     thread: () => 'trade-requests',
   },

@@ -40,7 +40,7 @@ describe('the rules themselves', () => {
   });
 });
 
-describe('a trade buyer’s bag', () => {
+describe('a wholesaler’s bag', () => {
   it('is fine when every rule is met', () => {
     expect(tradeBagProblems([line()], 50_000_00)).toEqual([]);
   });
@@ -58,7 +58,7 @@ describe('a trade buyer’s bag', () => {
 
   it('holds the shop’s minimum order on the goods', () => {
     const [problem] = tradeBagProblems([line({ quantity: 12, unitPrice: 100_000 })], 2_000_000);
-    expect(problem.message).toBe('Trade orders start at ₦20,000 of goods. Add ₦8,000 more to order.');
+    expect(problem.message).toBe('Wholesale orders start at ₦20,000 of goods. Add ₦8,000 more to order.');
   });
 
   it('asks nothing of a shopper’s bag', () => {
@@ -67,7 +67,7 @@ describe('a trade buyer’s bag', () => {
 });
 
 describe('a line’s quantity', () => {
-  it('stops a shopper at 99, but not a trade buyer', () => {
+  it('stops a shopper at 99, but not a wholesaler', () => {
     expect(lineQuantity({ maxQuantity: 5000 }, 500)).toBe(MAX_LINE_QUANTITY);
     expect(lineQuantity({ maxQuantity: 5000, trade: { minQuantity: null, packSize: null } }, 500)).toBe(500);
   });

@@ -72,7 +72,7 @@ The goal is a calm, professional tool that a busy shop owner or warehouse clerk 
 - Workflow records (PO, invoice, fulfillment, return, cycle count, transfer) show where they are in the lifecycle: a status badge plus a short hint of the next step ("Awaiting approval — an Admin must approve before ordering").
 
 ## 6. Language and formatting
-- Write in plain language, for business owners rather than developers. Say "Store" in the UI, not "Warehouse". Never show raw enum values: map `PARTIALLY_PAID` → "Partially paid" through a shared label helper, and don't use `.replace('_',' ')`.
+- Write in plain language, for business owners rather than developers. Say "Store" in the UI, not "Warehouse". Say "wholesale" and "wholesaler" — "wholesale account", "wholesale price", "wholesale order" — never "trade account" or "trade buyer", which Nigerian shoppers and merchants don't use. (Code names like `tradeBuyer` and `/account/trade` stay: renaming them would break links and data.) Never show raw enum values: map `PARTIALLY_PAID` → "Partially paid" through a shared label helper, and don't use `.replace('_',' ')`.
 - **Money** always goes through one shared formatter using the org's currency (currently NGN/₦). Never use a bare `toFixed(2)` or hard-code `$`.
 - **Dates** go through one shared formatter (e.g. "14 May 2026"; relative time such as "2 hours ago" for activity). Never use a bare `toLocaleDateString()`, which varies between server and client.
 - Sentence case for titles, buttons and menu items ("New invoice", not "New Invoice").

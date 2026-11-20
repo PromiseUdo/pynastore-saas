@@ -51,7 +51,7 @@ export async function saveWholesaleSettings(input: WholesaleSettingsInput): Prom
       return { success: false, error: notOnPlanMessage(FEATURES.WHOLESALE) };
     }
     if (!next.tradePayOnline && !next.tradePayTransfer && !next.tradePayOnDelivery) {
-      return { success: false, error: 'Leave at least one way for trade buyers to pay.' };
+      return { success: false, error: 'Leave at least one way for wholesalers to pay.' };
     }
 
     const before = await prisma.organization.findUnique({

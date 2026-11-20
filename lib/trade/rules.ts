@@ -15,24 +15,24 @@ export type WholesaleMode = 'OFF' | 'RETAIL_AND_TRADE' | 'TRADE_ONLY';
 export type TradeStatus = 'REQUESTED' | 'APPROVED' | 'DECLINED' | 'SUSPENDED';
 
 export const WHOLESALE_MODES: { value: WholesaleMode; label: string; hint: string }[] = [
-  { value: 'OFF', label: 'Off', hint: 'Everyone shops at your normal prices. Nobody is a trade buyer.' },
+  { value: 'OFF', label: 'Off', hint: 'Everyone shops at your normal prices. Nobody is a wholesaler.' },
   {
     value: 'RETAIL_AND_TRADE',
-    label: 'Retail and trade',
-    hint: 'Everyone can shop. Businesses you approve shop as trade buyers.',
+    label: 'Retail and wholesale',
+    hint: 'Everyone can shop. Businesses you approve shop as wholesalers.',
   },
   {
     value: 'TRADE_ONLY',
-    label: 'Trade only',
-    hint: 'Only businesses you approve can see your products and order. Everyone else is asked to sign in or ask for a trade account.',
+    label: 'Wholesale only',
+    hint: 'Only businesses you approve can see your products and order. Everyone else is asked to sign in or ask for a wholesale account.',
   },
 ];
 
 export const TRADE_STATUS_LABEL: Record<TradeStatus, string> = {
-  REQUESTED: 'Asked for trade',
-  APPROVED: 'Trade buyer',
-  DECLINED: 'Trade declined',
-  SUSPENDED: 'Trade paused',
+  REQUESTED: 'Asked for wholesale',
+  APPROVED: 'Wholesaler',
+  DECLINED: 'Wholesale declined',
+  SUSPENDED: 'Wholesale paused',
 };
 
 export const TRADE_STATUS_VARIANT: Record<TradeStatus, 'pending' | 'success' | 'rejected' | 'cancelled'> = {

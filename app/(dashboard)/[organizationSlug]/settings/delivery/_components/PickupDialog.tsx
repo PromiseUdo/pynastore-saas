@@ -242,7 +242,7 @@ export function PickupDialog({
                 {errors.audience ? (
                   <FieldError>{errors.audience}</FieldError>
                 ) : (
-                  <FieldDescription>Collection is usually for everyone. A trade-only point suits a warehouse gate, say.</FieldDescription>
+                  <FieldDescription>Collection is usually for everyone. A wholesale-only point suits a warehouse gate, say.</FieldDescription>
                 )}
               </Field>
             )}
