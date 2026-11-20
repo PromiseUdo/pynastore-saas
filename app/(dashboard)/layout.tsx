@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { PlanEndedPage, PlanNotice, planLabel } from '@/components/layout/plan-notice';
+import { LapsedGate } from '@/components/layout/lapsed-gate';
 import { getOrganizationContext } from '@/lib/organization';
 import { getOrganizationEntitlements } from '@/lib/billing/entitlements';
 import { isOpenWhileLapsed } from '@/lib/billing/access';
@@ -101,7 +102,13 @@ export default async function Layout({ children }: { children: React.ReactNode }
         />
       }
     >
-      {closed ? <PlanEndedPage canManageBilling={canManageBilling} noBuying={noBuying} /> : children}
+      {/* Decided per page as the merchant navigates — see LapsedGate. */}
+      <LapsedGate
+        lapsed={access.state === 'lapsed'}
+        closedScreen={<PlanEndedPage canManageBilling={canManageBilling} noBuying={noBuying} />}
+      >
+        {children}
+      </LapsedGate>
     </DashboardLayout>
   );
 }
