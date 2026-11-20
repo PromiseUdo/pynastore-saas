@@ -304,7 +304,7 @@ export default async function HomePage() {
             {[
               aiOn && {
                 icon: MessageCircle,
-                t: 'Shopping assistant',
+                t: 'AI shopping assistant',
                 d: 'Shoppers type what they want in their own words, and see the products in your shop that match.',
                 href: '#assistant',
               },
@@ -429,9 +429,9 @@ export default async function HomePage() {
               <Chapter
                 id="assistant"
                 n="05"
-                kicker="Shopping assistant"
+                kicker="AI shopping assistant"
                 title="Shoppers ask. Your shop answers with products."
-                body="Shoppers type what they want in their own words — “something in ankara for a wedding, under ₦20,000” — and the shopping assistant searches your shop and brings back the products that fit. Or they upload a photo of something they like, and see what’s similar in your shop."
+                body="Shoppers type what they want in their own words — “something in ankara for a wedding, under ₦20,000” — and the AI shopping assistant searches your shop and brings back the products that fit. Or they upload a photo of something they like, and see what’s similar in your shop."
                 points={[
                   'Answers questions about a product’s sizes, colours and details',
                   'Suggests cheaper, pricier or similar items, and compares two side by side',

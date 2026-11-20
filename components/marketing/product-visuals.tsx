@@ -643,7 +643,7 @@ export function AssistantPreview() {
           <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <MessageCircle className="size-3.5" />
           </span>
-          <p className="text-[13px] font-semibold">Shopping assistant</p>
+          <p className="text-[13px] font-semibold">AI shopping assistant</p>
         </div>
         <div className="space-y-2.5 p-4 text-[11.5px]">
           <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-[#11211a] px-3 py-2 text-white">
@@ -683,7 +683,7 @@ export function AssistantPreview() {
         </span>
       </div>
       <figcaption className="sr-only">
-        An illustration of a shopper asking a store’s shopping assistant for an ankara outfit under a budget and getting two of the store’s own products back, and of a
+        An illustration of a shopper asking a store’s AI shopping assistant for an ankara outfit under a budget and getting two of the store’s own products back, and of a
         photo search finding three similar products in the same store.
       </figcaption>
     </figure>
