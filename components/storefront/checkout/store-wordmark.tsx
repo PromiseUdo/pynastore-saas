@@ -12,6 +12,10 @@
  * from the catalogue into checkout sees no change of ownership. That
  * continuity is the entire job of this component: an unfamiliar header on a
  * payment page is how a checkout loses trust.
+ *
+ * A logo stands alone, at the size the site header gives it: the logo IS
+ * the shop's identity, and a name beside it only shrinks it. The name shows
+ * only for a shop with no logo.
  */
 import Link from 'next/link';
 import { StoreLogo } from '@/components/storefront/layout/store-logo';
@@ -21,11 +25,12 @@ export function StoreWordmark() {
   const { org } = useStorefront();
 
   return (
-    <Link href="/" className="flex items-center gap-2.5" aria-label={`${org.name} — home`}>
+    <Link href="/" className="flex items-center" aria-label={`${org.name} — home`}>
       {org.logoUrl ? (
-        <StoreLogo src={org.logoUrl} darkSrc={org.logoDarkUrl} alt="" className="size-7 rounded-md object-contain" />
-      ) : null}
-      <span className="font-display text-lg leading-none">{org.name}</span>
+        <StoreLogo src={org.logoUrl} darkSrc={org.logoDarkUrl} alt="" className="h-9 w-auto max-w-40 object-contain" />
+      ) : (
+        <span className="font-display text-lg leading-none">{org.name}</span>
+      )}
     </Link>
   );
 }
