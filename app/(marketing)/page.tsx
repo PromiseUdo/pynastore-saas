@@ -18,7 +18,15 @@
  */
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, Check, Globe, ImageIcon, MessageCircle, Smartphone } from 'lucide-react';
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Check,
+  Globe,
+  ImageIcon,
+  MessageCircle,
+  Smartphone,
+} from 'lucide-react';
 import {
   PLATFORM_DOMAIN,
   PLATFORM_NAME,
@@ -48,12 +56,18 @@ import {
   StorefrontPreview,
   TeamMini,
 } from '@/components/marketing/product-visuals';
-import { CounterScene, HeroScene, PaymentScene } from '@/components/marketing/photo-scenes';
+import {
+  CounterScene,
+  HeroScene,
+  PaymentScene,
+} from '@/components/marketing/photo-scenes';
 
 export const revalidate = 600;
 
 export const metadata: Metadata = {
-  title: { absolute: `${PLATFORM_NAME} — sell in your shop, online and on Instagram` },
+  title: {
+    absolute: `${PLATFORM_NAME} — sell in your shop, online and on Instagram`,
+  },
   description: `Sell at your counter, on your own website and on Instagram from the same stock. Online payments go straight to your bank, and ${PLATFORM_NAME} takes no commission on your sales.`,
   alternates: { canonical: '/' },
   openGraph: {
@@ -211,7 +225,10 @@ export default async function HomePage() {
                   className="group inline-flex items-center gap-1 font-semibold text-primary underline-offset-4 hover:underline"
                 >
                   Look around a live demo shop
-                  <ArrowUpRight className="size-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden />
+                  <ArrowUpRight
+                    className="size-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                    aria-hidden
+                  />
                 </a>
               </p>
             )}
@@ -219,7 +236,7 @@ export default async function HomePage() {
 
           <HeroScene className="lg:-mr-6 lg:pl-8" />
         </div>
-        <div className="relative mx-auto max-w-6xl px-4 pb-14 sm:px-6">
+        {/* <div className="relative mx-auto max-w-6xl px-4 pb-14 sm:px-6">
           <p className="text-[13px] font-semibold text-muted-foreground">Made for shops that sell</p>
           <ul className="mt-3 flex flex-wrap gap-2">
             {[
@@ -237,7 +254,7 @@ export default async function HomePage() {
               </li>
             ))}
           </ul>
-        </div>
+        </div> */}
       </section>
 
       {/* ── How it fits together ─────────────────────────────────────── */}
@@ -300,7 +317,12 @@ export default async function HomePage() {
             title="More than an online shop."
             body="The extras that help your customers find what they want — and keep coming back."
           />
-          <ul className={cn('mt-12 grid gap-4 sm:grid-cols-2', aiOn ? 'lg:grid-cols-4' : 'lg:grid-cols-2')}>
+          <ul
+            className={cn(
+              'mt-12 grid gap-4 sm:grid-cols-2',
+              aiOn ? 'lg:grid-cols-4' : 'lg:grid-cols-2',
+            )}
+          >
             {[
               aiOn && {
                 icon: MessageCircle,
@@ -327,7 +349,16 @@ export default async function HomePage() {
                 href: '#online-shop',
               },
             ]
-              .filter((x): x is { icon: typeof Globe; t: string; d: string; href: string } => Boolean(x))
+              .filter(
+                (
+                  x,
+                ): x is {
+                  icon: typeof Globe;
+                  t: string;
+                  d: string;
+                  href: string;
+                } => Boolean(x),
+              )
               .map(({ icon: Icon, t, d, href }) => (
                 <li key={t}>
                   <a
@@ -337,11 +368,18 @@ export default async function HomePage() {
                     <span className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
                       <Icon className="size-5" aria-hidden />
                     </span>
-                    <span className="mt-5 font-mk-display text-[19px] font-semibold tracking-[-0.01em]">{t}</span>
-                    <span className="mt-1.5 flex-1 text-[15px] leading-relaxed text-muted-foreground">{d}</span>
+                    <span className="mt-5 font-mk-display text-[19px] font-semibold tracking-[-0.01em]">
+                      {t}
+                    </span>
+                    <span className="mt-1.5 flex-1 text-[15px] leading-relaxed text-muted-foreground">
+                      {d}
+                    </span>
                     <span className="mt-5 inline-flex items-center gap-1 text-[14px] font-semibold text-primary">
                       See how
-                      <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                      <ArrowRight
+                        className="size-4 transition-transform group-hover:translate-x-0.5"
+                        aria-hidden
+                      />
                     </span>
                   </a>
                 </li>
@@ -537,8 +575,8 @@ export default async function HomePage() {
                 </p>
               )}
               <p className="mt-1 text-[13px] text-white/55">
-                It’s listed in the app stores under your business’s own
-                Apple and Google accounts, so the app belongs to you.
+                It’s listed in the app stores under your business’s own Apple
+                and Google accounts, so the app belongs to you.
               </p>
             </div>
           </div>
@@ -889,7 +927,10 @@ function Chapter({
   reverse?: boolean;
 }) {
   return (
-    <article id={id} className="grid scroll-mt-24 grid-cols-1 items-center gap-8 rounded-[2rem] border bg-card p-5 sm:gap-10 sm:p-10 lg:grid-cols-2 lg:gap-14 lg:p-12">
+    <article
+      id={id}
+      className="grid scroll-mt-24 grid-cols-1 items-center gap-8 rounded-[2rem] border bg-card p-5 sm:gap-10 sm:p-10 lg:grid-cols-2 lg:gap-14 lg:p-12"
+    >
       <div className={reverse ? 'lg:order-2' : undefined}>
         <p className="flex items-baseline gap-3">
           <span className="font-mk-display text-[15px] font-bold tabular-nums text-mk-clay">
