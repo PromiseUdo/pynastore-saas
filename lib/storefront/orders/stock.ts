@@ -382,6 +382,7 @@ export async function reReserveOrderStock(tx: Tx, input: { organizationId: strin
       deliveryFee: true,
       shipState: true,
       shipCity: true,
+      shipArea: true,
       buyerBusinessName: true,
       deliveryArranged: true,
       organization: { select: { slug: true } },
@@ -397,7 +398,8 @@ export async function reReserveOrderStock(tx: Tx, input: { organizationId: strin
 
   const quote = await quoteDelivery(
     order.organization.slug,
-    { state: order.shipState ?? '', city: order.shipCity ?? '' },
+    // The neighbourhood priced it too, where the shop prices by one (ROADMAP 25.2).
+    { state: order.shipState ?? '', city: order.shipCity ?? '', area: order.shipArea },
     lines.map((line) => ({ itemId: line.inventoryItemId, quantity: line.quantity, unitPrice: line.unitPrice })),
     // A trade order is re-quoted as one (21.4A): its options and thresholds.
     { buyer: order.buyerBusinessName ? 'trade' : 'retail' },

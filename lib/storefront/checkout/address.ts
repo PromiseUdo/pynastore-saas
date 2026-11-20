@@ -27,6 +27,7 @@ export function emptyAddress(countryCode: string): CheckoutAddress {
     country: countryCode,
     state: '',
     city: '',
+    area: '',
     addressLine1: '',
     addressLine2: '',
     postalCode: '',
@@ -68,7 +69,7 @@ export function postalCodeRequired(config: CheckoutConfig, code: string): boolea
  * optional fields simply don't produce a line.
  */
 export function addressLines(address: CheckoutAddress, config: CheckoutConfig): string[] {
-  const region = [address.city, address.state].filter(Boolean).join(', ');
+  const region = [address.area, address.city, address.state].filter(Boolean).join(', ');
   return [
     `${address.firstName} ${address.lastName}`.trim(),
     address.addressLine1,
@@ -81,7 +82,7 @@ export function addressLines(address: CheckoutAddress, config: CheckoutConfig): 
 
 /** A one-line summary: "Port Harcourt, Rivers" — for a collapsed section. */
 export function addressSummary(address: CheckoutAddress): string {
-  return [address.city, address.state].filter(Boolean).join(', ');
+  return [address.area, address.city, address.state].filter(Boolean).join(', ');
 }
 
 /* ---------------- account address-book interop ---------------- */
@@ -99,6 +100,7 @@ export function fromStoredAddress(stored: Address, config: CheckoutConfig): Chec
     country: matched?.code ?? config.defaultCountryCode,
     state: stored.state,
     city: stored.city,
+    area: stored.area ?? '',
     addressLine1: stored.line1,
     addressLine2: stored.line2 ?? '',
     postalCode: stored.postalCode ?? '',
@@ -116,6 +118,7 @@ export function toStoredAddress(
     line1: address.addressLine1,
     line2: address.addressLine2 || undefined,
     city: address.city,
+    area: address.area || undefined,
     state: address.state,
     country: countryName(config, address.country),
     postalCode: address.postalCode || undefined,

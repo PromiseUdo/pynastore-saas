@@ -349,7 +349,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
    * or stock moved and the bag now goes from elsewhere) is refused. */
   const quote = await quoteDelivery(
     input.organizationSlug,
-    { state: input.address.state, city: input.address.city },
+    { state: input.address.state, city: input.address.city, area: input.address.area || null },
     items.map((item) => ({ itemId: item.variantId, quantity: item.quantity, unitPrice: item.unitPrice })),
     // A trade buyer is charged the trade options and thresholds they were quoted (21.4A).
     { buyer: input.config.tradeBuyer ? 'trade' : 'retail' },
@@ -475,6 +475,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           shipLine1: address.addressLine1,
           shipLine2: address.addressLine2 || null,
           shipCity: address.city,
+          // The neighbourhood that priced it, when the shop prices by one (ROADMAP 25.2).
+          shipArea: address.area?.trim() || null,
           shipState: address.state,
           shipCountry: countryName(input.config, address.country),
           shipPostalCode: address.postalCode || null,

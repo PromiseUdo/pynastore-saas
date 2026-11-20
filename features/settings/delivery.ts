@@ -35,6 +35,7 @@ import { getOrganizationContext } from '@/lib/organization';
 import { requirePermission, PERMISSIONS } from '@/lib/permissions';
 import { createAuditLog } from '@/lib/audit';
 import { NIGERIAN_STATES, normalizePlace, parsePlaceList } from '@/lib/geo/nigeria';
+import { findLga } from '@/lib/geo/nigeria-lgas';
 import { deliveryFor, quoteEachStore, type DeliveryAudience, type StoreDeliverySetup } from '@/lib/storefront/delivery/match';
 import { planWithAnyStock } from '@/lib/storefront/delivery/plan';
 import { HAS_LIVE_DELIVERY_WHERE, ONLINE_SUPPLY_WHERE } from '@/lib/storefront/delivery/supply';
@@ -71,6 +72,8 @@ export interface DeliveryZoneRow {
   state: string | null;
   states: string[];
   cities: string[];
+  /** neighbourhoods inside its one LGA (ROADMAP 25.2); empty = the whole LGA */
+  areas: string[];
   isActive: boolean;
   rates: DeliveryRateRow[];
 }
@@ -218,6 +221,7 @@ async function loadSettings(organizationId: string): Promise<DeliverySettings> {
       state: zone.state,
       states: zone.states,
       cities: zone.cities,
+      areas: zone.areas,
       isActive: zone.isActive,
       rates: zone.rates.map((rate) => ({
         id: rate.id,
@@ -369,9 +373,25 @@ const ZoneSchema = z
     state: stateEnum.nullish(),
     states: z.array(stateEnum).default([]),
     cities: z.union([z.string(), z.array(z.string())]).default([]),
+    areas: z.union([z.string(), z.array(z.string())]).default([]),
     isActive: z.boolean().default(true),
   })
-  .transform((zone) => ({ ...zone, cities: parsePlaceList(zone.cities) }))
+  // A city zone lists LGAs (ROADMAP 25.1): each name is saved as the LGA it
+  // means ("eti-osa", "Lekki" → "Eti Osa"), once. A name that's no LGA of
+  // the state is kept as typed for the check below to report.
+  .transform((zone) => {
+    const typed = parsePlaceList(zone.cities);
+    const areas = zone.kind === 'CITIES' ? parsePlaceList(zone.areas) : [];
+    if (zone.kind !== 'CITIES' || !zone.state) return { ...zone, cities: typed, areas, unknownPlaces: [] as string[] };
+    const lgas: string[] = [];
+    const unknownPlaces: string[] = [];
+    for (const name of typed) {
+      const lga = findLga(zone.state, name);
+      if (!lga) unknownPlaces.push(name);
+      else if (!lgas.includes(lga)) lgas.push(lga);
+    }
+    return { ...zone, cities: lgas, areas, unknownPlaces };
+  })
   .superRefine((zone, ctx) => {
     if (zone.name.length < 2) {
       ctx.addIssue({ code: 'custom', path: ['name'], message: 'Give the zone a name customers will recognise' });
@@ -380,8 +400,21 @@ const ZoneSchema = z
     }
     if (zone.kind === 'CITIES') {
       if (!zone.state) ctx.addIssue({ code: 'custom', path: ['state'], message: 'Choose the state these cities are in' });
-      if (zone.cities.length === 0) {
-        ctx.addIssue({ code: 'custom', path: ['cities'], message: 'Add at least one city or area' });
+      if (zone.unknownPlaces.length > 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['cities'],
+          message: `${zone.unknownPlaces.join(', ')} ${zone.unknownPlaces.length === 1 ? 'isn’t an LGA' : 'aren’t LGAs'} in ${zone.state}. Choose from the list.`,
+        });
+      } else if (zone.cities.length === 0) {
+        ctx.addIssue({ code: 'custom', path: ['cities'], message: 'Choose at least one LGA' });
+      }
+      // Neighbourhoods name places inside ONE LGA (ROADMAP 25.2).
+      if (zone.areas.length > 0 && zone.cities.length > 1) {
+        ctx.addIssue({ code: 'custom', path: ['areas'], message: 'Neighbourhoods work on a zone with one LGA. Untick the others, or clear the neighbourhoods.' });
+      }
+      if (zone.areas.some((area) => area.length > 60)) {
+        ctx.addIssue({ code: 'custom', path: ['areas'], message: 'Keep each neighbourhood under 60 characters' });
       }
     }
     if (zone.kind === 'STATES' && zone.states.length === 0) {
@@ -404,7 +437,7 @@ function fieldErrors(error: z.ZodError): Record<string, string> {
 async function overlap(
   organizationId: string,
   zoneId: string | null,
-  zone: { warehouseId: string; kind: string; state?: string | null; states: string[]; cities: string[] },
+  zone: { warehouseId: string; kind: string; state?: string | null; states: string[]; cities: string[]; areas: string[] },
 ): Promise<{ field: string; message: string } | null> {
   // Within one store only: two stores both covering Rivers is the point.
   const others = await prisma.deliveryZone.findMany({
@@ -414,7 +447,7 @@ async function overlap(
       kind: zone.kind as 'CITIES' | 'STATES' | 'NATIONWIDE',
       ...(zoneId ? { NOT: { id: zoneId } } : {}),
     },
-    select: { name: true, state: true, states: true, cities: true },
+    select: { name: true, state: true, states: true, cities: true, areas: true },
   });
 
   if (zone.kind === 'NATIONWIDE' && others.length) {
@@ -429,12 +462,25 @@ async function overlap(
     }
   }
   if (zone.kind === 'CITIES') {
-    const mine = new Map(zone.cities.map((c) => [normalizePlace(c), c]));
+    // Compared as LGAs, so an older zone's "Bode thomas" clashes with "Surulere".
+    const asPlace = (c: string) => (zone.state && findLga(zone.state, c)) || normalizePlace(c);
+    const mine = new Map(zone.cities.map((c) => [asPlace(c), c]));
     for (const other of others.filter((o) => o.state === zone.state)) {
-      const shared = other.cities.map(normalizePlace).filter((c) => mine.has(c)).map((c) => mine.get(c)!);
-      if (shared.length) {
-        return { field: 'cities', message: `${shared.join(', ')} ${shared.length === 1 ? 'is' : 'are'} already in “${other.name}”.` };
+      const shared = [...new Set(other.cities.map(asPlace))].filter((c) => mine.has(c)).map((c) => mine.get(c)!);
+      if (!shared.length) continue;
+      // Neighbourhoods (25.2): a neighbourhood zone and a whole-LGA zone on the
+      // same LGA is the point — the neighbourhood wins. Two neighbourhood zones
+      // clash only over a neighbourhood they both name.
+      if (zone.areas.length || other.areas.length) {
+        if (!zone.areas.length || !other.areas.length) continue;
+        const theirs = new Set(other.areas.map(normalizePlace));
+        const both = zone.areas.filter((a) => theirs.has(normalizePlace(a)));
+        if (both.length) {
+          return { field: 'areas', message: `${both.join(', ')} ${both.length === 1 ? 'is' : 'are'} already in “${other.name}”.` };
+        }
+        continue;
       }
+      return { field: 'cities', message: `${shared.join(', ')} ${shared.length === 1 ? 'is' : 'are'} already in “${other.name}”.` };
     }
   }
   return null;
@@ -457,6 +503,7 @@ export async function saveDeliveryZone(zoneId: string | null, input: DeliveryZon
       state: zone.kind === 'CITIES' ? zone.state ?? null : null,
       states: zone.kind === 'STATES' ? zone.states : [],
       cities: zone.kind === 'CITIES' ? zone.cities : [],
+      areas: zone.kind === 'CITIES' ? zone.areas : [],
       isActive: zone.isActive,
     };
 
@@ -859,6 +906,8 @@ export interface DeliveryPreview {
 export async function previewDelivery(input: {
   state: string;
   city: string;
+  /** the neighbourhood, where the store prices by one (ROADMAP 25.2) */
+  area?: string;
   subtotal?: number;
   /** as a trade buyer would see it (ROADMAP 21.4A) */
   buyer?: 'retail' | 'trade';
@@ -889,7 +938,7 @@ export async function previewDelivery(input: {
       // The same filter checkout applies for this buyer.
       .map((setup) => deliveryFor(setup, input.buyer === 'trade' ? 'trade' : 'retail'));
 
-    const address = { state: input.state, city: input.city };
+    const address = { state: input.state, city: input.city, area: input.area || null };
     const subtotal = kobo(input.subtotal ?? 0);
     const naira = (options: { label: string; description: string; price: number }[]) =>
       options.map((o) => ({ label: o.label, detail: o.description, price: o.price / 100 }));

@@ -11,6 +11,8 @@
  * where the country actually needs one — no component branches on a country
  * code.
  */
+import { NeighbourhoodField, useNeighbourhoods } from '@/components/storefront/checkout/neighbourhoods';
+import { findLga, lgaOptions } from '@/lib/geo/nigeria-lgas';
 import * as React from 'react';
 import { useActionState } from 'react';
 import Link from 'next/link';
@@ -47,6 +49,18 @@ export function AddressForm({
 
   const value = (field: keyof Address, fallback = '') =>
     state?.values?.[field] ?? (address?.[field] as string | undefined) ?? fallback;
+
+  /* A Nigerian address names its LGA from the official list (ROADMAP 25.1),
+   * the one the shop's delivery zones use. A saved address typed before the
+   * list ("Lekki") opens on its LGA; one we can't place opens blank to pick. */
+  const byLga = countryCode === 'NG';
+  const [regionState, setRegionState] = React.useState(value('state'));
+  const savedCity = value('city');
+  const lgaDefault = regionState === value('state') ? (findLga(regionState, savedCity) ?? '') : '';
+  const [lga, setLga] = React.useState(lgaDefault);
+  // A shop that prices by neighbourhood inside this LGA asks which (ROADMAP 25.2).
+  const { areas: neighbourhoods } = useNeighbourhoods(byLga ? regionState : '', lga);
+  const savedArea = value('area');
 
   return (
     <form action={action} className="space-y-4" noValidate>
@@ -120,6 +134,10 @@ export function AddressForm({
             options={country.regions.map((r) => ({ value: r, label: r }))}
             searchNoun={pluralRegion(country.regionLabel)}
             defaultValue={value('state')}
+            onChange={(event) => {
+              setRegionState(event.target.value);
+              setLga('');
+            }}
             error={state?.fieldErrors?.state}
           />
         ) : (
@@ -134,16 +152,47 @@ export function AddressForm({
           />
         )}
 
-        <TextField
-          id="address-city"
-          name="city"
-          label="City or town"
-          autoComplete="address-level2"
-          defaultValue={value('city')}
-          error={state?.fieldErrors?.city}
-          required
-        />
+        {byLga ? (
+          <SelectField
+            // A new state starts a new pick.
+            key={regionState}
+            id="address-city"
+            name="city"
+            label="LGA"
+            placeholder={regionState ? 'Choose your LGA' : 'Choose a state first'}
+            options={lgaOptions(regionState)}
+            searchNoun="LGAs"
+            disabled={!regionState}
+            defaultValue={lgaDefault}
+            onChange={(event) => setLga(event.target.value)}
+            hint="Not sure? Search your area, e.g. Lekki or Festac."
+            error={state?.fieldErrors?.city}
+          />
+        ) : (
+          <TextField
+            id="address-city"
+            name="city"
+            label="City or town"
+            autoComplete="address-level2"
+            defaultValue={value('city')}
+            error={state?.fieldErrors?.city}
+            required
+          />
+        )}
       </FieldRow>
+
+      {byLga && neighbourhoods.length > 0 && (
+        <NeighbourhoodField
+          // A new LGA starts a new pick.
+          key={lga}
+          id="address-area"
+          name="area"
+          lga={lga}
+          areas={neighbourhoods}
+          defaultValue={neighbourhoods.includes(savedArea) ? savedArea : ''}
+          error={state?.fieldErrors?.area}
+        />
+      )}
 
       {country?.postalCodeRequired ? (
         <TextField

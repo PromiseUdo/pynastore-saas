@@ -12,6 +12,8 @@
  * an estimate: the whole bag and the exact address decide at checkout, and
  * the panel says so.
  */
+import { NeighbourhoodField, useNeighbourhoods } from '@/components/storefront/checkout/neighbourhoods';
+import { findLga, lgaOptions } from '@/lib/geo/nigeria-lgas';
 import * as React from 'react';
 import { Loader2, MapPin, Truck } from 'lucide-react';
 import { NIGERIAN_STATES } from '@/lib/geo/nigeria';
@@ -52,7 +54,7 @@ export function DeliverToEstimate({
   const [editing, setEditing] = React.useState(false);
   const attempt = React.useRef(0);
 
-  const placeKey = place ? `${place.state}|${place.city}` : '';
+  const placeKey = place ? `${place.state}|${place.city}|${place.area ?? ''}` : '';
   React.useEffect(() => {
     // Nothing to estimate for: no variant, or a guest who hasn't said where.
     if (!hydrated || !variantId || (!place && !shopper)) return;
@@ -72,7 +74,7 @@ export function DeliverToEstimate({
   if (!hydrated || !variantId) return null;
 
   const deliverTo = state.data?.deliverTo ?? (place ? { ...place, fromAccount: false } : null);
-  const where = deliverTo ? [deliverTo.city, deliverTo.state].filter(Boolean).join(', ') : null;
+  const where = deliverTo ? [deliverTo.area, deliverTo.city, deliverTo.state].filter(Boolean).join(', ') : null;
   const result = state.data?.result ?? null;
 
   return (
@@ -184,13 +186,18 @@ function PlaceForm({
   onSave,
   onCancel,
 }: {
-  initial: { state: string; city: string } | null;
-  onSave: (place: { state: string; city: string }) => void;
+  initial: { state: string; city: string; area?: string | null } | null;
+  onSave: (place: { state: string; city: string; area?: string }) => void;
   onCancel: () => void;
 }) {
   const [state, setState] = React.useState(initial?.state ?? '');
-  const [city, setCity] = React.useState(initial?.city ?? '');
+  // The LGA, from the official list (ROADMAP 25.1); an older "Lekki" reads as its LGA.
+  const [city, setCity] = React.useState(initial ? (findLga(initial.state, initial.city) ?? initial.city) : '');
   const [error, setError] = React.useState<string | null>(null);
+  // A shop that prices by neighbourhood inside this LGA asks which (ROADMAP 25.2).
+  const { areas: neighbourhoods } = useNeighbourhoods(state, city);
+  const [area, setArea] = React.useState(initial?.area ?? '');
+  const chosenArea = neighbourhoods.includes(area) ? area : '';
 
   return (
     <form
@@ -201,7 +208,7 @@ function PlaceForm({
           setError('Choose a state.');
           return;
         }
-        onSave({ state, city });
+        onSave({ state, city, ...(chosenArea ? { area: chosenArea } : {}) });
       }}
       noValidate
     >
@@ -213,6 +220,7 @@ function PlaceForm({
         searchNoun="states"
         value={state}
         onChange={(e) => {
+          if (e.target.value !== state) setCity('');
           setState(e.target.value);
           setError(null);
         }}
@@ -220,16 +228,32 @@ function PlaceForm({
         aria-describedby={error ? 'deliver-to-error' : undefined}
         className="h-10 rounded-lg px-3 text-sm"
       />
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium">City or area</span>
-        <input
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          placeholder="e.g. Port Harcourt"
-          autoComplete="address-level2"
-          className="h-10 w-full rounded-lg border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </label>
+      <SelectField
+        id="deliver-to-city"
+        label="LGA"
+        placeholder={state ? 'Choose your LGA' : 'Choose a state first'}
+        options={lgaOptions(state)}
+        searchNoun="LGAs"
+        disabled={!state}
+        value={city}
+        onChange={(e) => {
+          setCity(e.target.value);
+          setArea('');
+        }}
+        className="h-10 rounded-lg px-3 text-sm"
+      />
+      {neighbourhoods.length > 0 && (
+        <div className="sm:col-span-2">
+          <NeighbourhoodField
+            id="deliver-to-area"
+            lga={city}
+            areas={neighbourhoods}
+            value={chosenArea}
+            onChange={(e) => setArea(e.target.value)}
+            className="h-10 rounded-lg px-3 text-sm"
+          />
+        </div>
+      )}
       <div className="flex gap-2">
         <button
           type="submit"

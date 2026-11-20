@@ -74,6 +74,7 @@ const payForOrderAction = vi.fn(async (_token: string, _options?: unknown) => ({
   paymentUrl: 'https://checkout.paystack.com/c_retry',
 }));
 vi.mock('@/features/shop-orders/actions', () => ({
+  deliveryNeighbourhoodsAction: async () => [],
   placeOrderAction: (request: unknown) => placeOrderAction(request as never),
   payForOrderAction: (token: string, options?: unknown) => payForOrderAction(token, options),
   payForMyOrderAction: vi.fn(),
@@ -176,7 +177,7 @@ async function fillInformation(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Email address'), 'ada@example.com');
   await user.type(screen.getByLabelText('Phone number'), '08012345678');
   await user.selectOptions(screen.getByLabelText('State'), 'Rivers');
-  await user.type(screen.getByLabelText('City or town'), 'Port Harcourt');
+  await user.selectOptions(screen.getByLabelText('LGA'), 'Port Harcourt');
   await user.type(screen.getByLabelText('Address'), '12 Example Street');
   await user.click(screen.getByRole('button', { name: /continue to delivery/i }));
   await screen.findByRole('heading', { name: 'Delivery' });
@@ -512,7 +513,7 @@ describe('checkout navigation', () => {
 
     const email = await screen.findByLabelText('Email address');
     expect((email as HTMLInputElement).value).toBe('ada@example.com');
-    expect((screen.getByLabelText('City or town') as HTMLInputElement).value).toBe('Port Harcourt');
+    expect((screen.getByLabelText('LGA') as HTMLSelectElement).value).toBe('Port Harcourt');
     expect((screen.getByLabelText('Address') as HTMLInputElement).value).toBe('12 Example Street');
 
     /* ...and forward again, with the delivery choice intact. */
@@ -697,7 +698,7 @@ describe('delivery quoted for the address', () => {
       useCheckoutStore.getState().reset(quotedConfig);
       renderIn(<CheckoutView config={quotedConfig} account={null} />);
       expect((screen.getByLabelText('State') as HTMLSelectElement).value).toBe('Rivers');
-      expect((screen.getByLabelText('City or town') as HTMLInputElement).value).toBe('Port Harcourt');
+      expect((screen.getByLabelText('LGA') as HTMLSelectElement).value).toBe('Port Harcourt');
       // The street is theirs to type.
       expect((screen.getByLabelText('Address') as HTMLInputElement).value).toBe('');
     } finally {

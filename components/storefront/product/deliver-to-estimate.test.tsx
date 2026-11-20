@@ -14,6 +14,7 @@ import { formatMoney } from '@/lib/storefront/format';
 
 const estimateDeliveryAction = vi.fn();
 vi.mock('@/features/shop-orders/actions', () => ({
+  deliveryNeighbourhoodsAction: async () => [],
   estimateDeliveryAction: (input: unknown) => estimateDeliveryAction(input),
 }));
 
@@ -63,7 +64,7 @@ describe('DeliverToEstimate', () => {
 
     await user.click(screen.getByRole('button', { name: /choose a location/i }));
     await user.selectOptions(screen.getByLabelText('State'), 'Rivers');
-    await user.type(screen.getByLabelText('City or area'), 'Port Harcourt');
+    await user.selectOptions(screen.getByLabelText('LGA'), 'Port Harcourt');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByText('Ships from Lagos Store')).toBeDefined();

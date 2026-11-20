@@ -136,7 +136,7 @@ export async function exportShopperData(organizationId: string, customerId: stri
       contact: { name: [o.firstName, o.lastName].filter(Boolean).join(' '), email: o.email, phone: o.phone },
       ...(o.buyerBusinessName ? { business: { name: o.buyerBusinessName, taxId: o.buyerTaxId, cacNumber: o.buyerCacNumber } } : {}),
       deliverTo: o.shipLine1
-        ? [o.shipFullName, o.shipLine1, o.shipLine2, o.shipCity, o.shipState, o.shipCountry, o.shipPostalCode].filter(Boolean).join(', ')
+        ? [o.shipFullName, o.shipLine1, o.shipLine2, o.shipArea, o.shipCity, o.shipState, o.shipCountry, o.shipPostalCode].filter(Boolean).join(', ')
         : null,
       items: o.lineItems.map((l) => ({ name: l.name, variant: l.variantName, quantity: l.quantity, unitPrice: money(l.unitPrice) })),
     })),

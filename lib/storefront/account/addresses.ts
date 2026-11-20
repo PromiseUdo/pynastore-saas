@@ -19,6 +19,7 @@
  * default promotes the next most recently used. A shopper should never
  * reach checkout and find nothing preselected, or two things preselected.
  */
+import { findLga } from '@/lib/geo/nigeria-lgas';
 import { prisma } from '@/lib/prisma';
 import type { Address } from '../types';
 
@@ -32,6 +33,7 @@ type Row = {
   line1: string;
   line2: string | null;
   city: string;
+  area: string | null;
   state: string;
   country: string;
   postalCode: string | null;
@@ -45,6 +47,7 @@ const SELECT = {
   line1: true,
   line2: true,
   city: true,
+  area: true,
   state: true,
   country: true,
   postalCode: true,
@@ -59,6 +62,7 @@ function toAddress(row: Row): Address {
     line1: row.line1,
     line2: row.line2 ?? undefined,
     city: row.city,
+    area: row.area ?? undefined,
     state: row.state,
     country: row.country,
     postalCode: row.postalCode ?? undefined,
@@ -128,7 +132,8 @@ export async function createAddress(
         phone: input.phone,
         line1: input.line1,
         line2: input.line2 || null,
-        city: input.city,
+        city: savedCity(input),
+        area: input.area?.trim() || null,
         state: input.state,
         country: input.country,
         postalCode: input.postalCode || null,
@@ -167,7 +172,8 @@ export async function updateAddress(
         phone: input.phone,
         line1: input.line1,
         line2: input.line2 || null,
-        city: input.city,
+        city: savedCity(input),
+        area: input.area?.trim() || null,
         state: input.state,
         country: input.country,
         postalCode: input.postalCode || null,
@@ -243,4 +249,14 @@ export async function saveAddressIfNew(
   if (match) return { ok: true, address: match, existing: true };
 
   return createAddress(scope, input);
+}
+
+/**
+ * A Nigerian address's city is stored as its LGA, as the official list
+ * spells it (ROADMAP 25.1) — "eti-osa" or "Lekki" become "Eti Osa" — so the
+ * address book and the delivery zones agree. Anything else is kept as given.
+ */
+function savedCity(input: { city: string; state: string; country: string }): string {
+  const nigeria = input.country === 'NG' || input.country === 'Nigeria';
+  return (nigeria && findLga(input.state, input.city)) || input.city;
 }

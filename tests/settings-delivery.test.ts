@@ -146,7 +146,7 @@ describe('delivery zones and options', () => {
     expect(!result.success && result.fieldErrors).toMatchObject({
       name: expect.any(String),
       state: 'Choose the state these cities are in',
-      cities: 'Add at least one city or area',
+      cities: 'Choose at least one LGA',
     });
   });
 
@@ -178,10 +178,12 @@ describe('delivery zones and options', () => {
     const nationwide = await saveDeliveryZone(null, { warehouseId: mainId, name: 'Everywhere', kind: 'NATIONWIDE' });
     expect(nationwide).toMatchObject({ success: false, error: expect.stringContaining('Rest of Nigeria') });
 
-    // The same city name in another state is a different place.
-    const other = await saveDeliveryZone(null, { warehouseId: mainId, name: 'Lagos PH street', kind: 'CITIES', state: 'Lagos', cities: 'Port Harcourt' });
-    expect(other.success).toBe(true);
-    if (other.success) ok(await deleteDeliveryZone(other.data.id));
+    // The same LGA name in another state is a different place: Lagos and Oyo both have a Surulere.
+    const lagos = await saveDeliveryZone(null, { warehouseId: mainId, name: 'Surulere (Lagos)', kind: 'CITIES', state: 'Lagos', cities: 'Surulere' });
+    const oyo = await saveDeliveryZone(null, { warehouseId: mainId, name: 'Surulere (Oyo)', kind: 'CITIES', state: 'Oyo', cities: 'Surulere' });
+    expect(lagos.success && oyo.success).toBe(true);
+    if (lagos.success) ok(await deleteDeliveryZone(lagos.data.id));
+    if (oyo.success) ok(await deleteDeliveryZone(oyo.data.id));
   });
 
   /* Not every merchant delivers in days: a supermarket promises 45 minutes,
@@ -713,5 +715,55 @@ describe('delivery per store', () => {
       });
       expect(Number((await level(lamp, lagosId)).reservedQty)).toBe(0);
     });
+  });
+});
+
+describe('city zones list LGAs (ROADMAP 25.1)', () => {
+  it('saves each place as the LGA it means, once', async () => {
+    const saved = ok(
+      await saveDeliveryZone(null, { warehouseId: mainId, name: 'Island', kind: 'CITIES', state: 'Lagos', cities: 'eti-osa, Lekki, Ajah, Ibeju-Lekki' }),
+    );
+    const row = await prisma.deliveryZone.findUniqueOrThrow({ where: { id: saved.id } });
+    expect(row.cities).toEqual(['Eti Osa', 'Ibeju-Lekki']);
+    ok(await deleteDeliveryZone(saved.id));
+  });
+
+  it('refuses a name that isn’t an LGA of that state, naming it', async () => {
+    const result = await saveDeliveryZone(null, { warehouseId: mainId, name: 'Estate', kind: 'CITIES', state: 'Lagos', cities: 'Surulere, Sunshine Estate' });
+    expect(result.success).toBe(false);
+    expect(!result.success && result.fieldErrors?.cities).toBe('Sunshine Estate isn’t an LGA in Lagos. Choose from the list.');
+  });
+
+  it('counts an older zone’s neighbourhoods as their LGA when checking overlaps', async () => {
+    const older = await prisma.deliveryZone.create({
+      data: { organizationId: ctx.organization.id, warehouseId: mainId, name: 'Old Surulere', kind: 'CITIES', state: 'Lagos', cities: ['Bode thomas', 'aguda'] },
+    });
+    const result = await saveDeliveryZone(null, { warehouseId: mainId, name: 'New Surulere', kind: 'CITIES', state: 'Lagos', cities: 'Surulere' });
+    expect(result).toMatchObject({ success: false, error: expect.stringContaining('Old Surulere') });
+    await prisma.deliveryZone.delete({ where: { id: older.id } });
+  });
+});
+
+describe('neighbourhood zones (ROADMAP 25.2)', () => {
+  it('saves neighbourhoods on a one-LGA zone, beside a zone for the whole LGA', async () => {
+    const whole = ok(await saveDeliveryZone(null, { warehouseId: mainId, name: 'Surulere', kind: 'CITIES', state: 'Lagos', cities: 'Surulere' }));
+    const near = ok(
+      await saveDeliveryZone(null, { warehouseId: mainId, name: 'Surulere near', kind: 'CITIES', state: 'Lagos', cities: 'Surulere', areas: 'Bode Thomas, Ojuelegba' }),
+    );
+    expect((await prisma.deliveryZone.findUniqueOrThrow({ where: { id: near.id } })).areas).toEqual(['Bode Thomas', 'Ojuelegba']);
+
+    // Two neighbourhood zones clash only over a neighbourhood they share.
+    const far = await saveDeliveryZone(null, { warehouseId: mainId, name: 'Surulere far', kind: 'CITIES', state: 'Lagos', cities: 'Surulere', areas: 'Aguda' });
+    expect(far.success).toBe(true);
+    const clash = await saveDeliveryZone(null, { warehouseId: mainId, name: 'Dup', kind: 'CITIES', state: 'Lagos', cities: 'Surulere', areas: 'ojuelegba' });
+    expect(clash).toMatchObject({ success: false, error: expect.stringContaining('Surulere near') });
+
+    for (const id of [whole.id, near.id, ...(far.success ? [far.data.id] : [])]) ok(await deleteDeliveryZone(id));
+  });
+
+  it('refuses neighbourhoods on a zone with more than one LGA', async () => {
+    const result = await saveDeliveryZone(null, { warehouseId: mainId, name: 'Two', kind: 'CITIES', state: 'Lagos', cities: 'Surulere, Ikeja', areas: 'Bode Thomas' });
+    expect(result.success).toBe(false);
+    expect(!result.success && result.fieldErrors?.areas).toMatch(/one LGA/);
   });
 });

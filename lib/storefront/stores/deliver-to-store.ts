@@ -17,6 +17,8 @@ import { safeStorage, followActiveOrg } from './storage';
 export interface DeliverToPlace {
   state: string;
   city: string;
+  /** the neighbourhood, where the shop prices by one (ROADMAP 25.2) */
+  area?: string;
 }
 
 interface DeliverToState {
@@ -31,7 +33,14 @@ export const useDeliverToStore = create<DeliverToState>()(
     (set) => ({
       place: null,
       hydrated: false,
-      choose: (place) => set({ place: { state: place.state.trim(), city: place.city.trim() } }),
+      choose: (place) =>
+        set({
+          place: {
+            state: place.state.trim(),
+            city: place.city.trim(),
+            ...(place.area?.trim() ? { area: place.area.trim() } : {}),
+          },
+        }),
       clear: () => set({ place: null }),
     }),
     {

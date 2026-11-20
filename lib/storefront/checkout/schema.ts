@@ -73,6 +73,7 @@ export const addressSchema = z.object({
   country: z.string().trim().min(1, 'Choose a country.'),
   state: z.string().trim().min(1, 'Choose a state or region.'),
   city: z.string().trim().min(1, 'Enter your city or town.'),
+  area: z.string().trim().max(80).optional(),
   /* One message at a time: an empty field is asked to be filled in, and
    * only a field with something in it is told it needs more detail. Two
    * `.min()` rules would emit both at once. */

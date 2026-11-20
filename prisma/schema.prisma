@@ -1612,6 +1612,8 @@ model CustomerAddress {
   line1      String
   line2      String?
   city       String
+  /** the neighbourhood inside the LGA, for a shop that prices by one (ROADMAP 25.2) */
+  area       String?
   state      String
   country    String  @default("Nigeria")
   postalCode String?
@@ -1922,6 +1924,8 @@ model Order {
   shipLine1      String?
   shipLine2      String?
   shipCity       String?
+  /** the neighbourhood picked inside the LGA, when the shop prices by one (ROADMAP 25.2) */
+  shipArea       String?
   shipState      String?
   shipCountry    String?
   shipPostalCode String?
@@ -2482,6 +2486,13 @@ model DeliveryZone {
    * CITIES zones: the city/area names, as the merchant typed them
    */
   cities         String[]         @default([])
+  /**
+   * Neighbourhoods inside the zone's one LGA that this price covers (ROADMAP
+   * 25.2) — "Bode Thomas, Ojuelegba" in Surulere. Empty: the whole LGA. A
+   * neighbourhood zone beats a whole-LGA zone; shoppers pick from these
+   * names, so they can't miss over a spelling.
+   */
+  areas          String[]         @default([])
   isActive       Boolean          @default(true)
   sortOrder      Int              @default(0)
 

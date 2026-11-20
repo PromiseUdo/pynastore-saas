@@ -89,6 +89,7 @@ const ORDER_SELECT = {
   shipLine1: true,
   shipLine2: true,
   shipCity: true,
+  shipArea: true,
   shipState: true,
   shipCountry: true,
   shipPostalCode: true,
@@ -276,7 +277,8 @@ function toStorefrontOrder(row: OrderRow, now = new Date()): StorefrontOrder {
       phone: onlineField(row.shipPhone, 'shipPhone', row.reference),
       line1: onlineField(row.shipLine1, 'shipLine1', row.reference),
       line2: row.shipLine2,
-      city: onlineField(row.shipCity, 'shipCity', row.reference),
+      // With the neighbourhood that priced it (ROADMAP 25.2).
+      city: [row.shipArea, onlineField(row.shipCity, 'shipCity', row.reference)].filter(Boolean).join(', '),
       state: onlineField(row.shipState, 'shipState', row.reference),
       country: onlineField(row.shipCountry, 'shipCountry', row.reference),
       postalCode: row.shipPostalCode,

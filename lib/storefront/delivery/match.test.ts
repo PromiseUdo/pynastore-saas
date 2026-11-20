@@ -10,6 +10,7 @@ import {
   offeredTo,
   qualifiesForArranged,
   matchZone,
+  neighbourhoodsIn,
   quoteEachStore,
   quoteFromSetup,
   type DeliverySetup,
@@ -223,5 +224,69 @@ describe('delivery to be arranged: which bags qualify (ROADMAP 21.4B)', () => {
     expect(qualifiesForArranged(rule, { value: 49_999_999, items: 99 })).toBe(false);
     expect(qualifiesForArranged({ fromValue: null, fromItems: null, withinHours: 24 }, { value: 1e12, items: 1e6 })).toBe(false);
     expect(qualifiesForArranged(null, { value: 1e12, items: 1e6 })).toBe(false);
+  });
+});
+
+describe('matching by LGA (ROADMAP 25.1)', () => {
+  // AurafumeNG's zone, as it was typed before LGAs: the neighbourhoods, not "Surulere".
+  const SURULERE = zone({ id: 'z-surulere', kind: 'CITIES', name: 'Surulere', state: 'Lagos', cities: ['Bode thomas', 'ojuelegba', 'aguda', 'kilo'] });
+  const ETI_OSA = zone({ id: 'z-island', kind: 'CITIES', name: 'Island', state: 'Lagos', cities: ['Eti Osa'] });
+  const lagos: DeliverySetup = { zones: [SURULERE, ETI_OSA], pickups: [] };
+
+  it('finds a zone of neighbourhoods for a shopper who gives the LGA (the Surulere bug)', () => {
+    expect(matchZone(lagos, { state: 'Lagos', city: 'Surulere' })?.id).toBe('z-surulere');
+  });
+
+  it('finds an LGA zone for a well-known place in it, however it’s typed', () => {
+    expect(matchZone(lagos, { state: 'Lagos', city: 'Lekki' })?.id).toBe('z-island');
+    expect(matchZone(lagos, { state: 'Lagos', city: 'eti-osa' })?.id).toBe('z-island');
+    expect(matchZone(lagos, { state: 'Lagos', city: 'Aguda' })?.id).toBe('z-surulere');
+  });
+
+  it('keeps an LGA in its own state: Oyo’s Surulere isn’t Lagos’s', () => {
+    expect(matchZone(lagos, { state: 'Oyo', city: 'Surulere' })).toBeNull();
+  });
+
+  it('still matches a name that isn’t an LGA or a known place only by itself, as before', () => {
+    const custom = zone({ id: 'z-estate', kind: 'CITIES', name: 'Estate', state: 'Lagos', cities: ['Sunshine Estate'] });
+    const s: DeliverySetup = { zones: [custom], pickups: [] };
+    expect(matchZone(s, { state: 'Lagos', city: 'sunshine estate' })?.id).toBe('z-estate');
+    expect(matchZone(s, { state: 'Lagos', city: 'Surulere' })).toBeNull();
+  });
+});
+
+describe('neighbourhood prices inside an LGA (ROADMAP 25.2)', () => {
+  const NEAR = zone({ id: 'near', kind: 'CITIES', state: 'Lagos', cities: ['Surulere'], areas: ['Bode Thomas', 'Ojuelegba'] });
+  const FAR = zone({ id: 'far', kind: 'CITIES', state: 'Lagos', cities: ['Surulere'], areas: ['Aguda', 'Ijesha'] });
+  const REST_OF = zone({ id: 'surulere', kind: 'CITIES', state: 'Lagos', cities: ['Surulere'] });
+  const LAGOS = zone({ id: 'lagos', kind: 'STATES', states: ['Lagos'] });
+  const shop: DeliverySetup = { zones: [LAGOS, REST_OF, FAR, NEAR], pickups: [] };
+  const at = (area?: string) => matchZone(shop, { state: 'Lagos', city: 'Surulere', area })?.id;
+
+  it('prices the neighbourhood the shopper picked, ahead of the whole LGA', () => {
+    expect(at('Bode Thomas')).toBe('near');
+    expect(at('aguda')).toBe('far');
+  });
+
+  it('gives "somewhere else", or no pick, the whole-LGA price', () => {
+    expect(at('')).toBe('surulere');
+    expect(at(undefined)).toBe('surulere');
+    expect(at('Masha')).toBe('surulere');
+  });
+
+  it('falls through to the state when only neighbourhoods are priced', () => {
+    const partly: DeliverySetup = { zones: [LAGOS, NEAR], pickups: [] };
+    expect(matchZone(partly, { state: 'Lagos', city: 'Surulere', area: 'Bode Thomas' })?.id).toBe('near');
+    expect(matchZone(partly, { state: 'Lagos', city: 'Surulere' })?.id).toBe('lagos');
+  });
+
+  it('never applies a neighbourhood in another LGA', () => {
+    expect(matchZone(shop, { state: 'Lagos', city: 'Ikeja', area: 'Bode Thomas' })?.id).toBe('lagos');
+  });
+
+  it('lists the shop’s neighbourhoods in an LGA, in its order, across stores — and none where it prices the whole LGA', () => {
+    const otherStore: DeliverySetup = { zones: [zone({ id: 'x', kind: 'CITIES', state: 'Lagos', cities: ['Surulere'], areas: ['Kilo', 'aguda'] })], pickups: [] };
+    expect(neighbourhoodsIn([shop, otherStore], 'Lagos', 'Surulere')).toEqual(['Aguda', 'Ijesha', 'Bode Thomas', 'Ojuelegba', 'Kilo']);
+    expect(neighbourhoodsIn([shop], 'Lagos', 'Ikeja')).toEqual([]);
   });
 });

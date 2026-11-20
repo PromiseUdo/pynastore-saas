@@ -572,6 +572,8 @@ export interface Address {
   line1: string;
   line2?: string;
   city: string;
+  /** the neighbourhood inside the LGA, for a shop that prices by one (ROADMAP 25.2) */
+  area?: string;
   state: string;
   country: string;
   postalCode?: string;

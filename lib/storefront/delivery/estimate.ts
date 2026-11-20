@@ -20,6 +20,8 @@ import type { DeliveryBuyer } from './match';
 export interface DeliverTo {
   state: string;
   city: string;
+  /** the neighbourhood, where the shop prices by one (ROADMAP 25.2) */
+  area?: string | null;
 }
 
 export interface DeliveryEstimate {
@@ -44,10 +46,13 @@ export type EstimateResult =
   | { ok: false; reason: 'no-delivery' | 'not-in-stock-here' | 'unavailable' | 'pickup-only'; pickupCount: number };
 
 /** A place a shopper typed or picked, cleaned — null if it isn't one we can quote for. */
-export function cleanDeliverTo(input: { state?: unknown; city?: unknown } | null | undefined): DeliverTo | null {
+export function cleanDeliverTo(
+  input: { state?: unknown; city?: unknown; area?: unknown } | null | undefined,
+): DeliverTo | null {
   const state = String(input?.state ?? '').trim();
   const city = String(input?.city ?? '').trim().replace(/\s+/g, ' ').slice(0, 120);
-  return isNigerianState(state) ? { state, city } : null;
+  const area = String(input?.area ?? '').trim().replace(/\s+/g, ' ').slice(0, 80);
+  return isNigerianState(state) ? { state, city, ...(area ? { area } : {}) } : null;
 }
 
 export async function estimateDelivery(

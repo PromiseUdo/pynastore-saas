@@ -216,7 +216,10 @@ export function CheckoutView({
     parcels: ParcelOffer[];
   }>({ status: fixedOptions.length ? 'ready' : 'idle', options: fixedOptions, zoneName: null, message: null, notice: null, parcels: [] });
 
-  const [quoteState, quoteCity] = useWatch({ control: form.control, name: ['address.state', 'address.city'] });
+  const [quoteState, quoteCity, quoteArea] = useWatch({
+    control: form.control,
+    name: ['address.state', 'address.city', 'address.area'],
+  });
   const pastDetails = step !== 'information';
   /* The bag as the quote needs it — ids and quantities, re-priced on the
    * server. A string key, so the quote re-runs only when the bag changes. */
@@ -234,7 +237,7 @@ export function CheckoutView({
             return { productId, variantId, quantity: Number(quantity) };
           })
         : [];
-      const result = await quoteDeliveryAction({ state: quoteState ?? '', city: quoteCity ?? '', lines });
+      const result = await quoteDeliveryAction({ state: quoteState ?? '', city: quoteCity ?? '', area: quoteArea ?? '', lines });
       // A slower, older answer must not overwrite the one for the current address.
       if (attempt !== quoteAttempt.current) return;
       if (!result.ok) {
@@ -272,7 +275,7 @@ export function CheckoutView({
         parcels: [],
       });
     }
-  }, [fixedOptions.length, quoteState, quoteCity, bagKey, form]);
+  }, [fixedOptions.length, quoteState, quoteCity, quoteArea, bagKey, form]);
 
   React.useEffect(() => {
     if (pastDetails && hydrated) void requestQuote();
@@ -616,7 +619,7 @@ export function CheckoutView({
                 zoneName={quote.zoneName}
                 notice={quote.notice}
                 errorMessage={quote.message}
-                addressLabel={[quoteCity, quoteState].filter(Boolean).join(', ')}
+                addressLabel={[quoteArea, quoteCity, quoteState].filter(Boolean).join(', ')}
                 onRetry={() => void requestQuote()}
                 onChangeAddress={() => goTo('information')}
                 currency={totals.currency}

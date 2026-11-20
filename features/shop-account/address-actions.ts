@@ -41,6 +41,7 @@ type AddressField =
   | 'line1'
   | 'line2'
   | 'city'
+  | 'area'
   | 'state'
   | 'country'
   | 'postalCode';
@@ -69,6 +70,7 @@ const BaseSchema = z.object({
   line1: z.string().trim().min(3, 'Enter the street address.'),
   line2: z.string().trim().optional().or(z.literal('')),
   city: z.string().trim().min(1, 'Enter the city or town.'),
+  area: z.string().trim().max(80).optional().or(z.literal('')),
   state: z.string().trim().min(1, 'Choose a state or region.'),
   country: z.string().trim().min(1, 'Choose a country.'),
   postalCode: z.string().trim().optional().or(z.literal('')),
@@ -82,6 +84,7 @@ function readForm(formData: FormData) {
     line1: get('line1'),
     line2: get('line2'),
     city: get('city'),
+    area: get('area'),
     state: get('state'),
     country: get('country'),
     postalCode: get('postalCode'),
@@ -139,6 +142,7 @@ export async function saveAddressAction(
     line1: raw.line1.trim(),
     line2: raw.line2.trim() || undefined,
     city: raw.city.trim(),
+    area: raw.area.trim() || undefined,
     state: raw.state.trim(),
     // Stored as the display name, which is what the address book shows and
     // what `fromStoredAddress` matches back to a code.
@@ -205,6 +209,7 @@ export async function saveCheckoutAddressAction(input: {
   line1: string;
   line2?: string;
   city: string;
+  area?: string;
   state: string;
   country: string;
   postalCode?: string;
@@ -230,6 +235,7 @@ export async function saveCheckoutAddressAction(input: {
     line1: input.line1.trim(),
     line2: input.line2?.trim() || undefined,
     city: input.city.trim(),
+    area: input.area?.trim() || undefined,
     state: input.state.trim(),
     // Already a display name here: checkout converts with `toStoredAddress`.
     country: input.country.trim(),

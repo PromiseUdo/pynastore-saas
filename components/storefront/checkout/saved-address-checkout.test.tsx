@@ -49,6 +49,7 @@ vi.mock('@/features/shop-account/address-actions', () => ({
 /* The order itself is written on the server; these tests are about the
  * address that goes with it. */
 vi.mock('@/features/shop-orders/actions', () => ({
+  deliveryNeighbourhoodsAction: async () => [],
   placeOrderAction: vi.fn(async () => ({
     ok: true,
     reference: 'ORD-2026-000001',
@@ -155,7 +156,7 @@ describe('a signed-in shopper with saved addresses', () => {
 
     // The eight fields simply are not there.
     expect(screen.queryByLabelText('Address')).toBeNull();
-    expect(screen.queryByLabelText('City or town')).toBeNull();
+    expect(screen.queryByLabelText('LGA')).toBeNull();
   });
 
   it('reaches delivery without typing an address at all', async () => {
@@ -261,7 +262,7 @@ describe('saving an address from checkout', () => {
 
     await user.click(screen.getByRole('radio', { name: /deliver somewhere else/i }));
     await user.selectOptions(screen.getByLabelText('State'), 'Rivers');
-    await user.type(screen.getByLabelText('City or town'), 'Port Harcourt');
+    await user.selectOptions(screen.getByLabelText('LGA'), 'Port Harcourt');
     await user.type(screen.getByLabelText('Address'), '9 Somewhere Close');
     await user.click(screen.getByLabelText(/save this address to my account/i));
 
@@ -281,7 +282,7 @@ describe('saving an address from checkout', () => {
     renderIn(<CheckoutView config={config} account={{ ...account, addresses: [] }} />);
 
     await user.selectOptions(screen.getByLabelText('State'), 'Rivers');
-    await user.type(screen.getByLabelText('City or town'), 'Port Harcourt');
+    await user.selectOptions(screen.getByLabelText('LGA'), 'Port Harcourt');
     await user.type(screen.getByLabelText('Address'), '9 Somewhere Close');
     // Ticked by default for a shopper with no addresses — untick it.
     await user.click(screen.getByLabelText(/save this address to my account/i));

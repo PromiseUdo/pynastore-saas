@@ -28,7 +28,7 @@ import { acceptArrangedDelivery } from '@/lib/storefront/orders/arranged';
 import { deepLinkSchemeFor } from '@/lib/mobile/store-apps';
 import { watchOrder } from '@/lib/mobile/push/watch';
 import { prisma } from '@/lib/prisma';
-import { quoteDelivery } from '@/lib/storefront/delivery/quote';
+import { deliveryNeighbourhoods, quoteDelivery } from '@/lib/storefront/delivery/quote';
 import type { ParcelOffer } from '@/lib/storefront/delivery/plan';
 import { cleanDeliverTo, estimateDelivery, type EstimateResult } from '@/lib/storefront/delivery/estimate';
 import { getDefaultAddress } from '@/lib/storefront/account/addresses';
@@ -305,6 +305,8 @@ const MAX_QUOTE_LINES = 100;
 export async function quoteDeliveryAction(input: {
   state: string;
   city: string;
+  /** the neighbourhood, where the shop prices by one (ROADMAP 25.2) */
+  area?: string | null;
   lines: OrderLineRequest[];
 }): Promise<QuoteDeliveryResult> {
   const slug = await currentStoreSlug();
@@ -323,7 +325,11 @@ export async function quoteDeliveryAction(input: {
 
     const quote = await quoteDelivery(
       slug,
-      { state: String(input.state ?? '').slice(0, 80), city: String(input.city ?? '').slice(0, 120) },
+      {
+        state: String(input.state ?? '').slice(0, 80),
+        city: String(input.city ?? '').slice(0, 120),
+        area: String(input.area ?? '').slice(0, 80) || null,
+      },
       items.map((item) => ({ itemId: item.variantId, quantity: item.quantity, unitPrice: item.unitPrice })),
       { buyer: await deliveryBuyer() },
     );
@@ -344,11 +350,27 @@ export async function quoteDeliveryAction(input: {
   }
 }
 
+/**
+ * The neighbourhoods this shop prices by inside an LGA (ROADMAP 25.2): what
+ * the "Which part of …?" question offers at checkout, in saved addresses and
+ * on the product page. Usually empty, and then nothing is asked.
+ */
+export async function deliveryNeighbourhoodsAction(input: { state: string; lga: string }): Promise<string[]> {
+  const slug = await currentStoreSlug();
+  if (!slug) return [];
+  try {
+    return await deliveryNeighbourhoods(slug, String(input?.state ?? '').slice(0, 80), String(input?.lga ?? '').slice(0, 120));
+  } catch (error) {
+    console.error('[storefront] Could not list delivery neighbourhoods:', error);
+    return [];
+  }
+}
+
 export type EstimateDeliveryResult =
   | {
       ok: true;
       /** the place it was estimated for, and whether it came from the shopper's default address */
-      deliverTo: { state: string; city: string; fromAccount: boolean } | null;
+      deliverTo: { state: string; city: string; area?: string | null; fromAccount: boolean } | null;
       result: EstimateResult | null;
     }
   | { ok: false; message: string };
@@ -363,7 +385,7 @@ export type EstimateDeliveryResult =
 export async function estimateDeliveryAction(input: {
   productId: string;
   variantId: string;
-  deliverTo?: { state: string; city: string } | null;
+  deliverTo?: { state: string; city: string; area?: string | null } | null;
 }): Promise<EstimateDeliveryResult> {
   const slug = await currentStoreSlug();
   if (!slug) return { ok: false, message: 'We couldn’t reach the store. Please try again.' };

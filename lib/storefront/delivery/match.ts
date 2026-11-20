@@ -8,9 +8,24 @@
  * THE RULE. An address is matched to the most specific active zone covering
  * it, and only that zone's rates are offered:
  *
- *   1. a CITIES zone in the shopper's state listing their city/area
- *   2. a STATES zone listing their state
- *   3. the NATIONWIDE zone
+ *   1. a CITIES zone listing the neighbourhood they picked in their LGA
+ *   2. a CITIES zone in the shopper's state covering their whole LGA
+ *   3. a STATES zone listing their state
+ *   4. the NATIONWIDE zone
+ *
+ * NEIGHBOURHOODS (ROADMAP 25.2). A zone with one LGA may name the
+ * neighbourhoods its price covers ("Bode Thomas, Ojuelegba" in Surulere).
+ * It matches only a shopper who picked one of them — from the shop's own
+ * list (`neighbourhoodsIn`), so the names agree — and a shopper who picked
+ * none, or "somewhere else", falls through to the whole-LGA zone.
+ *
+ * BY LGA (ROADMAP 25.1). Zones list LGAs and shoppers pick theirs from the
+ * same official list (lib/geo/nigeria-lgas.ts), so they can't miss each
+ * other over a spelling. Names typed before the list existed — a zone's
+ * "Bode thomas, ojuelegba", an address's "Lekki" — are read as the LGA
+ * they're in (`findLga`), so an older zone covers that whole LGA and an
+ * older address still finds its price; a name that isn't an LGA or a known
+ * place in one still matches only itself, exactly as before.
  *
  * so "Within Port Harcourt" beats "Rivers", which beats "Rest of Nigeria" —
  * the merchant sets a cheaper local price without it leaking to the rest of
@@ -27,6 +42,7 @@
  * Money is minor units (kobo) here, like the rest of the storefront.
  */
 import { normalizePlace } from '@/lib/geo/nigeria';
+import { findLga } from '@/lib/geo/nigeria-lgas';
 import type { Money, ShippingMethod } from '../types';
 import { eta, formatEta, type DeliveryEta, type DeliveryEtaUnit } from './eta';
 
@@ -45,6 +61,8 @@ export interface ZoneSetup {
   state: string | null;
   states: string[];
   cities: string[];
+  /** neighbourhoods inside its one LGA (25.2); empty or absent = the whole LGA */
+  areas?: string[];
   isActive: boolean;
   rates: RateSetup[];
 }
@@ -107,7 +125,10 @@ export interface StoreDeliverySetup extends DeliverySetup {
 
 export interface DeliveryAddress {
   state: string;
+  /** the LGA (or, on an older address, the city as typed) */
   city: string;
+  /** the neighbourhood picked from the shop's list, if it prices by one (25.2) */
+  area?: string | null;
 }
 
 export interface DeliveryQuote {
@@ -159,13 +180,50 @@ function specificity(zone: ZoneSetup, address: DeliveryAddress): number | null {
       if (!zone.state || zone.state !== state) return null;
       const city = normalizePlace(address.city);
       if (!city) return null;
-      return zone.cities.some((c) => normalizePlace(c) === city) ? 0 : null;
+      // The LGA the shopper picked (or typed, on an older address)…
+      const lga = findLga(state, address.city);
+      const inLga = Boolean(lga && zone.cities.some((c) => findLga(state, c) === lga));
+      // A neighbourhood zone covers only the neighbourhoods it names.
+      if (zone.areas?.length) {
+        const area = normalizePlace(address.area ?? '');
+        return inLga && area && zone.areas.some((a) => normalizePlace(a) === area) ? 0 : null;
+      }
+      if (inLga) return 1;
+      // …or, for a name that's no LGA we know, the name itself, as before.
+      return zone.cities.some((c) => normalizePlace(c) === city) ? 1 : null;
     }
     case 'STATES':
-      return zone.states.includes(state) ? 1 : null;
+      return zone.states.includes(state) ? 2 : null;
     case 'NATIONWIDE':
-      return state ? 2 : null;
+      return state ? 3 : null;
   }
+}
+
+/**
+ * The neighbourhoods a shop prices by inside one LGA, across its stores, in
+ * the order the merchant listed them — what the shopper picks from (25.2).
+ * Empty when the shop prices the whole LGA at one price (the usual case), and
+ * then nobody is asked.
+ */
+export function neighbourhoodsIn(setups: DeliverySetup[], state: string, place: string): string[] {
+  const lga = findLga(state, place);
+  if (!lga) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const setup of setups) {
+    for (const zone of setup.zones) {
+      if (!zone.isActive || zone.kind !== 'CITIES' || zone.state !== state || !zone.areas?.length) continue;
+      if (!zone.cities.some((c) => findLga(state, c) === lga)) continue;
+      for (const area of zone.areas) {
+        const key = normalizePlace(area);
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          out.push(area);
+        }
+      }
+    }
+  }
+  return out;
 }
 
 export function matchZone(setup: DeliverySetup, address: DeliveryAddress): ZoneSetup | null {

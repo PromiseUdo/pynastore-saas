@@ -28,6 +28,8 @@
  * carries them, filled from contact when the step is submitted. See
  * `addressFromContact`.
  */
+import { NeighbourhoodField, useNeighbourhoods } from './neighbourhoods';
+import { findLga, lgaOptions } from '@/lib/geo/nigeria-lgas';
 import * as React from 'react';
 import Link from 'next/link';
 import { useWatch, type UseFormReturn } from 'react-hook-form';
@@ -76,7 +78,38 @@ export function InformationStep({
   const onCountryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setValue('address.country', event.target.value, { shouldValidate: false });
     setValue('address.state', '', { shouldValidate: false });
+    setValue('address.city', '', { shouldValidate: false });
   };
+
+  /* Nigerian addresses name their LGA from the official list (ROADMAP 25.1) —
+   * the same list the shop's delivery zones are built from, so the price
+   * can't be missed over a spelling. An address typed before the list (a
+   * saved "Lekki") is read as its LGA; one we can't place is left blank to
+   * pick. */
+  const stateValue = useWatch({ control, name: 'address.state' }) ?? '';
+  const cityValue = useWatch({ control, name: 'address.city' }) ?? '';
+  const lgaChoices = React.useMemo(() => lgaOptions(stateValue), [stateValue]);
+  const byLga = countryCode === 'NG';
+  // A shop that prices by neighbourhood inside this LGA asks which (ROADMAP 25.2).
+  const areaValue = useWatch({ control, name: 'address.area' }) ?? '';
+  const { areas: neighbourhoods, loaded: neighbourhoodsLoaded } = useNeighbourhoods(byLga ? stateValue : '', cityValue);
+  React.useEffect(() => {
+    // Once the list is in: a neighbourhood that isn't on it (another LGA's, or
+    // one the shop has since removed) is cleared — to "somewhere else".
+    if (neighbourhoodsLoaded && areaValue && !neighbourhoods.includes(areaValue)) {
+      setValue('address.area', '', { shouldValidate: false });
+    }
+  }, [areaValue, neighbourhoods, neighbourhoodsLoaded, setValue]);
+  const usingSavedAddress = savedAddresses.length > 0 && selectedAddressId !== USE_NEW_ADDRESS;
+  React.useEffect(() => {
+    if (!byLga || !lgaChoices.length || !cityValue) return;
+    if (lgaChoices.some((option) => option.value === cityValue)) return;
+    const lga = findLga(stateValue, cityValue);
+    // A saved address we can't place keeps its city: its fields are hidden,
+    // and it's still priced by a state or "Rest of Nigeria" zone.
+    if (lga) setValue('address.city', lga, { shouldValidate: false });
+    else if (!usingSavedAddress) setValue('address.city', '', { shouldValidate: false });
+  }, [byLga, lgaChoices, cityValue, stateValue, setValue, usingSavedAddress]);
 
   const usingSaved = savedAddresses.length > 0 && selectedAddressId !== USE_NEW_ADDRESS;
 
@@ -197,7 +230,10 @@ export function InformationStep({
                   options={country.regions.map((r) => ({ value: r, label: r }))}
                   searchNoun={pluralRegion(country.regionLabel)}
                   error={errors.address?.state?.message}
-                  {...register('address.state')}
+                  {...register('address.state', {
+                    // An LGA belongs to its state: a new state starts a new pick.
+                    onChange: () => byLga && setValue('address.city', '', { shouldValidate: false }),
+                  })}
                 />
               ) : (
                 <TextField
@@ -209,14 +245,38 @@ export function InformationStep({
                 />
               )}
 
-              <TextField
-                id="address-city"
-                label="City or town"
-                autoComplete="address-level2"
-                error={errors.address?.city?.message}
-                {...register('address.city')}
-              />
+              {byLga ? (
+                <SelectField
+                  id="address-city"
+                  label="LGA"
+                  placeholder={stateValue ? 'Choose your LGA' : 'Choose a state first'}
+                  options={lgaChoices}
+                  searchNoun="LGAs"
+                  disabled={!stateValue}
+                  hint="Not sure? Search your area, e.g. Lekki or Festac."
+                  error={errors.address?.city?.message}
+                  {...register('address.city')}
+                />
+              ) : (
+                <TextField
+                  id="address-city"
+                  label="City or town"
+                  autoComplete="address-level2"
+                  error={errors.address?.city?.message}
+                  {...register('address.city')}
+                />
+              )}
             </FieldRow>
+
+            {byLga && neighbourhoods.length > 0 && (
+              <NeighbourhoodField
+                id="address-area"
+                lga={cityValue}
+                areas={neighbourhoods}
+                error={errors.address?.area?.message}
+                {...register('address.area')}
+              />
+            )}
 
             <TextField
               id="address-line1"

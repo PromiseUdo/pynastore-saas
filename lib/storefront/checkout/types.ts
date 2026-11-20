@@ -57,6 +57,8 @@ export interface CheckoutAddress {
   country: string;
   state: string;
   city: string;
+  /** the neighbourhood inside the LGA, for a shop that prices by one (ROADMAP 25.2); '' = none */
+  area?: string;
   addressLine1: string;
   addressLine2: string;
   postalCode: string;

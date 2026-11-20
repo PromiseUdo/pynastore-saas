@@ -41,6 +41,7 @@ const applyDiscountCodeAction = vi.fn(async (input: unknown) => {
     : { ok: false as const, message: 'That code isn’t valid.' };
 });
 vi.mock('@/features/shop-orders/actions', () => ({
+  deliveryNeighbourhoodsAction: async () => [],
   applyDiscountCodeAction: (input: unknown) => applyDiscountCodeAction(input),
   placeOrderAction: vi.fn(),
   payForOrderAction: vi.fn(),

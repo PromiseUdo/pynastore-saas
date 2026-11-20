@@ -55,13 +55,73 @@ import { ArrangedDeliveryDialog, arrangedSummary } from './ArrangedDeliveryDialo
 import { ReturnsPolicyCard } from './ReturnsPolicyCard';
 import { ConsolidationCard } from './ConsolidationCard';
 import { StateSelect } from '@/components/dashboard/state-select';
+import { LgaSelect } from '@/components/dashboard/lga-select';
+import { findLga, lgasOf } from '@/lib/geo/nigeria-lgas';
 
 const KIND_ORDER: Record<DeliveryZoneRow['kind'], number> = { CITIES: 0, STATES: 1, NATIONWIDE: 2 };
+
+/**
+ * For each state a store delivers to by LGA, the LGAs no zone covers — when
+ * nothing whole-state catches them (the caller has checked there's no
+ * "Rest of Nigeria"). An older zone's typed names count as their LGA.
+ */
+function coverageGaps(zones: DeliveryZoneRow[]): { state: string; missing: string[]; partly: string[] }[] {
+  const active = zones.filter((z) => z.isActive);
+  const wholeStates = new Set(active.filter((z) => z.kind === 'STATES').flatMap((z) => z.states));
+  const byState = new Map<string, Set<string>>();
+  const partlyByState = new Map<string, Set<string>>();
+  for (const zone of active) {
+    if (zone.kind !== 'CITIES' || !zone.state || wholeStates.has(zone.state)) continue;
+    const covered = byState.get(zone.state) ?? new Set<string>();
+    // A zone that names neighbourhoods covers only part of its LGA (25.2).
+    if (zone.areas.length) {
+      byState.set(zone.state, covered);
+      const partly = partlyByState.get(zone.state) ?? new Set<string>();
+      for (const place of zone.cities) {
+        const lga = findLga(zone.state, place);
+        if (lga) partly.add(lga);
+      }
+      partlyByState.set(zone.state, partly);
+      continue;
+    }
+    for (const place of zone.cities) {
+      const lga = findLga(zone.state, place);
+      if (lga) covered.add(lga);
+    }
+    byState.set(zone.state, covered);
+  }
+  return [...byState]
+    .map(([state, covered]) => {
+      const partly = [...(partlyByState.get(state) ?? [])].filter((lga) => !covered.has(lga));
+      return {
+        state,
+        partly,
+        missing: lgasOf(state).filter((lga) => !covered.has(lga) && !partly.includes(lga)),
+      };
+    })
+    .filter((gap) => gap.missing.length > 0 || gap.partly.length > 0);
+}
 
 function coverage(zone: DeliveryZoneRow): string {
   if (zone.kind === 'NATIONWIDE') return 'Everywhere in Nigeria your other zones don’t cover';
   if (zone.kind === 'STATES') return zone.states.join(', ');
+  if (zone.areas.length) return `${zone.areas.join(', ')} in ${zone.cities.join(', ')} (${zone.state})`;
   return `${zone.cities.join(', ')} (${zone.state})`;
+}
+
+/** Select needs a non-empty value for "somewhere else in the LGA". */
+const ANYWHERE_ELSE = '__anywhere_else__';
+
+/** The neighbourhoods any active zone names in this LGA — what checkout asks a customer there (25.2). */
+function zoneNeighbourhoods(zones: DeliveryZoneRow[], state: string, lga: string): string[] {
+  if (!state || !lga) return [];
+  const out: string[] = [];
+  for (const zone of zones) {
+    if (!zone.isActive || zone.kind !== 'CITIES' || zone.state !== state || !zone.areas.length) continue;
+    if (!zone.cities.some((c) => findLga(state, c) === lga)) continue;
+    for (const area of zone.areas) if (!out.includes(area)) out.push(area);
+  }
+  return out;
 }
 
 /* The wording customers get, so the table and checkout can't drift apart. */
@@ -266,7 +326,7 @@ export function DeliverySettingsClient({ settings, canManage }: { settings: Deli
               </section>
             )}
 
-            {!nothingSetUp && <AddressCheck wholesaleOn={settings.wholesaleOn} />}
+            {!nothingSetUp && <AddressCheck wholesaleOn={settings.wholesaleOn} zones={settings.zones} />}
           </div>
         )}
 
@@ -385,6 +445,7 @@ function StoreSection({
   const place = formatStorePlace(store);
   const empty = zones.length === 0 && pickups.length === 0;
   const noNationwide = !zones.some((z) => z.kind === 'NATIONWIDE' && z.isActive);
+  const gaps = noNationwide ? coverageGaps(zones) : [];
   // Left out of online stock because another store can deliver and this one can't.
   const heldBack = store.sellsOnline && store.open && !store.suppliesOnline;
 
@@ -426,6 +487,30 @@ function StoreSection({
           </div>
         )}
       </div>
+
+      {/* LGAs a customer can't get delivery to (ROADMAP 25.1): a state with city
+        * zones but nothing to catch the rest of it. */}
+      {gaps.map((gap) => (
+        <div key={gap.state} role="status" className="space-y-1 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {gap.missing.length > 0 && (
+            <p>
+              <span className="font-medium text-foreground">
+                {gap.missing.length} {gap.state} {gap.missing.length === 1 ? 'LGA has' : 'LGAs have'} no delivery from here:
+              </span>{' '}
+              {gap.missing.join(', ')}. Tick them in a zone, or add a “Whole states → {gap.state}” zone so everywhere
+              else in {gap.state} gets a price.
+            </p>
+          )}
+          {/* Neighbourhood prices only (25.2): the rest of that LGA has none. */}
+          {gap.partly.length > 0 && (
+            <p>
+              <span className="font-medium text-foreground">Only some neighbourhoods have a price in {gap.partly.join(', ')}.</span>{' '}
+              Customers elsewhere there can’t get delivery — add a zone covering all of{' '}
+              {gap.partly.length === 1 ? 'it' : 'each'} to give them one.
+            </p>
+          )}
+        </div>
+      ))}
 
       {store.needsReview && (
         <div
@@ -711,8 +796,10 @@ function ZoneCard({
 }
 
 /** "What would a customer here see?" — runs the same matching checkout uses. */
-function AddressCheck({ wholesaleOn }: { wholesaleOn: boolean }) {
+function AddressCheck({ wholesaleOn, zones }: { wholesaleOn: boolean; zones: DeliveryZoneRow[] }) {
   const [state, setState] = React.useState('');
+  // Neighbourhoods the stores price by in the chosen LGA (ROADMAP 25.2).
+  const [area, setArea] = React.useState('');
   // See it as a trade buyer would (ROADMAP 21.4A).
   const [buyer, setBuyer] = React.useState<'retail' | 'trade'>('retail');
   const [city, setCity] = React.useState('');
@@ -729,7 +816,13 @@ function AddressCheck({ wholesaleOn }: { wholesaleOn: boolean }) {
     }
     setPending(true);
     setError(null);
-    const response = await previewDelivery({ state, city, subtotal: subtotal ? Number(subtotal.replace(/,/g, '')) : 0, buyer });
+    const response = await previewDelivery({
+      state,
+      city,
+      area: area || undefined,
+      subtotal: subtotal ? Number(subtotal.replace(/,/g, '')) : 0,
+      buyer,
+    });
     setPending(false);
     if (!response.success) {
       setError(response.error);
@@ -750,12 +843,46 @@ function AddressCheck({ wholesaleOn }: { wholesaleOn: boolean }) {
       <form onSubmit={check} className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_10rem_auto] sm:items-end">
         <div className="space-y-1.5">
           <Label htmlFor="check-state">State</Label>
-          <StateSelect id="check-state" value={state} onChange={setState} />
+          <StateSelect
+            id="check-state"
+            value={state}
+            onChange={(next) => {
+              if (next !== state) setCity('');
+              setState(next);
+            }}
+          />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="check-city">City</Label>
-          <Input id="check-city" placeholder="e.g. Port Harcourt" value={city} onChange={(e) => setCity(e.target.value)} />
+          <Label htmlFor="check-city">LGA</Label>
+          {/* The same list a customer picks from at checkout (ROADMAP 25.1). */}
+          <LgaSelect
+            id="check-city"
+            state={state}
+            value={city}
+            onChange={(next) => {
+              setCity(next);
+              setArea('');
+            }}
+          />
         </div>
+        {zoneNeighbourhoods(zones, state, city).length > 0 && (
+          <div className="space-y-1.5">
+            <Label htmlFor="check-area">Neighbourhood</Label>
+            <SelectRoot value={area || ANYWHERE_ELSE} onValueChange={(value) => setArea(value === ANYWHERE_ELSE ? '' : value)}>
+              <SelectTrigger id="check-area">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {zoneNeighbourhoods(zones, state, city).map((name) => (
+                  <SelectItem key={name} value={name}>
+                    {name}
+                  </SelectItem>
+                ))}
+                <SelectItem value={ANYWHERE_ELSE}>Somewhere else in {city}</SelectItem>
+              </SelectContent>
+            </SelectRoot>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label htmlFor="check-subtotal">Items total (₦)</Label>
           <Input id="check-subtotal" inputMode="decimal" placeholder="0" value={subtotal} onChange={(e) => setSubtotal(e.target.value)} />

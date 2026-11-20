@@ -30,6 +30,7 @@ import {
   arrangedOption,
   deliveryFor,
   hasAnyDelivery,
+  neighbourhoodsIn,
   qualifiesForArranged,
   type DeliveryAddress,
   type DeliveryBuyer,
@@ -94,6 +95,7 @@ export const loadDeliverySetup = cache(async (organizationSlug: string): Promise
           state: true,
           states: true,
           cities: true,
+          areas: true,
           isActive: true,
           rates: {
             orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -329,3 +331,12 @@ export async function deliveryOverview(organizationSlug: string): Promise<Delive
 }
 
 export type { BagLine, DeliveryQuote, PlannedQuote, ShippingMethod };
+
+/**
+ * The neighbourhoods this shop prices by inside an LGA (ROADMAP 25.2) — for
+ * the "Which part of Surulere?" question. Empty for nearly every LGA, and
+ * then the question isn't asked.
+ */
+export async function deliveryNeighbourhoods(organizationSlug: string, state: string, lga: string): Promise<string[]> {
+  return neighbourhoodsIn(await loadDeliverySetup(organizationSlug), state, lga);
+}

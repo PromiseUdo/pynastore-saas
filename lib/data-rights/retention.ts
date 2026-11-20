@@ -107,6 +107,7 @@ export async function runDataRetention(options: { now?: Date; only?: string[] } 
       shipLine1: null,
       shipLine2: null,
       shipCity: null,
+      shipArea: null,
       shipState: null,
       shipPostalCode: null,
       note: null,

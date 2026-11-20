@@ -8669,3 +8669,49 @@ customer counted once and an invoice with no due date never being late).
 **Noted, not built:** the invoices list has no overdue filter, so the landing
 page's "Overdue invoices" tile links to the list plainly rather than carrying a
 `?status=overdue` nothing reads. Worth adding with Phase 7's reports work.
+
+## Phase 25 — Delivery by LGA — 25.1 + 25.2 DONE (2026-11-20)
+
+A customer in Surulere couldn't get a price from a shop with a "Surulere"
+zone, because the zone's typed list said "Bode thomas, ojuelegba, aguda,
+kilo" and matching compared typed names. Nigerian stores (Jumia, Konga) solve
+this the standard way: customers pick their area from a fixed list, and
+merchants price against the same list. We use the official one: Nigeria's
+774 LGAs (`lib/geo/nigeria-lgas.ts`, checked against every state's count).
+
+### 25.1 LGAs everywhere — DONE (2026-11-20)
+- **Merchants** tick LGAs for a city zone (searchable, "Lekki" finds Eti
+  Osa); saving stores the official names and refuses anything that isn't an
+  LGA of the state. Overlaps are checked by LGA. "Check an address" uses the
+  same picker. Each store shows the LGAs it can't deliver to when there's no
+  whole-state or "Rest of Nigeria" zone to catch them.
+- **Shoppers** pick their LGA at checkout, in saved addresses and in the
+  product page's "Deliver to", from the same list (labels name well-known
+  places in each LGA). Saved addresses store the official name.
+- **Matching** is by LGA (`lib/storefront/delivery/match.ts`). Names typed
+  before the list are read as the LGA they're in (`findLga`, with
+  `KNOWN_AREAS` for well-known neighbourhoods), so existing zones and saved
+  addresses keep working — AurafumeNG's Surulere zone matches "Surulere" with
+  no edit. A name that's neither still matches only itself, as before; a
+  saved address we can't place keeps its city and is priced by a state or
+  "Rest of Nigeria" zone.
+
+### 25.2 Neighbourhood prices inside an LGA — DONE (2026-11-20)
+- **Merchants:** a zone with ONE LGA may list neighbourhoods ("Only part of
+  Surulere?", `DeliveryZone.areas`). Matching order: neighbourhood zone →
+  whole-LGA zone → state → Rest of Nigeria. A neighbourhood zone may sit
+  beside a whole-LGA zone; two zones clash only over a neighbourhood they
+  share. The settings page says when an LGA has only neighbourhood prices,
+  and "Check an address" asks the neighbourhood.
+- **Shoppers:** after picking an LGA where the shop prices by neighbourhood,
+  "Which part of Surulere?" lists the shop's own names plus "Somewhere else
+  in Surulere" (`useNeighbourhoods` → `deliveryNeighbourhoodsAction` →
+  `neighbourhoodsIn`), at checkout, in saved addresses and on "Deliver to".
+  Elsewhere nothing is asked. A saved neighbourhood the shop no longer lists
+  is cleared to "somewhere else".
+- **Orders** keep it (`Order.shipArea`, `CustomerAddress.area`), show it
+  ("Bode Thomas, Surulere") to the merchant, the shopper and in emails, and
+  re-planning a late payment prices with it.
+
+### Later
+Distance pricing (same-day shops) and live courier quotes, alongside LGAs.
