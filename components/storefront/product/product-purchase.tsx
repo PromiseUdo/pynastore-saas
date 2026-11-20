@@ -411,11 +411,17 @@ function StickyBuyBar({
  * options, highlights, delivery — scrolls past, so a long column doesn't leave
  * a blank space under the photos.
  *
- * It stops just under the shop's sticky header, measured rather than assumed
- * (each header layout has its own height). And only when the whole gallery
- * fits in the window under that header: a gallery taller than the window,
- * held in place, would never show its bottom. Below `lg` the page is one
- * column and nothing sticks.
+ * Always sticky, so it behaves the same in every browser, window size and
+ * zoom level:
+ *   - a gallery that fits under the shop's sticky header (measured, since
+ *     each header layout has its own height) stops just under it;
+ *   - a gallery taller than the window gets a NEGATIVE top: it scrolls up
+ *     with the page until its bottom edge is a gap above the bottom of the
+ *     screen, then holds there. Every part of it has been seen on the way
+ *     down, so nothing is cut off out of reach.
+ * (It used to stick only when it fitted, which turned on a few pixels — a
+ * bookmarks bar or 110% zoom decided it — and looked random.)
+ * Below `lg` the page is one column and nothing sticks.
  */
 function useStickyGallery() {
   const ref = React.useRef<HTMLDivElement>(null);
@@ -428,8 +434,10 @@ function useStickyGallery() {
     const measure = () => {
       const gallery = ref.current;
       if (!gallery || !wide.matches) return setTop(null);
-      const offset = Math.round((header?.getBoundingClientRect().height ?? 0) + 24);
-      setTop(gallery.offsetHeight + offset <= window.innerHeight ? offset : null);
+      const gap = 24;
+      const offset = Math.round((header?.getBoundingClientRect().height ?? 0) + gap);
+      // Fits: under the header. Too tall: hold it with its bottom a gap above the screen's.
+      setTop(Math.min(offset, window.innerHeight - gallery.offsetHeight - gap));
     };
     measure();
     const observer = new ResizeObserver(measure);
