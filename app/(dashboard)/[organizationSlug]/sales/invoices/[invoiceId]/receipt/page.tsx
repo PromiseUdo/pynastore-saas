@@ -8,6 +8,7 @@
  * Same narrow print-first shape as the counter-sale receipt.
  */
 import type { Metadata } from 'next';
+import { printableTitle } from '@/lib/print-title';
 import { notFound } from 'next/navigation';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -17,7 +18,9 @@ import { getOrganizationSettings } from '@/features/settings/organization';
 import { ReceiptDocument } from '@/components/sales/receipt-document';
 import { enumLabel, formatDate, formatMoney } from '@/lib/format';
 
-export const metadata: Metadata = { title: 'Receipt' };
+export async function generateMetadata({ params }: { params: Promise<{ invoiceId: string }> }): Promise<Metadata> {
+  return printableTitle({ kind: 'receipt', invoiceId: (await params).invoiceId });
+}
 
 export default async function InvoiceReceiptPage({ params }: { params: Promise<{ invoiceId: string }> }) {
   const ctx = await getOrganizationContext();
@@ -77,6 +80,8 @@ export default async function InvoiceReceiptPage({ params }: { params: Promise<{
         },
       ]}
       note={invoice.notes}
+      // Only in full: a part-paid invoice's receipt says what's still owed.
+      stamp={invoice.totalAmount - invoice.paidAmount <= 0 ? 'Paid' : null}
     />
   );
 }

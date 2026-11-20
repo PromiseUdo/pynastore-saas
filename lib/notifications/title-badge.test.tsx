@@ -37,4 +37,16 @@ describe('the tab title', () => {
     unmount();
     expect(document.title).toBe('Orders');
   });
+
+  it('leaves the count off while printing, so a saved PDF is named for the document', () => {
+    document.title = 'AurafumeNG receipt ORD-2026-000001';
+    renderHook(() => useTitleCount('notifications', 2));
+    expect(document.title).toBe('(2) AurafumeNG receipt ORD-2026-000001');
+
+    window.dispatchEvent(new Event('beforeprint'));
+    expect(document.title).toBe('AurafumeNG receipt ORD-2026-000001');
+
+    window.dispatchEvent(new Event('afterprint'));
+    expect(document.title).toBe('(2) AurafumeNG receipt ORD-2026-000001');
+  });
 });

@@ -9,6 +9,12 @@
  * cards, narrow column, black on white. A thermal printer or an A5 sheet is
  * the target, not a browser window.
  *
+ * `stamp` lays a diagonal "PAID" across a document whose money has
+ * arrived — only ever from the record (the order's paidAt, an invoice paid
+ * in full), never as decoration. It's in grey ink so it prints the same on
+ * a mono thermal printer, and it's for the eye only: the Status line below
+ * says the same thing in words.
+ *
  * Everything it shows is passed in already formatted, by a server component
  * that read it off the record. Nothing is computed here for the paper.
  */
@@ -36,6 +42,7 @@ export function ReceiptDocument({
   total,
   footerFacts,
   note,
+  stamp,
 }: {
   businessName: string;
   businessAddress: string | null;
@@ -50,9 +57,18 @@ export function ReceiptDocument({
   /** how it was paid, and anything still owed */
   footerFacts: ReceiptFact[];
   note?: string | null;
+  /** a word stamped diagonally across it, e.g. "Paid" — only when the record says so */
+  stamp?: string | null;
 }) {
   return (
-    <div className="mx-auto max-w-[420px] bg-white px-6 py-8 text-black print:max-w-none print:px-0 print:py-0">
+    <div className="relative mx-auto max-w-[420px] bg-white px-6 py-8 text-black print:max-w-none print:px-0 print:py-0">
+      {stamp && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
+          <span className="-rotate-[30deg] rounded-md border-[5px] border-black/15 px-6 py-1 text-7xl font-black uppercase tracking-[0.2em] text-black/15 select-none">
+            {stamp}
+          </span>
+        </div>
+      )}
       <div className="mb-6 flex justify-end print:hidden">
         <PrintButton share={{ title, text: receiptText({ businessName, title, facts, lines, totals, total, footerFacts, note }) }} />
       </div>

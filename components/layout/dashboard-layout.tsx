@@ -60,12 +60,19 @@ export function DashboardLayout({
           * Radix switches, selects and checkboxes) are otherwise laid out
           * against the page itself, outside every overflow box, and one far
           * down a long page stretched the window into an empty second scroll. */}
-        <div data-admin-shell className="relative flex h-dvh overflow-hidden">
-          <Sidebar org={org} orgs={orgs} user={user} showMessageCount={canViewMessages} />
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <Header breadcrumbs={breadcrumbs} actions={headerActions} user={user} />
-            {notice}
-            <main className="relative flex-1 overflow-y-auto">{children}</main>
+        {/* On paper only the page itself prints (a receipt, an invoice, a
+          * packing slip): no menu, top bar or plan notice, and the screen's
+          * scroll boxes open up so a long page isn't cut at the first sheet. */}
+        <div data-admin-shell className="relative flex h-dvh overflow-hidden print:block print:h-auto print:overflow-visible">
+          <div className="contents print:hidden">
+            <Sidebar org={org} orgs={orgs} user={user} showMessageCount={canViewMessages} />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden print:block print:overflow-visible">
+            <div className="contents print:hidden">
+              <Header breadcrumbs={breadcrumbs} actions={headerActions} user={user} />
+              {notice}
+            </div>
+            <main className="relative flex-1 overflow-y-auto print:overflow-visible">{children}</main>
           </div>
         </div>
         <Toaster />

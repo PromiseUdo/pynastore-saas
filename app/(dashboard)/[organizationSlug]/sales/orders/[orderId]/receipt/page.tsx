@@ -7,6 +7,7 @@
  * order; nothing is computed for the paper.
  */
 import type { Metadata } from 'next';
+import { printableTitle } from '@/lib/print-title';
 import { notFound } from 'next/navigation';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -17,7 +18,9 @@ import { ReceiptDocument, type ReceiptFact } from '@/components/sales/receipt-do
 import { formatDate, formatMoney } from '@/lib/format';
 import { COUNTER_PAYMENT_LABEL, ORDER_CHANNEL_LABEL, PAYMENT_METHOD_LABEL } from '@/lib/sales/order-labels';
 
-export const metadata: Metadata = { title: 'Receipt' };
+export async function generateMetadata({ params }: { params: Promise<{ orderId: string }> }): Promise<Metadata> {
+  return printableTitle({ kind: 'receipt', orderId: (await params).orderId });
+}
 
 export default async function ReceiptPage({ params }: { params: Promise<{ orderId: string }> }) {
   const ctx = await getOrganizationContext();
@@ -81,6 +84,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ orderI
         },
       ]}
       note={order.note}
+      stamp={order.paidAt ? 'Paid' : null}
     />
   );
 }

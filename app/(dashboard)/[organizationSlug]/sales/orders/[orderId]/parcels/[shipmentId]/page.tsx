@@ -9,6 +9,7 @@
  * order.
  */
 import type { Metadata } from 'next';
+import { printableTitle } from '@/lib/print-title';
 import { notFound } from 'next/navigation';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -19,7 +20,9 @@ import { ReceiptDocument, type ReceiptFact } from '@/components/sales/receipt-do
 import { formatDate, formatMoney } from '@/lib/format';
 import { formatEta, formatReady } from '@/lib/storefront/delivery/eta';
 
-export const metadata: Metadata = { title: 'Packing slip' };
+export async function generateMetadata({ params }: { params: Promise<{ orderId: string }> }): Promise<Metadata> {
+  return printableTitle({ kind: 'packing slip', orderId: (await params).orderId });
+}
 
 export default async function PackingSlipPage({ params }: { params: Promise<{ orderId: string; shipmentId: string }> }) {
   const ctx = await getOrganizationContext();
@@ -91,6 +94,8 @@ export default async function PackingSlipPage({ params }: { params: Promise<{ or
         ...(parcel.trackingNote ? [{ label: 'Courier', value: parcel.trackingNote }] : []),
       ]}
       note={order.note}
+      // Tells whoever hands the parcel over there's nothing to collect.
+      stamp={!collect && order.paidAt ? 'Paid' : null}
     />
   );
 }

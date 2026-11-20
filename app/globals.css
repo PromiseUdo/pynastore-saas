@@ -416,3 +416,19 @@
   --pyna-block: #ffffff;
   --pyna-word: #ffffff;
 }
+
+/* Printing from the admin (receipts, invoices, packing slips). A zero page
+ * margin leaves the browser no room for its own header and footer — the
+ * date, the tab title, the page's web address — so the paper carries only
+ * the document. The margin comes back as padding, repeated on every sheet. */
+@media print {
+  @page {
+    margin: 0;
+  }
+  body {
+    padding: 14mm 16mm;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    background: #fff;
+  }
+}

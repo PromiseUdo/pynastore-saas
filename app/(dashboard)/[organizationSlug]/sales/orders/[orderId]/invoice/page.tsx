@@ -8,6 +8,7 @@
  * at ../receipt.
  */
 import type { Metadata } from 'next';
+import { printableTitle } from '@/lib/print-title';
 import { notFound } from 'next/navigation';
 import { getOrganizationContext } from '@/lib/organization';
 import { hasPermission, PERMISSIONS } from '@/lib/permissions';
@@ -15,7 +16,9 @@ import { AccessDenied } from '@/components/layout/access-denied';
 import { tradeInvoiceForOrder } from '@/lib/storefront/orders/trade-invoice';
 import { TradeInvoiceDocument } from '@/components/sales/trade-invoice-document';
 
-export const metadata: Metadata = { title: 'Business invoice' };
+export async function generateMetadata({ params }: { params: Promise<{ orderId: string }> }): Promise<Metadata> {
+  return printableTitle({ kind: 'invoice', orderId: (await params).orderId });
+}
 
 export default async function TradeOrderInvoicePage({ params }: { params: Promise<{ orderId: string }> }) {
   const ctx = await getOrganizationContext();
