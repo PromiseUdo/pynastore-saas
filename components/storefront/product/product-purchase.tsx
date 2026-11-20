@@ -150,7 +150,15 @@ export function ProductPurchase({
         <div
           ref={stickyTop.ref}
           className="min-w-0 lg:self-start"
-          style={stickyTop.top != null ? { position: 'sticky', top: stickyTop.top } : undefined}
+          style={
+            stickyTop.sticky
+              ? ({
+                  position: 'sticky',
+                  top: stickyTop.sticky.top,
+                  '--sf-gallery-fit': `${stickyTop.sticky.fit}px`,
+                } as React.CSSProperties)
+              : undefined
+          }
         >
         <ProductGallery
           images={product.images}
@@ -411,21 +419,22 @@ function StickyBuyBar({
  * options, highlights, delivery — scrolls past, so a long column doesn't leave
  * a blank space under the photos.
  *
- * Always sticky, so it behaves the same in every browser, window size and
- * zoom level:
- *   - a gallery that fits under the shop's sticky header (measured, since
- *     each header layout has its own height) stops just under it;
- *   - a gallery taller than the window gets a NEGATIVE top: it scrolls up
- *     with the page until its bottom edge is a gap above the bottom of the
- *     screen, then holds there. Every part of it has been seen on the way
- *     down, so nothing is cut off out of reach.
- * (It used to stick only when it fitted, which turned on a few pixels — a
- * bookmarks bar or 110% zoom decided it — and looked random.)
+ * Always sticky, and sized to fit, so it looks the same in every browser,
+ * window size and zoom level (a bookmarks bar used to decide it):
+ *   - `fit` is the height left under the shop's sticky header (measured,
+ *     since each header layout has its own height), less a gap above and
+ *     below. The gallery caps its photo and thumbnail column to it
+ *     (`--sf-gallery-fit`), so on a short window the photo is a little
+ *     smaller and the whole gallery still sits under the header with room.
+ *   - it never shrinks below FIT_MIN; on a window shorter than that the
+ *     gallery gets a NEGATIVE top instead: it scrolls up with the page until
+ *     its bottom edge is a gap above the screen's, then holds there, so every
+ *     part of it is seen on the way down.
  * Below `lg` the page is one column and nothing sticks.
  */
 function useStickyGallery() {
   const ref = React.useRef<HTMLDivElement>(null);
-  const [top, setTop] = React.useState<number | null>(null);
+  const [sticky, setSticky] = React.useState<{ top: number; fit: number } | null>(null);
 
   React.useEffect(() => {
     if (typeof window.matchMedia !== 'function') return; // not a browser (tests)
@@ -433,11 +442,14 @@ function useStickyGallery() {
     const header = document.querySelector<HTMLElement>('[data-sf-header]');
     const measure = () => {
       const gallery = ref.current;
-      if (!gallery || !wide.matches) return setTop(null);
+      if (!gallery || !wide.matches) return setSticky(null);
       const gap = 24;
       const offset = Math.round((header?.getBoundingClientRect().height ?? 0) + gap);
-      // Fits: under the header. Too tall: hold it with its bottom a gap above the screen's.
-      setTop(Math.min(offset, window.innerHeight - gallery.offsetHeight - gap));
+      const fit = Math.max(FIT_MIN, window.innerHeight - offset - gap);
+      // Fits (the usual case, given `fit`): under the header. Still too tall
+      // (a very short window): hold it with its bottom a gap above the screen's.
+      const top = Math.min(offset, window.innerHeight - gallery.offsetHeight - gap);
+      setSticky((was) => (was?.top === top && was.fit === fit ? was : { top, fit }));
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -452,5 +464,8 @@ function useStickyGallery() {
     };
   }, []);
 
-  return { ref, top };
+  return { ref, sticky };
 }
+
+/** The smallest the desktop photo is made to fit a short window, in px. */
+const FIT_MIN = 400;

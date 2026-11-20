@@ -92,8 +92,10 @@ export function ProductGallery({
       {/* ── thumbnails (pointer devices) ───────────────────────────── */}
       <div
         // p-1: the scrolling column clips what's drawn outside it, and the
-        // selected thumbnail's ring (2px, with a 2px gap) sits just outside.
-        className="sf-thin-scrollbar hidden lg:flex lg:max-h-[34rem] lg:w-[5.5rem] lg:shrink-0 lg:flex-col lg:gap-3 lg:overflow-y-auto lg:-ml-1 lg:-mt-1 lg:p-1"
+        // selected thumbnail's ring (1px, with a 2px gap) sits just outside.
+        // Never taller than the space the product page gives the gallery
+        // (--sf-gallery-fit, see useStickyGallery).
+        className="sf-thin-scrollbar hidden lg:flex lg:max-h-[min(34rem,var(--sf-gallery-fit,34rem))] lg:w-[5.5rem] lg:shrink-0 lg:flex-col lg:gap-3 lg:overflow-y-auto lg:-ml-1 lg:-mt-1 lg:p-1"
         role="tablist"
         aria-label={`${productName} images`}
       >
@@ -118,7 +120,9 @@ export function ProductGallery({
 
       {/* ── main image (pointer devices) ───────────────────────────── */}
       <div className="relative hidden min-w-0 flex-1 lg:block">
-        <div className="relative aspect-square overflow-hidden rounded-2xl bg-tile">
+        {/* Square, and no wider (so no taller) than the height the product
+          * page has free under its header: the gallery always fits on screen. */}
+        <div className="relative aspect-square max-w-(--sf-gallery-fit) overflow-hidden rounded-2xl bg-tile">
           <Image
             src={active.url}
             alt={active.alt || productName}
