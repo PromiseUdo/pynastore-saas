@@ -145,7 +145,7 @@ export function SearchField({
       <form
         onSubmit={submit}
         role="search"
-        className="flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] border-2 border-border bg-card pl-4 pr-1 transition-colors focus-within:border-brand sm:pr-1.5"
+        className="flex items-center gap-2 rounded-[var(--sf-radius-button,999px)] border border-border bg-card pl-4 pr-1 transition-colors focus-within:border-brand sm:pr-1.5"
       >
         <Search aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <input

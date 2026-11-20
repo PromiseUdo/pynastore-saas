@@ -157,7 +157,10 @@ function QuickViewBody({ product, onClose }: { product: Product; onClose: () => 
         </div>
         {images.length > 1 && (
           <div
-            className="sf-no-scrollbar mt-3 flex gap-2 overflow-x-auto p-0.5"
+            // The scroll row clips what sticks out of it: p-1 leaves room for the
+            // chosen thumbnail's ring and its gap (and a keyboard focus ring),
+            // and -mx-1 keeps the first thumbnail lined up with the photo.
+            className="sf-no-scrollbar -mx-1 mt-2 flex gap-2 overflow-x-auto p-1"
             role="tablist"
             aria-label={`${product.name} images`}
           >
@@ -171,7 +174,7 @@ function QuickViewBody({ product, onClose }: { product: Product; onClose: () => 
                 onClick={() => setImageIndex(i)}
                 className={cn(
                   'relative size-14 shrink-0 overflow-hidden rounded-xl bg-tile ring-offset-2 ring-offset-card transition',
-                  i === imageIndex ? 'ring-2 ring-brand' : 'opacity-70 hover:opacity-100',
+                  i === imageIndex ? 'ring-1 ring-brand' : 'opacity-70 hover:opacity-100',
                 )}
               >
                 <Image src={image.url} alt="" fill sizes="56px" className="object-cover" />

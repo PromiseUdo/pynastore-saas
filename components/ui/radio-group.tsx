@@ -69,6 +69,7 @@ function RadioGroupCard({
   return (
     <label
       htmlFor={id}
+      data-slot="radio-card"
       className={cn(
         'flex cursor-pointer items-start gap-3.5 rounded-xl border bg-card p-4 transition-colors',
         'hover:border-brand/50',

@@ -28,7 +28,9 @@ export default async function CheckoutLayout({
 }) {
   const { organizationSlug } = await params;
   return (
-    <div className="flex min-h-screen flex-col">
+    // The top bar is sticky: a field the browser scrolls to (the first error,
+    // the next input) stops below it rather than behind it.
+    <div className="flex min-h-screen flex-col [&_:is(input,select,textarea,button,[role=radio])]:scroll-mt-24">
       <CheckoutChrome />
       <main className="flex-1">
         <div className="sf-container py-7 lg:py-12">{children}</div>

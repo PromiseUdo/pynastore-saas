@@ -162,7 +162,7 @@ export function SelectField({
             CONTROL,
             searchNoun && 'pointer-fine:sr-only',
             'w-full appearance-none border bg-background pr-10 text-foreground',
-            'transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'transition-colors focus-visible:border-brand focus-visible:outline-none focus-visible:ring-0',
             'disabled:cursor-not-allowed disabled:opacity-50',
             'aria-invalid:border-destructive',
             className,

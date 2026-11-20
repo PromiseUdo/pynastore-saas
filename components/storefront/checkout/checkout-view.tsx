@@ -708,7 +708,8 @@ export function CheckoutView({
         </form>
       </div>
 
-      <div className="hidden lg:block">
+      {/* Full height of the row (the grid is items-start), so the summary inside has room to stay in view. */}
+      <div className="hidden lg:block lg:self-stretch">
         <CheckoutSummary
           items={items}
           totals={totals}

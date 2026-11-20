@@ -834,3 +834,27 @@
   border-radius: 6px;
   padding: 3px;
 }
+
+/* ── One thin line for anything you type into or pick ───────────────────
+ * The shop's search bar is the model: a 1px border that turns the brand
+ * colour when it has focus, and nothing more. Shared admin primitives
+ * (components/ui Input, Textarea, Select, RadioGroupCard) and the global
+ * :focus-visible rule add a 2px ring on top; inside the shop that ring is
+ * switched off, so typed-into fields and chosen cards all wear the same thin
+ * line. Focus stays visible — the border changes colour — and a chosen card
+ * keeps its filled radio dot, so selection is never colour alone.
+ * Unlayered, so it outranks the Tailwind utilities it overrides. */
+[data-storefront]
+  :is(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']),
+    textarea,
+    select,
+    [role='combobox']
+  ):focus-visible {
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  border-color: var(--brand);
+}
+[data-storefront] [data-slot='radio-card']:has([data-state='checked']) {
+  --tw-ring-shadow: 0 0 #0000;
+}

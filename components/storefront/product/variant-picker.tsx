@@ -95,7 +95,7 @@ export function VariantPicker({
                       className={cn(
                         shared,
                         'size-12 overflow-hidden rounded-full ring-offset-2',
-                        chosen ? 'ring-2 ring-brand' : 'ring-1 ring-border hover:ring-foreground/40',
+                        chosen ? 'ring-1 ring-brand' : 'ring-1 ring-border hover:ring-foreground/40',
                       )}
                     >
                       {swatchImage ? (

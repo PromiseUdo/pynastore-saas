@@ -108,7 +108,7 @@ export function ProductGallery({
             className={cn(
               'relative aspect-square w-full shrink-0 overflow-hidden rounded-xl bg-tile ring-offset-2 transition',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              i === safeIndex ? 'ring-2 ring-brand' : 'opacity-70 hover:opacity-100',
+              i === safeIndex ? 'ring-1 ring-brand' : 'opacity-70 hover:opacity-100',
             )}
           >
             <Image src={image.url} alt="" fill sizes="80px" className="object-cover" />

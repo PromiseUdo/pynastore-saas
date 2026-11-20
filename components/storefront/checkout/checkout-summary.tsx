@@ -230,7 +230,7 @@ export function CheckoutSummary({
       {/* ── desktop: open, sticky ───────────────────────────────────── */}
       <section
         aria-labelledby="checkout-summary-heading"
-        className="hidden rounded-2xl border bg-card p-5 lg:sticky lg:top-8 lg:block"
+        className="hidden rounded-2xl border bg-card p-5 lg:sticky lg:top-24 lg:block"
       >
         <div className="flex items-baseline justify-between gap-3">
           <h2 id="checkout-summary-heading" className="font-display text-lg">

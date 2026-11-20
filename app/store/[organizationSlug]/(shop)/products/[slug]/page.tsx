@@ -17,7 +17,10 @@
  */
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { Breadcrumbs, BreadcrumbJsonLd } from '@/components/storefront/common/breadcrumbs';
+import {
+  Breadcrumbs,
+  BreadcrumbJsonLd,
+} from '@/components/storefront/common/breadcrumbs';
 import { HighlightRail } from '@/components/storefront/catalog/highlight-rail';
 import { ProductPurchase } from '@/components/storefront/product/product-purchase';
 import { ProductDelivery } from '@/components/storefront/product/product-delivery';
@@ -52,7 +55,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Absolute and tenant-specific: each merchant's storefront is its own
   // origin, so a canonical built from a single hardcoded domain would point
   // every store at one of them.
-  const url = (await storefrontUrlFor(organizationSlug, `/products/${product.slug}`));
+  const url = await storefrontUrlFor(
+    organizationSlug,
+    `/products/${product.slug}`,
+  );
 
   return {
     title: `${product.name} — ${product.brandName}`,
@@ -77,8 +83,16 @@ export default async function ProductDetailPage({ params }: Props) {
   const data = await loadProductPage(slug, { organizationSlug });
   if (!data) notFound();
 
-  const { product, breadcrumb, reviews, questions, delivery, recommendations } = data;
-  const { cheaper, premium, fromBrand, boughtTogether, completeTheLook, completeTheLookTitle } = recommendations;
+  const { product, breadcrumb, reviews, questions, delivery, recommendations } =
+    data;
+  const {
+    cheaper,
+    premium,
+    fromBrand,
+    boughtTogether,
+    completeTheLook,
+    completeTheLookTitle,
+  } = recommendations;
 
   /* "You may also like" comes from the Recommendation Service: the same
    * similarity score as the rails below, nudged by the session once the
@@ -94,11 +108,16 @@ export default async function ProductDetailPage({ params }: Props) {
 
   /* The merchant's size guide, offered beside the size picker — only when
    * they've published one and this product actually comes in sizes. */
-  const sizeGuide = hasSizeOption(product.options.map((o) => o.name)) ? pageOfKind(pages, 'SIZE_GUIDE') : null;
+  const sizeGuide = hasSizeOption(product.options.map((o) => o.name))
+    ? pageOfKind(pages, 'SIZE_GUIDE')
+    : null;
 
   const crumbs = [
     { label: 'Home', href: '/' },
-    ...breadcrumb.map((category) => ({ label: category.name, href: categoryHref(category.path) })),
+    ...breadcrumb.map((category) => ({
+      label: category.name,
+      href: categoryHref(category.path),
+    })),
     { label: product.name },
   ];
 
@@ -109,7 +128,7 @@ export default async function ProductDetailPage({ params }: Props) {
   return (
     <div className="sf-container py-4 lg:py-8">
       {/* One scrollable line on a phone: a wrapped trail ending in a long
-        * product name can take three lines before the photograph starts. */}
+       * product name can take three lines before the photograph starts. */}
       <Breadcrumbs
         items={crumbs}
         className="sf-no-scrollbar -mx-5 mb-3 overflow-x-auto whitespace-nowrap px-5 sm:mx-0 sm:mb-5 sm:flex-wrap sm:px-0 sm:whitespace-normal"
@@ -117,10 +136,18 @@ export default async function ProductDetailPage({ params }: Props) {
 
       <ProductPurchase
         product={product}
-        deliveryPanel={<ProductDelivery delivery={delivery} requiresPrepayment={product.requiresPrepayment && payOnDelivery} />}
+        deliveryPanel={
+          <ProductDelivery
+            delivery={delivery}
+            requiresPrepayment={product.requiresPrepayment && payOnDelivery}
+          />
+        }
         deliverySummary={deliverySummary(delivery.options)}
         sizeGuideHref={sizeGuide?.href ?? null}
-        shareUrl={await storefrontUrlFor(organizationSlug, `/products/${product.slug}`)}
+        shareUrl={await storefrontUrlFor(
+          organizationSlug,
+          `/products/${product.slug}`,
+        )}
       />
 
       <div className="mt-10 border-t pt-8 lg:mt-14 lg:pt-10">
@@ -142,37 +169,48 @@ export default async function ProductDetailPage({ params }: Props) {
       </div>
 
       {/* With no answered questions and neither way to ask on the shop's
-        * plan, the whole block (rule included) goes. */}
+       * plan, the whole block (rule included) goes. */}
       <div
         className={
-          'mt-10 border-t pt-8 lg:mt-14 lg:pt-10' + (questions.items.length === 0 ? ' has-[[data-ask]:empty]:hidden' : '')
+          'mt-10 border-t pt-8 lg:mt-14 lg:pt-10' +
+          (questions.items.length === 0 ? ' has-[[data-ask]:empty]:hidden' : '')
         }
       >
         <ProductQuestions
           product={product}
           questions={questions.items}
           /* Two ways to ask — and a third way to decide: the shop's AI,
-            * from this product's own listing, reviews and the store's
-            * policies; and a message to the store team (ROADMAP 17.3 — shown
-            * only when the shop takes messages). The public "Ask a question"
-            * form was retired 2026-11-19 (see product-questions.tsx). */
+           * from this product's own listing, reviews and the store's
+           * policies; and a message to the store team (ROADMAP 17.3 — shown
+           * only when the shop takes messages). The public "Ask a question"
+           * form was retired 2026-11-19 (see product-questions.tsx). */
           ask={
             <>
               <AssistantLauncher
-                seed={{ surface: 'product', productSlug: product.slug, productName: product.name }}
+                seed={{
+                  surface: 'product',
+                  productSlug: product.slug,
+                  productName: product.name,
+                }}
               />
-              <ChatLauncher variant="button" product={{ id: product.id, name: product.name }} />
+              <ChatLauncher
+                variant="button"
+                product={{ id: product.id, name: product.name }}
+              />
               {/* Side by side with its closest matches — the same products as
-                * "You may also like" below, so the two agree on "similar". */}
-              <CompareSimilar product={product} candidates={mayAlsoLike.items.map((item) => item.product)} />
+               * "You may also like" below, so the two agree on "similar". */}
+              <CompareSimilar
+                product={product}
+                candidates={mayAlsoLike.items.map((item) => item.product)}
+              />
             </>
           }
         />
       </div>
 
       {/* ── recommendations ──────────────────────────────────────────
-        * Each rail answers a different question, and each is dropped
-        * entirely when the catalogue has nothing honest to put in it. */}
+       * Each rail answers a different question, and each is dropped
+       * entirely when the catalogue has nothing honest to put in it. */}
       <Recommendations
         id="similar"
         placement="product"
@@ -183,7 +221,7 @@ export default async function ProductDetailPage({ params }: Props) {
       <div id="cheaper" className="scroll-mt-24">
         <HighlightRail
           title="Want something cheaper?"
-          subtitle="Related products that cost less — nearest first."
+          subtitle="Related products that cost less."
           products={cheaper}
         />
       </div>
@@ -204,14 +242,23 @@ export default async function ProductDetailPage({ params }: Props) {
 
       <HighlightRail title={completeTheLookTitle} products={completeTheLook} />
 
-      <HighlightRail title={`More from ${product.brandName}`} products={fromBrand} />
+      <HighlightRail
+        title={`More from ${product.brandName}`}
+        products={fromBrand}
+      />
 
       <RecentlyViewed excludeProductId={product.id} />
 
-      <BreadcrumbJsonLd items={crumbs} baseUrl={(await storefrontUrlFor(organizationSlug)).replace(/\/$/, '')} />
+      <BreadcrumbJsonLd
+        items={crumbs}
+        baseUrl={(await storefrontUrlFor(organizationSlug)).replace(/\/$/, '')}
+      />
       <ProductJsonLd
         product={product}
-        url={(await storefrontUrlFor(organizationSlug, `/products/${product.slug}`))}
+        url={await storefrontUrlFor(
+          organizationSlug,
+          `/products/${product.slug}`,
+        )}
         reviews={reviews.items}
       />
     </div>
