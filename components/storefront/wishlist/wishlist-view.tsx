@@ -22,7 +22,10 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { Heart } from 'lucide-react';
-import { ProductCard, ProductCardSkeleton } from '@/components/storefront/product/product-card';
+import {
+  ProductCard,
+  ProductCardSkeleton,
+} from '@/components/storefront/product/product-card';
 import { useStorefront, useShopper } from '@/lib/storefront/context';
 import { useWishlistStore } from '@/lib/storefront/stores/wishlist-store';
 import type { Product } from '@/lib/storefront/types';
@@ -57,7 +60,9 @@ export function WishlistView() {
 
         /* Drop saves the catalogue no longer knows about. Done here rather
          * than in the store so it happens once, where the answer is known. */
-        const alive = new Set((data.products ?? []).map((product) => product.id));
+        const alive = new Set(
+          (data.products ?? []).map((product) => product.id),
+        );
         const store = useWishlistStore.getState();
         for (const id of key.split(',')) {
           if (!alive.has(id)) store.remove(id);
@@ -84,10 +89,11 @@ export function WishlistView() {
     return (
       <div className="rounded-3xl border border-border bg-card px-6 py-14 text-center">
         <Heart className="mx-auto size-8 text-muted-foreground" aria-hidden />
-        <h2 className="mt-4 font-display text-xl font-semibold">Nothing saved yet</h2>
+        <h2 className="mt-4 font-display text-xl font-semibold">
+          Nothing saved yet
+        </h2>
         <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-          Tap the heart on anything you like and it waits for you here — with whatever it costs on
-          the day you come back.
+          Tap the heart on anything you like and it waits for you here.
         </p>
         <Link
           href="/products"
@@ -107,7 +113,7 @@ export function WishlistView() {
         </p>
 
         {/* Said once, quietly, to the people it affects — not a wall in
-          * front of a page that already works. */}
+         * front of a page that already works. */}
         {!shopper && (
           <p className="text-sm text-muted-foreground">
             Saved on this device.{' '}
