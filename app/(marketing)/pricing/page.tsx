@@ -99,7 +99,7 @@ export default async function PricingPage() {
               },
               {
                 q: 'How do I pay for my plan?',
-                a: 'By card, through Paystack. Your plan renews automatically at the end of each period, at the price you signed up at.',
+                a: 'By card, through Paystack. Your plan renews by itself at the end of each period, at the price you signed up at.',
               },
               {
                 q: 'Can I change plans?',
@@ -107,7 +107,7 @@ export default async function PricingPage() {
               },
               {
                 q: 'Can I cancel?',
-                a: 'Yes. Cancelling stops the next renewal; you keep everything until the end of the period you’ve paid for.',
+                a: 'Yes. If you cancel, you won’t be charged again, and you keep everything until the end of the period you’ve paid for.',
               },
               {
                 q: 'What if I don’t renew?',
@@ -120,12 +120,12 @@ export default async function PricingPage() {
                 q: 'What does my shop’s own app cost?',
                 a:
                   offer.appSetupFee !== null && offer.appYearlyFee !== null
-                    ? `It’s an add-on for any paid plan: ${formatMoney(offer.appSetupFee)} to set up, including the first year, then ${formatMoney(offer.appYearlyFee)} a year. You get an Android and an iPhone app with your shop’s name and icon, published under your own developer accounts.`
-                    : 'It’s an add-on for any paid plan: an Android and an iPhone app with your shop’s name and icon, published under your own developer accounts. Ask us about the price.',
+                    ? `It’s an optional extra on any paid plan: ${formatMoney(offer.appSetupFee)} to set up, including the first year, then ${formatMoney(offer.appYearlyFee)} a year. You get an Android and an iPhone app with your shop’s name and icon, listed in the app stores under your business’s own Apple and Google accounts, so it belongs to you.`
+                    : 'It’s an optional extra on any paid plan: an Android and an iPhone app with your shop’s name and icon, listed in the app stores under your business’s own Apple and Google accounts, so it belongs to you. Ask us about the price.',
               },
               {
-                q: 'Can I use my own domain?',
-                a: `Yes. Every shop gets its own address on our domain, and you can connect a domain you already own — a .com, a .com.ng or any other — for free on any plan, even during your trial. On a paid plan you can also buy ${offer.comNg ? 'a .com or .com.ng' : 'a .com'} through us; the price, and what it renews at, are shown before you pay.${offer.freeDomainPlans.length ? ` Pay yearly on ${orList(offer.freeDomainPlans)} and your first year of a .com.ng is free; renewing it after that is at the normal price.` : ''}`,
+                q: 'Can I use my own web address, like yourshop.com.ng?',
+                a: `Yes. Every shop gets its own web address with us, and you can connect one you already own (also called a domain) — a .com, a .com.ng or any other — for free on any plan, even during your trial. On a paid plan you can also buy ${offer.comNg ? 'a .com or .com.ng' : 'a .com'} through us; the price, and what it renews at, are shown before you pay.${offer.freeDomainPlans.length ? ` Pay yearly on ${orList(offer.freeDomainPlans)} and your first year of a .com.ng is free; renewing it after that is at the normal price.` : ''}`,
               },
             ]}
           />

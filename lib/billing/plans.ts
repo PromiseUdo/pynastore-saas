@@ -44,18 +44,18 @@ export const FEATURE_KEYS = Object.values(FEATURES) as FeatureKey[];
  * it exists yet. An unbuilt feature is never sold (ROADMAP 12.1, 12.4).
  */
 export const FEATURE_INFO: Record<FeatureKey, { label: string; description: string; built: boolean }> = {
-  'inventory.module': { label: 'Inventory', description: 'Products, stock and stores', built: true },
-  'sales.module': { label: 'Sales', description: 'Orders, customers, invoices and quotes', built: true },
-  'procurement.module': { label: 'Purchasing', description: 'Suppliers and purchase orders', built: true },
-  'roles.custom': { label: 'Custom roles', description: 'Decide exactly what each member can do', built: true },
-  'inventory.kits': { label: 'Kits and bundles', description: 'Sell several products together as one item', built: true },
-  'procurement.auto_reorder': { label: 'Restocking suggestions', description: 'An order to your supplier, drafted when stock runs low', built: true },
-  'reports.advanced': { label: 'Advanced reports', description: 'Sales, profit, and how each store is doing', built: true },
-  'audit_log.export': { label: 'Activity log download', description: 'Download a record of who did what, and when', built: true },
+  'inventory.module': { label: 'Inventory', description: 'Your products, and how many of each you have in every store', built: true },
+  'sales.module': { label: 'Orders and customers', description: 'Orders, customers, price quotes and invoices', built: true },
+  'procurement.module': { label: 'Purchasing', description: 'Keep track of what you order from your suppliers, and what has arrived', built: true },
+  'roles.custom': { label: 'Roles and permissions', description: 'Choose exactly what each staff member can see and do', built: true },
+  'inventory.kits': { label: 'Kits and bundles', description: 'Sell a few products together as one item, like a gift set', built: true },
+  'procurement.auto_reorder': { label: 'Reorder suggestions', description: 'When stock runs low, we draft an order to your supplier for you', built: true },
+  'reports.advanced': { label: 'Detailed reports', description: 'Sales, profit, and how each store is doing', built: true },
+  'audit_log.export': { label: 'Activity log download', description: 'Download a record of who did what in your shop, and when', built: true },
   'api.access': { label: 'API access', description: 'Connect your own systems', built: false },
-  'marketing.campaigns': { label: 'Campaigns', description: 'Sales that start and end on their own, with a banner or pop-up', built: true },
+  'marketing.campaigns': { label: 'Campaigns', description: 'Discounts that start and end by themselves, with a banner on your website', built: true },
   'sales.wholesale': { label: 'Wholesale', description: 'Sell at wholesale prices to businesses you approve', built: true },
-  'storefront.ai_shopping': { label: 'AI shopping assistant', description: 'Shoppers ask questions or search with a photo', built: true },
+  'storefront.ai_shopping': { label: 'AI shopping assistant', description: 'Shoppers describe what they want, or search with a photo, and see matching products', built: true },
   'domain.free_com_ng': {
     label: 'Free .com.ng for a year',
     description: 'Paying yearly? Your shop gets a .com.ng address, registered and connected for you, free for the first year',

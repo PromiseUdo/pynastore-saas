@@ -563,5 +563,7 @@ export default async function proxy(req: NextRequest, event: NextFetchEvent) {
 export const config = {
   // brand/: the platform's logo files and icons (public/brand), served as
   // they are on every host — a shop or admin host must not rewrite them.
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|brand/|sw\\.js$|.*\\.svg$).*)'],
+  // site-photos/: the public site's photos (public/site-photos), likewise.
+  // (Not "marketing/": that's the admin's own Marketing pages.)
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|brand/|site-photos/|sw\\.js$|.*\\.svg$).*)'],
 };

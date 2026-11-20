@@ -142,7 +142,7 @@ export function PricingTable({ plans, trialPlanName }: { plans: PlanOffer[]; tri
                 {(Object.keys(LIMIT_INFO) as (keyof typeof LIMIT_INFO)[]).map((k) => (
                   <tr key={k}>
                     <th scope="row" className="px-5 py-3.5 text-left font-normal text-muted-foreground">
-                      {k === 'maxSeats' ? 'Team members' : 'Stores'}
+                      {k === 'maxSeats' ? 'Team members' : 'Stores (branches)'}
                     </th>
                     {plans.map((p) => (
                       <td key={p.id} className="px-5 py-3.5 tabular-nums">

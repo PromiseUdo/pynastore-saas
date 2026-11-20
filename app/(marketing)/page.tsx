@@ -8,7 +8,9 @@
  * read from the plan catalogue and billing settings (lib/marketing/offer.ts,
  * lib/billing/catalogue.ts), the same places the app uses. No testimonials,
  * customer counts or logos: we don't have any we could stand behind yet.
- * The pictures are drawn illustrations of a sample shop, and say so.
+ * The screens are drawn illustrations of a sample shop, and say so; the
+ * photos are of models (components/marketing/photo-scenes.tsx), with the
+ * product's cards floating around them.
  *
  * The page reads top to bottom as: what it is → how it fits together → the
  * facts → the four big jobs → everything else → how to start → what it
@@ -39,28 +41,23 @@ import {
   AssistantPreview,
   ChatMini,
   CounterMini,
-  DashboardScreen,
   InvoiceMini,
-  LowStockNotice,
-  PaidNotice,
-  PayoutPreview,
-  PhoneShop,
   ShopperAppPreview,
   ReportMini,
   SocialPreview,
-  StockPreview,
   StorefrontPreview,
   TeamMini,
 } from '@/components/marketing/product-visuals';
+import { CounterScene, HeroScene, PaymentScene } from '@/components/marketing/photo-scenes';
 
 export const revalidate = 600;
 
 export const metadata: Metadata = {
-  title: { absolute: `${PLATFORM_NAME} — one stock, every way you sell` },
+  title: { absolute: `${PLATFORM_NAME} — sell in your shop, online and on Instagram` },
   description: `Sell at your counter, on your own website and on Instagram from the same stock. Online payments go straight to your bank, and ${PLATFORM_NAME} takes no commission on your sales.`,
   alternates: { canonical: '/' },
   openGraph: {
-    title: `${PLATFORM_NAME} — one stock, every way you sell`,
+    title: `${PLATFORM_NAME} — sell in your shop, online and on Instagram`,
     description:
       'Stock, sales, delivery and payments for shops across Nigeria. No commission on your sales.',
     type: 'website',
@@ -110,8 +107,8 @@ export default async function HomePage() {
       text: `free${offer.trialPlanName ? ` on ${offer.trialPlanName}` : ''}, with no card needed to start.`,
     },
     {
-      figure: '36 + FCT',
-      text: 'Set your own delivery prices for every state, down to the city.',
+      figure: '36 + Abuja',
+      text: 'Set your own delivery price for every state and Abuja, down to the local area.',
     },
     offer.fromMonthly && {
       figure: formatMoney(offer.fromMonthly),
@@ -127,14 +124,14 @@ export default async function HomePage() {
         : 'No card is needed to create your shop. You pay when you choose a plan.',
     },
     {
-      q: 'Can I use my own domain, like yourshop.com.ng?',
-      a: `Yes. Every shop starts at shop-yourname.${PLATFORM_DOMAIN}. If you already own a domain — a .com, a .com.ng or any other — you can connect it for free on any plan, even during your trial. On a paid plan you can also buy ${offer.comNg ? 'a .com or .com.ng' : 'a .com'} through us, registered in your business’s name, with the price and what it renews at shown before you pay. It’s usually ready within 24 hours.${offer.freeDomainPlans.length ? ` Pay yearly on ${orList(offer.freeDomainPlans)} and your first year of a .com.ng is free.` : ''}`,
+      q: 'Can I use my own web address, like yourshop.com.ng?',
+      a: `Yes. Every shop starts at shop-yourname.${PLATFORM_DOMAIN}. If you already own a web address (also called a domain) — a .com, a .com.ng or any other — you can connect it for free on any plan, even during your trial. On a paid plan you can also buy ${offer.comNg ? 'a .com or .com.ng' : 'a .com'} through us, registered in your business’s name, with the price and what it renews at shown before you pay. It’s usually ready within 24 hours.${offer.freeDomainPlans.length ? ` Pay yearly on ${orList(offer.freeDomainPlans)} and your first year of a .com.ng is free.` : ''}`,
     },
     {
       q: 'Can my customers shop from an app?',
       a: appPrice
-        ? `Yes. On a paid plan you can add your shop’s own Android and iPhone app, with your name and icon: ${appPrice}. We build it and hand it over ready for Google Play and the App Store; it’s published under your own developer accounts, so it’s yours.`
-        : 'Yes. On a paid plan you can add your shop’s own Android and iPhone app, with your name and icon. We build it and hand it over ready for Google Play and the App Store; it’s published under your own developer accounts, so it’s yours. Ask us about the price.',
+        ? `Yes. On a paid plan you can add your shop’s own Android and iPhone app, with your name and icon: ${appPrice}. We build it and get it ready for Google Play and the App Store. It’s listed under your business’s own Apple and Google accounts, so it belongs to you.`
+        : 'Yes. On a paid plan you can add your shop’s own Android and iPhone app, with your name and icon. We build it and get it ready for Google Play and the App Store. It’s listed under your business’s own Apple and Google accounts, so it belongs to you. Ask us about the price.',
     },
     {
       q: `Does ${PLATFORM_NAME} take a cut of my sales?`,
@@ -149,11 +146,11 @@ export default async function HomePage() {
     },
     {
       q: 'I already keep my products in a spreadsheet.',
-      a: 'Import it. Up to 500 rows at a time, with sizes and colours and the stock in each of your stores. You see exactly what will be added before anything is saved.',
+      a: 'Bring it straight in. Up to 500 products at a time, with sizes, colours and how many you have in each branch. You see exactly what will be added before anything is saved.',
     },
     {
       q: 'Who owns my data?',
-      a: 'You do. Your products, customers and orders are yours, and you can export your lists as spreadsheets from the dashboard.',
+      a: 'You do. Your products, customers and orders are yours, and you can download them as spreadsheets whenever you like.',
     },
   ];
 
@@ -172,15 +169,16 @@ export default async function HomePage() {
               For shops and boutiques across Nigeria
             </p> */}
             <h1 className="mt-5 font-mk-display text-[2.7rem] font-bold leading-[1.02] tracking-[-0.04em] sm:text-[3.6rem]">
-              <span className="block">One stock.</span>
+              <span className="block">Sell anywhere.</span>
               <span className="block">
-                <Marked>Every way you sell.</Marked>
+                <Marked>One stock count.</Marked>
               </span>
             </h1>
             <p className="text-pretty mt-6 max-w-xl text-[18px] leading-relaxed text-muted-foreground">
-              Sell at your counter, on your own website and on Instagram, all
-              from the same shelf. {PLATFORM_NAME} keeps the count right in
-              every branch, and online payments go straight to your bank.
+              Sell at your counter, on your own website and on Instagram.
+              Whenever something sells, {PLATFORM_NAME} takes it off your stock
+              in the right branch, so you always know what you have. Online
+              payments go straight to your bank.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <PrimaryCta href="/register">
@@ -219,23 +217,7 @@ export default async function HomePage() {
             )}
           </div>
 
-          <figure className="relative lg:-mr-10 lg:pl-12">
-            <div
-              aria-hidden
-              className="absolute -inset-x-6 -bottom-10 top-10 rounded-[2.5rem] bg-mk-leaf sm:-inset-x-10 lg:-right-24 lg:left-0"
-            />
-            <div className="relative motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-700">
-              <DashboardScreen />
-            </div>
-            <PhoneShop className="absolute -bottom-14 -left-6 hidden w-[11.5rem] md:block lg:-left-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-6 motion-safe:duration-700 motion-safe:delay-150 motion-safe:fill-mode-backwards" />
-            <PaidNotice className="absolute -top-6 right-3 hidden sm:flex lg:-right-2 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-500 motion-safe:delay-500 motion-safe:fill-mode-backwards" />
-            <LowStockNotice className="absolute -bottom-7 right-6 hidden sm:flex motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-500 motion-safe:delay-700 motion-safe:fill-mode-backwards" />
-            <figcaption className="sr-only">
-              An illustration of {PLATFORM_NAME} for a sample fabric shop: the
-              dashboard with today’s sales and orders, the shop’s website on a
-              phone, a payment received, and a low-stock warning.
-            </figcaption>
-          </figure>
+          <HeroScene className="lg:-mr-6 lg:pl-8" />
         </div>
         <div className="relative mx-auto max-w-6xl px-4 pb-14 sm:px-6">
           <p className="text-[13px] font-semibold text-muted-foreground">Made for shops that sell</p>
@@ -264,8 +246,8 @@ export default async function HomePage() {
           <SectionIntro
             id="one-shelf"
             label="How it fits together"
-            title="Everything comes off one shelf."
-            body="Most shops sell in more than one way. Instead of a notebook for the counter, a spreadsheet for stock and DMs for Instagram, every sale lands in the same place."
+            title="Every sale lands in one place."
+            body="Most shops sell in more than one way. Instead of a notebook for the counter, a spreadsheet for stock and DMs for Instagram, every sale is recorded in the same place — and your stock count updates by itself."
           />
           <div className="mt-14">
             <FlowDiagram />
@@ -323,7 +305,7 @@ export default async function HomePage() {
               aiOn && {
                 icon: MessageCircle,
                 t: 'Shopping assistant',
-                d: 'Shoppers say what they want in their own words, and get back the products in your shop that fit.',
+                d: 'Shoppers type what they want in their own words, and see the products in your shop that match.',
                 href: '#assistant',
               },
               aiOn && {
@@ -340,8 +322,8 @@ export default async function HomePage() {
               },
               {
                 icon: Globe,
-                t: 'Your own domain',
-                d: 'yourshop.com.ng or yourshop.com — connect one you own, free on every plan.',
+                t: 'Your own web address',
+                d: 'Like yourshop.com.ng. Already own one? Connect it free, on every plan.',
                 href: '#online-shop',
               },
             ]
@@ -389,15 +371,15 @@ export default async function HomePage() {
               n="01"
               kicker="Stock"
               title="Know what’s on every shelf, in every branch."
-              body="Each store keeps its own count, and every sale — at the counter or online — comes off the right one. Move stock between branches, count it, and get told when something runs low, store by store."
+              body="Each of your branches keeps its own count. Every sale — at the counter or online — is taken off the branch it came from, so the number you see is the number on the shelf. We warn you when something is running low."
               points={[
                 'One product in many sizes, colours or materials',
-                'Move stock between stores and see when it arrives',
-                'Count your shelves and see what’s gone missing',
-                'Bring your products in from a spreadsheet',
+                'Move stock from one branch to another and see when it arrives',
+                'Count what’s on your shelves and spot what’s missing',
+                'Add all your products at once from a spreadsheet, like Excel',
               ]}
               stage="bg-mk-leaf"
-              visual={<StockPreview />}
+              visual={<CounterScene />}
             />
             <Chapter
               id="online-shop"
@@ -405,13 +387,13 @@ export default async function HomePage() {
               n="02"
               kicker="Your online shop"
               title="Your own website, at your own address."
-              body={`Your products go online at shop-yourname.${PLATFORM_DOMAIN} from day one — or at your own domain, like yourshop.com or yourshop.com.ng. Delivery is priced from the store that has the stock to the shopper’s state and city, at the rates you set.`}
+              body={`Your products go online at shop-yourname.${PLATFORM_DOMAIN} from day one — or at your own web address, like yourshop.com.ng. Shoppers see a delivery price for their area before they pay, worked out from the prices you set and the branch that has the item.`}
               points={[
-                'Connect a domain you already own, free on every plan',
-                'Or buy a .com through us, in your business’s name',
-                'Delivery prices by state and city, and pickup points',
-                'Card, bank transfer and pay on delivery',
-                'Shows “Opening soon” until you’re ready',
+                'Use a web address you already own, free on every plan',
+                'Or get one through us, registered in your business’s name',
+                'Your own delivery prices by state and area, plus pickup points',
+                'Shoppers pay by card, bank transfer or on delivery',
+                'Stays closed to customers, showing “Opening soon”, until you’re ready',
               ]}
               stage="bg-mk-sun-soft"
               visual={<StorefrontPreview />}
@@ -422,23 +404,23 @@ export default async function HomePage() {
               title="Online payments go straight to your bank."
               body={`When a customer pays by card or transfer, Paystack pays you directly into your own bank account, less its standard fee. ${PLATFORM_NAME} never holds your money.`}
               points={[
-                'We check your business once, then payments start',
-                'Every payment shows what Paystack took and what you got',
-                'If a customer’s bank disputes a payment, you see it on the order, with the date to reply by',
+                'We verify your business once, then you can take payments',
+                'Every payment shows Paystack’s fee and what you received',
+                'If a customer asks their bank to reverse a payment, you see it on the order, with the date to respond by',
               ]}
-              stage="bg-muted"
-              visual={<PayoutPreview />}
+              stage="bg-mk-sun-soft"
+              visual={<PaymentScene />}
             />
             <Chapter
               reverse
               n="04"
               kicker="Instagram and Facebook"
               title="Post your products without retyping them."
-              body="Pick a product and we draft a caption from its own details — never a price or a promise your shop can’t back up. You edit it and publish to your Facebook Page and Instagram together."
+              body="Pick a product and we write a caption for you from its details — without making up prices or promises. Change anything you like, then post to your Facebook Page and Instagram at the same time."
               points={[
-                'Connect your Page and Instagram in a few clicks',
-                'Captions drafted from your product details, yours to edit',
-                'Every post kept, and a failed one can be tried again',
+                'Connect your Facebook Page and Instagram in a few clicks',
+                'Captions written from your product details, yours to edit',
+                'See every post you’ve made, and retry any that didn’t go through',
               ]}
               stage="bg-mk-leaf"
               visual={<SocialPreview />}
@@ -453,8 +435,8 @@ export default async function HomePage() {
                 points={[
                   'Answers questions about a product’s sizes, colours and details',
                   'Suggests cheaper, pricier or similar items, and compares two side by side',
-                  'Search with an image: a photo in, similar products out',
-                  'Shows only your own products and prices, never made-up ones',
+                  'Search with a photo: upload a picture, see similar products',
+                  'Shows only your own products and prices — it never makes things up',
                 ]}
                 note={aiOn}
                 stage="bg-mk-sun-soft"
@@ -485,7 +467,7 @@ export default async function HomePage() {
                 Your shop’s own app
               </span>
               <span className="rounded-full border border-white/20 px-2.5 py-0.5 text-[11.5px] font-medium text-white/70">
-                Add-on
+                Optional extra
               </span>
             </p>
             <h2
@@ -505,7 +487,7 @@ export default async function HomePage() {
                 'Order updates arrive as notifications on their phone',
                 'Change products or prices and the app shows it straight away',
                 'A “Get our app” banner and QR code on your website',
-                'We build it and hand it over ready for Google Play and the App Store',
+                'We build it and get it ready for Google Play and the App Store',
               ].map((p) => (
                 <li key={p} className="flex gap-3 text-[15px]">
                   <span
@@ -522,14 +504,14 @@ export default async function HomePage() {
               {appPrice ? (
                 <p>
                   <span className="font-semibold text-white">
-                    On any paid plan:
+                    Available on any paid plan:
                   </span>{' '}
                   <span className="text-white/75">{appPrice}.</span>
                 </p>
               ) : (
                 <p>
                   <span className="font-semibold text-white">
-                    An add-on for any paid plan.
+                    Available on any paid plan, for an extra fee.
                   </span>{' '}
                   <span className="text-white/75">
                     {chat ? (
@@ -555,8 +537,8 @@ export default async function HomePage() {
                 </p>
               )}
               <p className="mt-1 text-[13px] text-white/55">
-                It’s published under your own Apple and Google developer
-                accounts, so the app stays yours.
+                It’s listed in the app stores under your business’s own
+                Apple and Google accounts, so the app belongs to you.
               </p>
             </div>
           </div>
@@ -590,7 +572,7 @@ export default async function HomePage() {
               },
               {
                 t: 'Quotes and invoices',
-                d: 'Send a quote, turn it into an invoice, and record what’s been paid.',
+                d: 'Send a price quote, turn it into an invoice, and record what’s been paid.',
                 v: <InvoiceMini />,
               },
               {
@@ -600,12 +582,12 @@ export default async function HomePage() {
               },
               {
                 t: 'Your staff',
-                d: 'Invite staff and decide what each can do — down to which store.',
+                d: 'Invite your staff and choose what each person can do — even which branch they work in.',
                 v: <TeamMini />,
               },
               {
                 t: 'Reports',
-                d: 'Sales, profit, and what sells in which store — as spreadsheets too.',
+                d: 'Sales, profit and best-sellers in each branch — download them as spreadsheets too.',
                 v: <ReportMini />,
               },
             ].map((c) => (
@@ -640,9 +622,8 @@ export default async function HomePage() {
                 'Ordering from your suppliers',
                 'Returns and refunds',
                 'Discount codes',
-                'Shoppers’ questions on products',
-                'Products sold together as a set',
-                'Sales that start and end on their own',
+                'Bundles, like gift sets',
+                'Discounts that start and end by themselves',
                 'Wholesale prices for businesses that buy in bulk',
                 'Your shop’s own colours and layout',
                 'Add products from a spreadsheet',
@@ -695,7 +676,7 @@ export default async function HomePage() {
             {[
               {
                 t: 'Create your shop',
-                d: 'Choose your web address and tell us where your first store is. It takes a couple of minutes.',
+                d: 'Choose your shop’s web address and tell us where your shop is. It takes a couple of minutes.',
               },
               {
                 t: 'Add your products',
