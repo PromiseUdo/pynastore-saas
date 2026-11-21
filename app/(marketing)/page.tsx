@@ -40,6 +40,7 @@ import { cn } from '@/lib/utils';
 import { FEATURES } from '@/lib/billing/plans';
 import { PrimaryCta, SecondaryCta } from '@/components/marketing/cta';
 import { Faq, type FaqItem } from '@/components/marketing/faq';
+import { FeatureMarquee } from '@/components/marketing/feature-marquee';
 import { FlowDiagram } from '@/components/marketing/flow-diagram';
 import { Marked, SectionIntro } from '@/components/marketing/section';
 import { SupportChatLink } from '@/components/marketing/support-chat';
@@ -257,8 +258,11 @@ export default async function HomePage() {
         </div> */}
       </section>
 
+      {/* ── Everything it does, drifting past — a glance before the details ── */}
+      <FeatureMarquee className="border-t bg-card py-8 sm:py-10" />
+
       {/* ── How it fits together ─────────────────────────────────────── */}
-      <section aria-labelledby="one-shelf" className="border-y bg-card">
+      <section aria-labelledby="one-shelf" className="border-b bg-card">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24">
           <SectionIntro
             id="one-shelf"

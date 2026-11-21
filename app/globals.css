@@ -397,6 +397,15 @@
   }
 }
 
+/* The feature row under the hero (components/marketing/feature-marquee.tsx)
+   moves itself; for anyone who asked for less motion it stays still and
+   scrolls sideways by hand. */
+@media (prefers-reduced-motion: reduce) {
+  .site .mk-marquee-track {
+    overflow-x: auto;
+  }
+}
+
 /* A saffron highlighter stroke under a few words of a headline. */
 .site .mk-mark {
   background-image: linear-gradient(
