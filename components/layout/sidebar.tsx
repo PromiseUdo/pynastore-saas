@@ -483,7 +483,7 @@ function SidebarPanel({
                               'size-4 shrink-0',
                               active
                                 ? 'text-sidebar-primary'
-                                : 'text-sidebar-foreground/50',
+                                : 'text-sidebar-primary/75',
                             )}
                           />
                           {collapsed && count > 0 && (

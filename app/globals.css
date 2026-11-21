@@ -92,8 +92,9 @@
   --popover:         oklch(1 0 0);
   --popover-foreground: oklch(0.13 0.006 250);
 
-  /* Brand — clean indigo (Linear / Vercel flavour) */
-  --primary:            oklch(0.52 0.19 264);  /* #4F46E5 range */
+  /* Brand — Pynastore green (#0e6b47, the logo's block; lib/brand.ts
+   * PLATFORM_MARK_COLORS). White on it is 6.5:1. */
+  --primary:            oklch(0.468 0.1 160.6);
   --primary-foreground: oklch(0.99 0 0);
 
   /* Secondary — subtle fill */
@@ -105,21 +106,21 @@
   --muted-foreground: oklch(0.47 0.012 250);  /* ~zinc-500 */
 
   /* Accent — hover backgrounds */
-  --accent:            oklch(0.955 0.006 264);
+  --accent:            oklch(0.955 0.006 160);
   --accent-foreground: oklch(0.25 0.006 250);
 
   /* Semantic */
   --destructive:      oklch(0.56 0.22 27);  /* red-600 */
   --border:           oklch(0.90 0.005 250); /* ~zinc-200 */
   --input:            oklch(0.90 0.005 250);
-  --ring:             oklch(0.52 0.19 264);  /* same as primary */
+  --ring:             oklch(0.468 0.1 160.6);  /* same as primary */
 
   /* Radius — 6 px; compact & professional */
   --radius: 0.375rem;
 
   /* Charts — purposeful data viz palette */
-  --chart-1: oklch(0.52 0.19 264);  /* indigo  */
-  --chart-2: oklch(0.60 0.15 142);  /* green   */
+  --chart-1: oklch(0.468 0.1 160.6);  /* Pynastore green */
+  --chart-2: oklch(0.52 0.19 264);  /* indigo  */
   --chart-3: oklch(0.68 0.16 55);   /* amber   */
   --chart-4: oklch(0.55 0.20 300);  /* violet  */
   --chart-5: oklch(0.56 0.22 27);   /* red     */
@@ -127,12 +128,12 @@
   /* Sidebar — slightly cooler off-white */
   --sidebar:                   oklch(0.975 0.004 250);
   --sidebar-foreground:        oklch(0.25 0.006 250);
-  --sidebar-primary:           oklch(0.52 0.19 264);
+  --sidebar-primary:           oklch(0.468 0.1 160.6);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent:            oklch(0.93 0.007 264);
+  --sidebar-accent:            oklch(0.93 0.012 160);
   --sidebar-accent-foreground: oklch(0.20 0.006 250);
   --sidebar-border:            oklch(0.88 0.005 250);
-  --sidebar-ring:              oklch(0.52 0.19 264);
+  --sidebar-ring:              oklch(0.468 0.1 160.6);
 }
 
 /* ─────────────────────────────────────────────────
@@ -146,8 +147,10 @@
   --popover:         oklch(0.21 0.007 250);
   --popover-foreground: oklch(0.92 0.005 250);
 
-  --primary:            oklch(0.65 0.20 264);
-  --primary-foreground: oklch(0.99 0 0);
+  /* A lighter Pynastore green, 6.2:1 on the dark card; white on it would be
+   * too faint (2.7:1), so text on it is near-black (6.7:1). */
+  --primary:            oklch(0.685 0.129 160.6);
+  --primary-foreground: oklch(0.18 0.02 160);
 
   --secondary:            oklch(0.26 0.008 250);
   --secondary-foreground: oklch(0.85 0.005 250);
@@ -155,28 +158,28 @@
   --muted:            oklch(0.26 0.008 250);
   --muted-foreground: oklch(0.60 0.012 250);
 
-  --accent:            oklch(0.26 0.009 264);
+  --accent:            oklch(0.26 0.009 160);
   --accent-foreground: oklch(0.85 0.005 250);
 
   --destructive:      oklch(0.65 0.22 27);
   --border:           oklch(0.32 0.008 250);
   --input:            oklch(0.28 0.008 250);
-  --ring:             oklch(0.65 0.20 264);
+  --ring:             oklch(0.685 0.129 160.6);
 
-  --chart-1: oklch(0.65 0.20 264);
-  --chart-2: oklch(0.65 0.15 142);
+  --chart-1: oklch(0.685 0.129 160.6);
+  --chart-2: oklch(0.65 0.20 264);
   --chart-3: oklch(0.72 0.16 55);
   --chart-4: oklch(0.65 0.20 300);
   --chart-5: oklch(0.65 0.22 27);
 
   --sidebar:                   oklch(0.145 0.006 250);
   --sidebar-foreground:        oklch(0.85 0.005 250);
-  --sidebar-primary:           oklch(0.65 0.20 264);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-primary:           oklch(0.685 0.129 160.6);
+  --sidebar-primary-foreground: oklch(0.18 0.02 160);
   --sidebar-accent:            oklch(0.22 0.007 250);
   --sidebar-accent-foreground: oklch(0.85 0.005 250);
   --sidebar-border:            oklch(0.28 0.008 250);
-  --sidebar-ring:              oklch(0.65 0.20 264);
+  --sidebar-ring:              oklch(0.685 0.129 160.6);
 }
 
 @layer base {

@@ -203,7 +203,7 @@ function ConsoleSidebar({
                       )}
                     >
                       <item.icon
-                        className={cn('size-4 shrink-0', active ? 'text-sidebar-primary' : 'text-sidebar-foreground/50')}
+                        className={cn('size-4 shrink-0', active ? 'text-sidebar-primary' : 'text-sidebar-primary/75')}
                         aria-hidden
                       />
                       <span className="flex-1 truncate">{item.title}</span>

@@ -39,7 +39,7 @@ These rules cover everything under `app/(dashboard)/`, `components/layout/`, `co
 The goal is a calm, professional tool that a busy shop owner or warehouse clerk understands without training. When a rule and a clever idea conflict, choose the option that is easier to understand.
 
 ## 1. Look and feel
-- **Theme:** neutral slate surfaces with an indigo `--primary`, Geist Sans, 6px radius, very light shadows. Use the tokens in `app/globals.css` (`bg-card`, `text-muted-foreground`, `border`, `bg-primary`…). Do not hard-code hex or oklch colours in components.
+- **Theme:** neutral slate surfaces with the Pynastore green `--primary` (the logo's #0e6b47; a lighter green with dark text in dark mode), Geist Sans, 6px radius, very light shadows. Use the tokens in `app/globals.css` (`bg-card`, `text-muted-foreground`, `border`, `bg-primary`…). Do not hard-code hex or oklch colours in components.
 - **Status colours** always come from `<Badge variant>` (`success`/`warning`/`destructive`/`info`, or the workflow variants `draft`/`pending`/`approved`/`completed`/`rejected`/`cancelled`/`processing`/`overdue`). Colour is never the only signal: every badge has a text label.
 - Every new surface must work in light **and** dark mode (`.dark` class). Check contrast in both.
 - **Type scale:** page title `text-lg font-semibold`; section title `text-sm font-semibold`; body `text-sm`; helper text `text-xs text-muted-foreground`. Put `tabular-nums` on numbers in tables and stat cards.
